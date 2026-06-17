@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "Словозбирачі",
+    "slug": "wordreapers",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "wordreapers",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.wordreapers.app",
+      "infoPlist": {
+        "UIDesignRequiresCompatibility": true,
+        "UIStatusBarHidden": true,
+        "UIViewControllerBasedStatusBarAppearance": false,
+        "NSLocalNetworkUsageDescription": "Потрібен доступ до локальної мережі, щоб завантажувати код гри з компʼютера під час розробки.",
+        "NSBonjourServices": ["_metro._tcp"]
+      }
+    },
+    "android": {
+      "package": "com.wordreapers.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#F5F3ED"
+      }
+    },
+    "androidStatusBar": {
+      "hidden": true,
+      "translucent": true
+    },
+    "plugins": [
+      "expo-router",
+      "expo-localization",
+      "expo-asset",
+      "expo-audio",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Дозвіл на камеру для сканування QR-коду кімнати."
+        }
+      ],
+      "expo-notifications"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
