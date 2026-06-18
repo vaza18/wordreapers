@@ -26,6 +26,7 @@
     "legal:pages": "tsx scripts/build-legal-pages.ts",
     "icons:generate": "tsx scripts/generate-app-icons.ts",
     "eas-build-post-install": "npm run dict:all",
+    "eas-build-pre-install": "npm install -g npm@11.6.2",
     "sounds:generate": "tsx scripts/generate-feedback-sounds.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run",
