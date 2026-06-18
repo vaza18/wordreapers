@@ -75,6 +75,15 @@ npm run ios
 3. Після змін нативних залежностей (камера, notifications тощо) — повна перезбірка: `npm run ios`.
 4. Перевірте `ios/.xcode.env.local` — `NODE_BINARY` має вказувати на ваш `node` (nvm).
 
+## `simctl openurl` / Operation timed out (симулятор)
+
+Збірка могла завершитися успішно (`Build Succeeded`), але Expo не встиг відкрити deep link на симуляторі. Це типово для iOS Simulator, особливо після холодного старту.
+
+1. Відкрийте **Simulator** — застосунок «Словозбирачі» вже встановлений; натисніть іконку вручну.
+2. Або в терміналі Metro натисніть **`i`**.
+3. Якщо повторюється: перезапустіть симулятор (**Device → Restart**) і знову `npm run ios`.
+4. Для симулятора `npm run ios` піднімає Metro з `--localhost` (не LAN IP). Якщо Metro уже був запущений без `--localhost`, зупиніть його (`Ctrl+C`) і повторіть `npm run ios`.
+
 ## Фізичний iPhone (кабель / Wi‑Fi)
 
 `npm run ios` — вибір **симулятора або iPhone** в меню Expo. `npm run ios:device iPhone` — одразу на телефон без меню.

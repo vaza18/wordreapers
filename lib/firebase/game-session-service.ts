@@ -442,7 +442,12 @@ export async function startGameSession(gameId: string, actorUid: string): Promis
     throw new Error('BASE_WORD_MISSING');
   }
 
-  const endsAt = getServerNow() + session.settings.durationSeconds * 1000;
+  const settings = resolveGameSessionSettings(
+    session.settings,
+    Object.keys(session.players).length,
+  );
+
+  const endsAt = getServerNow() + settings.durationSeconds * 1000;
   const players: Record<string, GameSessionPlayer> = {};
   for (const [uid, player] of Object.entries(session.players)) {
     players[uid] = { ...player, score: 0, wordCount: 0 };
@@ -464,6 +469,7 @@ export async function startGameSession(gameId: string, actorUid: string): Promis
   await update(sessionRef(normalized), {
     status: 'playing',
     timerEndsAt: endsAt,
+    settings,
     players,
     wordCounts: {},
     wordFirst: {},

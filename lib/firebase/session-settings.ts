@@ -5,7 +5,7 @@ import {
   parseGameSetupPreferences,
 } from '../settings/game-setup-preferences.js';
 
-import type { GameSessionSettings } from './types.js';
+import type { GameSession, GameSessionSettings } from './types.js';
 
 export function defaultGameSessionSettings(
   durationMinutes = DEFAULT_GAME_SETUP_PREFERENCES.durationMinutes,
@@ -29,6 +29,16 @@ function uniqueBonusModeFromSettings(settings: Partial<GameSessionSettings>): Un
     return settings.uniqueBonusMode;
   }
   return settings.uniqueBonusEnabled ? 'auto' : 'off';
+}
+export function playerCountForSession(session: Pick<GameSession, 'players'>): number {
+  return Object.keys(session.players ?? {}).length;
+}
+
+/** Apply roster-dependent fields (e.g. auto x2 for 3+ players) to stored settings. */
+export function resolveGameSessionSettingsForSession(
+  session: Pick<GameSession, 'settings' | 'players'>,
+): GameSessionSettings {
+  return resolveGameSessionSettings(session.settings, playerCountForSession(session));
 }
 
 /** Fallback for partial RTDB snapshots missing `settings`. */

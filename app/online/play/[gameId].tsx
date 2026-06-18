@@ -47,6 +47,7 @@ import {
   subscribeGameSession,
   type GameSessionSnapshot,
 } from '@/lib/firebase/game-session-service';
+import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
 import { markPendingRoundArchive } from '@/lib/online/pending-round-archive';
 import {
@@ -302,7 +303,9 @@ export default function OnlinePlayScreen() {
   }, []);
 
   const endsAt = session?.timerEndsAt ?? null;
-  const uniqueBonusEnabled = session?.settings.uniqueBonusEnabled ?? false;
+  const uniqueBonusEnabled = session
+    ? resolveGameSessionSettingsForSession(session).uniqueBonusEnabled
+    : false;
 
   const isPaused = session?.pauseState?.active === true;
 

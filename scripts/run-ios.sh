@@ -16,9 +16,6 @@ if [ ! -f .env ]; then
   exit 1
 fi
 
-ensure_metro
-apply_ios_native_patches "$ROOT"
-
 DEVICE_UDID="${IOS_DEVICE_UDID:-}"
 EXPO_ARGS=(--no-bundler)
 REMAINING_ARGS=()
@@ -54,6 +51,13 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+ensure_metro "$DEVICE_UDID"
+if [ -n "$DEVICE_UDID" ]; then
+  apply_ios_native_patches "$ROOT"
+else
+  apply_ios_simulator_patches "$ROOT"
+fi
+
 if [ "${IOS_DEVICE_FRESH:-}" = "1" ]; then
   echo "Fresh iOS build: clearing native build cache…"
   EXPO_ARGS+=(--no-build-cache)
@@ -70,9 +74,29 @@ else
 fi
 
 if [ ${#REMAINING_ARGS[@]} -gt 0 ]; then
+  set +e
   npx expo run:ios "${EXPO_ARGS[@]}" "${REMAINING_ARGS[@]}"
+  expo_exit=$?
+  set -e
 else
+  set +e
   npx expo run:ios "${EXPO_ARGS[@]}"
+  expo_exit=$?
+  set -e
+fi
+
+if [ "$expo_exit" -ne 0 ] && [ -z "$DEVICE_UDID" ]; then
+  echo ""
+  echo "Build may have succeeded but Simulator timed out opening the dev-client URL (simctl openurl)."
+  echo "→ Open Simulator and tap Slovozbirachi, or press i in the Metro terminal."
+  if [ -d "$ROOT/ios/build/Build/Products/Debug-iphonesimulator" ] || \
+    find "$HOME/Library/Developer/Xcode/DerivedData" -maxdepth 5 -name 'Debug-iphonesimulator' -type d 2>/dev/null | grep -q .; then
+    expo_exit=0
+  fi
+fi
+
+if [ "$expo_exit" -ne 0 ]; then
+  exit "$expo_exit"
 fi
 
 finalize_physical_ios_app_if_built "$ROOT" "$DEVICE_UDID" "$BUILD_STARTED_AT"

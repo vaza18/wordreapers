@@ -1,5 +1,6 @@
 import { toDisplayUpper } from '../dictionary/normalize.js';
 import type { StoredPlayerWord } from '../firebase/player-words-service.js';
+import { resolveGameSessionSettingsForSession } from '../firebase/session-settings.js';
 import type { GameSession } from '../firebase/types.js';
 import { createOnlineResultsDirectory } from '../game/results-directory.js';
 import { formatResultsHeadline } from '../game/results-headline.js';
@@ -44,7 +45,7 @@ export function buildOnlineResultsView(
   byPlayer: ReadonlyMap<string, ReadonlyMap<string, StoredPlayerWord>>,
   options?: { finishedAtMs?: number },
 ) {
-  const uniqueBonusEnabled = session.settings.uniqueBonusEnabled;
+  const uniqueBonusEnabled = resolveGameSessionSettingsForSession(session).uniqueBonusEnabled;
   const { wordsByPlayer, displaysByPlayer } = firebaseWordsToMaps(byPlayer);
   const roundDurationSeconds = computeRoundDurationSeconds(
     session,
