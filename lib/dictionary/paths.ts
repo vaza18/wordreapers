@@ -1,7 +1,9 @@
 import { join } from 'node:path';
 
-/** Generated dictionary files under `assets/dictionaries/` (Metro bundles this folder). */
-export const DICTIONARIES_DIR = 'assets/dictionaries';
+import { GENERATED_DICTIONARIES_DIR } from '../assets/generated-paths.js';
+
+/** Generated dictionary files under `assets/generated/dictionaries/` (Metro bundles this folder). */
+export const DICTIONARIES_DIR = GENERATED_DICTIONARIES_DIR;
 
 /**
  * Absolute paths to generated dictionary artifacts for one locale.
@@ -9,7 +11,7 @@ export const DICTIONARIES_DIR = 'assets/dictionaries';
  * BCP 47 locale tag — all dictionary files for one language/region variant.
  * Example: `uk-uk`, future `en-us`.
  *
- *   assets/dictionaries/{locale}/dictionary.txt
+ *   assets/generated/dictionaries/{locale}/dictionary.txt
  *   dictionaries/{locale}/base_words.txt
  *   dictionaries/{locale}/meta.json
  *   dictionaries/{locale}/normalization.json

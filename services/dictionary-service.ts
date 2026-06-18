@@ -7,14 +7,14 @@ import {
   parseBaseWords,
   type BaseWord,
 } from '@/lib/dictionary/dictionary-index';
-import normalizationMap from '../assets/dictionaries/uk-uk/normalization.json';
+import normalizationMap from '../assets/generated/dictionaries/uk-uk/normalization.json';
 
-/** Metro-bundled text assets under `assets/dictionaries/uk-uk/` (`.txt` only — not `.json`). */
+/** Metro-bundled text assets under `assets/generated/dictionaries/uk-uk/` (`.txt` only — not `.json`). */
 const TEXT_ASSET_MODULES = {
-  dictionary: require('../assets/dictionaries/uk-uk/dictionary.txt'),
-  baseWords: require('../assets/dictionaries/uk-uk/base_words.txt'),
-  supplementProperNouns: require('../assets/dictionaries/uk-uk/supplement_proper_nouns.txt'),
-  supplementSlang: require('../assets/dictionaries/uk-uk/supplement_slang.txt'),
+  dictionary: require('../assets/generated/dictionaries/uk-uk/dictionary.txt'),
+  baseWords: require('../assets/generated/dictionaries/uk-uk/base_words.txt'),
+  supplementProperNouns: require('../assets/generated/dictionaries/uk-uk/supplement_proper_nouns.txt'),
+  supplementSlang: require('../assets/generated/dictionaries/uk-uk/supplement_slang.txt'),
 } as const;
 
 /**

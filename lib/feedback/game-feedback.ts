@@ -1,7 +1,7 @@
 import { DEFAULT_BUTTON_FEEDBACK, type FeedbackMode } from '../settings/feedback-mode.js';
 
-import keyPressSound from '../../assets/sounds/key-press.wav';
-import wordAcceptedSound from '../../assets/sounds/word-accepted.wav';
+import keyPressSound from '../../assets/generated/sounds/key-press.wav';
+import wordAcceptedSound from '../../assets/generated/sounds/word-accepted.wav';
 
 type SoundPlayer = {
   seekTo: (seconds: number) => Promise<void>;

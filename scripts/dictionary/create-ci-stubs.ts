@@ -16,7 +16,7 @@ async function pathExists(filePath: string): Promise<boolean> {
 }
 
 /**
- * Write minimal dictionary artifacts when `assets/dictionaries/` is missing (CI / fresh clone).
+ * Write minimal dictionary artifacts when `assets/generated/dictionaries/` is missing (CI / fresh clone).
  */
 async function main(): Promise<void> {
   const paths = ukDictionaryPaths(ROOT);

@@ -20,7 +20,7 @@ const scriptFiles = ['scripts/**/*.ts', 'tests/**/*.ts', 'vitest.config.ts'];
 export default defineConfig(
   {
     ignores: [
-      'assets/dictionaries/**',
+      'assets/generated/**',
       '.data/**',
       'node_modules/**',
       'docs/**',

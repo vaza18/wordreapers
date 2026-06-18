@@ -2,8 +2,10 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { GENERATED_SOUNDS_DIR } from '../lib/assets/generated-paths.js';
+
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const outDir = join(root, 'assets', 'sounds');
+const outDir = join(root, GENERATED_SOUNDS_DIR);
 
 function writeWav(path: string, frequencyHz: number, durationMs: number, volume = 0.25): void {
   const sampleRate = 22_050;
@@ -41,4 +43,4 @@ function writeWav(path: string, frequencyHz: number, durationMs: number, volume 
 mkdirSync(outDir, { recursive: true });
 writeWav(join(outDir, 'key-press.wav'), 1_400, 40);
 writeWav(join(outDir, 'word-accepted.wav'), 660, 160, 0.35);
-console.log('Wrote feedback sounds to assets/sounds/');
+console.log(`Wrote feedback sounds to ${GENERATED_SOUNDS_DIR}/`);

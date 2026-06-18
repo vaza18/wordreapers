@@ -6,21 +6,26 @@
     "orientation": "portrait",
     "scheme": "wordreapers",
     "userInterfaceStyle": "light",
+    "icon": "./assets/icons/app-icon.png",
+    "splash": {
+      "image": "./assets/icons/app-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#7b5323"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.wordreapers.app",
       "infoPlist": {
         "UIDesignRequiresCompatibility": true,
         "UIStatusBarHidden": true,
-        "UIViewControllerBasedStatusBarAppearance": false,
-        "NSLocalNetworkUsageDescription": "Потрібен доступ до локальної мережі, щоб завантажувати код гри з компʼютера під час розробки.",
-        "NSBonjourServices": ["_metro._tcp"]
+        "UIViewControllerBasedStatusBarAppearance": false
       }
     },
     "android": {
       "package": "com.wordreapers.app",
       "adaptiveIcon": {
-        "backgroundColor": "#F5F3ED"
+        "foregroundImage": "./assets/icons/app-icon.png",
+        "backgroundColor": "#7b5323"
       }
     },
     "androidStatusBar": {
@@ -42,6 +47,11 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "bb9b8b94-ed8d-464a-ae5f-f299cea1b90d"
+      }
     }
   }
 }

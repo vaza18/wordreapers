@@ -40,7 +40,7 @@ When changing user-visible behavior:
 
 - Keep changes focused; prefer small, reviewable PRs.
 - Add or update unit tests for logic in `lib/`.
-- Do not commit secrets (`.env`), `.firebaserc`, generated dictionaries (`assets/dictionaries/`), generated sounds (`assets/sounds/*.wav`), or native `ios/` / `android/` folders.
+- Do not commit secrets (`.env`), `.firebaserc`, `assets/generated/` (sounds, icons, dictionaries), or native `ios/` / `android/` folders.
 
 ## License
 

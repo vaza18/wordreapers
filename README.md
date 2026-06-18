@@ -17,11 +17,11 @@ npm install                   # also runs legal:bundle + sounds:generate
 npm run dict:all              # required once after clone (~8 MB)
 ```
 
-`npm install` generates legal bundles and feedback sounds (`assets/sounds/*.wav`). Dictionaries are built separately with `dict:all` (see below).
+`npm install` generates legal bundles and feedback sounds (`assets/generated/sounds/*.wav`). Dictionaries are built separately with `dict:all` (see below). See [`assets/README.md`](assets/README.md) for the layout.
 
 ### Dictionaries (required after clone)
 
-The `assets/dictionaries/uk-uk/` folder holds generated `.txt` / `.json` (~8 MB). Generate locally:
+The `assets/generated/dictionaries/uk-uk/` folder holds generated `.txt` / `.json` (~8 MB). Generate locally:
 
 ```bash
 npm run dict:all
@@ -32,7 +32,7 @@ After that, restart Metro: `npx expo start --clear`.
 #### File layout
 
 ```
-assets/dictionaries/
+assets/generated/dictionaries/
   uk-uk/
     dictionary.txt         # normalized words, one per line (~125k)
     base_words.txt         # autocomplete / shuffle: sorted normalized strings (8+); UI display via displayForm()
@@ -42,7 +42,7 @@ assets/dictionaries/
     supplement_slang.txt         # optional when slang is enabled
 ```
 
-Future locales get their own subdirectories, e.g. `dictionaries/en-us/`.
+Future locales get their own subdirectories, e.g. `assets/generated/dictionaries/en-us/`.
 
 Manual exclusions: `scripts/dictionary/blocklist-uk-uk.txt` (committed, one word per line).
 
@@ -90,7 +90,7 @@ npm run firebase:deploy:functions
 npm run firebase:deploy:backend
 ```
 
-The app bundles dictionary files from `assets/dictionaries/uk-uk/` (same output as `npm run dict:build`).
+The app bundles dictionary files from `assets/generated/dictionaries/uk-uk/` (same output as `npm run dict:build`).
 
 **Expo Go:** install [Expo Go](https://expo.dev/go) from the Play Store / App Store — this project targets **SDK 54** (matches the store build, e.g. client 54.0.x).
 

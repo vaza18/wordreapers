@@ -6,14 +6,11 @@ functions/node_modules/
 .env.*
 !.env.example
 
-# Generated dictionaries (see README.md § Project setup)
-assets/dictionaries/
+# Generated assets (see assets/README.md)
+assets/generated/
 
 # Generated from docs/legal/*.md and docs/wordreapers_about.md (npm run legal:bundle)
 lib/legal/bundled-legal.ts
-
-# Generated feedback sounds (npm run sounds:generate)
-assets/sounds/*.wav
 
 # Firebase CLI default project (copy from .firebaserc.example)
 .firebaserc
@@ -26,6 +23,7 @@ docs/wordreapers.pdf
 docs/firebase_schema.md
 docs/firebase_setup.md
 docs/validation_test_cases.md
+docs/store/
 
 # Cursor IDE
 .cursor/

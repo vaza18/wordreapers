@@ -19,9 +19,10 @@
     "scripts/**/*.ts",
     "tests/**/*.ts",
     "lib/**/*.ts",
+    "constants/theme.ts",
     "vitest.config.ts",
     "types/assets.d.ts",
     "types/firebase-auth-rn.d.ts"
   ],
-  "exclude": ["app", "components", "constants", "store", "i18n"]
+  "exclude": ["app", "components", "store", "i18n"]
 }

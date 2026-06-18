@@ -13,7 +13,7 @@ npm test                  # unit tests (tags, normalize, multiset)
 npm run lint              # ESLint (lib/ exports require JSDoc)
 ```
 
-## Output (`dictionaries/` — gitignored)
+## Output (`assets/generated/dictionaries/` — gitignored)
 
 Each locale is one folder (BCP 47 tag). Example for Ukrainian:
 
