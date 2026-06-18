@@ -1,0 +1,57 @@
+{
+  "rules": {
+    "game_sessions": {
+      "$gameId": {
+        ".read": "auth != null",
+        ".write": "auth != null && ((!data.exists() && newData.exists() && (newData.child('organizerId').val() === auth.uid || (newData.child('status').val() == 'playing' && newData.child('players').child(auth.uid).exists()) || (newData.child('status').val() == 'finished' && newData.child('players').child(auth.uid).exists()) || (newData.child('status').val() == 'waiting' && newData.child('players').child(auth.uid).exists() && newData.child('players').child(newData.child('organizerId').val()).exists()))) || (data.exists() && newData.exists() && newData.child('organizerId').val() === data.child('organizerId').val() && (data.child('organizerId').val() === auth.uid || data.child('players').child(auth.uid).exists())) || (data.exists() && newData.exists() && !data.child('status').exists() && !data.child('organizerId').exists() && newData.child('status').val() == 'waiting' && newData.child('players').child(auth.uid).exists() && newData.child('players').child(newData.child('organizerId').val()).exists()) || (data.exists() && !newData.exists() && ((data.child('status').val() == 'waiting' && data.child('organizerId').val() === auth.uid) || (!data.child('status').exists() && data.child('players').child(auth.uid).exists()))))",
+        "organizerId": {
+          ".validate": "newData.isString() && newData.val().length > 0 && (!data.exists() || newData.val() === data.val())"
+        },
+        "status": {
+          ".validate": "newData.isString() && (newData.val() == 'waiting' || newData.val() == 'playing' || newData.val() == 'finished')"
+        },
+        "purgeAfterAt": {
+          ".validate": "newData.isNumber() || newData.val() === null"
+        },
+        "settings": {
+          ".validate": "newData.hasChildren(['durationSeconds', 'uniqueBonusEnabled', 'uniqueBonusMode', 'language', 'allowProperNouns', 'allowSlang']) && (newData.child('uniqueBonusMode').val() == 'auto' || newData.child('uniqueBonusMode').val() == 'off')"
+        },
+        "resultsExitedBy": {
+          "$uid": {
+            ".write": "auth != null && auth.uid == $uid && (root.child('game_sessions').child($gameId).child('status').val() == 'finished' || root.child('game_sessions').child($gameId).child('status').val() == 'waiting') && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists()",
+            ".validate": "newData.val() === true"
+          }
+        },
+        "players": {
+          "$playerId": {
+            ".write": "auth != null && root.child('game_sessions').child($gameId).child('status').exists() && (auth.uid == $playerId || data.parent().parent().child('organizerId').val() === auth.uid || newData.parent().parent().child('organizerId').val() === auth.uid || root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists())"
+          }
+        }
+      }
+    },
+    "player_words": {
+      "$gameId": {
+        ".read": "auth != null && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists()",
+        "$playerId": {
+          ".read": "auth != null && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && (auth.uid == $playerId || root.child('game_sessions').child($gameId).child('status').val() == 'finished')",
+          ".write": "auth != null && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && ((!newData.exists() && ((root.child('game_sessions').child($gameId).child('status').val() == 'waiting' && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists()) || (root.child('game_sessions').child($gameId).child('status').val() == 'finished' && (auth.uid == $playerId || root.child('game_sessions').child($gameId).child('organizerId').val() === auth.uid)) || (root.child('game_sessions').child($gameId).child('status').val() == 'playing' && auth.uid == $playerId))) || (newData.exists() && (auth.uid == $playerId || root.child('game_sessions').child($gameId).child('organizerId').val() === auth.uid || root.child('game_sessions').child($gameId).child('status').val() == 'finished')))"
+        }
+      }
+    },
+    "user_stats": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid && auth.token.firebase.sign_in_provider != 'anonymous'",
+        "gamesPlayed": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && (!data.exists() || newData.val() >= data.val())"
+        },
+        "gamesWon": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && (!data.exists() || newData.val() >= data.val())"
+        },
+        "wordsCollected": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && (!data.exists() || newData.val() >= data.val())"
+        }
+      }
+    }
+  }
+}

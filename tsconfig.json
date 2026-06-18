@@ -1,0 +1,31 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "jsx": "react-native",
+    "paths": {
+      "@/*": ["./*"]
+    }
+  },
+  "include": [
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "constants/**/*.ts",
+    "services/**/*.ts",
+    "store/**/*.ts",
+    "i18n/**/*.ts",
+    "lib/dictionary/dictionary-index.ts",
+    "lib/dictionary/normalize.ts",
+    "lib/dictionary/validate-word.ts",
+    "lib/dictionary/vesum-tags.ts",
+    "lib/game/*.ts",
+    "lib/feedback/**/*.ts",
+    "lib/settings/**/*.ts",
+    "types/assets.d.ts",
+    "types/firebase-auth-rn.d.ts",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ]
+}
