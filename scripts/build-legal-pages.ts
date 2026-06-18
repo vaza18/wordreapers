@@ -54,7 +54,9 @@ function markdownToHtml(md: string): string {
       const tag = i === 0 ? 'th' : 'td';
       const rowTag = i === 0 ? 'thead><tr' : 'tr';
       if (i === 0) {
-        out.push(`<${rowTag}>${cells.map((c) => `<${tag}>${inline(c)}</${tag}>`).join('')}</tr></thead><tbody>`);
+        out.push(
+          `<${rowTag}>${cells.map((c) => `<${tag}>${inline(c)}</${tag}>`).join('')}</tr></thead><tbody>`,
+        );
       } else {
         out.push(`<tr>${cells.map((c) => `<${tag}>${inline(c)}</${tag}>`).join('')}</tr>`);
       }

@@ -13,7 +13,7 @@ import { computeLetterKeySize } from './letter-keyboard.js';
 export const LETTER_KEY_REFERENCE_SCREEN_WIDTH = 390;
 
 /** Gameplay letter key font size (px); fixed in `LetterKeyboard`. */
-export const LETTER_KEY_FONT_SIZE = 40;
+export const LETTER_KEY_FONT_SIZE = 22;
 
 /** Semibold label on available keys (`LetterKeyboard`). */
 export const LETTER_KEY_FONT_WEIGHT = 700;

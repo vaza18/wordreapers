@@ -47,7 +47,7 @@ function configFromExtra(): FirebasePublicConfig | null {
 }
 
 function envString(name: string): string | undefined {
-  const value = process.env[name] as string | undefined;
+  const value = process.env[name];
   return value?.length ? value : undefined;
 }
 
@@ -75,7 +75,7 @@ function resolveFirebaseConfig(): FirebasePublicConfig | null {
 }
 
 function requireEnv(name: string): string {
-  const value = process.env[name] as string | undefined;
+  const value = process.env[name];
   if (!value) {
     throw new Error(`Missing ${name}. Copy .env.example to .env and fill Firebase keys.`);
   }
@@ -99,7 +99,7 @@ export function loadFirebaseConfig(): FirebasePublicConfig {
     storageBucket: requireEnv('EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET'),
     messagingSenderId: requireEnv('EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID'),
     appId: requireEnv('EXPO_PUBLIC_FIREBASE_APP_ID'),
-    measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID as string | undefined,
+    measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID,
   };
 }
 
