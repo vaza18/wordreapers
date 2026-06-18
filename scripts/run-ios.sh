@@ -66,6 +66,7 @@ if [ -n "$DEVICE_UDID" ]; then
   echo "Building for physical device $DEVICE_UDID (iphoneos)…"
 else
   echo "Select a simulator or connected iPhone in the Expo prompt…"
+  EXPO_ARGS+=(--device)
 fi
 
 if [ ${#REMAINING_ARGS[@]} -gt 0 ]; then

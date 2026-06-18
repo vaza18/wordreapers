@@ -1,5 +1,3 @@
-const appJson = require('./app.json');
-
 const isProductionBuild =
   process.env.EAS_BUILD_PROFILE === 'production' || process.env.APP_VARIANT === 'production';
 
@@ -9,34 +7,46 @@ const devIosInfoPlist = {
   NSBonjourServices: ['_metro._tcp'],
 };
 
-const baseIosInfoPlist = { ...(appJson.expo.ios?.infoPlist ?? {}) };
-
-if (isProductionBuild) {
-  delete baseIosInfoPlist.NSLocalNetworkUsageDescription;
-  delete baseIosInfoPlist.NSBonjourServices;
-} else {
-  Object.assign(baseIosInfoPlist, devIosInfoPlist);
-}
-
-const plugins = [
-  ...(appJson.expo.plugins ?? []),
-  './plugins/with-firebase-extra.cjs',
-  './plugins/without-ios-push-entitlement.cjs',
-];
-
-if (!isProductionBuild) {
-  plugins.push('./plugins/with-ios-device-metro-host.cjs');
-}
-
 /** @type {import('expo/config').ExpoConfig} */
-module.exports = {
-  expo: {
-    ...appJson.expo,
-    name: isProductionBuild ? 'Wordreapers' : appJson.expo.name,
+module.exports = ({ config }) => {
+  const baseIosInfoPlist = { ...(config.ios?.infoPlist ?? {}) };
+
+  if (isProductionBuild) {
+    delete baseIosInfoPlist.NSLocalNetworkUsageDescription;
+    delete baseIosInfoPlist.NSBonjourServices;
+  } else {
+    Object.assign(baseIosInfoPlist, devIosInfoPlist);
+  }
+
+  const plugins = [
+    ...(config.plugins ?? []),
+    './plugins/with-firebase-extra.cjs',
+    './plugins/without-ios-push-entitlement.cjs',
+  ];
+
+  if (isProductionBuild) {
+    plugins.push([
+      'expo-build-properties',
+      {
+        android: {
+          enableMinifyInReleaseBuilds: true,
+          enableShrinkResourcesInReleaseBuilds: true,
+        },
+      },
+    ]);
+  }
+
+  if (!isProductionBuild) {
+    plugins.push('./plugins/with-ios-device-metro-host.cjs');
+  }
+
+  return {
+    ...config,
+    name: isProductionBuild ? 'Wordreapers' : config.name,
     ios: {
-      ...appJson.expo.ios,
+      ...config.ios,
       infoPlist: baseIosInfoPlist,
     },
     plugins,
-  },
+  };
 };
