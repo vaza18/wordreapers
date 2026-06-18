@@ -6,6 +6,13 @@ const config = getDefaultConfig(__dirname);
 
 config.resolver.assetExts.push('txt');
 
+/** npm may nest react-native@0.86 as a peer-dep artifact under react-native@0.81; never bundle it. */
+const nestedReactNative = /node_modules[/\\]react-native[/\\]node_modules[/\\]react-native[/\\].*/;
+config.resolver.blockList = [
+  ...(Array.isArray(config.resolver.blockList) ? config.resolver.blockList : []),
+  nestedReactNative,
+];
+
 /** Nested under `firebase`; Metro needs an explicit alias for RN auth persistence. */
 const firebaseAuthRoot = path.resolve(
   __dirname,

@@ -4,7 +4,7 @@
   "type": "module",
   "main": "expo-router/entry",
   "scripts": {
-    "postinstall": "npm run legal:bundle && npm run sounds:generate",
+    "postinstall": "node scripts/prune-nested-react-native.mjs && npm run legal:bundle && npm run sounds:generate",
     "prestart": "npm run legal:bundle",
     "pretest": "npm run legal:bundle",
     "start": "expo start --dev-client",
