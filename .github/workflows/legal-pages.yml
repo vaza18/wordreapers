@@ -19,11 +19,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -41,6 +38,28 @@ jobs:
       - name: Build legal HTML pages
         run: npm run legal:pages
 
+      - name: Upload pages artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: legal-pages
+          path: assets/generated/legal-pages
+          if-no-files-found: error
+
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download pages artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: legal-pages
+          path: assets/generated/legal-pages
+
+      # Requires repo Settings → Pages → Build and deployment → Source: GitHub Actions.
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
