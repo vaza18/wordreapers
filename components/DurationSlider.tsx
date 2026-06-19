@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
   track: {
     height: 6,
     borderRadius: radii.sm,
-    backgroundColor: colors.backgroundPrimary,
+    backgroundColor: colors.controlTrack,
     overflow: 'hidden',
   },
   trackFill: {

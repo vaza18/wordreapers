@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
     color: colors.penBlueMuted,
   },
   keyLabelUsed: {
-    color: colors.textTertiary,
+    color: colors.textSecondary,
     fontWeight: '500',
   },
 });

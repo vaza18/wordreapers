@@ -50,6 +50,7 @@ export function RoundSettingsFields({
         <Text style={styles.sectionLabel}>{t('game.uniqueBonus')}</Text>
         <FeedbackPressable
           accessibilityRole="button"
+          accessibilityLabel={t('game.uniqueBonusHintTitle')}
           onPress={() => setShowUniqueBonusHint(true)}
           style={styles.infoButton}
         >

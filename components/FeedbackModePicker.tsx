@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
   },
   hint: {
     fontSize: 12,
-    color: colors.textTertiary,
+    color: colors.textSecondary,
     lineHeight: 18,
   },
   options: {

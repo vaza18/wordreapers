@@ -27,6 +27,7 @@ export function PrimaryButton({
   return (
     <FeedbackPressable
       accessibilityRole="button"
+      accessibilityLabel={label}
       disabled={disabled}
       feedback={feedback}
       onPress={onPress}
