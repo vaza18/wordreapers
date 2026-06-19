@@ -10,7 +10,11 @@ import { Screen } from '@/components/Screen';
 import { colors, spacing } from '@/constants/theme';
 import { resetFirebaseBootstrap } from '@/lib/firebase/bootstrap';
 import { ensureFirebaseReady } from '@/lib/firebase/ensure-firebase-ready';
-import { firebaseBootstrapErrorMessage, joinErrorMessage } from '@/lib/firebase/join-error-message';
+import {
+  firebaseBootstrapErrorMessage,
+  firebaseConfigErrorMessage,
+  joinErrorMessage,
+} from '@/lib/firebase/join-error-message';
 import { joinGameSession } from '@/lib/firebase/game-session-service';
 import { resolvePostJoinRoute } from '@/lib/online/post-join-route';
 import { isValidRoomCode, normalizeRoomCode } from '@/lib/firebase/room-code';
@@ -80,7 +84,7 @@ export default function JoinRoomScreen() {
       return;
     }
     if (firebaseStatus === 'not_configured') {
-      setError(t('online.errorFirebaseConfig'));
+      setError(firebaseConfigErrorMessage(t, 'Missing EXPO_PUBLIC_FIREBASE_* in .env'));
       return;
     }
 

@@ -1,5 +1,7 @@
 import type { TFunction } from 'i18next';
 
+import { describeFirebaseConfigGap, FIREBASE_CONFIG_ALPHA_DIAGNOSTICS } from './config.js';
+
 function isPermissionDenied(text: string): boolean {
   return /permission[-_]?denied/i.test(text);
 }
@@ -12,6 +14,30 @@ function isNetworkError(text: string, code: string | null): boolean {
   );
 }
 
+function isFirebaseConfigError(message: string): boolean {
+  return message.includes('Missing EXPO_PUBLIC') || message.includes('not configured');
+}
+
+function withAlphaFirebaseDiagnostics(base: string, rawMessage?: string): string {
+  if (!FIREBASE_CONFIG_ALPHA_DIAGNOSTICS) {
+    return base;
+  }
+  const details = describeFirebaseConfigGap();
+  const parts = [base];
+  if (rawMessage?.trim()) {
+    parts.push(`[α] ${rawMessage.trim()}`);
+  }
+  if (details) {
+    parts.push(details);
+  }
+  return parts.join('\n\n');
+}
+
+/** User-facing Firebase config error (with optional alpha diagnostics). */
+export function firebaseConfigErrorMessage(t: TFunction, rawMessage?: string): string {
+  return withAlphaFirebaseDiagnostics(t('online.errorFirebaseConfig'), rawMessage);
+}
+
 /** Map Firebase bootstrap `errorMessage` strings to UI copy. */
 export function firebaseBootstrapErrorMessage(
   errorMessage: string | null | undefined,
@@ -21,8 +47,8 @@ export function firebaseBootstrapErrorMessage(
   if (!message) {
     return t('online.errorFirebaseNetwork');
   }
-  if (message.includes('Missing EXPO_PUBLIC') || message.includes('not configured')) {
-    return t('online.errorFirebaseConfig');
+  if (isFirebaseConfigError(message)) {
+    return firebaseConfigErrorMessage(t, message);
   }
   if (isPermissionDenied(message)) {
     return t('online.errorFirebasePermission');
@@ -57,8 +83,8 @@ export function joinErrorMessage(error: unknown, t: TFunction): string {
   if (message === 'ROOM_NOT_WAITING' || message === 'ROOM_NOT_JOINABLE') {
     return t('online.errorRoomStarted');
   }
-  if (message.includes('Missing EXPO_PUBLIC') || message.includes('Firebase is not configured')) {
-    return t('online.errorFirebaseConfig');
+  if (isFirebaseConfigError(message) || message.includes('Firebase is not configured')) {
+    return firebaseConfigErrorMessage(t, message);
   }
   if (code === 'permission-denied' || isPermissionDenied(message)) {
     return t('online.errorFirebasePermission');

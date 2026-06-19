@@ -1,8 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { TFunction } from 'i18next';
+
+vi.mock('expo-constants', () => ({
+  default: {
+    expoConfig: { extra: {} },
+  },
+}));
 
 import {
   firebaseBootstrapErrorMessage,
+  firebaseConfigErrorMessage,
   joinErrorMessage,
 } from '../lib/firebase/join-error-message.js';
 
@@ -26,12 +33,24 @@ describe('joinErrorMessage', () => {
   it('falls back to generic join failure', () => {
     expect(joinErrorMessage(new Error('something else'), t)).toBe('online.errorJoinFailed');
   });
+
+  it('appends alpha diagnostics for missing firebase config', () => {
+    const message = joinErrorMessage(
+      new Error('Firebase is not configured. Add EXPO_PUBLIC_FIREBASE_* to .env'),
+      t,
+    );
+    expect(message).toContain('online.errorFirebaseConfig');
+    expect(message).toContain('[α] Firebase config');
+  });
 });
 
 describe('firebaseBootstrapErrorMessage', () => {
   it('maps missing config and api key errors', () => {
-    expect(firebaseBootstrapErrorMessage('Missing EXPO_PUBLIC_FIREBASE_API_KEY', t)).toBe(
+    expect(firebaseBootstrapErrorMessage('Missing EXPO_PUBLIC_FIREBASE_API_KEY', t)).toContain(
       'online.errorFirebaseConfig',
+    );
+    expect(firebaseBootstrapErrorMessage('Missing EXPO_PUBLIC_FIREBASE_API_KEY', t)).toContain(
+      'Missing EXPO_PUBLIC_FIREBASE_API_KEY',
     );
     expect(firebaseBootstrapErrorMessage('API_KEY_INVALID', t)).toBe('online.errorFirebaseApiKey');
   });
@@ -44,5 +63,14 @@ describe('firebaseBootstrapErrorMessage', () => {
     expect(firebaseBootstrapErrorMessage('RTDB connection timed out', t)).toBe(
       'online.errorFirebaseNetwork',
     );
+  });
+});
+
+describe('firebaseConfigErrorMessage', () => {
+  it('includes alpha diagnostics block', () => {
+    const message = firebaseConfigErrorMessage(t, 'Missing EXPO_PUBLIC_FIREBASE_* in .env');
+    expect(message).toContain('online.errorFirebaseConfig');
+    expect(message).toContain('Missing EXPO_PUBLIC_FIREBASE_* in .env');
+    expect(message).toContain('[α] Firebase config');
   });
 });
