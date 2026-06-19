@@ -115,8 +115,15 @@ The app bundles dictionary files from `assets/generated/dictionaries/uk-uk/` (sa
 Production Android/iOS builds use [EAS Build](https://docs.expo.dev/build/introduction/):
 
 ```bash
-eas build --platform android --profile production   # AAB → Google Play
-eas build --platform ios --profile production       # IPA → TestFlight / App Store
+eas build --platform android --profile production   # AAB → Google Play (cloud)
+eas build --platform ios --profile production       # IPA → TestFlight (cloud)
+```
+
+**Local EAS builds** (`--local` excludes gitignored `.env` from the archive — scripts export env first):
+
+```bash
+npm run build:android   # AAB on Mac (Android SDK)
+npm run build:ios       # IPA on Mac (Xcode)
 ```
 
 Firebase keys for release builds: EAS **production** environment (`EXPO_PUBLIC_FIREBASE_*`). Local step-by-step notes: `docs/store/` (gitignored on maintainer machines).
