@@ -28,7 +28,7 @@ export function computeLetterKeySize(screenWidth: number): number {
 export interface LetterKey {
   id: string;
   label: string;
-  /** Normalized character added to the draft when pressed (empty for apostrophe key). */
+  /** Character appended to the draft when pressed. */
   value: string;
 }
 
@@ -45,7 +45,7 @@ export function buildLetterKeys(baseWordDisplay: string): LetterKey[] {
       continue;
     }
     if (/[''ʼ`]/.test(char)) {
-      keys.push({ id: `${index}-'`, label: "'", value: '' });
+      keys.push({ id: `${index}-'`, label: "'", value: char });
       continue;
     }
     keys.push({ id: `${index}-${char}`, label: char, value: normalizeUk(char) });
@@ -70,7 +70,7 @@ export function isLetterKeyAvailable(
   const baseCounts = countChars(keys.map((item) => item.value).filter(Boolean));
   const draftCounts = countChars([...draftNormalized]);
 
-  if (key.value === '') {
+  if (/[''ʼ`]/.test(key.value)) {
     return true;
   }
 
