@@ -6,6 +6,7 @@ import { createOnlineResultsDirectory } from '../game/results-directory.js';
 import { formatResultsHeadline } from '../game/results-headline.js';
 import { buildGlobalResultWords, buildPlayerResultRankGroups } from '../game/results-view.js';
 import { computeRoundDurationSeconds } from '../game/round-duration.js';
+import { buildLiveStandingsFromSession } from '../online/live-standings.js';
 import { buildStandingsFromSession, type PlayerStandings } from '../game/scoring.js';
 
 type TranslateFn = (key: string, params?: Record<string, string | number>) => string;
@@ -52,8 +53,11 @@ export function buildOnlineResultsView(
     byPlayer,
     options?.finishedAtMs,
   );
-  // Scores live on the session during play; do not recompute from word nodes alone.
-  const standings: PlayerStandings[] = buildStandingsFromSession(session);
+  // Prefer word-map totals when present (matches x2 badges); fall back to stored player nodes.
+  const standings: PlayerStandings[] =
+    Object.keys(session.wordPlayers ?? {}).length > 0
+      ? buildLiveStandingsFromSession(session)
+      : buildStandingsFromSession(session);
   const directory = createOnlineResultsDirectory(session);
 
   const globalWords = buildGlobalResultWords({

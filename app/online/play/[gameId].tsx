@@ -45,6 +45,7 @@ import {
   finishGameSessionIfExpired,
   leaveGameSession,
   subscribeGameSession,
+  syncSessionPlayerScores,
   type GameSessionSnapshot,
 } from '@/lib/firebase/game-session-service';
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
@@ -82,16 +83,15 @@ import {
   voteResume,
 } from '@/lib/firebase/session-votes-service';
 import { buildOnlineWordListDisplay } from '@/lib/online/online-word-display';
+import {
+  buildLiveStandingsFromSession,
+  sessionPlayerScoresMatchWordMaps,
+} from '@/lib/online/live-standings';
 import { formatPlayRulesLabel } from '@/lib/online/play-rules-label';
 import { buildLetterKeys, computeLetterKeySize } from '@/lib/game/letter-keyboard';
+import { letterKeyFontSizeForKeySize } from '@/lib/game/letter-key-style';
 import { acceptWord, type PlayWordErrorCode } from '@/lib/game/play-word';
-import {
-  assignDisplayRanks,
-  compareStandings,
-  computePlayerScore,
-  displayRankForPlayer,
-  type PlayerStandings,
-} from '@/lib/game/scoring';
+import { assignDisplayRanks, displayRankForPlayer, type PlayerStandings } from '@/lib/game/scoring';
 import { useFirebaseStore } from '@/store/firebase-store';
 import { useProfileStore } from '@/store/profile-store';
 import { useSettingsStore } from '@/store/settings-store';
@@ -112,6 +112,7 @@ export default function OnlinePlayScreen() {
   const myUid = useFirebaseStore((state) => state.uid) ?? '';
   const { width: screenWidth } = useWindowDimensions();
   const composeKeySize = computeLetterKeySize(screenWidth);
+  const composeKeyFontSize = letterKeyFontSizeForKeySize(composeKeySize);
   const wordAcceptedFeedback = useSettingsStore((state) => state.wordAcceptedFeedback);
   const timerAlertMode = useSettingsStore((state) => state.timerAlertMode);
   const viewerGender = useProfileStore((state) => state.gender);
@@ -146,6 +147,7 @@ export default function OnlinePlayScreen() {
   const leavingIntentionallyRef = useRef(false);
   const playRoundKeyRef = useRef<number | null>(null);
   const staleWordsReconcileKeyRef = useRef<string | null>(null);
+  const scoresSyncInFlightRef = useRef(false);
   const myWordsRef = useRef(myWords);
   myWordsRef.current = myWords;
 
@@ -332,7 +334,14 @@ export default function OnlinePlayScreen() {
   }, [myUid, myWords, session]);
 
   const myPlayer = session?.players[myUid];
-  const playerScore = myPlayer?.score ?? computePlayerScore(scoredWords);
+  const standings = useMemo((): PlayerStandings[] => {
+    if (!session) {
+      return [];
+    }
+    return buildLiveStandingsFromSession(session);
+  }, [session]);
+
+  const playerScore = standings.find((row) => row.playerId === myUid)?.score ?? 0;
   const playerWordCount = myPlayer?.wordCount ?? scoredWords.length;
   const myName = myPlayer?.name ?? t('profile.namePlaceholder');
 
@@ -346,19 +355,18 @@ export default function OnlinePlayScreen() {
 
   useTimerAlerts(remainingMs, isPaused, timerAlertMode, session?.status === 'playing');
 
-  const standings = useMemo((): PlayerStandings[] => {
-    if (!session) {
-      return [];
+  useEffect(() => {
+    if (!gameId || !session || session.status !== 'playing') {
+      return;
     }
-    return Object.entries(session.players)
-      .map(([playerId, player]) => ({
-        playerId,
-        score: player.score ?? 0,
-        wordCount: player.wordCount ?? 0,
-        uniqueCount: 0,
-      }))
-      .sort(compareStandings);
-  }, [session]);
+    if (sessionPlayerScoresMatchWordMaps(session) || scoresSyncInFlightRef.current) {
+      return;
+    }
+    scoresSyncInFlightRef.current = true;
+    void syncSessionPlayerScores(gameId).finally(() => {
+      scoresSyncInFlightRef.current = false;
+    });
+  }, [gameId, session]);
 
   const displayRanks = useMemo(() => assignDisplayRanks(standings), [standings]);
   const playerRank = displayRankForPlayer(standings, myUid);
@@ -750,9 +758,9 @@ export default function OnlinePlayScreen() {
                 styles.composeKeyDanger,
               ]}
             >
-              <Text style={styles.composeKeyLabel}>✕</Text>
+              <Text style={[styles.composeKeyLabel, { fontSize: composeKeyFontSize }]}>✕</Text>
             </FeedbackPressable>
-            <View style={styles.draftBox}>
+            <View style={[styles.draftBox, { height: composeKeySize }]}>
               <Text style={styles.draftText}>{toDisplayUpper(draft) || ' '}</Text>
             </View>
             <FeedbackPressable
@@ -764,7 +772,7 @@ export default function OnlinePlayScreen() {
                 styles.composeKeyOk,
               ]}
             >
-              <Text style={styles.composeKeyLabel}>←</Text>
+              <Text style={[styles.composeKeyLabel, { fontSize: composeKeyFontSize }]}>←</Text>
             </FeedbackPressable>
           </View>
 
@@ -1099,16 +1107,13 @@ const styles = StyleSheet.create({
   },
   composeKeyLabel: {
     color: '#FFFFFF',
-    fontSize: 22,
     fontWeight: '700',
   },
   draftBox: {
     flex: 1,
     backgroundColor: '#FAEEDA',
     borderRadius: radii.sm,
-    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    minHeight: 40,
     justifyContent: 'center',
   },
   draftText: {

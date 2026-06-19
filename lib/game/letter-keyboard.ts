@@ -4,17 +4,24 @@ import { normalizeUk, toDisplayUpper } from '../dictionary/normalize.js';
 export const LETTER_KEYBOARD_COLUMNS = 6;
 /** Horizontal padding on play screen (matches `play.tsx` container). */
 export const LETTER_KEYBOARD_HORIZONTAL_PADDING = spacing.md * 2;
+/** Cap letter/compose key size on wide screens (~laptop keycap). */
+export const LETTER_KEY_MAX_SIZE = 48;
+/** Apply the cap from this width (phones keep the 6-column layout). */
+export const LETTER_KEY_TABLET_MIN_WIDTH = 600;
 
 /**
  * Square key size for letter keyboard and compose action buttons.
  */
 export function computeLetterKeySize(screenWidth: number): number {
-  return Math.floor(
-    (screenWidth -
-      LETTER_KEYBOARD_HORIZONTAL_PADDING -
-      spacing.xs * (LETTER_KEYBOARD_COLUMNS - 1)) /
-      LETTER_KEYBOARD_COLUMNS,
+  const gap = spacing.xs;
+  const available = screenWidth - LETTER_KEYBOARD_HORIZONTAL_PADDING;
+  const uncapped = Math.floor(
+    (available - gap * (LETTER_KEYBOARD_COLUMNS - 1)) / LETTER_KEYBOARD_COLUMNS,
   );
+  if (screenWidth < LETTER_KEY_TABLET_MIN_WIDTH) {
+    return uncapped;
+  }
+  return Math.min(LETTER_KEY_MAX_SIZE, uncapped);
 }
 
 /** One pressable key on the interactive letter keyboard. */

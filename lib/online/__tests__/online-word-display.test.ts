@@ -38,7 +38,12 @@ describe('resolveOnlineWordEntry', () => {
   it('returns x2 when unique and bonus enabled', () => {
     const s = session({
       wordCounts: { слово: 1 },
-      settings: { ...session().settings, uniqueBonusEnabled: true },
+      settings: { ...session().settings, uniqueBonusMode: 'auto' },
+      players: {
+        org: { name: 'Орг', wordCount: 0, score: 0, avatarColorIndex: 0 },
+        a: { name: 'А', wordCount: 0, score: 0, avatarColorIndex: 1 },
+        b: { name: 'Б', wordCount: 0, score: 0, avatarColorIndex: 2 },
+      },
     });
     const entry = resolveOnlineWordEntry('слово', s);
     expect(entry.badge).toBe('x2');

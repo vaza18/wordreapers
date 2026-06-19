@@ -25,6 +25,7 @@ import { playWordAcceptedFeedback } from '@/lib/feedback/game-feedback';
 import { ensureFirebaseReady } from '@/lib/firebase/ensure-firebase-ready';
 import { joinErrorMessage } from '@/lib/firebase/join-error-message';
 import { buildLetterKeys, computeLetterKeySize } from '@/lib/game/letter-keyboard';
+import { letterKeyFontSizeForKeySize } from '@/lib/game/letter-key-style';
 import { acceptWord, type PlayWordErrorCode } from '@/lib/game/play-word';
 import { formatPlayRulesLabel } from '@/lib/online/play-rules-label';
 import { gameSessionSettingsFromSetup } from '@/lib/firebase/session-settings';
@@ -77,6 +78,7 @@ export default function OrganizerSoloPlayScreen() {
   const gameId = rawGameId ?? '';
   const { width: screenWidth } = useWindowDimensions();
   const composeKeySize = computeLetterKeySize(screenWidth);
+  const composeKeyFontSize = letterKeyFontSizeForKeySize(composeKeySize);
   const wordAcceptedFeedback = useSettingsStore((state) => state.wordAcceptedFeedback);
   const timerAlertMode = useSettingsStore((state) => state.timerAlertMode);
   const myName = useProfileStore((state) => state.name) || t('profile.namePlaceholder');
@@ -377,9 +379,9 @@ export default function OrganizerSoloPlayScreen() {
                   styles.composeKeyDanger,
                 ]}
               >
-                <Text style={styles.composeKeyLabel}>✕</Text>
+                <Text style={[styles.composeKeyLabel, { fontSize: composeKeyFontSize }]}>✕</Text>
               </FeedbackPressable>
-              <View style={styles.draftBox}>
+              <View style={[styles.draftBox, { height: composeKeySize }]}>
                 <Text style={styles.draftText}>{toDisplayUpper(draft) || ' '}</Text>
               </View>
               <FeedbackPressable
@@ -391,7 +393,7 @@ export default function OrganizerSoloPlayScreen() {
                   styles.composeKeyOk,
                 ]}
               >
-                <Text style={styles.composeKeyLabel}>←</Text>
+                <Text style={[styles.composeKeyLabel, { fontSize: composeKeyFontSize }]}>←</Text>
               </FeedbackPressable>
             </View>
 
@@ -538,16 +540,13 @@ const styles = StyleSheet.create({
   },
   composeKeyLabel: {
     color: '#FFFFFF',
-    fontSize: 22,
     fontWeight: '700',
   },
   draftBox: {
     flex: 1,
     backgroundColor: '#FAEEDA',
     borderRadius: radii.sm,
-    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    minHeight: 40,
     justifyContent: 'center',
   },
   draftText: {
