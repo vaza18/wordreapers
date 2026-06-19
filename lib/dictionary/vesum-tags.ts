@@ -89,20 +89,6 @@ export function isExcludedStylistic(tags: string): boolean {
 }
 
 /**
- * Nominative singular adjective (any gender).
- */
-export function isAdjectiveNominativeSingular(tags: string): boolean {
-  return tags.startsWith('adj:') && tags.includes(':v_naz') && !tags.includes(':p:v_naz');
-}
-
-/**
- * Gradable adjective lemma — often homographs with rare substantivized noun senses.
- */
-export function isGradableAdjectiveLemma(tags: string): boolean {
-  return isAdjectiveNominativeSingular(tags) && tags.includes(':compb');
-}
-
-/**
  * Nominative singular noun (Condition A in TZ §7.4).
  */
 export function isNounNominativeSingular(tags: string): boolean {
@@ -167,18 +153,11 @@ export function isSupplementSlangEntry(tags: string): boolean {
 /**
  * Return whether a VESUM entry belongs in the main `dictionary.txt`.
  */
-export function isMainDictionaryEntry(
-  tags: string,
-  normalizedWord: string,
-  gradableAdjectiveHomographs: ReadonlySet<string>,
-): boolean {
+export function isMainDictionaryEntry(tags: string): boolean {
   if (!isGameDictionaryEntry(tags)) {
     return false;
   }
   if (isSlang(tags) || isExcludedStylistic(tags)) {
-    return false;
-  }
-  if (gradableAdjectiveHomographs.has(normalizedWord)) {
     return false;
   }
   return true;

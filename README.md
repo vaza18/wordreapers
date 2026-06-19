@@ -92,7 +92,20 @@ npm run firebase:deploy:backend
 
 The app bundles dictionary files from `assets/generated/dictionaries/uk-uk/` (same output as `npm run dict:build`).
 
-**Expo Go:** install [Expo Go](https://expo.dev/go) from the Play Store / App Store — this project targets **SDK 54** (matches the store build, e.g. client 54.0.x).
+### Store builds (maintainers)
+
+Production Android/iOS builds use [EAS Build](https://docs.expo.dev/build/introduction/):
+
+```bash
+eas build --platform android --profile production   # AAB → Google Play
+eas build --platform ios --profile production       # IPA → TestFlight / App Store
+```
+
+Firebase keys for release builds: EAS **production** environment (`EXPO_PUBLIC_FIREBASE_*`). Local step-by-step notes: `docs/store/` (gitignored on maintainer machines).
+
+**Testers:** Google Play internal/closed testing (opt-in link from Play Console); iOS via TestFlight after IPA upload.
+
+**Expo Go:** install [Expo Go](https://expo.dev/go) from the Play Store / App Store — this project targets **SDK 54** (matches the store build, e.g. client 54.0.x). **For development only** — family testers should use Play / TestFlight builds, not Expo Go.
 
 **Fullscreen / hidden status bar:** the app hides the status bar in its own builds (`app.json` + `StatusBar hidden`). **Expo Go cannot remove the system clock/battery row** — that bar belongs to the Expo Go host app, not Wordreapers. To see true fullscreen, use a **development build** on your phone:
 

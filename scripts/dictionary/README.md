@@ -33,8 +33,7 @@ Each locale is one folder (BCP 47 tag). Example for Ukrainian:
 - nouns, nominative, singular (+ pluralia tantum `:ns`)
 - exclude `:prop`, `:abbr`, `:pron:` (займенники), `:slang`
 - exclude stylistic non-standard tags: `:arch`, `:subst`, `:bad`, `:vulg`, `:obsc` (VESUM has no surzhyk tag; `:obsc` = obscene, e.g. «хуїльйон»; `:arch` drops e.g. «утка», standard «качка» stays)
-- exclude **gradable adjective homographs** (`adj` with `:v_naz` + `:compb` — e.g. `чорний` as color adjective, not rare noun sense)
-- manual blocklist: `scripts/dictionary/blocklist-uk-uk.txt`
+- manual blocklist: `scripts/dictionary/blocklist-uk-uk.txt` (e.g. «утка», «чорний»/«чорна» as offensive noun senses)
 
 Future example: `en-us/` with the same four files for English (US).
 
