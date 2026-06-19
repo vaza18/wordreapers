@@ -91,7 +91,7 @@
     "playRulesStandard": "без власних назв і сленгу",
     "errorRoomStarted": "Кімнату не знайдено або приєднання закрито",
     "errorJoinFailed": "Не вдалося приєднатись",
-    "errorFirebaseConfig": "Firebase не вбудовано в iOS-збірку. Переконайтесь, що є .env, і знову: npm run ios:device",
+    "errorFirebaseConfig": "Відсутні налаштування бази даних. Зверніться до розробника.",
     "errorFirebasePermission": "Немає доступу до Firebase. Опублікуйте rules з firebase/database.rules.json у Firebase Console",
     "errorFirebaseApiKey": "Firebase API key заблоковано для iOS. У Google Cloud → API key зніміть обмеження або додайте bundle id com.wordreapers.app",
     "errorFirebaseNetwork": "Немає зʼєднання з хмарою Firebase. Потрібен інтернет (Wi‑Fi або LTE), не локальна мережа з Mac",
