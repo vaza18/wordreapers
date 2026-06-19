@@ -1,4 +1,4 @@
-# Android development build (перший `expo run:android`)
+# Android development build (перший `npm run android`)
 
 Помилка `Failed to resolve the Android SDK path` / `spawn adb ENOENT` означає: на Mac **немає Android SDK** (зазвичай ставиться разом з **Android Studio**).
 
@@ -74,19 +74,28 @@ npm run android:check
 
 Android Studio → **Device Manager** → **Create Device** → завантажте system image → **Run**.
 
-## 6. Збірка Wordreapers
+## 6. Development build (Wordreapers + Metro)
 
 У папці проєкту:
 
 ```bash
 cd wordreapers
 npm run dict:all          # якщо ще не робили
-npm run android           # або: source scripts/android-env.sh && npx expo run:android
+npm run android           # перший раз: збірка + встановлення dev client (~10–20 хв)
+npm start                 # далі щодня: Metro (expo start --dev-client)
 ```
 
-Перша збірка — **10–20 хв** (Gradle, залежності). Далі швидше.
+Відкрийте на телефоні **«Словозбирачі»** (окремий застосунок з dev menu), **не Expo Go**. Після змін лише в `.ts`/`.tsx` достатньо reload; після змін у `app.json` / плагінах — знову `npm run android`.
 
-На телефон встановиться **окремий** застосунок «Словозбирачі» (не Expo Go). Там має працювати прихований статус-бар.
+На телефоні має працювати прихований статус-бар (на відміну від Expo Go).
+
+### EAS dev APK (без локального Android SDK)
+
+```bash
+npm run build:android:dev
+```
+
+Встановіть APK з Expo dashboard, потім `npm start` на Mac.
 
 ## 7. Після змін у `app.json` / нативних плагінах
 
@@ -106,12 +115,13 @@ npx expo run:android
 | JDK помилка                       | Android Studio → **Settings → Build → Gradle JDK** → Embedded JDK 17                                  |
 | Повільна збірка                   | Нормально для першого разу; наступні — інкрементальні                                                 |
 
-## Expo Go vs dev build
+## Dev client vs Expo Go
 
-|                       | Expo Go                      | `expo run:android` |
-| --------------------- | ---------------------------- | ------------------ |
-| Встановлення          | Play Store                   | Збираєте ви        |
-| Статус-бар (годинник) | Завжди видно (оболонка Expo) | Можна сховати      |
-| Словник / гра         | Так                          | Так                |
+|                        | Expo Go (не використовуємо)  | Development build (`npm run android`) |
+| ---------------------- | ---------------------------- | ------------------------------------- |
+| Встановлення           | Play Store                   | `npm run android` або EAS dev APK     |
+| Metro                  | `expo start` без dev client  | `npm start` (`--dev-client`)          |
+| Статус-бар (годинник)  | Завжди видно (оболонка Expo) | Можна сховати                         |
+| Камера / notifications | обмежено                     | як у production                       |
 
-Для сімейного тесту з повним екраном — **dev build**; для швидких правок UI — **Expo Go + tunnel**.
+Проєкт містить **`expo-dev-client`** — для розробки потрібен dev build, не Expo Go.

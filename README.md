@@ -27,7 +27,7 @@ The `assets/generated/dictionaries/uk-uk/` folder holds generated `.txt` / `.jso
 npm run dict:all
 ```
 
-After that, restart Metro: `npx expo start --clear`.
+After that, restart Metro: `npm start -- --clear`.
 
 #### File layout
 
@@ -73,12 +73,30 @@ Transitive dependency conflicts (e.g. `uuid` in Expo’s iOS tooling, `react-nat
 
 Pipeline details: [`scripts/dictionary/README.md`](scripts/dictionary/README.md).
 
-### Mobile app (Expo)
+### Mobile app (Expo development build)
+
+This project uses **[expo-dev-client](https://docs.expo.dev/develop/development-builds/introduction/)** — a custom dev app on your phone/emulator, not Expo Go.
+
+**First time** (installs native dev client; Android needs [Android Studio + SDK](docs/android-dev-setup.md)):
 
 ```bash
 npm run dict:all          # build dictionaries (required once after clone)
-npm start                 # Expo dev server → scan QR in Expo Go
+npm run android           # or: npm run ios
 ```
+
+**Daily development** (after the dev client is installed):
+
+```bash
+npm start                 # Metro for development build (expo start --dev-client)
+```
+
+Open **Словозбирачі** on the device (not Expo Go). Reload from the dev menu or shake the device.
+
+Cross-network / USB-only: `npm run start:tunnel`.
+
+After `app.json` or native plugin changes: `npm run android` or `npm run ios` again (rebuilds native project).
+
+Cloud dev APK (optional, no local Android SDK): `npm run build:android:dev`.
 
 ### Firebase deploy (maintainers)
 
@@ -105,25 +123,18 @@ Firebase keys for release builds: EAS **production** environment (`EXPO_PUBLIC_F
 
 **Testers:** Google Play internal/closed testing (opt-in link from Play Console); iOS via TestFlight after IPA upload.
 
-**Expo Go:** install [Expo Go](https://expo.dev/go) from the Play Store / App Store — this project targets **SDK 54** (matches the store build, e.g. client 54.0.x). **For development only** — family testers should use Play / TestFlight builds, not Expo Go.
+**Development builds** use `expo-dev-client` (`npm run android` / `npm run ios`, then `npm start`). **Do not use Expo Go** — native modules (camera, notifications, fullscreen status bar) need the dev client or a store build.
 
-**Fullscreen / hidden status bar:** the app hides the status bar in its own builds (`app.json` + `StatusBar hidden`). **Expo Go cannot remove the system clock/battery row** — that bar belongs to the Expo Go host app, not Wordreapers. To see true fullscreen, use a **development build** on your phone:
-
-```bash
-npx expo run:android   # USB debugging + Android SDK, or
-npx expo run:ios       # macOS + Xcode
-```
-
-Or an EAS preview APK. Settings in [`app.json`](app.json) (`androidStatusBar.hidden`, iOS `UIStatusBarHidden`) apply there.
+**Fullscreen / hidden status bar:** works in dev builds and production (`app.json` + `StatusBar hidden`). Settings in [`app.json`](app.json) (`androidStatusBar.hidden`, iOS `UIStatusBarHidden`).
 
 **First `expo run:android` on Mac:** requires [Android Studio](https://developer.android.com/studio) + SDK + `ANDROID_HOME`. Step-by-step: [`docs/android-dev-setup.md`](docs/android-dev-setup.md). Quick check: `npm run android:check`.
 
-**If Expo Go shows “Failed to download remote update”:** the phone could not reach Metro on your computer (not a dictionary bug). Try:
+**If the dev client shows “Failed to download remote update”:** the phone could not reach Metro on your computer. Try:
 
-1. Phone and computer on the **same Wi‑Fi** (no guest network / VPN).
-2. Reload in Expo Go (circular arrow) or scan the QR code again.
-3. Tunnel (works across networks): `npm run start:tunnel` — wait for the URL, then open it in Expo Go.
-4. Restart Metro with a clean cache: `npx expo start --clear`
+1. Phone and computer on the **same Wi‑Fi** (no guest network / VPN), or USB with `adb reverse tcp:8081 tcp:8081`.
+2. Reload from the dev menu or restart the app.
+3. Tunnel (works across networks): `npm run start:tunnel`.
+4. Restart Metro with a clean cache: `npx expo start --dev-client --clear`.
 5. Allow incoming connections on port **8081** in the Mac firewall (System Settings → Network → Firewall).
 
 **Stack:** Expo SDK 54, Expo Router 6, React 19.1, React Native 0.81, Zustand, i18next (uk), shared logic in `lib/dictionary/`.

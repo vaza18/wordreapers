@@ -37,7 +37,7 @@ function loadHapticsModule(): HapticsModule | null {
     return hapticsModule;
   }
   try {
-    // Deferred require keeps Expo Go alive when the native module is missing.
+    // Deferred require keeps dev client usable when the native module is missing in some builds.
     hapticsModule = require('expo-haptics') as HapticsModule;
     return hapticsModule;
   } catch {

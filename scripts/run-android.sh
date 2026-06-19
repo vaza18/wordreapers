@@ -19,4 +19,22 @@ if [[ ! -d "${ANDROID_HOME:-}" ]]; then
 fi
 
 cd "$ROOT"
+
+if [[ ! -f "$ROOT/.env" ]]; then
+  echo "Missing .env — copy from .env.example and fill Firebase keys."
+  exit 1
+fi
+if [[ -f "$ROOT/.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$ROOT/.env"
+  set +a
+fi
+if [[ -f "$ROOT/.env.local" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$ROOT/.env.local"
+  set +a
+fi
+
 exec npx expo run:android "$@"

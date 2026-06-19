@@ -41,7 +41,9 @@
     "firebase:login": "npx firebase-tools login",
     "firebase:deploy:rules": "bash scripts/firebase-deploy.sh --only database",
     "firebase:deploy:functions": "bash scripts/firebase-deploy.sh --only functions",
-    "firebase:deploy:backend": "bash scripts/firebase-deploy.sh --only database,functions"
+    "firebase:deploy:backend": "bash scripts/firebase-deploy.sh --only database,functions",
+    "build:android": "bash scripts/eas-build-android-local.sh",
+    "build:android:dev": "eas build --platform android --profile development"
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",
@@ -72,6 +74,7 @@
     "expo-build-properties": "~1.0.10",
     "expo-camera": "~17.0.10",
     "expo-constants": "~18.0.13",
+    "expo-dev-client": "~6.0.21",
     "expo-file-system": "~19.0.23",
     "expo-font": "~14.0.12",
     "expo-haptics": "~15.0.8",

@@ -15,6 +15,8 @@ npm run dict:all                     # required once after clone
 
 Fill Firebase `EXPO_PUBLIC_*` values in `.env` for online play. The same `EXPO_PUBLIC_FIREBASE_PROJECT_ID` is used by `npm run firebase:deploy:*`.
 
+Install the **development client** once (`npm run android` or `npm run ios`), then use `npm start` for daily JS work — not Expo Go.
+
 ## Quality checks
 
 Run these before opening a pull request:

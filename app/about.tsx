@@ -5,7 +5,7 @@ import { Screen } from '@/components/Screen';
 export default function AboutScreen() {
   return (
     <Screen scroll={false} style={{ padding: 0 }}>
-      <LegalDocumentView documentKey="about" />
+      <LegalDocumentView documentKey="about" showAppVersion />
     </Screen>
   );
 }
