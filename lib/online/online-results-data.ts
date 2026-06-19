@@ -7,6 +7,7 @@ import { formatResultsHeadline } from '../game/results-headline.js';
 import { buildGlobalResultWords, buildPlayerResultRankGroups } from '../game/results-view.js';
 import { computeRoundDurationSeconds } from '../game/round-duration.js';
 import { buildLiveStandingsFromSession } from '../online/live-standings.js';
+import { isSoloStandings } from '../game/solo-round.js';
 import { buildStandingsFromSession, type PlayerStandings } from '../game/scoring.js';
 
 type TranslateFn = (key: string, params?: Record<string, string | number>) => string;
@@ -20,8 +21,8 @@ export function firebaseWordsToMaps(
   const wordsByPlayer = new Map<string, string[]>();
   const displaysByPlayer = new Map<string, string[]>();
 
-  for (const [playerId, words] of byPlayer) {
-    const sorted: [string, StoredPlayerWord][] = [...words.entries()].sort(
+  for (const [playerId, words] of Array.from(byPlayer)) {
+    const sorted: [string, StoredPlayerWord][] = Array.from(words.entries()).sort(
       (a, b) => a[1].at - b[1].at,
     );
     const normals: string[] = [];
@@ -76,7 +77,8 @@ export function buildOnlineResultsView(
     roundDurationSeconds,
   });
 
-  const headline = formatResultsHeadline(t, directory, standings);
+  const headline = formatResultsHeadline(t, directory, standings, uniqueBonusEnabled);
+  const isSolo = isSoloStandings(standings);
 
   return {
     headline,
@@ -87,6 +89,7 @@ export function buildOnlineResultsView(
     standings,
     uniqueBonusEnabled,
     roundDurationSeconds,
+    isSolo,
   };
 }
 

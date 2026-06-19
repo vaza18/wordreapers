@@ -28,6 +28,7 @@ export interface OrganizerSoloState {
   finishRound: () => void;
   pauseRound: () => void;
   resumeRound: () => void;
+  addTime: (minutes: number) => void;
   markPublished: () => void;
   clear: () => void;
   getScoredWords: () => ScoredWordEntry[];
@@ -104,6 +105,18 @@ export const useOrganizerSoloStore = create<OrganizerSoloState>((set, get) => ({
       endsAt: Date.now() + pausedRemainingMs,
       pausedRemainingMs: null,
     });
+  },
+
+  addTime: (minutes) => {
+    const { status, endsAt, pausedRemainingMs } = get();
+    const addMs = minutes * 60_000;
+    if (status === 'playing' && endsAt !== null) {
+      set({ endsAt: endsAt + addMs });
+      return;
+    }
+    if (status === 'paused' && pausedRemainingMs !== null) {
+      set({ pausedRemainingMs: pausedRemainingMs + addMs });
+    }
   },
 
   markPublished: () => {

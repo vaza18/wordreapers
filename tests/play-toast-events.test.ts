@@ -6,21 +6,32 @@ import { detectPlayToastEvents } from '../lib/online/play-toast-events.js';
 function session(
   players: GameSession['players'],
   status: GameSession['status'] = 'playing',
+  settings?: Partial<GameSession['settings']>,
 ): GameSession {
   return {
     baseWord: 'тест',
     status,
     settings: {
       durationSeconds: 300,
+      uniqueBonusMode: 'off',
       uniqueBonusEnabled: false,
       language: 'uk',
       allowProperNouns: false,
       allowSlang: false,
+      ...settings,
     },
     timerEndsAt: Date.now() + 60_000,
     organizerId: 'org',
     players,
   };
+}
+
+/** Three or more players with auto x2 — rank/score toasts are enabled. */
+function scoringSession(
+  players: GameSession['players'],
+  status: GameSession['status'] = 'playing',
+): GameSession {
+  return session(players, status, { uniqueBonusMode: 'auto' });
 }
 
 describe('detectPlayToastEvents', () => {
@@ -151,7 +162,7 @@ describe('detectPlayToastEvents', () => {
   });
 
   it('detects overtakes when rejoined player still has stale hasLeft in RTDB', () => {
-    const prev = session({
+    const prev = scoringSession({
       me: { name: 'Я', wordCount: 2, score: 3, online: true },
       a: {
         name: 'Василь',
@@ -161,8 +172,9 @@ describe('detectPlayToastEvents', () => {
         online: true,
         hasLeft: true,
       },
+      b: { name: 'Б', wordCount: 0, score: 0, online: true },
     });
-    const curr = session({
+    const curr = scoringSession({
       me: { name: 'Я', wordCount: 2, score: 3, online: true },
       a: {
         name: 'Василь',
@@ -172,6 +184,7 @@ describe('detectPlayToastEvents', () => {
         online: true,
         hasLeft: true,
       },
+      b: { name: 'Б', wordCount: 0, score: 0, online: true },
     });
 
     expect(detectPlayToastEvents(prev, curr, 'me')).toEqual([
@@ -207,13 +220,15 @@ describe('detectPlayToastEvents', () => {
   });
 
   it('detects overtakes after a tied start', () => {
-    const prev = session({
+    const prev = scoringSession({
       me: { name: 'Я', wordCount: 0, score: 0, online: true },
       bab: { name: 'Бабуся', gender: 'f', wordCount: 0, score: 0, online: true },
+      c: { name: 'С', wordCount: 0, score: 0, online: true },
     });
-    const curr = session({
+    const curr = scoringSession({
       me: { name: 'Я', wordCount: 0, score: 0, online: true },
       bab: { name: 'Бабуся', gender: 'f', wordCount: 1, score: 2, online: true },
+      c: { name: 'С', wordCount: 0, score: 0, online: true },
     });
 
     expect(detectPlayToastEvents(prev, curr, 'me')).toEqual([
@@ -232,17 +247,25 @@ describe('detectPlayToastEvents', () => {
         name: 'Я',
         gender: null,
       },
+      {
+        type: 'yielded_to_me',
+        playerId: 'c',
+        name: 'С',
+        gender: null,
+      },
     ]);
   });
 
   it('detects yielding the lead after scoring from a tie', () => {
-    const prev = session({
+    const prev = scoringSession({
       me: { name: 'Я', wordCount: 0, score: 0, online: true },
       egor: { name: 'Єгор', gender: 'm', wordCount: 0, score: 0, online: true },
+      c: { name: 'С', wordCount: 0, score: 0, online: true },
     });
-    const curr = session({
+    const curr = scoringSession({
       me: { name: 'Я', wordCount: 1, score: 2, online: true },
       egor: { name: 'Єгор', gender: 'm', wordCount: 0, score: 0, online: true },
+      c: { name: 'С', wordCount: 0, score: 0, online: true },
     });
 
     expect(detectPlayToastEvents(prev, curr, 'me')).toEqual([
@@ -252,17 +275,25 @@ describe('detectPlayToastEvents', () => {
         name: 'Єгор',
         gender: 'm',
       },
+      {
+        type: 'yielded_to_me',
+        playerId: 'c',
+        name: 'С',
+        gender: null,
+      },
     ]);
   });
 
   it('detects rank overtakes in both directions', () => {
-    const prev = session({
+    const prev = scoringSession({
       me: { name: 'Я', wordCount: 1, score: 1, online: true },
       bab: { name: 'Бабуся', gender: 'f', wordCount: 0, score: 0, online: true },
+      c: { name: 'С', wordCount: 0, score: 0, online: true },
     });
-    const curr = session({
+    const curr = scoringSession({
       me: { name: 'Я', wordCount: 1, score: 1, online: true },
       bab: { name: 'Бабуся', gender: 'f', wordCount: 1, score: 2, online: true },
+      c: { name: 'С', wordCount: 0, score: 0, online: true },
     });
 
     expect(detectPlayToastEvents(prev, curr, 'me')).toEqual([
@@ -274,13 +305,15 @@ describe('detectPlayToastEvents', () => {
       },
     ]);
 
-    const passedPrev = session({
+    const passedPrev = scoringSession({
       me: { name: 'Я', wordCount: 0, score: 0, online: true },
       dad: { name: 'Тато', gender: 'm', wordCount: 1, score: 1, online: true },
+      c: { name: 'С', wordCount: 0, score: 0, online: true },
     });
-    const passedCurr = session({
+    const passedCurr = scoringSession({
       me: { name: 'Я', wordCount: 1, score: 2, online: true },
       dad: { name: 'Тато', gender: 'm', wordCount: 1, score: 1, online: true },
+      c: { name: 'С', wordCount: 0, score: 0, online: true },
     });
 
     expect(detectPlayToastEvents(passedPrev, passedCurr, 'me')).toEqual([
@@ -290,17 +323,25 @@ describe('detectPlayToastEvents', () => {
         name: 'Тато',
         gender: 'm',
       },
+      {
+        type: 'yielded_to_me',
+        playerId: 'c',
+        name: 'С',
+        gender: null,
+      },
     ]);
   });
 
   it('detects yielding when opponent loses points and viewer takes the lead', () => {
-    const prev = session({
+    const prev = scoringSession({
       me: { name: 'Я', wordCount: 1, score: 2, online: true },
       egor: { name: 'Єгор', gender: 'm', wordCount: 2, score: 3, online: true },
+      c: { name: 'С', wordCount: 0, score: 0, online: true },
     });
-    const curr = session({
+    const curr = scoringSession({
       me: { name: 'Я', wordCount: 1, score: 2, online: true },
       egor: { name: 'Єгор', gender: 'm', wordCount: 2, score: 1, online: true },
+      c: { name: 'С', wordCount: 0, score: 0, online: true },
     });
 
     expect(detectPlayToastEvents(prev, curr, 'me')).toEqual([
@@ -314,27 +355,51 @@ describe('detectPlayToastEvents', () => {
   });
 
   it('does not toast on score ties', () => {
-    const catchUpPrev = session({
+    const catchUpPrev = scoringSession({
       me: { name: 'Я', wordCount: 1, score: 5, online: true },
       dad: { name: 'Тато', gender: 'm', wordCount: 2, score: 6, online: true },
+      c: { name: 'С', wordCount: 0, score: 0, online: true },
     });
-    const catchUpCurr = session({
+    const catchUpCurr = scoringSession({
       me: { name: 'Я', wordCount: 2, score: 6, online: true },
       dad: { name: 'Тато', gender: 'm', wordCount: 2, score: 6, online: true },
+      c: { name: 'С', wordCount: 0, score: 0, online: true },
     });
 
     expect(detectPlayToastEvents(catchUpPrev, catchUpCurr, 'me')).toEqual([]);
 
-    const wordOnlyPrev = session({
+    const wordOnlyPrev = scoringSession({
       me: { name: 'Я', wordCount: 1, score: 4, online: true },
       bab: { name: 'Бабуся', gender: 'f', wordCount: 1, score: 4, online: true },
+      c: { name: 'С', wordCount: 0, score: 0, online: true },
     });
-    const wordOnlyCurr = session({
+    const wordOnlyCurr = scoringSession({
       me: { name: 'Я', wordCount: 1, score: 4, online: true },
       bab: { name: 'Бабуся', gender: 'f', wordCount: 2, score: 4, online: true },
+      c: { name: 'С', wordCount: 0, score: 0, online: true },
     });
 
     expect(detectPlayToastEvents(wordOnlyPrev, wordOnlyCurr, 'me')).toEqual([]);
+  });
+
+  it('uses word count for rank toasts when unique bonus is off', () => {
+    const prev = session({
+      me: { name: 'Я', wordCount: 0, score: 0, online: true },
+      bab: { name: 'Бабуся', gender: 'f', wordCount: 0, score: 0, online: true },
+    });
+    const curr = session({
+      me: { name: 'Я', wordCount: 0, score: 0, online: true },
+      bab: { name: 'Бабуся', gender: 'f', wordCount: 1, score: 1, online: true },
+    });
+
+    expect(detectPlayToastEvents(prev, curr, 'me')).toEqual([
+      {
+        type: 'overtook_me',
+        playerId: 'bab',
+        name: 'Бабуся',
+        gender: 'f',
+      },
+    ]);
   });
 
   it('returns nothing outside playing status', () => {

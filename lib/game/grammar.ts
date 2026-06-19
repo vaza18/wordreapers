@@ -31,7 +31,7 @@ export function tGendered(
   return t(genderedI18nKey(baseKey, null), params);
 }
 
-interface WinnerLineParams extends Record<string, string | number> {
+interface WinnerLineParams {
   name: string;
   score: number;
   words: number;
@@ -44,12 +44,25 @@ export function formatWinnerHeadline(
   t: TranslateFn,
   gender: PlayerGender,
   params: WinnerLineParams,
+  showScores = true,
 ): string {
+  if (showScores) {
+    const withScore = { name: params.name, score: params.score, words: params.words };
+    if (gender === 'f') {
+      return t('game.winnerLineFemale', withScore);
+    }
+    if (gender === 'm') {
+      return t('game.winnerLineMale', withScore);
+    }
+    return t('game.winnerLineNeutral', withScore);
+  }
+
+  const wordsOnly = { name: params.name, words: params.words };
   if (gender === 'f') {
-    return t('game.winnerLineFemale', params);
+    return t('game.winnerLineFemaleWords', wordsOnly);
   }
   if (gender === 'm') {
-    return t('game.winnerLineMale', params);
+    return t('game.winnerLineMaleWords', wordsOnly);
   }
-  return t('game.winnerLineNeutral', params);
+  return t('game.winnerLineNeutralWords', wordsOnly);
 }

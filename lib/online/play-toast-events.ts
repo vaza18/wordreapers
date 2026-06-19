@@ -1,5 +1,6 @@
 import type { PlayerGender } from '../game/grammar.js';
 import { assignDisplayRanks, buildStandingsFromSession } from '../game/scoring.js';
+import { resolveGameSessionSettingsForSession } from '../firebase/session-settings.js';
 import type { GameSession } from '../firebase/types.js';
 import { votingPlayerIds } from './voting-player-ids.js';
 
@@ -135,24 +136,27 @@ function playerScore(session: GameSession, playerId: string): number {
   return session.players[playerId]?.score ?? 0;
 }
 
-function isTiedOnScore(session: GameSession, playerA: string, playerB: string): boolean {
-  return playerScore(session, playerA) === playerScore(session, playerB);
+function playerWordCount(session: GameSession, playerId: string): number {
+  return session.players[playerId]?.wordCount ?? 0;
 }
 
-/** True when `leaderId` has more points than `followerId` (ties do not count as ahead). */
-function isAheadByScore(session: GameSession, leaderId: string, followerId: string): boolean {
-  return playerScore(session, leaderId) > playerScore(session, followerId);
-}
-
-function hasPointsChange(prev: GameSession, curr: GameSession, playerId: string): boolean {
-  return playerScore(prev, playerId) !== playerScore(curr, playerId);
+function activeCompetitorIds(session: GameSession): string[] {
+  return Object.keys(session.players).filter((playerId) => isCompetingInRound(session, playerId));
 }
 
 function detectRankEvents(prev: GameSession, curr: GameSession, myUid: string): PlayToastEvent[] {
-  const scoreChanged = Object.keys(curr.players).some(
-    (playerId) => isCompetingInRound(curr, playerId) && hasPointsChange(prev, curr, playerId),
+  if (activeCompetitorIds(curr).length < 2) {
+    return [];
+  }
+
+  const useScoreRanking = resolveGameSessionSettingsForSession(curr).uniqueBonusEnabled;
+  const metric = useScoreRanking ? playerScore : playerWordCount;
+
+  const rankChanged = Object.keys(curr.players).some(
+    (playerId) =>
+      isCompetingInRound(curr, playerId) && metric(prev, playerId) !== metric(curr, playerId),
   );
-  if (!scoreChanged) {
+  if (!rankChanged) {
     return [];
   }
 
@@ -163,22 +167,22 @@ function detectRankEvents(prev: GameSession, curr: GameSession, myUid: string): 
       continue;
     }
 
-    if (isTiedOnScore(curr, playerId, myUid)) {
+    if (metric(curr, playerId) === metric(curr, myUid)) {
       continue;
     }
 
-    const opponentPointsChanged = hasPointsChange(prev, curr, playerId);
-    const myPointsChanged = hasPointsChange(prev, curr, myUid);
+    const opponentChanged = metric(prev, playerId) !== metric(curr, playerId);
+    const myChanged = metric(prev, myUid) !== metric(curr, myUid);
 
     const theyTookLead =
-      isAheadByScore(curr, playerId, myUid) &&
-      !isAheadByScore(prev, playerId, myUid) &&
-      (opponentPointsChanged || myPointsChanged);
+      metric(curr, playerId) > metric(curr, myUid) &&
+      metric(prev, playerId) <= metric(prev, myUid) &&
+      (opponentChanged || myChanged);
 
     const iTookLead =
-      isAheadByScore(curr, myUid, playerId) &&
-      !isAheadByScore(prev, myUid, playerId) &&
-      (myPointsChanged || opponentPointsChanged);
+      metric(curr, myUid) > metric(curr, playerId) &&
+      metric(prev, myUid) <= metric(prev, playerId) &&
+      (myChanged || opponentChanged);
 
     if (theyTookLead) {
       events.push({

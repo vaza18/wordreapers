@@ -416,6 +416,7 @@ export default function OnlineResultsScreen() {
         defaultExpandedPlayerId={myUid}
         showBaseWordInMeta={false}
         showScores={viewData.uniqueBonusEnabled}
+        showWordAuthors={!viewData.isSolo}
         roundDurationSeconds={viewData.roundDurationSeconds}
         footer={
           <>

@@ -14,12 +14,14 @@ import {
   assignDisplayRanks,
   buildStandingsFromSession,
   compareStandings,
+  shouldShowPointUi,
 } from '@/lib/game/scoring';
 import {
   formatPlayerLeftLabel,
   formatVoteStatusLabel,
   playerGenderFromSession,
 } from '@/lib/game/vote-status-label';
+import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import { voteProposerName } from '@/lib/firebase/session-votes-service';
 
 interface PauseRoundModalProps {
@@ -67,6 +69,9 @@ function PauseBody({
     [session],
   );
   const displayRanks = useMemo(() => assignDisplayRanks(standings), [standings]);
+  const showStandingsScores = shouldShowPointUi(
+    resolveGameSessionSettingsForSession(session).uniqueBonusEnabled,
+  );
 
   const resumeHeadline = useMemo(() => {
     if (!resumeVote) {
@@ -138,8 +143,14 @@ function PauseBody({
                   </Text>
                   <Text style={styles.standingMeta}>
                     {presence} · {row.wordCount}
-                    {t('game.wordsShort')} · {row.score}
-                    {t('game.pointsShort')}
+                    {t('game.wordsShort')}
+                    {showStandingsScores ? (
+                      <>
+                        {' · '}
+                        {row.score}
+                        {t('game.pointsShort')}
+                      </>
+                    ) : null}
                   </Text>
                 </View>
               </View>

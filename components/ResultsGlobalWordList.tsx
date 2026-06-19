@@ -6,22 +6,30 @@ import type { GlobalResultWordRow, GlobalWordAuthor } from '@/lib/game/results-v
 
 interface ResultsGlobalWordListProps {
   rows: readonly GlobalResultWordRow[];
+  showAuthors?: boolean;
+  showScoreBadges?: boolean;
 }
 
 /**
  * «Всі слова» tab — full alphabetical list with author chips (scroll via parent).
  */
-export function ResultsGlobalWordList({ rows }: ResultsGlobalWordListProps) {
+export function ResultsGlobalWordList({
+  rows,
+  showAuthors = true,
+  showScoreBadges = false,
+}: ResultsGlobalWordListProps) {
   return (
     <View style={styles.list}>
       {rows.map((row) => (
         <View key={row.normalized} style={styles.row}>
           <Text style={styles.word}>{row.display}</Text>
           <View style={styles.badges}>
-            {row.authors.map((author) => (
-              <AuthorChip key={`${row.normalized}-${author.playerId}`} author={author} />
-            ))}
-            {row.showX2 ? <Text style={styles.x2}>x2</Text> : null}
+            {showAuthors
+              ? row.authors.map((author) => (
+                  <AuthorChip key={`${row.normalized}-${author.playerId}`} author={author} />
+                ))
+              : null}
+            {showScoreBadges && row.showX2 ? <Text style={styles.x2}>x2</Text> : null}
           </View>
         </View>
       ))}

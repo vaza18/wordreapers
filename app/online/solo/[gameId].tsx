@@ -9,6 +9,7 @@ import {
   loadBundledDictionary,
   loadBundledSupplements,
 } from '@/services/dictionary-service';
+import { AddTimeModal } from '@/components/AddTimeModal';
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { GameMenuModal } from '@/components/GameMenuModal';
 import { GamePlayStatusBar } from '@/components/GamePlayStatusBar';
@@ -92,6 +93,7 @@ export default function OrganizerSoloPlayScreen() {
   const finishRound = useOrganizerSoloStore((state) => state.finishRound);
   const pauseRound = useOrganizerSoloStore((state) => state.pauseRound);
   const resumeRound = useOrganizerSoloStore((state) => state.resumeRound);
+  const addTime = useOrganizerSoloStore((state) => state.addTime);
   const getScoredWords = useOrganizerSoloStore((state) => state.getScoredWords);
   const getRemainingMs = useOrganizerSoloStore((state) => state.getRemainingMs);
 
@@ -103,6 +105,7 @@ export default function OrganizerSoloPlayScreen() {
   const [draftKeyIndices, setDraftKeyIndices] = useState<number[]>([]);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [showGameMenu, setShowGameMenu] = useState(false);
+  const [showAddTimeModal, setShowAddTimeModal] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -345,18 +348,26 @@ export default function OrganizerSoloPlayScreen() {
       <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
         {!isPaused ? (
           <>
-            <GamePlayStatusBar
-              timerLabel={remainingLabel}
-              timerUrgent={timerUrgent}
-              rank={1}
-              showRank={false}
-              showScore={false}
-              wordCount={scoredWords.length}
-              score={playerScore}
-              wordsShort={t('game.wordsShort')}
-              pointsShort={t('game.pointsShort')}
-              style={{ marginHorizontal: -spacing.md }}
-            />
+            <FeedbackPressable
+              accessibilityRole="button"
+              accessibilityLabel={t('game.addTimeTitle')}
+              onPress={() => {
+                setShowAddTimeModal(true);
+              }}
+            >
+              <GamePlayStatusBar
+                timerLabel={remainingLabel}
+                timerUrgent={timerUrgent}
+                rank={1}
+                showRank={false}
+                showScore={false}
+                wordCount={scoredWords.length}
+                score={playerScore}
+                wordsShort={t('game.wordsShort')}
+                pointsShort={t('game.pointsShort')}
+                style={{ marginHorizontal: -spacing.md }}
+              />
+            </FeedbackPressable>
 
             <View style={styles.playerHeader}>
               <Text style={styles.playerName} numberOfLines={1}>
@@ -412,7 +423,8 @@ export default function OrganizerSoloPlayScreen() {
                 entries={scoredWords}
                 displays={displays}
                 draftPrefix={draft}
-                showBadges={false}
+                showScoreBadges={false}
+                showOverlapPeers={false}
               />
             </View>
 
@@ -476,6 +488,18 @@ export default function OrganizerSoloPlayScreen() {
         visible={timeUpModalVisible}
         onViewResults={() => {
           router.replace({ pathname: '/online/solo-results/[gameId]', params: { gameId } });
+        }}
+      />
+
+      <AddTimeModal
+        visible={showAddTimeModal}
+        remainingMs={remainingMs}
+        requiresConsensus={false}
+        onClose={() => {
+          setShowAddTimeModal(false);
+        }}
+        onSelect={(minutes) => {
+          addTime(minutes);
         }}
       />
 

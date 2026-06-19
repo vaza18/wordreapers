@@ -34,6 +34,11 @@ export function resolveUniqueBonusEnabled(mode: UniqueBonusMode, playerCount: nu
   return playerCount >= 3;
 }
 
+/** Show point totals and x2/+N badges when unique-word scoring is active. */
+export function shouldShowPointUi(uniqueBonusEnabled: boolean): boolean {
+  return uniqueBonusEnabled;
+}
+
 /**
  * Build overlap badge (+N) where N is how many other players share the word.
  */

@@ -91,7 +91,12 @@ import { formatPlayRulesLabel } from '@/lib/online/play-rules-label';
 import { buildLetterKeys, computeLetterKeySize } from '@/lib/game/letter-keyboard';
 import { letterKeyFontSizeForKeySize } from '@/lib/game/letter-key-style';
 import { acceptWord, type PlayWordErrorCode } from '@/lib/game/play-word';
-import { assignDisplayRanks, displayRankForPlayer, type PlayerStandings } from '@/lib/game/scoring';
+import {
+  assignDisplayRanks,
+  displayRankForPlayer,
+  shouldShowPointUi,
+  type PlayerStandings,
+} from '@/lib/game/scoring';
 import { useFirebaseStore } from '@/store/firebase-store';
 import { useProfileStore } from '@/store/profile-store';
 import { useSettingsStore } from '@/store/settings-store';
@@ -308,6 +313,7 @@ export default function OnlinePlayScreen() {
   const uniqueBonusEnabled = session
     ? resolveGameSessionSettingsForSession(session).uniqueBonusEnabled
     : false;
+  const showPointUi = shouldShowPointUi(uniqueBonusEnabled);
 
   const isPaused = session?.pauseState?.active === true;
 
@@ -403,7 +409,7 @@ export default function OnlinePlayScreen() {
       }
       lastValidatedDraft.current = draftValue;
 
-      const ownNormals = [...myWords.keys()];
+      const ownNormals = Array.from(myWords.keys());
       const playerWordsMap = new Map<string, readonly string[]>([[myUid, ownNormals]]);
       const result = acceptWord({
         input: draftValue,
@@ -670,8 +676,7 @@ export default function OnlinePlayScreen() {
   const pauseVote = session.pauseVote;
   const addTimeVote = session.addTimeVote;
   const resumeVote = session.resumeVote;
-  const isOrganizer = session.organizerId === myUid;
-  const canProposeAddTime = isOrganizer && !isPaused && !earlyVote && !pauseVote && !addTimeVote;
+  const canProposeAddTime = !isPaused && !earlyVote && !pauseVote && !addTimeVote;
 
   const pressKey = (index: number) => {
     if (roundEnded || isPaused || usedKeyIndices.has(index)) {
@@ -720,7 +725,7 @@ export default function OnlinePlayScreen() {
                 wordsShort={t('game.wordsShort')}
                 pointsShort={t('game.pointsShort')}
                 showRank={hasOpponent}
-                showScore={uniqueBonusEnabled && hasOpponent}
+                showScore={showPointUi}
                 style={{ marginHorizontal: -spacing.md }}
               />
             </FeedbackPressable>
@@ -786,7 +791,8 @@ export default function OnlinePlayScreen() {
               entries={scoredWords}
               displays={displays}
               draftPrefix={draft}
-              showBadges={hasOpponent}
+              showScoreBadges={showPointUi && hasOpponent}
+              showOverlapPeers={hasOpponent}
             />
           </View>
 
@@ -836,8 +842,14 @@ export default function OnlinePlayScreen() {
               </Text>
               <Text style={styles.standingMeta}>
                 {row.wordCount}
-                {t('game.wordsShort')} · {row.score}
-                {t('game.pointsShort')}
+                {t('game.wordsShort')}
+                {showPointUi ? (
+                  <>
+                    {' · '}
+                    {row.score}
+                    {t('game.pointsShort')}
+                  </>
+                ) : null}
               </Text>
             </View>
           );
@@ -967,6 +979,7 @@ export default function OnlinePlayScreen() {
           session={session}
           vote={addTimeVote}
           myUid={myUid}
+          serverNow={serverNow}
           onYes={() => {
             void voteAddTime(gameId, myUid, 'yes');
           }}
@@ -979,6 +992,8 @@ export default function OnlinePlayScreen() {
 
       <AddTimeModal
         visible={showAddTimeModal}
+        remainingMs={remainingMs}
+        requiresConsensus={hasOpponent}
         onClose={() => {
           setShowAddTimeModal(false);
         }}

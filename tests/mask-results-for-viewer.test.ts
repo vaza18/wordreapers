@@ -13,6 +13,7 @@ function viewData(): RoundResultsViewData {
     standings: [],
     uniqueBonusEnabled: true,
     roundDurationSeconds: 600,
+    isSolo: false,
     globalWords: [
       {
         normalized: 'рот',

@@ -9,6 +9,7 @@ import {
   recomputeSessionPlayerScores,
   recomputeWordScores,
   resolveUniqueBonusEnabled,
+  shouldShowPointUi,
   toScoredWordEntry,
 } from '../lib/game/scoring.js';
 import type { PlayerStandings } from '../lib/game/scoring.js';
@@ -21,6 +22,13 @@ describe('resolveUniqueBonusEnabled', () => {
 
   it('respects explicit off', () => {
     expect(resolveUniqueBonusEnabled('off', 4)).toBe(false);
+  });
+});
+
+describe('shouldShowPointUi', () => {
+  it('mirrors unique bonus enabled', () => {
+    expect(shouldShowPointUi(false)).toBe(false);
+    expect(shouldShowPointUi(true)).toBe(true);
   });
 });
 

@@ -16,6 +16,8 @@ interface ResultsByPlayerProps {
   highlightPlayerId: string | null;
   defaultExpandedPlayerId: string | null;
   showScores?: boolean;
+  showScoreBadges?: boolean;
+  showOverlapPeers?: boolean;
   showWordsPerMinute?: boolean;
 }
 
@@ -30,8 +32,12 @@ export function ResultsByPlayer({
   highlightPlayerId,
   defaultExpandedPlayerId,
   showScores = true,
+  showScoreBadges,
+  showOverlapPeers,
   showWordsPerMinute = false,
 }: ResultsByPlayerProps) {
+  const showX2Badges = showScoreBadges ?? showScores;
+  const showPeerAvatars = showOverlapPeers ?? showX2Badges;
   const { t } = useTranslation();
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => {
     const initial = new Set<string>();
@@ -68,11 +74,16 @@ export function ResultsByPlayer({
           <View key={`rank-${group.rank}`} style={tierStyle}>
             {multi ? (
               <Text style={[styles.tierLabel, group.isTopRank ? styles.tierLabelTop : null]}>
-                {t('game.resultsRankTier', {
-                  rank: group.rank,
-                  score: rep?.score ?? 0,
-                  words: rep?.wordCount ?? 0,
-                })}
+                {showScores
+                  ? t('game.resultsRankTier', {
+                      rank: group.rank,
+                      score: rep?.score ?? 0,
+                      words: rep?.wordCount ?? 0,
+                    })
+                  : t('game.resultsRankTierWords', {
+                      rank: group.rank,
+                      words: rep?.wordCount ?? 0,
+                    })}
               </Text>
             ) : null}
 
@@ -140,13 +151,13 @@ export function ResultsByPlayer({
                             <Text
                               style={[
                                 styles.wordChip,
-                                word.badge === 'x2' ? styles.wordChipX2 : null,
+                                showX2Badges && word.badge === 'x2' ? styles.wordChipX2 : null,
                               ]}
                             >
                               {word.display}
-                              {word.badge === 'x2' ? ` ${word.badge}` : ''}
+                              {showX2Badges && word.badge === 'x2' ? ` ${word.badge}` : ''}
                             </Text>
-                            {word.overlapPeers.length > 0 ? (
+                            {showPeerAvatars && word.overlapPeers.length > 0 ? (
                               <WordOverlapAvatars peers={word.overlapPeers} />
                             ) : null}
                           </View>
