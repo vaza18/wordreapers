@@ -1,4 +1,4 @@
-/** Unique-word x2 bonus setting before a round starts. */
+/** Whether the x2 unique-word bonus applies: auto (3+ players) or off. */
 export type UniqueBonusMode = 'auto' | 'off';
 
 /** How a word contributes to score. */
@@ -32,6 +32,11 @@ export function resolveUniqueBonusEnabled(mode: UniqueBonusMode, playerCount: nu
     return false;
   }
   return playerCount >= 3;
+}
+
+/** Show point totals and x2/+N badges when unique-word scoring is active. */
+export function shouldShowPointUi(uniqueBonusEnabled: boolean): boolean {
+  return uniqueBonusEnabled;
 }
 
 /**
@@ -180,6 +185,64 @@ export function compareStandings(a: PlayerStandings, b: PlayerStandings): number
     return b.wordCount - a.wordCount;
   }
   return 0;
+}
+
+/**
+ * Recompute each player's score and word count from session-wide word maps.
+ * Used when the x2 bonus toggles (e.g. 3rd player joins after a solo publish).
+ */
+export function recomputeSessionPlayerScores(
+  session: {
+    players: Record<string, { score?: number; wordCount?: number }>;
+    wordCounts?: Record<string, number>;
+    wordPlayers?: Record<string, Record<string, boolean>>;
+  },
+  uniqueBonusEnabled: boolean,
+): void {
+  const wordCounts = session.wordCounts ?? {};
+  const wordPlayers = session.wordPlayers ?? {};
+
+  for (const [playerId, player] of Object.entries(session.players)) {
+    let score = 0;
+    let wordCount = 0;
+    for (const [normalized, playersOnWord] of Object.entries(wordPlayers)) {
+      if (!playersOnWord[playerId]) {
+        continue;
+      }
+      const globalCount = wordCounts[normalized] ?? 1;
+      const kind: WordScoreKind = globalCount > 1 ? 'normal' : 'unique';
+      score += toScoredWordEntry(normalized, kind, uniqueBonusEnabled, globalCount).points;
+      wordCount += 1;
+    }
+    player.score = score;
+    player.wordCount = wordCount;
+  }
+}
+
+/**
+ * Standings from session word maps (authoritative when wordPlayers is populated).
+ */
+export function buildStandingsFromSessionWordMaps(
+  session: {
+    players: Record<string, { score?: number; wordCount?: number }>;
+    wordCounts?: Record<string, number>;
+    wordPlayers?: Record<string, Record<string, boolean>>;
+  },
+  uniqueBonusEnabled: boolean,
+): PlayerStandings[] {
+  const hasWords = Object.keys(session.wordPlayers ?? {}).length > 0;
+  if (!hasWords) {
+    return buildStandingsFromSession(session);
+  }
+
+  const players = Object.fromEntries(
+    Object.entries(session.players).map(([playerId, player]) => [playerId, { ...player }]),
+  );
+  recomputeSessionPlayerScores(
+    { players, wordCounts: session.wordCounts, wordPlayers: session.wordPlayers },
+    uniqueBonusEnabled,
+  );
+  return buildStandingsFromSession({ players });
 }
 
 /**

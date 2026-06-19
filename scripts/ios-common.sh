@@ -5,13 +5,20 @@ metro_ready() {
 }
 
 ensure_metro() {
+  local device_udid="${1:-}"
+  local metro_args=(start --dev-client --port 8081)
+
+  if [ -z "$device_udid" ]; then
+    metro_args+=(--localhost)
+  fi
+
   if metro_ready; then
     return 0
   fi
 
   echo "Metro is not running on http://127.0.0.1:8081"
   echo "Starting Metro in the background (logs: /tmp/wordreapers-metro.log)…"
-  nohup npx expo start --dev-client --port 8081 > /tmp/wordreapers-metro.log 2>&1 &
+  nohup npx expo "${metro_args[@]}" > /tmp/wordreapers-metro.log 2>&1 &
   disown || true
   for _ in $(seq 1 45); do
     if metro_ready; then
@@ -193,6 +200,20 @@ apply_ios_native_patches() {
     configure_packager_hostname "$root" "$ip"
     patch_ios_metro_host "$root" "$ip"
   fi
+}
+
+apply_ios_simulator_patches() {
+  local root="$1"
+  local local_file="$root/ios/.xcode.env.local"
+
+  strip_ios_push_entitlement_if_needed "$root"
+  patch_ios_embed_bundle_on_device "$root"
+
+  if [ -f "$local_file" ]; then
+    grep -v 'REACT_NATIVE_PACKAGER_HOSTNAME' "$local_file" >"${local_file}.tmp" || true
+    mv "${local_file}.tmp" "$local_file"
+  fi
+  unset REACT_NATIVE_PACKAGER_HOSTNAME
 }
 
 embed_js_bundle_into_app() {

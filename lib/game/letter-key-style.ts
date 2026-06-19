@@ -12,7 +12,10 @@ import { computeLetterKeySize } from './letter-keyboard.js';
 /** Typical phone width for deriving letter-key ratios (iPhone 15 class). */
 export const LETTER_KEY_REFERENCE_SCREEN_WIDTH = 390;
 
-/** Gameplay letter key font size (px); fixed in `LetterKeyboard`. */
+/** Reference key size at {@link LETTER_KEY_REFERENCE_SCREEN_WIDTH} (6-column phone layout). */
+export const LETTER_KEY_REFERENCE_KEY_SIZE = 56;
+
+/** Gameplay letter key font size (px) at reference key size. */
 export const LETTER_KEY_FONT_SIZE = 22;
 
 /** Semibold label on available keys (`LetterKeyboard`). */
@@ -29,6 +32,11 @@ export interface LetterKeyProportions {
   fontSizeRatio: number;
 }
 
+/** Font size scaled to a key edge length. */
+export function letterKeyFontSizeForKeySize(keySize: number): number {
+  return Math.round(keySize * (LETTER_KEY_FONT_SIZE / LETTER_KEY_REFERENCE_KEY_SIZE));
+}
+
 /**
  * Letter-key geometry ratios from the live play screen (`LetterKeyboard`).
  */
@@ -38,15 +46,16 @@ export function letterKeyProportions(
   const keySize = computeLetterKeySize(screenWidth);
   const gap = spacing.xs;
   const borderRadius = radii.sm;
+  const fontSize = letterKeyFontSizeForKeySize(keySize);
 
   return {
     keySize,
     gap,
     borderRadius,
-    fontSize: LETTER_KEY_FONT_SIZE,
+    fontSize,
     borderRadiusRatio: borderRadius / keySize,
     gapRatio: gap / keySize,
-    fontSizeRatio: LETTER_KEY_FONT_SIZE / keySize,
+    fontSizeRatio: fontSize / keySize,
   };
 }
 

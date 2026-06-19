@@ -17,6 +17,7 @@ import { currentBaseWordPickerUid } from '../online/base-word-picker.js';
 import { clearAllActiveRoundCachesForGame } from '../online/active-round-cache.js';
 import { setOrganizerWaitingRoom } from '../online/organizer-waiting-room.js';
 import { resolveGameSessionSettings } from './session-settings.js';
+import { recomputeSessionPlayerScores } from '../game/scoring.js';
 import {
   resolveEarlyFinishVoteIfExpired,
   resolveResumeVoteIfExpired,
@@ -28,7 +29,7 @@ import {
 import { getServerNow } from './server-clock.js';
 import { ensureAnonymousAuth, getFirebaseUid } from './auth.js';
 import { isFirebasePermissionDenied } from './rtdb-errors.js';
-import { computePurgeAfterAt, withFinishedPurgeFields } from './session-purge.js';
+import { withFinishedPurgeFields } from './session-purge.js';
 import { getFirebaseDatabase } from './init.js';
 import { gameSessionPath, GAME_SESSIONS_PATH } from './paths.js';
 import { isValidRoomCode, normalizeRoomCode } from './room-code.js';
@@ -248,8 +249,10 @@ export async function joinGameSession(
       ? options.invitedByUid
       : undefined;
 
+  const newPlayer = profileToPlayer(profile, true, inviterUid);
+
   await update(playersRef(normalized), {
-    [user.uid]: profileToPlayer(profile, true, inviterUid),
+    [user.uid]: newPlayer,
   });
 
   await runTransaction(sessionRef(normalized), (current) => {
@@ -258,12 +261,19 @@ export async function joinGameSession(
     }
     const next = current as GameSession;
     let changed = false;
+
+    if (!next.players[user.uid]) {
+      next.players = { ...next.players, [user.uid]: newPlayer };
+      changed = true;
+    }
+
     const order = [...(next.baseWordPickerOrder ?? [next.organizerId])];
     if (!order.includes(user.uid)) {
       order.push(user.uid);
       next.baseWordPickerOrder = order;
       changed = true;
     }
+
     const playerCount = Object.keys(next.players).length;
     const resolvedSettings = resolveGameSessionSettings(next.settings, playerCount);
     if (
@@ -273,11 +283,73 @@ export async function joinGameSession(
       next.settings = resolvedSettings;
       changed = true;
     }
+
+    const hasWords = Object.keys(next.wordPlayers ?? {}).length > 0;
+    if (next.status === 'playing' && hasWords) {
+      recomputeSessionPlayerScores(next, resolvedSettings.uniqueBonusEnabled);
+      changed = true;
+    }
+
     return changed ? next : undefined;
   });
 
   await setPlayerOnlinePresence(normalized, user.uid);
   return readSessionSnapshot(normalized);
+}
+
+/**
+ * Rewrite session player totals from wordCounts / wordPlayers when they drift (e.g. solo → 3+).
+ */
+export async function syncSessionPlayerScores(gameId: string): Promise<void> {
+  const normalized = normalizeRoomCode(gameId);
+  try {
+    await runTransaction(sessionRef(normalized), (current) => {
+      if (current == null) {
+        return undefined;
+      }
+      const session = current as GameSession;
+      if (session.status !== 'playing' || Object.keys(session.wordPlayers ?? {}).length === 0) {
+        return undefined;
+      }
+
+      const playerCount = Object.keys(session.players).length;
+      const resolvedSettings = resolveGameSessionSettings(session.settings, playerCount);
+      const players = Object.fromEntries(
+        Object.entries(session.players).map(([playerId, player]) => [playerId, { ...player }]),
+      );
+      recomputeSessionPlayerScores(
+        { players, wordCounts: session.wordCounts, wordPlayers: session.wordPlayers },
+        resolvedSettings.uniqueBonusEnabled,
+      );
+
+      let changed =
+        session.settings.uniqueBonusEnabled !== resolvedSettings.uniqueBonusEnabled ||
+        session.settings.uniqueBonusMode !== resolvedSettings.uniqueBonusMode;
+      if (!changed) {
+        for (const [playerId, player] of Object.entries(players)) {
+          const stored = session.players[playerId];
+          if (stored?.score !== player.score || stored?.wordCount !== player.wordCount) {
+            changed = true;
+            break;
+          }
+        }
+      }
+
+      if (!changed) {
+        return undefined;
+      }
+
+      return {
+        ...session,
+        settings: resolvedSettings,
+        players,
+      };
+    });
+  } catch (error) {
+    if (__DEV__) {
+      console.warn('syncSessionPlayerScores', error);
+    }
+  }
 }
 
 /**
@@ -442,7 +514,12 @@ export async function startGameSession(gameId: string, actorUid: string): Promis
     throw new Error('BASE_WORD_MISSING');
   }
 
-  const endsAt = getServerNow() + session.settings.durationSeconds * 1000;
+  const settings = resolveGameSessionSettings(
+    session.settings,
+    Object.keys(session.players).length,
+  );
+
+  const endsAt = getServerNow() + settings.durationSeconds * 1000;
   const players: Record<string, GameSessionPlayer> = {};
   for (const [uid, player] of Object.entries(session.players)) {
     players[uid] = { ...player, score: 0, wordCount: 0 };
@@ -464,6 +541,7 @@ export async function startGameSession(gameId: string, actorUid: string): Promis
   await update(sessionRef(normalized), {
     status: 'playing',
     timerEndsAt: endsAt,
+    settings,
     players,
     wordCounts: {},
     wordFirst: {},
@@ -530,6 +608,12 @@ export async function finishGameSessionIfExpired(gameId: string): Promise<boolea
       if (getServerNow() < session.timerEndsAt) {
         return undefined;
       }
+      const playerCount = Object.keys(session.players).length;
+      const resolvedSettings = resolveGameSessionSettings(session.settings, playerCount);
+      if (Object.keys(session.wordPlayers ?? {}).length > 0) {
+        recomputeSessionPlayerScores(session, resolvedSettings.uniqueBonusEnabled);
+        session.settings = resolvedSettings;
+      }
       const finishAt = session.timerEndsAt;
       return withFinishedPurgeFields(
         {
@@ -555,11 +639,29 @@ export async function finishGameSessionIfExpired(gameId: string): Promise<boolea
 export async function finishGameSession(gameId: string): Promise<void> {
   const normalized = normalizeRoomCode(gameId);
   const finishedAt = getServerNow();
-  await update(sessionRef(normalized), {
-    status: 'finished',
-    timerEndsAt: null,
-    finishedAt,
-    purgeAfterAt: computePurgeAfterAt(finishedAt),
+  await runTransaction(sessionRef(normalized), (current) => {
+    if (current == null) {
+      return undefined;
+    }
+    const session = current as GameSession;
+    if (session.status !== 'playing') {
+      return undefined;
+    }
+    const playerCount = Object.keys(session.players).length;
+    const resolvedSettings = resolveGameSessionSettings(session.settings, playerCount);
+    if (Object.keys(session.wordPlayers ?? {}).length > 0) {
+      recomputeSessionPlayerScores(session, resolvedSettings.uniqueBonusEnabled);
+      session.settings = resolvedSettings;
+    }
+    return withFinishedPurgeFields(
+      {
+        ...session,
+        status: 'finished',
+        timerEndsAt: null,
+        finishedAt,
+      },
+      finishedAt,
+    );
   });
   await clearAllActiveRoundCachesForGame(normalized);
 }

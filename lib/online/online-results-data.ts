@@ -1,10 +1,13 @@
 import { toDisplayUpper } from '../dictionary/normalize.js';
 import type { StoredPlayerWord } from '../firebase/player-words-service.js';
+import { resolveGameSessionSettingsForSession } from '../firebase/session-settings.js';
 import type { GameSession } from '../firebase/types.js';
 import { createOnlineResultsDirectory } from '../game/results-directory.js';
 import { formatResultsHeadline } from '../game/results-headline.js';
 import { buildGlobalResultWords, buildPlayerResultRankGroups } from '../game/results-view.js';
 import { computeRoundDurationSeconds } from '../game/round-duration.js';
+import { buildLiveStandingsFromSession } from '../online/live-standings.js';
+import { isSoloStandings } from '../game/solo-round.js';
 import { buildStandingsFromSession, type PlayerStandings } from '../game/scoring.js';
 
 type TranslateFn = (key: string, params?: Record<string, string | number>) => string;
@@ -18,8 +21,8 @@ export function firebaseWordsToMaps(
   const wordsByPlayer = new Map<string, string[]>();
   const displaysByPlayer = new Map<string, string[]>();
 
-  for (const [playerId, words] of byPlayer) {
-    const sorted: [string, StoredPlayerWord][] = [...words.entries()].sort(
+  for (const [playerId, words] of Array.from(byPlayer)) {
+    const sorted: [string, StoredPlayerWord][] = Array.from(words.entries()).sort(
       (a, b) => a[1].at - b[1].at,
     );
     const normals: string[] = [];
@@ -44,15 +47,18 @@ export function buildOnlineResultsView(
   byPlayer: ReadonlyMap<string, ReadonlyMap<string, StoredPlayerWord>>,
   options?: { finishedAtMs?: number },
 ) {
-  const uniqueBonusEnabled = session.settings.uniqueBonusEnabled;
+  const uniqueBonusEnabled = resolveGameSessionSettingsForSession(session).uniqueBonusEnabled;
   const { wordsByPlayer, displaysByPlayer } = firebaseWordsToMaps(byPlayer);
   const roundDurationSeconds = computeRoundDurationSeconds(
     session,
     byPlayer,
     options?.finishedAtMs,
   );
-  // Scores live on the session during play; do not recompute from word nodes alone.
-  const standings: PlayerStandings[] = buildStandingsFromSession(session);
+  // Prefer word-map totals when present (matches x2 badges); fall back to stored player nodes.
+  const standings: PlayerStandings[] =
+    Object.keys(session.wordPlayers ?? {}).length > 0
+      ? buildLiveStandingsFromSession(session)
+      : buildStandingsFromSession(session);
   const directory = createOnlineResultsDirectory(session);
 
   const globalWords = buildGlobalResultWords({
@@ -71,7 +77,8 @@ export function buildOnlineResultsView(
     roundDurationSeconds,
   });
 
-  const headline = formatResultsHeadline(t, directory, standings);
+  const headline = formatResultsHeadline(t, directory, standings, uniqueBonusEnabled);
+  const isSolo = isSoloStandings(standings);
 
   return {
     headline,
@@ -82,6 +89,7 @@ export function buildOnlineResultsView(
     standings,
     uniqueBonusEnabled,
     roundDurationSeconds,
+    isSolo,
   };
 }
 

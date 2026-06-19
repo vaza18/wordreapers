@@ -7,6 +7,7 @@ import { colors, radii, spacing } from '@/constants/theme';
 import type { AddTimeVote, GameSession } from '@/lib/firebase/types';
 import { formatPlayerLeftLabel, formatVoteStatusLabel } from '@/lib/game/vote-status-label';
 import { buildEarlyFinishParticipantRows } from '@/lib/online/early-finish-vote';
+import { formatTimerMs } from '@/lib/game/timer-label';
 import { viewerNeedsAddTimeVote } from '@/lib/online/add-time-vote';
 import { voteProposerName } from '@/lib/firebase/session-votes-service';
 
@@ -15,6 +16,7 @@ interface AddTimeVoteModalProps {
   session: GameSession;
   vote: AddTimeVote;
   myUid: string;
+  serverNow: number;
   onYes: () => void;
   onNo: () => void;
   onCancelProposal?: () => void;
@@ -24,6 +26,7 @@ function VoteCard({
   session,
   vote,
   myUid,
+  serverNow,
   onYes,
   onNo,
   onCancelProposal,
@@ -41,10 +44,21 @@ function VoteCard({
         count: vote.addMinutes,
       });
 
+  const timerEndsAt = session.timerEndsAt;
+  const remainingMs = timerEndsAt != null ? Math.max(0, timerEndsAt - serverNow) : 0;
+  const timerPreview =
+    timerEndsAt != null
+      ? t('game.voteAddTimeTimer', {
+          from: formatTimerMs(remainingMs),
+          to: formatTimerMs(remainingMs + vote.addMinutes * 60_000),
+        })
+      : null;
+
   return (
     <View style={[styles.overlay, { paddingBottom: spacing.lg + bottom }]}>
       <View style={styles.card}>
         <Text style={styles.message}>{headline}</Text>
+        {timerPreview ? <Text style={styles.timerPreview}>{timerPreview}</Text> : null}
 
         <View style={styles.participantList}>
           {participants.map((row) => (
@@ -94,6 +108,7 @@ export function AddTimeVoteModal({
   session,
   vote,
   myUid,
+  serverNow,
   onYes,
   onNo,
   onCancelProposal,
@@ -105,6 +120,7 @@ export function AddTimeVoteModal({
           session={session}
           vote={vote}
           myUid={myUid}
+          serverNow={serverNow}
           onYes={onYes}
           onNo={onNo}
           onCancelProposal={onCancelProposal}
@@ -134,6 +150,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     color: colors.textPrimary,
+    textAlign: 'center',
+  },
+  timerPreview: {
+    fontSize: 13,
+    color: colors.textSecondary,
     textAlign: 'center',
   },
   participantList: {

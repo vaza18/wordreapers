@@ -9,6 +9,7 @@ import {
   loadBundledDictionary,
   loadBundledSupplements,
 } from '@/services/dictionary-service';
+import { AddTimeModal } from '@/components/AddTimeModal';
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { GameMenuModal } from '@/components/GameMenuModal';
 import { GamePlayStatusBar } from '@/components/GamePlayStatusBar';
@@ -25,6 +26,7 @@ import { playWordAcceptedFeedback } from '@/lib/feedback/game-feedback';
 import { ensureFirebaseReady } from '@/lib/firebase/ensure-firebase-ready';
 import { joinErrorMessage } from '@/lib/firebase/join-error-message';
 import { buildLetterKeys, computeLetterKeySize } from '@/lib/game/letter-keyboard';
+import { letterKeyFontSizeForKeySize } from '@/lib/game/letter-key-style';
 import { acceptWord, type PlayWordErrorCode } from '@/lib/game/play-word';
 import { formatPlayRulesLabel } from '@/lib/online/play-rules-label';
 import { gameSessionSettingsFromSetup } from '@/lib/firebase/session-settings';
@@ -77,6 +79,7 @@ export default function OrganizerSoloPlayScreen() {
   const gameId = rawGameId ?? '';
   const { width: screenWidth } = useWindowDimensions();
   const composeKeySize = computeLetterKeySize(screenWidth);
+  const composeKeyFontSize = letterKeyFontSizeForKeySize(composeKeySize);
   const wordAcceptedFeedback = useSettingsStore((state) => state.wordAcceptedFeedback);
   const timerAlertMode = useSettingsStore((state) => state.timerAlertMode);
   const myName = useProfileStore((state) => state.name) || t('profile.namePlaceholder');
@@ -90,6 +93,7 @@ export default function OrganizerSoloPlayScreen() {
   const finishRound = useOrganizerSoloStore((state) => state.finishRound);
   const pauseRound = useOrganizerSoloStore((state) => state.pauseRound);
   const resumeRound = useOrganizerSoloStore((state) => state.resumeRound);
+  const addTime = useOrganizerSoloStore((state) => state.addTime);
   const getScoredWords = useOrganizerSoloStore((state) => state.getScoredWords);
   const getRemainingMs = useOrganizerSoloStore((state) => state.getRemainingMs);
 
@@ -101,6 +105,7 @@ export default function OrganizerSoloPlayScreen() {
   const [draftKeyIndices, setDraftKeyIndices] = useState<number[]>([]);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [showGameMenu, setShowGameMenu] = useState(false);
+  const [showAddTimeModal, setShowAddTimeModal] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -343,18 +348,26 @@ export default function OrganizerSoloPlayScreen() {
       <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
         {!isPaused ? (
           <>
-            <GamePlayStatusBar
-              timerLabel={remainingLabel}
-              timerUrgent={timerUrgent}
-              rank={1}
-              showRank={false}
-              showScore={false}
-              wordCount={scoredWords.length}
-              score={playerScore}
-              wordsShort={t('game.wordsShort')}
-              pointsShort={t('game.pointsShort')}
-              style={{ marginHorizontal: -spacing.md }}
-            />
+            <FeedbackPressable
+              accessibilityRole="button"
+              accessibilityLabel={t('game.addTimeTitle')}
+              onPress={() => {
+                setShowAddTimeModal(true);
+              }}
+            >
+              <GamePlayStatusBar
+                timerLabel={remainingLabel}
+                timerUrgent={timerUrgent}
+                rank={1}
+                showRank={false}
+                showScore={false}
+                wordCount={scoredWords.length}
+                score={playerScore}
+                wordsShort={t('game.wordsShort')}
+                pointsShort={t('game.pointsShort')}
+                style={{ marginHorizontal: -spacing.md }}
+              />
+            </FeedbackPressable>
 
             <View style={styles.playerHeader}>
               <Text style={styles.playerName} numberOfLines={1}>
@@ -377,9 +390,9 @@ export default function OrganizerSoloPlayScreen() {
                   styles.composeKeyDanger,
                 ]}
               >
-                <Text style={styles.composeKeyLabel}>✕</Text>
+                <Text style={[styles.composeKeyLabel, { fontSize: composeKeyFontSize }]}>✕</Text>
               </FeedbackPressable>
-              <View style={styles.draftBox}>
+              <View style={[styles.draftBox, { height: composeKeySize }]}>
                 <Text style={styles.draftText}>{toDisplayUpper(draft) || ' '}</Text>
               </View>
               <FeedbackPressable
@@ -391,7 +404,7 @@ export default function OrganizerSoloPlayScreen() {
                   styles.composeKeyOk,
                 ]}
               >
-                <Text style={styles.composeKeyLabel}>←</Text>
+                <Text style={[styles.composeKeyLabel, { fontSize: composeKeyFontSize }]}>←</Text>
               </FeedbackPressable>
             </View>
 
@@ -410,7 +423,8 @@ export default function OrganizerSoloPlayScreen() {
                 entries={scoredWords}
                 displays={displays}
                 draftPrefix={draft}
-                showBadges={false}
+                showScoreBadges={false}
+                showOverlapPeers={false}
               />
             </View>
 
@@ -477,6 +491,18 @@ export default function OrganizerSoloPlayScreen() {
         }}
       />
 
+      <AddTimeModal
+        visible={showAddTimeModal}
+        remainingMs={remainingMs}
+        requiresConsensus={false}
+        onClose={() => {
+          setShowAddTimeModal(false);
+        }}
+        onSelect={(minutes) => {
+          addTime(minutes);
+        }}
+      />
+
       {publishing ? (
         <View style={styles.publishingOverlay}>
           <ActivityIndicator color={colors.accent} size="large" />
@@ -538,16 +564,13 @@ const styles = StyleSheet.create({
   },
   composeKeyLabel: {
     color: '#FFFFFF',
-    fontSize: 22,
     fontWeight: '700',
   },
   draftBox: {
     flex: 1,
     backgroundColor: '#FAEEDA',
     borderRadius: radii.sm,
-    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    minHeight: 40,
     justifyContent: 'center',
   },
   draftText: {

@@ -1,8 +1,9 @@
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
-import { colors, radii, spacing } from '@/constants/theme';
+import { colors } from '@/constants/theme';
 import { computeLetterKeySize } from '@/lib/game/letter-keyboard';
+import { letterKeyFontSizeForKeySize, letterKeyProportions } from '@/lib/game/letter-key-style';
 import type { LetterKey } from '@/lib/game/letter-keyboard';
 
 interface LetterKeyboardProps {
@@ -12,18 +13,15 @@ interface LetterKeyboardProps {
   onPressKey: (index: number) => void;
 }
 
-/**
- * Interactive keyboard built from the base word letters.
- *
- * TODO: Derive gap, borderRadius, and fontSize from `@/lib/game/letter-key-style`
- * (`letterKeyProportions(screenWidth)`) so icon tiles and gameplay stay aligned.
- */
+/** Interactive keyboard built from the base word letters. */
 export function LetterKeyboard({ keys, usedKeyIndices, onPressKey }: LetterKeyboardProps) {
   const { width: screenWidth } = useWindowDimensions();
   const keySize = computeLetterKeySize(screenWidth);
+  const { gap, borderRadius } = letterKeyProportions(screenWidth);
+  const labelFontSize = letterKeyFontSizeForKeySize(keySize);
 
   return (
-    <View style={styles.grid}>
+    <View style={[styles.grid, { gap }]}>
       {keys.map((key, index) => {
         const used = usedKeyIndices.has(index);
         return (
@@ -36,11 +34,17 @@ export function LetterKeyboard({ keys, usedKeyIndices, onPressKey }: LetterKeybo
             }}
             style={[
               styles.key,
-              { width: keySize, height: keySize },
+              { width: keySize, height: keySize, borderRadius },
               used ? styles.keyUsed : styles.keyAvailable,
             ]}
           >
-            <Text style={[styles.keyLabel, used ? styles.keyLabelUsed : styles.keyLabelAvailable]}>
+            <Text
+              style={[
+                styles.keyLabel,
+                { fontSize: labelFontSize },
+                used ? styles.keyLabelUsed : styles.keyLabelAvailable,
+              ]}
+            >
               {key.label}
             </Text>
           </FeedbackPressable>
@@ -54,13 +58,9 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    // TODO: letter-key-style — spacing.xs via letterKeyProportions().gap
-    gap: spacing.xs,
     justifyContent: 'center',
   },
   key: {
-    // TODO: letter-key-style — borderRadius from letterKeyProportions().borderRadius
-    borderRadius: radii.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -71,8 +71,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.backgroundSecondary,
   },
   keyLabel: {
-    // TODO: letter-key-style — Math.round(keySize * fontSizeRatio) per key
-    fontSize: 22,
     fontWeight: '600',
   },
   keyLabelAvailable: {

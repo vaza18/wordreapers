@@ -20,9 +20,12 @@ const t = (key: string, params?: Record<string, string | number>) => {
   const table: Record<string, string> = {
     'game.resultsTitle': 'Гра завершена',
     'game.resultsTieHeadline': `Нічия · ${params?.score} · ${params?.words}`,
-    'game.resultsSoloHeadline': `Solo · ${params?.score} · ${params?.words}`,
-    'game.resultsCoWinnersHeadline': `Co: ${params?.names}`,
-    'game.winnerLineNeutral': `Win: ${params?.name}`,
+    'game.resultsTieHeadlineWords': `Нічия · ${params?.words}сл`,
+    'game.resultsSoloHeadline': `Solo · ${params?.words}сл`,
+    'game.resultsCoWinnersHeadline': `Co: ${params?.names} · ${params?.score}`,
+    'game.resultsCoWinnersHeadlineWords': `Co: ${params?.names}`,
+    'game.winnerLineNeutral': `Win: ${params?.name} · ${params?.score}`,
+    'game.winnerLineNeutralWords': `Win: ${params?.name} · ${params?.words}сл`,
     'game.defaultPlayerName': `P${params?.index}`,
   };
   return table[key] ?? key;
@@ -51,13 +54,19 @@ describe('formatResultsHeadline', () => {
   it('shows solo quip for a single player', () => {
     const standings = [row('player-0', 2, 1)];
     const directory = createLocalResultsDirectory(['Сим'], undefined, t);
-    expect(formatResultsHeadline(t, directory, standings)).toBe('Solo · 2 · 1');
+    expect(formatResultsHeadline(t, directory, standings)).toBe('Solo · 1сл');
   });
 
-  it('shows tie when everyone has the same score', () => {
+  it('shows tie without scores when bonus is off', () => {
     const standings = [row('player-0', 0, 0), row('player-1', 0, 0)];
     const directory = createLocalResultsDirectory(['А', 'Б'], undefined, t);
-    expect(formatResultsHeadline(t, directory, standings)).toBe('Нічия · 0 · 0');
+    expect(formatResultsHeadline(t, directory, standings)).toBe('Нічия · 0сл');
+  });
+
+  it('shows tie with scores when bonus is on', () => {
+    const standings = [row('player-0', 0, 0), row('player-1', 0, 0)];
+    const directory = createLocalResultsDirectory(['А', 'Б'], undefined, t);
+    expect(formatResultsHeadline(t, directory, standings, true)).toBe('Нічия · 0 · 0');
   });
 
   it('lists co-winners only when score and word count match', () => {

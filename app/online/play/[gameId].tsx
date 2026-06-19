@@ -45,8 +45,10 @@ import {
   finishGameSessionIfExpired,
   leaveGameSession,
   subscribeGameSession,
+  syncSessionPlayerScores,
   type GameSessionSnapshot,
 } from '@/lib/firebase/game-session-service';
+import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
 import { markPendingRoundArchive } from '@/lib/online/pending-round-archive';
 import {
@@ -81,14 +83,18 @@ import {
   voteResume,
 } from '@/lib/firebase/session-votes-service';
 import { buildOnlineWordListDisplay } from '@/lib/online/online-word-display';
+import {
+  buildLiveStandingsFromSession,
+  sessionPlayerScoresMatchWordMaps,
+} from '@/lib/online/live-standings';
 import { formatPlayRulesLabel } from '@/lib/online/play-rules-label';
 import { buildLetterKeys, computeLetterKeySize } from '@/lib/game/letter-keyboard';
+import { letterKeyFontSizeForKeySize } from '@/lib/game/letter-key-style';
 import { acceptWord, type PlayWordErrorCode } from '@/lib/game/play-word';
 import {
   assignDisplayRanks,
-  compareStandings,
-  computePlayerScore,
   displayRankForPlayer,
+  shouldShowPointUi,
   type PlayerStandings,
 } from '@/lib/game/scoring';
 import { useFirebaseStore } from '@/store/firebase-store';
@@ -111,6 +117,7 @@ export default function OnlinePlayScreen() {
   const myUid = useFirebaseStore((state) => state.uid) ?? '';
   const { width: screenWidth } = useWindowDimensions();
   const composeKeySize = computeLetterKeySize(screenWidth);
+  const composeKeyFontSize = letterKeyFontSizeForKeySize(composeKeySize);
   const wordAcceptedFeedback = useSettingsStore((state) => state.wordAcceptedFeedback);
   const timerAlertMode = useSettingsStore((state) => state.timerAlertMode);
   const viewerGender = useProfileStore((state) => state.gender);
@@ -145,6 +152,7 @@ export default function OnlinePlayScreen() {
   const leavingIntentionallyRef = useRef(false);
   const playRoundKeyRef = useRef<number | null>(null);
   const staleWordsReconcileKeyRef = useRef<string | null>(null);
+  const scoresSyncInFlightRef = useRef(false);
   const myWordsRef = useRef(myWords);
   myWordsRef.current = myWords;
 
@@ -302,7 +310,10 @@ export default function OnlinePlayScreen() {
   }, []);
 
   const endsAt = session?.timerEndsAt ?? null;
-  const uniqueBonusEnabled = session?.settings.uniqueBonusEnabled ?? false;
+  const uniqueBonusEnabled = session
+    ? resolveGameSessionSettingsForSession(session).uniqueBonusEnabled
+    : false;
+  const showPointUi = shouldShowPointUi(uniqueBonusEnabled);
 
   const isPaused = session?.pauseState?.active === true;
 
@@ -329,7 +340,14 @@ export default function OnlinePlayScreen() {
   }, [myUid, myWords, session]);
 
   const myPlayer = session?.players[myUid];
-  const playerScore = myPlayer?.score ?? computePlayerScore(scoredWords);
+  const standings = useMemo((): PlayerStandings[] => {
+    if (!session) {
+      return [];
+    }
+    return buildLiveStandingsFromSession(session);
+  }, [session]);
+
+  const playerScore = standings.find((row) => row.playerId === myUid)?.score ?? 0;
   const playerWordCount = myPlayer?.wordCount ?? scoredWords.length;
   const myName = myPlayer?.name ?? t('profile.namePlaceholder');
 
@@ -343,19 +361,18 @@ export default function OnlinePlayScreen() {
 
   useTimerAlerts(remainingMs, isPaused, timerAlertMode, session?.status === 'playing');
 
-  const standings = useMemo((): PlayerStandings[] => {
-    if (!session) {
-      return [];
+  useEffect(() => {
+    if (!gameId || !session || session.status !== 'playing') {
+      return;
     }
-    return Object.entries(session.players)
-      .map(([playerId, player]) => ({
-        playerId,
-        score: player.score ?? 0,
-        wordCount: player.wordCount ?? 0,
-        uniqueCount: 0,
-      }))
-      .sort(compareStandings);
-  }, [session]);
+    if (sessionPlayerScoresMatchWordMaps(session) || scoresSyncInFlightRef.current) {
+      return;
+    }
+    scoresSyncInFlightRef.current = true;
+    void syncSessionPlayerScores(gameId).finally(() => {
+      scoresSyncInFlightRef.current = false;
+    });
+  }, [gameId, session]);
 
   const displayRanks = useMemo(() => assignDisplayRanks(standings), [standings]);
   const playerRank = displayRankForPlayer(standings, myUid);
@@ -392,7 +409,7 @@ export default function OnlinePlayScreen() {
       }
       lastValidatedDraft.current = draftValue;
 
-      const ownNormals = [...myWords.keys()];
+      const ownNormals = Array.from(myWords.keys());
       const playerWordsMap = new Map<string, readonly string[]>([[myUid, ownNormals]]);
       const result = acceptWord({
         input: draftValue,
@@ -659,8 +676,7 @@ export default function OnlinePlayScreen() {
   const pauseVote = session.pauseVote;
   const addTimeVote = session.addTimeVote;
   const resumeVote = session.resumeVote;
-  const isOrganizer = session.organizerId === myUid;
-  const canProposeAddTime = isOrganizer && !isPaused && !earlyVote && !pauseVote && !addTimeVote;
+  const canProposeAddTime = !isPaused && !earlyVote && !pauseVote && !addTimeVote;
 
   const pressKey = (index: number) => {
     if (roundEnded || isPaused || usedKeyIndices.has(index)) {
@@ -709,7 +725,7 @@ export default function OnlinePlayScreen() {
                 wordsShort={t('game.wordsShort')}
                 pointsShort={t('game.pointsShort')}
                 showRank={hasOpponent}
-                showScore={uniqueBonusEnabled && hasOpponent}
+                showScore={showPointUi}
                 style={{ marginHorizontal: -spacing.md }}
               />
             </FeedbackPressable>
@@ -747,9 +763,9 @@ export default function OnlinePlayScreen() {
                 styles.composeKeyDanger,
               ]}
             >
-              <Text style={styles.composeKeyLabel}>✕</Text>
+              <Text style={[styles.composeKeyLabel, { fontSize: composeKeyFontSize }]}>✕</Text>
             </FeedbackPressable>
-            <View style={styles.draftBox}>
+            <View style={[styles.draftBox, { height: composeKeySize }]}>
               <Text style={styles.draftText}>{toDisplayUpper(draft) || ' '}</Text>
             </View>
             <FeedbackPressable
@@ -761,7 +777,7 @@ export default function OnlinePlayScreen() {
                 styles.composeKeyOk,
               ]}
             >
-              <Text style={styles.composeKeyLabel}>←</Text>
+              <Text style={[styles.composeKeyLabel, { fontSize: composeKeyFontSize }]}>←</Text>
             </FeedbackPressable>
           </View>
 
@@ -775,7 +791,8 @@ export default function OnlinePlayScreen() {
               entries={scoredWords}
               displays={displays}
               draftPrefix={draft}
-              showBadges={hasOpponent}
+              showScoreBadges={showPointUi && hasOpponent}
+              showOverlapPeers={hasOpponent}
             />
           </View>
 
@@ -825,8 +842,14 @@ export default function OnlinePlayScreen() {
               </Text>
               <Text style={styles.standingMeta}>
                 {row.wordCount}
-                {t('game.wordsShort')} · {row.score}
-                {t('game.pointsShort')}
+                {t('game.wordsShort')}
+                {showPointUi ? (
+                  <>
+                    {' · '}
+                    {row.score}
+                    {t('game.pointsShort')}
+                  </>
+                ) : null}
               </Text>
             </View>
           );
@@ -956,6 +979,7 @@ export default function OnlinePlayScreen() {
           session={session}
           vote={addTimeVote}
           myUid={myUid}
+          serverNow={serverNow}
           onYes={() => {
             void voteAddTime(gameId, myUid, 'yes');
           }}
@@ -968,6 +992,8 @@ export default function OnlinePlayScreen() {
 
       <AddTimeModal
         visible={showAddTimeModal}
+        remainingMs={remainingMs}
+        requiresConsensus={hasOpponent}
         onClose={() => {
           setShowAddTimeModal(false);
         }}
@@ -1096,16 +1122,13 @@ const styles = StyleSheet.create({
   },
   composeKeyLabel: {
     color: '#FFFFFF',
-    fontSize: 22,
     fontWeight: '700',
   },
   draftBox: {
     flex: 1,
     backgroundColor: '#FAEEDA',
     borderRadius: radii.sm,
-    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    minHeight: 40,
     justifyContent: 'center',
   },
   draftText: {

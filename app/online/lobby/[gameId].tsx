@@ -345,7 +345,7 @@ export default function LobbyScreen() {
           )
         ) : null}
 
-        <Text style={styles.settingsBanner}>{formatLobbySettingsLabel(t, session.settings)}</Text>
+        <Text style={styles.settingsBanner}>{formatLobbySettingsLabel(t, session)}</Text>
 
         <Text style={styles.sectionLabel}>
           {t('online.playersCount', { count: players.length })}

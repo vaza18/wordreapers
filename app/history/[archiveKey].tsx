@@ -135,6 +135,8 @@ export default function ArchivedRoundResultsScreen() {
         highlightPlayerId={highlightPlayerId}
         defaultExpandedPlayerId={highlightPlayerId}
         showBaseWordInMeta={false}
+        showScores={viewData.uniqueBonusEnabled}
+        showWordAuthors={!viewData.isSolo}
         roundDurationSeconds={viewData.roundDurationSeconds}
       />
     </>

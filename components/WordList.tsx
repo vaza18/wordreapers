@@ -14,7 +14,10 @@ interface WordListProps {
   entries: readonly (ScoredWordEntry & { overlapPeers?: readonly WordOverlapPeer[] })[];
   displays: readonly string[];
   draftPrefix?: string;
-  showBadges?: boolean;
+  /** x2 badge when unique-word scoring is active. */
+  showScoreBadges?: boolean;
+  /** Peer avatars when other players share the same word. */
+  showOverlapPeers?: boolean;
   /**
    * When false, renders rows in a plain View (for nesting inside a parent ScrollView).
    * Default true — self-scrolling FlatList for the play screen.
@@ -61,11 +64,13 @@ function splitDisplayByNormalizedPrefix(
 function WordListRow({
   row,
   prefix,
-  showBadges,
+  showScoreBadges,
+  showOverlapPeers,
 }: {
   row: WordRow;
   prefix: string;
-  showBadges: boolean;
+  showScoreBadges: boolean;
+  showOverlapPeers: boolean;
 }) {
   const split = splitDisplayByNormalizedPrefix(row.display, prefix);
 
@@ -79,10 +84,10 @@ function WordListRow({
       ) : (
         <Text style={styles.word}>{row.display}</Text>
       )}
-      {showBadges && row.entry.badge === 'x2' ? (
+      {showScoreBadges && row.entry.badge === 'x2' ? (
         <Text style={styles.badgeX2}>{row.entry.badge}</Text>
       ) : null}
-      {showBadges && row.entry.overlapPeers && row.entry.overlapPeers.length > 0 ? (
+      {showOverlapPeers && row.entry.overlapPeers && row.entry.overlapPeers.length > 0 ? (
         <WordOverlapAvatars peers={row.entry.overlapPeers} />
       ) : null}
     </View>
@@ -96,7 +101,8 @@ export function WordList({
   entries,
   displays,
   draftPrefix = '',
-  showBadges = true,
+  showScoreBadges = false,
+  showOverlapPeers = true,
   scrollable = true,
 }: WordListProps) {
   const prefix = normalizeUk(draftPrefix);
@@ -138,7 +144,13 @@ export function WordList({
     return (
       <View style={styles.staticList}>
         {rows.map((row) => (
-          <WordListRow key={row.key} row={row} prefix={prefix} showBadges={showBadges} />
+          <WordListRow
+            key={row.key}
+            row={row}
+            prefix={prefix}
+            showScoreBadges={showScoreBadges}
+            showOverlapPeers={showOverlapPeers}
+          />
         ))}
       </View>
     );
@@ -173,7 +185,12 @@ export function WordList({
             });
           }}
           renderItem={({ item: row }) => (
-            <WordListRow row={row} prefix={prefix} showBadges={showBadges} />
+            <WordListRow
+              row={row}
+              prefix={prefix}
+              showScoreBadges={showScoreBadges}
+              showOverlapPeers={showOverlapPeers}
+            />
           )}
         />
       </View>

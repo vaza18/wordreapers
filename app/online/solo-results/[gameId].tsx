@@ -126,7 +126,7 @@ export default function OrganizerSoloResultsScreen() {
       standings,
       roundDurationSeconds,
     });
-    const headline = formatResultsHeadline(t, directory, standings);
+    const headline = formatResultsHeadline(t, directory, standings, false);
     return {
       headline,
       globalWords,
@@ -172,6 +172,7 @@ export default function OrganizerSoloResultsScreen() {
         highlightPlayerId="solo"
         defaultExpandedPlayerId="solo"
         showScores={false}
+        showWordAuthors={false}
         roundDurationSeconds={viewData.roundDurationSeconds}
         footer={
           <PrimaryButton

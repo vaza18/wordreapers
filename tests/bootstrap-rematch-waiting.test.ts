@@ -66,4 +66,20 @@ describe('resolveGameSessionSettings', () => {
     expect(resolved.uniqueBonusMode).toBe('auto');
     expect(resolved.uniqueBonusEnabled).toBe(false);
   });
+
+  it('enables bonus for auto mode with three or more players', () => {
+    const resolved = resolveGameSessionSettings(
+      {
+        durationSeconds: 600,
+        uniqueBonusEnabled: false,
+        uniqueBonusMode: 'auto',
+        language: 'uk-uk',
+        allowProperNouns: false,
+        allowSlang: false,
+      },
+      3,
+    );
+    expect(resolved.uniqueBonusMode).toBe('auto');
+    expect(resolved.uniqueBonusEnabled).toBe(true);
+  });
 });

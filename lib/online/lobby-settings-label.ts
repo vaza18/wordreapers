@@ -1,5 +1,4 @@
-import type { GameSessionSettings } from '../firebase/types.js';
-import { resolveGameSessionSettings } from '../firebase/session-settings.js';
+import { resolveGameSessionSettingsForSession } from '../firebase/session-settings.js';
 
 type TranslateFn = (key: string, params?: Record<string, string | number>) => string;
 
@@ -8,9 +7,9 @@ type TranslateFn = (key: string, params?: Record<string, string | number>) => st
  */
 export function formatLobbySettingsLabel(
   t: TranslateFn,
-  settings?: GameSessionSettings | null,
+  session: Parameters<typeof resolveGameSessionSettingsForSession>[0],
 ): string {
-  const resolved = resolveGameSessionSettings(settings);
+  const resolved = resolveGameSessionSettingsForSession(session);
   const minutes = Math.round(resolved.durationSeconds / 60);
   const uniqueBonus = resolved.uniqueBonusEnabled
     ? t('online.lobbyUniqueBonusOn')

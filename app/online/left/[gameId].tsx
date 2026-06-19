@@ -301,6 +301,8 @@ export default function OnlineLeftRoundScreen() {
         playerRankGroups={viewData.playerRankGroups}
         highlightPlayerId={myUid}
         defaultExpandedPlayerId={myUid}
+        showScores={viewData.uniqueBonusEnabled}
+        showWordAuthors={!viewData.isSolo}
         roundDurationSeconds={viewData.roundDurationSeconds}
         footer={
           <>

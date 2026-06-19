@@ -23,6 +23,7 @@
     },
     "android": {
       "package": "com.wordreapers.app",
+      "blockedPermissions": ["android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"],
       "adaptiveIcon": {
         "foregroundImage": "./assets/icons/app-icon.png",
         "backgroundColor": "#7b5323"
@@ -36,7 +37,13 @@
       "expo-router",
       "expo-localization",
       "expo-asset",
-      "expo-audio",
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
+        }
+      ],
       [
         "expo-camera",
         {

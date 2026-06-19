@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AboutRulesIconButton } from '@/components/AboutRulesIconButton';
@@ -13,6 +13,8 @@ import { navigateToNewOnlineRoom } from '@/lib/online/create-room';
 import { joinErrorMessage } from '@/lib/firebase/join-error-message';
 import { useProfileStore } from '@/store/profile-store';
 import { colors, spacing } from '@/constants/theme';
+
+const appIcon = require('../assets/icons/app-icon.png');
 
 /**
  * Welcome / home screen (mockup screen 1).
@@ -45,6 +47,7 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.hero}>
+        <Image source={appIcon} style={styles.appIcon} accessibilityIgnoresInvertColors />
         <Text style={styles.brand}>Wordreapers</Text>
         <Text style={styles.appName}>{t('app.name')}</Text>
         <Text style={styles.tagline}>{t('app.tagline')}</Text>
@@ -83,6 +86,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
     gap: spacing.xs,
+  },
+  appIcon: {
+    width: 96,
+    height: 96,
+    borderRadius: 22,
+    marginBottom: spacing.sm,
   },
   brand: {
     fontSize: 28,

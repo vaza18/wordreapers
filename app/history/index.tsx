@@ -10,6 +10,7 @@ import { colors, radii, spacing } from '@/constants/theme';
 import { toDisplayUpper } from '@/lib/dictionary/normalize';
 import { formatResultsHeadline } from '@/lib/game/results-headline';
 import { createOnlineResultsDirectory } from '@/lib/game/results-directory';
+import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import { buildStandingsFromSession } from '@/lib/game/scoring';
 import { formatUkPlayers } from '@/lib/i18n/uk-plural';
 import { formatProfileStatsSummary } from '@/lib/profile/format-profile-stats';
@@ -105,7 +106,10 @@ export default function RoundHistoryScreen() {
                 const playerCount = Object.keys(archive.session.players).length;
                 const standings = buildStandingsFromSession(archive.session);
                 const directory = createOnlineResultsDirectory(archive.session);
-                const headline = formatResultsHeadline(t, directory, standings);
+                const uniqueBonusEnabled = resolveGameSessionSettingsForSession(
+                  archive.session,
+                ).uniqueBonusEnabled;
+                const headline = formatResultsHeadline(t, directory, standings, uniqueBonusEnabled);
 
                 return (
                   <FeedbackPressable

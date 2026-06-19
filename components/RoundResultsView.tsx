@@ -29,6 +29,7 @@ export interface RoundResultsViewProps {
   /** When base word is shown in the stack header, hide it from the meta line. */
   showBaseWordInMeta?: boolean;
   showScores?: boolean;
+  showWordAuthors?: boolean;
   roundDurationSeconds?: number;
 }
 
@@ -45,7 +46,8 @@ export function RoundResultsView({
   defaultExpandedPlayerId,
   footer,
   showBaseWordInMeta = true,
-  showScores = true,
+  showScores = false,
+  showWordAuthors = true,
   roundDurationSeconds,
 }: RoundResultsViewProps) {
   const { t } = useTranslation();
@@ -107,7 +109,11 @@ export function RoundResultsView({
             scrollEventThrottle={panelScroll.scrollEventThrottle}
           >
             {tab === 'all' ? (
-              <ResultsGlobalWordList rows={globalWords} />
+              <ResultsGlobalWordList
+                rows={globalWords}
+                showAuthors={showWordAuthors}
+                showScoreBadges={showScores}
+              />
             ) : (
               <ResultsByPlayer
                 rankGroups={playerRankGroups}
@@ -117,6 +123,8 @@ export function RoundResultsView({
                 highlightPlayerId={highlightPlayerId}
                 defaultExpandedPlayerId={defaultExpandedPlayerId}
                 showScores={showScores}
+                showScoreBadges={showScores}
+                showOverlapPeers={showWordAuthors}
                 showWordsPerMinute={roundDurationSeconds != null}
               />
             )}

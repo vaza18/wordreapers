@@ -6,8 +6,10 @@ import {
   compareStandings,
   computePlayerScore,
   displayRankForPlayer,
+  recomputeSessionPlayerScores,
   recomputeWordScores,
   resolveUniqueBonusEnabled,
+  shouldShowPointUi,
   toScoredWordEntry,
 } from '../lib/game/scoring.js';
 import type { PlayerStandings } from '../lib/game/scoring.js';
@@ -20,6 +22,13 @@ describe('resolveUniqueBonusEnabled', () => {
 
   it('respects explicit off', () => {
     expect(resolveUniqueBonusEnabled('off', 4)).toBe(false);
+  });
+});
+
+describe('shouldShowPointUi', () => {
+  it('mirrors unique bonus enabled', () => {
+    expect(shouldShowPointUi(false)).toBe(false);
+    expect(shouldShowPointUi(true)).toBe(true);
   });
 });
 
@@ -124,5 +133,30 @@ describe('buildStandings', () => {
     const standings = buildStandings(wordsByPlayer, true);
     expect(standings.map((row) => row.playerId)).toEqual(['p1', 'p2', 'p3']);
     expect(standings[0]?.score).toBe(3);
+  });
+});
+
+describe('recomputeSessionPlayerScores', () => {
+  it('applies x2 to solo words when bonus turns on for 3+ players', () => {
+    const session = {
+      players: {
+        org: { score: 3, wordCount: 3 },
+        p2: { score: 1, wordCount: 1 },
+        p3: { score: 0, wordCount: 0 },
+      },
+      wordCounts: { вада: 1, вал: 1, ванна: 1, рот: 2 },
+      wordPlayers: {
+        вада: { org: true },
+        вал: { org: true },
+        ванна: { org: true },
+        рот: { org: true, p2: true },
+      },
+    };
+
+    recomputeSessionPlayerScores(session, true);
+
+    expect(session.players.org?.score).toBe(7);
+    expect(session.players.org?.wordCount).toBe(4);
+    expect(session.players.p2?.score).toBe(1);
   });
 });

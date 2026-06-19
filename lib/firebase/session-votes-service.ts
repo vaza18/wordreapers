@@ -217,7 +217,7 @@ export async function cancelEarlyFinishVote(gameId: string, uid: string): Promis
 }
 
 /**
- * Propose adding minutes to the round timer (organizer only).
+ * Propose adding minutes to the round timer.
  * Applies immediately when no online opponents remain.
  */
 export async function proposeAddTime(
@@ -228,7 +228,7 @@ export async function proposeAddTime(
   await runSessionVoteTransaction(
     gameId,
     (session) => {
-      if (session.organizerId !== uid || session.pauseState?.active) {
+      if (!session.players[uid] || session.pauseState?.active) {
         return undefined;
       }
       if (session.addTimeVote || session.earlyFinishVote || session.pauseVote) {
