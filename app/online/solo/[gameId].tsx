@@ -18,6 +18,7 @@ import { LetterKeyboard } from '@/components/LetterKeyboard';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { WordList } from '@/components/WordList';
 import { colors, radii, spacing } from '@/constants/theme';
+import { useAutoPauseOnAppBackground } from '@/hooks/useAutoPauseOnAppBackground';
 import { useTimerAlerts } from '@/hooks/useTimerAlerts';
 import { useRoundTimeUpModal } from '@/hooks/useRoundTimeUpModal';
 import { DictionaryIndex } from '@/lib/dictionary/dictionary-index';
@@ -169,6 +170,7 @@ export default function OrganizerSoloPlayScreen() {
   const timerUrgent = remainingMs > 0 && remainingMs <= 60_000;
 
   useTimerAlerts(remainingMs, isPaused, timerAlertMode, status === 'playing');
+  useAutoPauseOnAppBackground(status === 'playing', pauseRound);
   const playRulesLabel = formatPlayRulesLabel(
     t,
     setup

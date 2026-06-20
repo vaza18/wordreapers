@@ -33,6 +33,7 @@ import { LetterKeyboard } from '@/components/LetterKeyboard';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { WordList } from '@/components/WordList';
 import { colors, radii, spacing } from '@/constants/theme';
+import { useAutoPauseOnAppBackground } from '@/hooks/useAutoPauseOnAppBackground';
 import { usePlaySessionToasts } from '@/hooks/usePlaySessionToasts';
 import { useServerNow } from '@/hooks/useServerNow';
 import { useRoundTimeUpModal } from '@/hooks/useRoundTimeUpModal';
@@ -571,6 +572,13 @@ export default function OnlinePlayScreen() {
   const hasOnlineOpponentInRound = useMemo(
     () => (session && myUid ? hasOnlineOpponent(session, myUid) : false),
     [myUid, session],
+  );
+
+  useAutoPauseOnAppBackground(
+    session?.status === 'playing' && !isPaused && !hasOnlineOpponentInRound,
+    () => {
+      void proposePause(gameId, myUid);
+    },
   );
 
   useEffect(() => {
