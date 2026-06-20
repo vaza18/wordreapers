@@ -29,9 +29,9 @@ import { PlaySessionToastStack } from '@/components/PlaySessionToast';
 import { PauseRoundModal } from '@/components/PauseRoundModal';
 import { PauseVoteModal } from '@/components/PauseVoteModal';
 import { RoomInviteModal } from '@/components/RoomInviteModal';
-import { LetterKeyboard } from '@/components/LetterKeyboard';
+import { OnlinePlayComposePanel } from '@/components/online/OnlinePlayComposePanel';
+import { OnlinePlayWordListSection } from '@/components/online/OnlinePlayWordListSection';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { WordList } from '@/components/WordList';
 import { colors, radii, spacing } from '@/constants/theme';
 import { useAutoPauseOnAppBackground } from '@/hooks/useAutoPauseOnAppBackground';
 import { usePlaySessionToasts } from '@/hooks/usePlaySessionToasts';
@@ -89,6 +89,7 @@ import {
   sessionPlayerScoresMatchWordMaps,
 } from '@/lib/online/live-standings';
 import { formatPlayRulesLabel } from '@/lib/online/play-rules-label';
+import { createSubmitWordProfile } from '@/lib/online/submit-word-profile';
 import { buildLetterKeys, computeLetterKeySize } from '@/lib/game/letter-keyboard';
 import { letterKeyFontSizeForKeySize } from '@/lib/game/letter-key-style';
 import { acceptWord, type PlayWordErrorCode } from '@/lib/game/play-word';
@@ -140,13 +141,18 @@ export default function OnlinePlayScreen() {
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showEndEarlyConfirm, setShowEndEarlyConfirm] = useState(false);
   const [showAddTimeModal, setShowAddTimeModal] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [backgroundSyncing, setBackgroundSyncing] = useState(false);
+  const [optimisticWords, setOptimisticWords] = useState<Map<string, StoredPlayerWord>>(new Map());
   const serverNow = useServerNow(250);
   const roundEnded = session?.status === 'finished';
   const { timeUpModalVisible } = useRoundTimeUpModal(roundEnded);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastValidatedDraft = useRef('');
+  const submittingRef = useRef(false);
+  const pendingSubmitDraftRef = useRef<string | null>(null);
+  const pendingListenerWordRef = useRef<string | null>(null);
+  const activeSubmitProfileRef = useRef<ReturnType<typeof createSubmitWordProfile>>(null);
   const finishAttemptedRef = useRef(false);
   const resultsNavigatedRef = useRef(false);
   const leftNavigatedRef = useRef(false);
@@ -156,6 +162,8 @@ export default function OnlinePlayScreen() {
   const scoresSyncInFlightRef = useRef(false);
   const myWordsRef = useRef(myWords);
   myWordsRef.current = myWords;
+  const draftKeyIndicesRef = useRef(draftKeyIndices);
+  draftKeyIndicesRef.current = draftKeyIndices;
 
   const navigateAfterLeave = useCallback(() => {
     if (!gameId || leftNavigatedRef.current) {
@@ -346,14 +354,26 @@ export default function OnlinePlayScreen() {
   const baseWord = session?.baseWord ?? '';
   const baseWordDisplay = dictionary?.lookupDisplayUpper(baseWord) ?? toDisplayUpper(baseWord);
   const letterKeys = useMemo(() => buildLetterKeys(baseWordDisplay), [baseWordDisplay]);
-  const usedKeyIndices = useMemo(() => new Set(draftKeyIndices), [draftKeyIndices]);
+
+  const wordsForDisplay = useMemo(() => {
+    if (optimisticWords.size === 0) {
+      return myWords;
+    }
+    const merged = new Map(myWords);
+    for (const [normalized, word] of optimisticWords) {
+      if (!merged.has(normalized)) {
+        merged.set(normalized, word);
+      }
+    }
+    return merged;
+  }, [myWords, optimisticWords]);
 
   const { entries: scoredWords, displays } = useMemo(() => {
     if (!session) {
       return { entries: [], displays: [] };
     }
-    return buildOnlineWordListDisplay(myWords, session, myUid);
-  }, [myUid, myWords, session]);
+    return buildOnlineWordListDisplay(wordsForDisplay, session, myUid);
+  }, [myUid, session, wordsForDisplay]);
 
   const myPlayer = session?.players[myUid];
   const standings = useMemo((): PlayerStandings[] => {
@@ -407,6 +427,41 @@ export default function OnlinePlayScreen() {
     };
   }, [feedback]);
 
+  useEffect(() => {
+    setOptimisticWords((prev) => {
+      if (prev.size === 0) {
+        return prev;
+      }
+      let changed = false;
+      const next = new Map(prev);
+      for (const normalized of prev.keys()) {
+        if (myWords.has(normalized)) {
+          next.delete(normalized);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+
+    const pendingWord = pendingListenerWordRef.current;
+    if (pendingWord && myWords.has(pendingWord)) {
+      activeSubmitProfileRef.current?.mark('listener');
+      activeSubmitProfileRef.current?.finish();
+      activeSubmitProfileRef.current = null;
+      pendingListenerWordRef.current = null;
+    }
+  }, [myWords]);
+
+  const runPendingSubmit = useCallback((submitFn: (draftValue: string) => Promise<void>) => {
+    const pending = pendingSubmitDraftRef.current;
+    if (!pending || pending === lastValidatedDraft.current) {
+      pendingSubmitDraftRef.current = null;
+      return;
+    }
+    pendingSubmitDraftRef.current = null;
+    void submitFn(pending);
+  }, []);
+
   const submitDraft = useCallback(
     async (draftValue: string) => {
       if (
@@ -420,12 +475,19 @@ export default function OnlinePlayScreen() {
       ) {
         return;
       }
-      if (draftValue === lastValidatedDraft.current || submitting) {
+      if (draftValue === lastValidatedDraft.current) {
         return;
       }
-      lastValidatedDraft.current = draftValue;
+      if (submittingRef.current) {
+        pendingSubmitDraftRef.current = draftValue;
+        return;
+      }
 
-      const ownNormals = Array.from(myWords.keys());
+      const profile = createSubmitWordProfile(draftValue);
+      profile?.mark('debounce');
+      activeSubmitProfileRef.current = profile;
+
+      const ownNormals = Array.from(wordsForDisplay.keys());
       const playerWordsMap = new Map<string, readonly string[]>([[myUid, ownNormals]]);
       const result = acceptWord({
         input: draftValue,
@@ -442,8 +504,10 @@ export default function OnlinePlayScreen() {
         },
         lookupDisplayUpper: (word) => dictionary.lookupDisplayUpper(word) ?? toDisplayUpper(word),
       });
+      profile?.mark('acceptWord');
 
-      if (!result.accepted) {
+      if (!result.accepted || !result.entry) {
+        activeSubmitProfileRef.current = null;
         if (result.error === 'NOT_IN_DICTIONARY') {
           return;
         }
@@ -454,42 +518,88 @@ export default function OnlinePlayScreen() {
         return;
       }
 
-      setSubmitting(true);
+      lastValidatedDraft.current = draftValue;
+      const savedDraft = draftValue;
+      const savedKeyIndices = [...draftKeyIndices];
+      const display = result.display ?? toDisplayUpper(result.normalized);
+      const optimisticWord: StoredPlayerWord = {
+        display,
+        kind: result.entry.kind,
+        points: result.entry.points,
+        badge: result.entry.badge,
+        at: Date.now(),
+      };
+
+      setOptimisticWords((prev) => {
+        const next = new Map(prev);
+        next.set(result.normalized, optimisticWord);
+        return next;
+      });
+      setDraft('');
+      setDraftKeyIndices([]);
+      setFeedback(t('game.wordAccepted'));
+      playWordAcceptedFeedback(wordAcceptedFeedback);
+      profile?.mark('optimisticUi');
+
+      submittingRef.current = true;
+      setBackgroundSyncing(true);
+      pendingListenerWordRef.current = result.normalized;
+
       const remote = await submitOnlineWord(
         gameId,
         myUid,
         result.normalized,
-        result.display ?? toDisplayUpper(result.normalized),
+        display,
         uniqueBonusEnabled,
+        { profile },
       );
-      setSubmitting(false);
+
+      submittingRef.current = false;
+      setBackgroundSyncing(false);
+      profile?.mark('remoteDone');
 
       if (!remote.ok) {
+        pendingListenerWordRef.current = null;
+        profile?.finish();
+        activeSubmitProfileRef.current = null;
+        setOptimisticWords((prev) => {
+          const next = new Map(prev);
+          next.delete(result.normalized);
+          return next;
+        });
+        setDraft(savedDraft);
+        setDraftKeyIndices(savedKeyIndices);
+        lastValidatedDraft.current = '';
         if (remote.error === 'DUPLICATE') {
           setFeedback(t('game.errorAlreadySubmitted'));
         }
+        runPendingSubmit(submitDraft);
         return;
       }
 
-      setDraft('');
-      setDraftKeyIndices([]);
       lastValidatedDraft.current = '';
-      setFeedback(t('game.wordAccepted'));
-      playWordAcceptedFeedback(wordAcceptedFeedback);
+      if (myWordsRef.current.has(result.normalized)) {
+        profile?.mark('listener');
+        profile?.finish();
+        activeSubmitProfileRef.current = null;
+        pendingListenerWordRef.current = null;
+      }
+      runPendingSubmit(submitDraft);
     },
     [
       dictionary,
+      draftKeyIndices,
       gameId,
       myUid,
-      myWords,
-      uniqueBonusEnabled,
       properNouns,
+      runPendingSubmit,
       session,
       slang,
-      submitting,
       supplementsReady,
       t,
+      uniqueBonusEnabled,
       wordAcceptedFeedback,
+      wordsForDisplay,
     ],
   );
 
@@ -518,6 +628,40 @@ export default function OnlinePlayScreen() {
       }
     };
   }, [draft, session?.status, submitDraft]);
+
+  const pressKey = useCallback(
+    (index: number) => {
+      if (
+        roundEnded ||
+        isPaused ||
+        remainingMs <= 0 ||
+        draftKeyIndicesRef.current.includes(index)
+      ) {
+        return;
+      }
+      const key = letterKeys[index];
+      if (!key) {
+        return;
+      }
+      setDraft((prev) => prev + key.value);
+      setDraftKeyIndices((prev) => [...prev, index]);
+      setFeedback(null);
+    },
+    [isPaused, letterKeys, remainingMs, roundEnded],
+  );
+
+  const clearDraft = useCallback(() => {
+    setDraft('');
+    setDraftKeyIndices([]);
+    setFeedback(null);
+    lastValidatedDraft.current = '';
+  }, []);
+
+  const backspaceDraft = useCallback(() => {
+    setDraft((prev) => prev.slice(0, -1));
+    setDraftKeyIndices((prev) => prev.slice(0, -1));
+    setFeedback(null);
+  }, []);
 
   const leaveToHome = () => {
     setShowExitConfirm(false);
@@ -701,32 +845,6 @@ export default function OnlinePlayScreen() {
   const resumeVote = session.resumeVote;
   const canProposeAddTime = !isPaused && !earlyVote && !pauseVote && !addTimeVote;
 
-  const pressKey = (index: number) => {
-    if (roundEnded || isPaused || remainingMs <= 0 || usedKeyIndices.has(index)) {
-      return;
-    }
-    const key = letterKeys[index];
-    if (!key) {
-      return;
-    }
-    setDraft((prev) => prev + key.value);
-    setDraftKeyIndices((prev) => [...prev, index]);
-    setFeedback(null);
-  };
-
-  const clearDraft = () => {
-    setDraft('');
-    setDraftKeyIndices([]);
-    setFeedback(null);
-    lastValidatedDraft.current = '';
-  };
-
-  const backspaceDraft = () => {
-    setDraft((prev) => prev.slice(0, -1));
-    setDraftKeyIndices((prev) => prev.slice(0, -1));
-    setFeedback(null);
-  };
-
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       {!isPaused ? (
@@ -776,48 +894,26 @@ export default function OnlinePlayScreen() {
             </Text>
           </View>
 
-          <View style={styles.composeRow}>
-            <FeedbackPressable
-              accessibilityRole="button"
-              onPress={clearDraft}
-              style={[
-                styles.composeKey,
-                { width: composeKeySize, height: composeKeySize },
-                styles.composeKeyDanger,
-              ]}
-            >
-              <Text style={[styles.composeKeyLabel, { fontSize: composeKeyFontSize }]}>✕</Text>
-            </FeedbackPressable>
-            <View style={[styles.draftBox, { height: composeKeySize }]}>
-              <Text style={styles.draftText}>{toDisplayUpper(draft) || ' '}</Text>
-            </View>
-            <FeedbackPressable
-              accessibilityRole="button"
-              onPress={backspaceDraft}
-              style={[
-                styles.composeKey,
-                { width: composeKeySize, height: composeKeySize },
-                styles.composeKeyOk,
-              ]}
-            >
-              <Text style={[styles.composeKeyLabel, { fontSize: composeKeyFontSize }]}>←</Text>
-            </FeedbackPressable>
-          </View>
+          <OnlinePlayComposePanel
+            draft={draft}
+            draftKeyIndices={draftKeyIndices}
+            letterKeys={letterKeys}
+            composeKeySize={composeKeySize}
+            composeKeyFontSize={composeKeyFontSize}
+            onPressKey={pressKey}
+            onClearDraft={clearDraft}
+            onBackspaceDraft={backspaceDraft}
+          />
 
-          <LetterKeyboard keys={letterKeys} usedKeyIndices={usedKeyIndices} onPressKey={pressKey} />
-
-          <View style={styles.wordListSection}>
-            <View style={styles.feedbackSlot}>
-              {feedback ? <Text style={styles.feedbackToast}>{feedback}</Text> : null}
-            </View>
-            <WordList
-              entries={scoredWords}
-              displays={displays}
-              draftPrefix={draft}
-              showScoreBadges={showPointUi && hasOpponent}
-              showOverlapPeers={hasOpponent}
-            />
-          </View>
+          <OnlinePlayWordListSection
+            entries={scoredWords}
+            displays={displays}
+            draftPrefix={draft}
+            feedback={feedback}
+            backgroundSyncing={backgroundSyncing}
+            showScoreBadges={showPointUi && hasOpponent}
+            showOverlapPeers={hasOpponent}
+          />
 
           <View style={styles.footer}>
             {!roundEnded ? (

@@ -18,6 +18,8 @@ import { gameSessionPath, playerWordsPath } from './paths.js';
 import { normalizeRoomCode } from './room-code.js';
 import type { GameSession } from './types.js';
 
+import { applyWordSubmitToSession } from '../online/apply-word-submit-to-session.js';
+import type { SubmitWordProfile } from '../online/submit-word-profile.js';
 import { wordsAreFromPreviousRound } from '../online/stale-player-words.js';
 
 export {
@@ -347,8 +349,12 @@ export function storedWordsToScoredEntries(words: Map<string, StoredPlayerWord>)
 
 export type SubmitWordError = 'NOT_PLAYING' | 'DUPLICATE' | 'SESSION_MISSING' | 'PLAYER_MISSING';
 
+export type SubmitOnlineWordOptions = {
+  profile?: SubmitWordProfile | null;
+};
+
 /**
- * Persist an accepted word: claim (transaction) + player stats + private word node.
+ * Persist an accepted word: session transaction + player word node (2 RTT).
  */
 export async function submitOnlineWord(
   gameId: string,
@@ -356,16 +362,54 @@ export async function submitOnlineWord(
   normalized: string,
   display: string,
   uniqueBonusEnabled: boolean,
+  options?: SubmitOnlineWordOptions,
 ): Promise<{ ok: true; entry: ScoredWordEntry } | { ok: false; error: SubmitWordError }> {
+  const profile = options?.profile ?? null;
   try {
     await ensureAnonymousAuth();
+    profile?.mark('auth');
     const roomId = normalizeRoomCode(gameId);
-    const sessionSnapshot = await get(sessionRef(roomId));
-    if (!sessionSnapshot.exists()) {
-      return { ok: false, error: 'SESSION_MISSING' };
+
+    let entry: ScoredWordEntry = toScoredWordEntry(normalized, 'normal', uniqueBonusEnabled, 1);
+
+    let sessionTx;
+    try {
+      sessionTx = await runTransaction(sessionRef(roomId), (current) => {
+        if (current == null) {
+          return undefined;
+        }
+        const applied = applyWordSubmitToSession(
+          current as GameSession,
+          uid,
+          normalized,
+          uniqueBonusEnabled,
+        );
+        if (!applied.ok) {
+          return undefined;
+        }
+        entry = applied.entry;
+        return applied.session;
+      });
+    } catch (error) {
+      if (isFirebasePermissionDenied(error)) {
+        return { ok: false, error: 'NOT_PLAYING' };
+      }
+      throw error;
     }
-    const preSession = sessionSnapshot.val() as GameSession;
-    if (preSession.status !== 'playing' || !preSession.players[uid]) {
+    profile?.mark('sessionTx');
+
+    if (!sessionTx.committed) {
+      const snapshot = await get(sessionRef(roomId));
+      if (!snapshot.exists()) {
+        return { ok: false, error: 'SESSION_MISSING' };
+      }
+      const session = snapshot.val() as GameSession;
+      if (session.status !== 'playing' || !session.players[uid]) {
+        return { ok: false, error: 'NOT_PLAYING' };
+      }
+      if (session.wordPlayers?.[normalized]?.[uid]) {
+        return { ok: false, error: 'DUPLICATE' };
+      }
       return { ok: false, error: 'NOT_PLAYING' };
     }
 
@@ -377,96 +421,6 @@ export async function submitOnlineWord(
         }
         return {
           display,
-          kind: 'normal' as WordScoreKind,
-          points: 1,
-          badge: null,
-          at: Date.now(),
-        };
-      });
-    } catch (error) {
-      if (isFirebasePermissionDenied(error)) {
-        return { ok: false, error: 'NOT_PLAYING' };
-      }
-      throw error;
-    }
-
-    if (!wordTx.committed) {
-      return { ok: false, error: 'DUPLICATE' };
-    }
-
-    let entry: ScoredWordEntry = toScoredWordEntry(normalized, 'normal', uniqueBonusEnabled, 1);
-
-    let sessionTx;
-    try {
-      sessionTx = await runTransaction(sessionRef(roomId), (current) => {
-        if (current == null) {
-          return undefined;
-        }
-        const session = current as GameSession;
-        if (session.status !== 'playing') {
-          return undefined;
-        }
-        const player = session.players[uid];
-        if (!player) {
-          return undefined;
-        }
-
-        const wordCounts = { ...(session.wordCounts ?? {}) };
-        const wordFirst = { ...(session.wordFirst ?? {}) };
-        const wordPlayers = { ...(session.wordPlayers ?? {}) };
-        const prevGlobal = wordCounts[normalized] ?? 0;
-        wordCounts[normalized] = prevGlobal + 1;
-        const globalCount = prevGlobal + 1;
-
-        const playersOnWord = { ...(wordPlayers[normalized] ?? {}) };
-        playersOnWord[uid] = true;
-        wordPlayers[normalized] = playersOnWord;
-
-        const kind: WordScoreKind = globalCount > 1 ? 'normal' : 'unique';
-
-        if (prevGlobal === 0) {
-          wordFirst[normalized] = uid;
-        } else if (uniqueBonusEnabled) {
-          const firstUid = wordFirst[normalized];
-          if (firstUid && firstUid !== uid) {
-            const firstPlayer = session.players[firstUid];
-            if (firstPlayer) {
-              firstPlayer.score = Math.max(0, (firstPlayer.score ?? 0) - 1);
-            }
-          }
-        }
-
-        session.wordCounts = wordCounts;
-        session.wordFirst = wordFirst;
-        session.wordPlayers = wordPlayers;
-
-        entry = toScoredWordEntry(normalized, kind, uniqueBonusEnabled, globalCount);
-        const points = entry.points;
-        player.score = (player.score ?? 0) + points;
-        player.wordCount = (player.wordCount ?? 0) + 1;
-        player.online = true;
-
-        session.players = { ...session.players, [uid]: player };
-        return session;
-      });
-    } catch (error) {
-      if (isFirebasePermissionDenied(error)) {
-        return { ok: false, error: 'NOT_PLAYING' };
-      }
-      throw error;
-    }
-
-    if (!sessionTx.committed) {
-      return { ok: false, error: 'NOT_PLAYING' };
-    }
-
-    try {
-      await runTransaction(playerWordRef(roomId, uid, normalized), (current) => {
-        if (current == null) {
-          return undefined;
-        }
-        return {
-          display,
           kind: entry.kind,
           points: entry.points,
           badge: entry.badge,
@@ -474,11 +428,18 @@ export async function submitOnlineWord(
         };
       });
     } catch (error) {
-      if (!isFirebasePermissionDenied(error) && __DEV__) {
-        console.warn('submitOnlineWord kind patch', error);
+      if (isFirebasePermissionDenied(error)) {
+        return { ok: false, error: 'NOT_PLAYING' };
       }
+      throw error;
+    }
+    profile?.mark('wordTx');
+
+    if (!wordTx.committed) {
+      return { ok: false, error: 'DUPLICATE' };
     }
 
+    profile?.mark('done');
     return { ok: true, entry };
   } catch (error) {
     if (__DEV__) {

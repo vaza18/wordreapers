@@ -31,6 +31,34 @@ interface WordRow {
   display: string;
 }
 
+/** First alphabetically sorted row whose normalized form starts with `prefix`. */
+function findPrefixScrollIndex(rows: readonly WordRow[], prefix: string): number {
+  if (prefix.length === 0 || rows.length === 0) {
+    return -1;
+  }
+
+  let lo = 0;
+  let hi = rows.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    const row = rows[mid];
+    if (!row) {
+      break;
+    }
+    if (row.entry.normalized.localeCompare(prefix, 'uk') < 0) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+
+  if (lo >= rows.length) {
+    return -1;
+  }
+  const row = rows[lo];
+  return row && row.entry.normalized.startsWith(prefix) ? lo : -1;
+}
+
 const ROW_HEIGHT = 42;
 
 /**
@@ -126,7 +154,7 @@ export function WordList({
       return;
     }
 
-    const index = rows.findIndex((row) => row.entry.normalized.startsWith(prefix));
+    const index = findPrefixScrollIndex(rows, prefix);
     if (index < 0) {
       return;
     }
