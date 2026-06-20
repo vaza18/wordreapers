@@ -18,6 +18,10 @@ import { getFirebaseDatabase } from './init.js';
 import { isFirebasePermissionDenied } from './rtdb-errors.js';
 import { computePurgeAfterAt } from './session-purge.js';
 import { getServerNow } from './server-clock.js';
+import {
+  computeRoundPlayedSecondsAtFinish,
+  resolveRoundTimerBudgetSeconds,
+} from '../game/round-duration.js';
 import { gameSessionPath } from './paths.js';
 import { normalizeRoomCode } from './room-code.js';
 import type { GameSession, GameSessionPlayer } from './types.js';
@@ -67,6 +71,7 @@ function initProposerVote(proposerId: string): Record<string, VoteChoice> {
 
 function finishPlayingSession(session: GameSession): GameSession {
   const finishedAt = getServerNow();
+  session.roundPlayedSeconds = computeRoundPlayedSecondsAtFinish(session, finishedAt);
   session.status = 'finished';
   session.timerEndsAt = null;
   session.finishedAt = finishedAt;
@@ -89,6 +94,7 @@ function finishIfTimerExpired(session: GameSession): GameSession {
 
 function applyAddTime(session: GameSession, addMinutes: number): GameSession {
   session.timerEndsAt = computeExtendedTimerEndsAt(session.timerEndsAt, addMinutes, getServerNow());
+  session.roundTimerBudgetSeconds = resolveRoundTimerBudgetSeconds(session) + addMinutes * 60;
   session.addTimeVote = null;
   return session;
 }

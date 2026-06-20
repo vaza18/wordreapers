@@ -40,6 +40,8 @@ function sessionCoreFromSnapshot(snap: PlayingRoundSnapshot): GameSession {
     status: 'playing',
     settings: snap.settings,
     timerEndsAt: snap.timerEndsAt,
+    roundStartedAt: snap.roundStartedAt,
+    roundTimerBudgetSeconds: snap.roundTimerBudgetSeconds,
     organizerId: snap.organizerId,
     players: snap.players,
     pauseState: snap.pauseState,

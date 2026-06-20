@@ -60,6 +60,12 @@ export interface GameSession {
   status: GameSessionStatus;
   settings: GameSessionSettings;
   timerEndsAt: number | null;
+  /** Server clock ms when the playing round started (rejoin archives, stale-word cutoff). */
+  roundStartedAt?: number | null;
+  /** Countdown budget in seconds (settings duration + approved add-time); excludes pause wall time. */
+  roundTimerBudgetSeconds?: number | null;
+  /** Timer/game seconds consumed when the round finished (results, history, WPM). */
+  roundPlayedSeconds?: number | null;
   organizerId: string;
   players: Record<string, GameSessionPlayer>;
   /** Merged client-side from `session_word_maps` (not stored on core RTDB node). */

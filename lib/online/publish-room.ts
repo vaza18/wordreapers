@@ -147,6 +147,8 @@ export interface PublishPlayingSoloInput {
   remainingMs: number;
   /** True when the organizer paused locally before inviting. */
   paused: boolean;
+  /** Solo countdown budget (duration + local add-time) for timer-based results duration. */
+  roundTimerBudgetSeconds?: number;
 }
 
 /**
@@ -156,10 +158,11 @@ export async function publishPlayingSoloRound(input: PublishPlayingSoloInput): P
   const gameId = await reserveUniqueRoomCode(input.draft.preferredCode, input.organizerUid);
   const normalized = normalizeRoomCode(gameId);
   const settings = settingsFromSetup(input.setup, 1);
+  const serverNow = getServerNow();
   const { timerEndsAt, pauseState } = buildPlayingSoloTimerFields(
     input.remainingMs,
     input.paused,
-    getServerNow(),
+    serverNow,
   );
   const wordMaps = buildWordSessionMaps(input.words, input.organizerUid);
 
@@ -174,6 +177,9 @@ export async function publishPlayingSoloRound(input: PublishPlayingSoloInput): P
     status: 'playing',
     settings: resolveGameSessionSettings(settings),
     timerEndsAt,
+    roundStartedAt: serverNow,
+    roundTimerBudgetSeconds:
+      input.roundTimerBudgetSeconds ?? resolveGameSessionSettings(settings).durationSeconds,
     organizerId: input.organizerUid,
     players: {
       [input.organizerUid]: player,
@@ -226,6 +232,7 @@ export async function publishPlayingSoloForDraft(
     wordCount: number;
     remainingMs: number;
     paused: boolean;
+    roundTimerBudgetSeconds?: number;
   },
 ): Promise<string> {
   const user = await ensureAnonymousAuth();

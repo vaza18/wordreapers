@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 import type { ScoredWordEntry, WordScoreBadge, WordScoreKind } from '@/lib/game/scoring';
 import { buildStandings, computePlayerScore, resolveUniqueBonusEnabled } from '@/lib/game/scoring';
+import { computeRoundPlayedSecondsFromTimerState } from '@/lib/game/round-duration';
 import type { LocalRoomSetup } from '@/lib/online/local-room-draft';
 
 export interface OrganizerSoloWord {
@@ -19,6 +20,8 @@ export interface OrganizerSoloState {
   uniqueBonusEnabled: boolean;
   endsAt: number | null;
   pausedRemainingMs: number | null;
+  roundTimerBudgetSeconds: number | null;
+  roundPlayedSeconds: number | null;
   status: 'idle' | 'playing' | 'paused' | 'finished';
   words: OrganizerSoloWord[];
   published: boolean;
@@ -42,6 +45,8 @@ const initialState = {
   uniqueBonusEnabled: false,
   endsAt: null as number | null,
   pausedRemainingMs: null as number | null,
+  roundTimerBudgetSeconds: null as number | null,
+  roundPlayedSeconds: null as number | null,
   status: 'idle' as const,
   words: [] as OrganizerSoloWord[],
   published: false,
@@ -68,6 +73,8 @@ export const useOrganizerSoloStore = create<OrganizerSoloState>((set, get) => ({
     set({
       endsAt: Date.now() + durationMs,
       pausedRemainingMs: null,
+      roundTimerBudgetSeconds: setup.durationMinutes * 60,
+      roundPlayedSeconds: null,
       status: 'playing',
       words: [],
     });
@@ -80,7 +87,19 @@ export const useOrganizerSoloStore = create<OrganizerSoloState>((set, get) => ({
   },
 
   finishRound: () => {
-    set({ status: 'finished', endsAt: Date.now(), pausedRemainingMs: null });
+    const state = get();
+    const now = Date.now();
+    const budget = state.roundTimerBudgetSeconds ?? (state.setup?.durationMinutes ?? 0) * 60;
+    const roundPlayedSeconds = computeRoundPlayedSecondsFromTimerState({
+      budgetSeconds: budget,
+      remainingMs: state.getRemainingMs(now),
+    });
+    set({
+      status: 'finished',
+      endsAt: now,
+      pausedRemainingMs: null,
+      roundPlayedSeconds,
+    });
   },
 
   pauseRound: () => {
@@ -108,14 +127,21 @@ export const useOrganizerSoloStore = create<OrganizerSoloState>((set, get) => ({
   },
 
   addTime: (minutes) => {
-    const { status, endsAt, pausedRemainingMs } = get();
+    const { status, endsAt, pausedRemainingMs, roundTimerBudgetSeconds } = get();
     const addMs = minutes * 60_000;
+    const addSeconds = minutes * 60;
     if (status === 'playing' && endsAt !== null) {
-      set({ endsAt: endsAt + addMs });
+      set({
+        endsAt: endsAt + addMs,
+        roundTimerBudgetSeconds: (roundTimerBudgetSeconds ?? 0) + addSeconds,
+      });
       return;
     }
     if (status === 'paused' && pausedRemainingMs !== null) {
-      set({ pausedRemainingMs: pausedRemainingMs + addMs });
+      set({
+        pausedRemainingMs: pausedRemainingMs + addMs,
+        roundTimerBudgetSeconds: (roundTimerBudgetSeconds ?? 0) + addSeconds,
+      });
     }
   },
 
@@ -157,6 +183,7 @@ export function organizerSoloSnapshotForPublish(state: OrganizerSoloState): {
   wordCount: number;
   remainingMs: number;
   paused: boolean;
+  roundTimerBudgetSeconds: number | undefined;
 } {
   const now = Date.now();
   return {
@@ -165,6 +192,7 @@ export function organizerSoloSnapshotForPublish(state: OrganizerSoloState): {
     wordCount: state.words.length,
     remainingMs: state.getRemainingMs(now),
     paused: state.status === 'paused',
+    roundTimerBudgetSeconds: state.roundTimerBudgetSeconds ?? undefined,
   };
 }
 

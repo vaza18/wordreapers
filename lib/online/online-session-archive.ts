@@ -33,6 +33,8 @@ export interface PlayingRoundSnapshot {
   wordPlayers?: GameSession['wordPlayers'];
   pauseState?: GameSession['pauseState'];
   timerEndsAt: number;
+  roundStartedAt?: number;
+  roundTimerBudgetSeconds?: number;
   organizerId: string;
   baseWordRound: number;
   baseWordPickerOrder?: string[];
@@ -124,7 +126,7 @@ function trimFinishedStore(store: FinishedArchiveStore): FinishedArchiveStore {
 }
 
 export function playingRoundSnapshotFromSession(session: GameSession): PlayingRoundSnapshot | null {
-  if (session.status !== 'playing' || session.timerEndsAt == null) {
+  if (session.status !== 'playing' || typeof session.roundStartedAt !== 'number') {
     return null;
   }
   return {
@@ -134,7 +136,9 @@ export function playingRoundSnapshotFromSession(session: GameSession): PlayingRo
     wordFirst: session.wordFirst,
     wordPlayers: session.wordPlayers,
     pauseState: session.pauseState,
-    timerEndsAt: session.timerEndsAt,
+    timerEndsAt: session.timerEndsAt ?? session.roundStartedAt,
+    roundStartedAt: session.roundStartedAt,
+    roundTimerBudgetSeconds: session.roundTimerBudgetSeconds ?? undefined,
     organizerId: session.organizerId,
     baseWordRound: session.baseWordRound ?? 0,
     baseWordPickerOrder: session.baseWordPickerOrder,

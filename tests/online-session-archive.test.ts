@@ -7,7 +7,11 @@ import {
   playingRoundSnapshotFromSession,
 } from '../lib/online/online-session-archive.js';
 
-function session(status: GameSession['status'], timerEndsAt: number | null): GameSession {
+function session(
+  status: GameSession['status'],
+  timerEndsAt: number | null,
+  roundStartedAt?: number,
+): GameSession {
   return {
     baseWord: 'тест',
     status,
@@ -19,6 +23,7 @@ function session(status: GameSession['status'], timerEndsAt: number | null): Gam
       allowSlang: false,
     },
     timerEndsAt,
+    roundStartedAt,
     organizerId: 'org',
     players: {
       org: { name: 'Org', wordCount: 0, score: 0, online: true },
@@ -41,8 +46,12 @@ describe('archive route keys', () => {
 
 describe('playingRoundSnapshotFromSession', () => {
   it('captures a playing snapshot while the timer runs', () => {
-    const snap = playingRoundSnapshotFromSession(session('playing', Date.now() + 60_000));
+    const roundStartedAt = Date.now() - 60_000;
+    const snap = playingRoundSnapshotFromSession(
+      session('playing', Date.now() + 60_000, roundStartedAt),
+    );
     expect(snap?.baseWord).toBe('тест');
+    expect(snap?.roundStartedAt).toBe(roundStartedAt);
     expect(snap?.timerEndsAt).toBeGreaterThan(Date.now());
     expect(snap?.players.org?.name).toBe('Org');
     expect(snap?.organizerId).toBe('org');
