@@ -42,6 +42,7 @@ import { useTimerAlerts } from '@/hooks/useTimerAlerts';
 import { DictionaryIndex } from '@/lib/dictionary/dictionary-index';
 import { toDisplayUpper } from '@/lib/dictionary/normalize';
 import { playWordAcceptedFeedback } from '@/lib/feedback/game-feedback';
+import { ensureAnonymousAuth } from '@/lib/firebase/auth';
 import {
   finishGameSession,
   finishGameSessionIfExpired,
@@ -177,6 +178,8 @@ export default function OnlinePlayScreen() {
   const staleWordsReconcileKeyRef = useRef<string | null>(null);
   const scoresSyncInFlightRef = useRef(false);
   const finishedArchiveRoundRef = useRef<number | null>(null);
+  const wordMapsRef = useRef(wordMaps);
+  wordMapsRef.current = wordMaps;
   const myWordsRef = useRef(myWords);
   myWordsRef.current = myWords;
   const draftKeyIndicesRef = useRef(draftKeyIndices);
@@ -236,16 +239,28 @@ export default function OnlinePlayScreen() {
     if (!gameId || !myUid) {
       return undefined;
     }
-    const unsubSession = subscribeGameSession(gameId, (next) => {
-      setSessionCore(next);
-      setLoading(false);
+    let cancelled = false;
+    let unsubSession: (() => void) | undefined;
+    let unsubMaps: (() => void) | undefined;
+    let unsubWords: (() => void) | undefined;
+
+    void ensureAnonymousAuth().then(() => {
+      if (cancelled) {
+        return;
+      }
+      unsubSession = subscribeGameSession(gameId, (next) => {
+        setSessionCore(next);
+        setLoading(false);
+      });
+      unsubMaps = subscribeSessionWordMaps(gameId, setWordMaps);
+      unsubWords = subscribePlayerWords(gameId, myUid, setMyWords);
     });
-    const unsubMaps = subscribeSessionWordMaps(gameId, setWordMaps);
-    const unsubWords = subscribePlayerWords(gameId, myUid, setMyWords);
+
     return () => {
-      unsubSession();
-      unsubMaps();
-      unsubWords();
+      cancelled = true;
+      unsubSession?.();
+      unsubMaps?.();
+      unsubWords?.();
     };
   }, [gameId, myUid]);
 
@@ -390,11 +405,13 @@ export default function OnlinePlayScreen() {
       return;
     }
     if (!finishAttemptedRef.current) {
-      void finishGameSessionIfExpired(gameId).then((committed) => {
-        if (committed) {
-          finishAttemptedRef.current = true;
-        }
-      });
+      void finishGameSessionIfExpired(gameId, wordMapsRef.current ?? undefined).then(
+        (committed) => {
+          if (committed) {
+            finishAttemptedRef.current = true;
+          }
+        },
+      );
     }
   }, [endsAt, gameId, isPaused, serverNow, session?.addTimeVote, session?.status]);
 
@@ -445,17 +462,17 @@ export default function OnlinePlayScreen() {
   useTimerAlerts(remainingMs, isPaused, timerAlertMode, session?.status === 'playing');
 
   useEffect(() => {
-    if (!gameId || !session || session.status !== 'playing') {
+    if (!gameId || !myUid || !session || session.status !== 'playing' || !wordMaps) {
       return;
     }
     if (sessionPlayerScoresMatchWordMaps(session) || scoresSyncInFlightRef.current) {
       return;
     }
     scoresSyncInFlightRef.current = true;
-    void syncSessionPlayerScores(gameId).finally(() => {
+    void syncSessionPlayerScores(gameId, wordMaps).finally(() => {
       scoresSyncInFlightRef.current = false;
     });
-  }, [gameId, session]);
+  }, [gameId, myUid, session, wordMaps]);
 
   const displayRanks = useMemo(() => assignDisplayRanks(standings), [standings]);
   const playerRank = displayRankForPlayer(standings, myUid);
@@ -809,7 +826,7 @@ export default function OnlinePlayScreen() {
       void proposeEarlyFinish(gameId, myUid);
       return;
     }
-    void finishGameSession(gameId);
+    void finishGameSession(gameId, wordMaps ?? undefined);
   };
 
   useEffect(() => {

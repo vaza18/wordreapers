@@ -8,6 +8,7 @@ import {
 } from 'firebase/database';
 
 import { getFirebaseDatabase } from './init.js';
+import { ensureAnonymousAuth } from './auth.js';
 import { isFirebasePermissionDenied } from './rtdb-errors.js';
 import { sessionWordMapsPath } from './paths.js';
 import { normalizeRoomCode } from './room-code.js';
@@ -28,10 +29,11 @@ function parseSessionWordMaps(raw: unknown): SessionWordMaps {
   };
 }
 
-/** One-shot read of shared word maps for a room. */
+/** One-shot read of shared word maps for a room (requires roster membership in RTDB rules). */
 export async function fetchSessionWordMaps(gameId: string): Promise<SessionWordMaps> {
   const roomId = normalizeRoomCode(gameId);
   try {
+    await ensureAnonymousAuth();
     const snapshot = await get(sessionWordMapsRef(roomId));
     if (!snapshot.exists()) {
       return { ...EMPTY_SESSION_WORD_MAPS };

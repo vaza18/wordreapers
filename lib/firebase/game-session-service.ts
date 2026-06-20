@@ -32,6 +32,7 @@ import { ensureAnonymousAuth, getFirebaseUid } from './auth.js';
 import { isFirebasePermissionDenied } from './rtdb-errors.js';
 import { withFinishedPurgeFields } from './session-purge.js';
 import { stripWordMapsFromSession } from './session-word-maps.js';
+import type { SessionWordMaps } from './session-word-maps.js';
 import { clearSessionWordMaps, fetchSessionWordMaps } from './session-word-maps-service.js';
 import { getFirebaseDatabase } from './init.js';
 import { gameSessionPath, GAME_SESSIONS_PATH } from './paths.js';
@@ -253,11 +254,12 @@ export async function joinGameSession(
       : undefined;
 
   const newPlayer = profileToPlayer(profile, true, inviterUid);
-  const wordMaps = await fetchSessionWordMaps(normalized);
 
   await update(playersRef(normalized), {
     [user.uid]: newPlayer,
   });
+
+  const wordMaps = await fetchSessionWordMaps(normalized);
 
   await runTransaction(sessionRef(normalized), (current) => {
     if (current == null) {
@@ -306,10 +308,15 @@ export async function joinGameSession(
 
 /**
  * Rewrite session player totals from wordPlayers when they drift (e.g. solo → 3+).
+ * Pass `mapsOverride` from a live listener to skip a redundant RTDB read on play.
  */
-export async function syncSessionPlayerScores(gameId: string): Promise<void> {
+export async function syncSessionPlayerScores(
+  gameId: string,
+  mapsOverride?: SessionWordMaps,
+): Promise<void> {
+  await ensureAnonymousAuth();
   const normalized = normalizeRoomCode(gameId);
-  const maps = await fetchSessionWordMaps(normalized);
+  const maps = mapsOverride ?? (await fetchSessionWordMaps(normalized));
   if (Object.keys(maps.wordPlayers ?? {}).length === 0) {
     return;
   }
@@ -597,8 +604,12 @@ export async function gameSessionExists(gameId: string): Promise<boolean> {
 /**
  * End the round when server timer has elapsed (any connected client may commit).
  */
-export async function finishGameSessionIfExpired(gameId: string): Promise<boolean> {
+export async function finishGameSessionIfExpired(
+  gameId: string,
+  mapsOverride?: SessionWordMaps,
+): Promise<boolean> {
   const normalized = normalizeRoomCode(gameId);
+  await ensureAnonymousAuth();
   const preSnapshot = await get(sessionRef(normalized));
   if (!preSnapshot.exists()) {
     return false;
@@ -613,7 +624,7 @@ export async function finishGameSessionIfExpired(gameId: string): Promise<boolea
   if (preSession.addTimeVote) {
     return false;
   }
-  const wordMaps = await fetchSessionWordMaps(normalized);
+  const wordMaps = mapsOverride ?? (await fetchSessionWordMaps(normalized));
   try {
     const result = await runTransaction(sessionRef(normalized), (current) => {
       if (current == null) {
@@ -666,10 +677,14 @@ export async function finishGameSessionIfExpired(gameId: string): Promise<boolea
 /**
  * Force-finish round (organizer / dev).
  */
-export async function finishGameSession(gameId: string): Promise<void> {
+export async function finishGameSession(
+  gameId: string,
+  mapsOverride?: SessionWordMaps,
+): Promise<void> {
   const normalized = normalizeRoomCode(gameId);
+  await ensureAnonymousAuth();
   const finishedAt = getServerNow();
-  const wordMaps = await fetchSessionWordMaps(normalized);
+  const wordMaps = mapsOverride ?? (await fetchSessionWordMaps(normalized));
   await runTransaction(sessionRef(normalized), (current) => {
     if (current == null) {
       return undefined;
