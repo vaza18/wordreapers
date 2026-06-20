@@ -141,7 +141,11 @@ export default function OnlineResultsScreen() {
   }, [gameId]);
 
   useEffect(() => {
-    if (!sessionLoaded || liveSession || !gameId) {
+    if (!sessionLoaded || !gameId || frozenRound) {
+      return undefined;
+    }
+    const shouldRecoverFromArchive = !liveSession || liveSession.status === 'waiting';
+    if (!shouldRecoverFromArchive) {
       return undefined;
     }
     let cancelled = false;
@@ -177,7 +181,7 @@ export default function OnlineResultsScreen() {
     return () => {
       cancelled = true;
     };
-  }, [gameId, liveSession, sessionLoaded]);
+  }, [frozenRound, gameId, liveSession, sessionLoaded]);
 
   useEffect(() => {
     if (!liveSession || liveSession.status !== 'finished') {

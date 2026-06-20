@@ -35,6 +35,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { colors, radii, spacing } from '@/constants/theme';
 import { useAutoPauseOnAppBackground } from '@/hooks/useAutoPauseOnAppBackground';
 import { usePlaySessionToasts } from '@/hooks/usePlaySessionToasts';
+import { useResultsRematchToast } from '@/hooks/useResultsRematchToast';
 import { useServerNow } from '@/hooks/useServerNow';
 import { useRoundTimeUpModal } from '@/hooks/useRoundTimeUpModal';
 import { useTimerAlerts } from '@/hooks/useTimerAlerts';
@@ -142,7 +143,6 @@ export default function OnlinePlayScreen() {
   const [draft, setDraft] = useState('');
   const [draftKeyIndices, setDraftKeyIndices] = useState<number[]>([]);
   const [feedback, setFeedback] = useState<string | null>(null);
-  const playToasts = usePlaySessionToasts(session, myUid);
   const [showStandings, setShowStandings] = useState(false);
   const [showGameMenu, setShowGameMenu] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -152,8 +152,16 @@ export default function OnlinePlayScreen() {
   const [backgroundSyncing, setBackgroundSyncing] = useState(false);
   const [optimisticWords, setOptimisticWords] = useState<Map<string, StoredPlayerWord>>(new Map());
   const serverNow = useServerNow(250);
-  const roundEnded = session?.status === 'finished';
+  const [roundOverPendingResults, setRoundOverPendingResults] = useState(false);
+  const roundEnded = session?.status === 'finished' || roundOverPendingResults;
   const { timeUpModalVisible } = useRoundTimeUpModal(roundEnded);
+  const skipRematchToastRef = useRef(false);
+  const rematchToasts = useResultsRematchToast(sessionCore, skipRematchToastRef);
+  const playToasts = usePlaySessionToasts(session, myUid);
+  const sessionToasts = useMemo(
+    () => [...playToasts, ...rematchToasts],
+    [playToasts, rematchToasts],
+  );
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastValidatedDraft = useRef('');
@@ -168,6 +176,7 @@ export default function OnlinePlayScreen() {
   const playRoundKeyRef = useRef<number | null>(null);
   const staleWordsReconcileKeyRef = useRef<string | null>(null);
   const scoresSyncInFlightRef = useRef(false);
+  const finishedArchiveRoundRef = useRef<number | null>(null);
   const myWordsRef = useRef(myWords);
   myWordsRef.current = myWords;
   const draftKeyIndicesRef = useRef(draftKeyIndices);
@@ -298,24 +307,52 @@ export default function OnlinePlayScreen() {
     playRoundKeyRef.current = round;
   }, [session?.baseWordRound]);
 
+  useEffect(() => {
+    if (session?.status === 'finished') {
+      setRoundOverPendingResults(true);
+    }
+  }, [session?.status]);
+
+  useEffect(() => {
+    if (!gameId || !session || session.status !== 'finished') {
+      return;
+    }
+    const round = session.baseWordRound ?? 0;
+    if (finishedArchiveRoundRef.current === round) {
+      return;
+    }
+    finishedArchiveRoundRef.current = round;
+    void archiveFinishedRoundFromFirebase(gameId, session).catch((error) => {
+      if (__DEV__) {
+        console.warn('archiveFinishedRoundFromFirebase', error);
+      }
+    });
+  }, [gameId, session]);
+
   const navigateToResults = useCallback(async () => {
-    if (!gameId || resultsNavigatedRef.current || !session || session.status !== 'finished') {
+    if (!gameId || resultsNavigatedRef.current || !session) {
+      return;
+    }
+    if (session.status !== 'finished' && !roundOverPendingResults) {
       return;
     }
     resultsNavigatedRef.current = true;
+    setRoundOverPendingResults(false);
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
       debounceRef.current = null;
     }
     try {
-      await archiveFinishedRoundFromFirebase(gameId, session);
+      if (session.status === 'finished') {
+        await archiveFinishedRoundFromFirebase(gameId, session);
+      }
     } catch (error) {
       if (__DEV__) {
         console.warn('archiveFinishedRoundFromFirebase', error);
       }
     }
     router.replace({ pathname: '/online/results/[gameId]', params: { gameId } });
-  }, [gameId, session]);
+  }, [gameId, roundOverPendingResults, session]);
 
   useEffect(() => {
     void Promise.all([loadBundledDictionary(), loadBundledSupplements()]).then(
@@ -838,7 +875,7 @@ export default function OnlinePlayScreen() {
     );
   }
 
-  if (session.status !== 'playing' && session.status !== 'finished') {
+  if (session.status !== 'playing' && !roundOverPendingResults) {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={colors.accent} />
@@ -1158,7 +1195,7 @@ export default function OnlinePlayScreen() {
         }}
       />
 
-      <PlaySessionToastStack toasts={playToasts} />
+      <PlaySessionToastStack toasts={sessionToasts} />
 
       <GameTimeUpModal
         visible={timeUpModalVisible}
