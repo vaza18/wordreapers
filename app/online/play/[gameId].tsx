@@ -319,14 +319,29 @@ export default function OnlinePlayScreen() {
   const isPaused = session?.pauseState?.active === true;
 
   useEffect(() => {
-    if (isPaused || session?.status !== 'playing' || endsAt === null || serverNow < endsAt) {
+    if (session?.addTimeVote) {
+      finishAttemptedRef.current = false;
+    }
+  }, [session?.addTimeVote]);
+
+  useEffect(() => {
+    if (
+      isPaused ||
+      session?.status !== 'playing' ||
+      endsAt === null ||
+      serverNow < endsAt ||
+      session?.addTimeVote
+    ) {
       return;
     }
     if (!finishAttemptedRef.current) {
-      finishAttemptedRef.current = true;
-      void finishGameSessionIfExpired(gameId);
+      void finishGameSessionIfExpired(gameId).then((committed) => {
+        if (committed) {
+          finishAttemptedRef.current = true;
+        }
+      });
     }
-  }, [endsAt, gameId, isPaused, serverNow, session?.status]);
+  }, [endsAt, gameId, isPaused, serverNow, session?.addTimeVote, session?.status]);
 
   const baseWord = session?.baseWord ?? '';
   const baseWordDisplay = dictionary?.lookupDisplayUpper(baseWord) ?? toDisplayUpper(baseWord);
@@ -687,7 +702,7 @@ export default function OnlinePlayScreen() {
   const canProposeAddTime = !isPaused && !earlyVote && !pauseVote && !addTimeVote;
 
   const pressKey = (index: number) => {
-    if (roundEnded || isPaused || usedKeyIndices.has(index)) {
+    if (roundEnded || isPaused || remainingMs <= 0 || usedKeyIndices.has(index)) {
       return;
     }
     const key = letterKeys[index];
@@ -981,7 +996,7 @@ export default function OnlinePlayScreen() {
         />
       ) : null}
 
-      {addTimeVote && !isPaused && !earlyVote && !pauseVote ? (
+      {addTimeVote && session.status === 'playing' && !isPaused && !earlyVote && !pauseVote ? (
         <AddTimeVoteModal
           visible
           session={session}

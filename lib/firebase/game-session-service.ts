@@ -596,6 +596,9 @@ export async function finishGameSessionIfExpired(gameId: string): Promise<boolea
   if (getServerNow() < preSession.timerEndsAt) {
     return false;
   }
+  if (preSession.addTimeVote) {
+    return false;
+  }
   try {
     const result = await runTransaction(sessionRef(normalized), (current) => {
       if (current == null) {
@@ -606,6 +609,9 @@ export async function finishGameSessionIfExpired(gameId: string): Promise<boolea
         return undefined;
       }
       if (getServerNow() < session.timerEndsAt) {
+        return undefined;
+      }
+      if (session.addTimeVote) {
         return undefined;
       }
       const playerCount = Object.keys(session.players).length;
@@ -620,6 +626,7 @@ export async function finishGameSessionIfExpired(gameId: string): Promise<boolea
           ...session,
           status: 'finished',
           timerEndsAt: null,
+          addTimeVote: null,
         },
         finishAt,
       );

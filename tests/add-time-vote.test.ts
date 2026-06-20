@@ -3,8 +3,11 @@ import { describe, expect, it } from 'vitest';
 import type { AddTimeVote, GameSession } from '../lib/firebase/types.js';
 import { EARLY_FINISH_VOTE_TIMEOUT_MS } from '../lib/online/early-finish-vote.js';
 import {
+  computeExtendedTimerEndsAt,
   shouldApplyAddTimeFromVote,
   shouldClearAddTimeVote,
+  shouldDeferTimerFinishForAddTimeVote,
+  shouldFinishRoundAfterTimerExpired,
   viewerNeedsAddTimeVote,
 } from '../lib/online/add-time-vote.js';
 
@@ -74,5 +77,35 @@ describe('add time vote', () => {
     });
     const rejected = { ...addTimeVote, votes: { org: 'yes', a: 'no' } as const };
     expect(shouldClearAddTimeVote(s, rejected, addTimeVote.proposedAt! + 1000)).toBe(true);
+  });
+
+  it('defers timer finish while add-time vote is active', () => {
+    expect(shouldDeferTimerFinishForAddTimeVote(null)).toBe(false);
+    expect(shouldDeferTimerFinishForAddTimeVote(undefined)).toBe(false);
+    expect(shouldDeferTimerFinishForAddTimeVote(addTimeVote)).toBe(true);
+  });
+
+  it('detects when round timer has expired', () => {
+    const now = 1_000_000;
+    expect(shouldFinishRoundAfterTimerExpired(now - 1, now)).toBe(true);
+    expect(shouldFinishRoundAfterTimerExpired(now + 1, now)).toBe(false);
+    expect(shouldFinishRoundAfterTimerExpired(null, now)).toBe(false);
+  });
+
+  it('extends timer from now when timerEndsAt is already in the past', () => {
+    const now = 1_000_000;
+    const expiredEndsAt = now - 5_000;
+    expect(computeExtendedTimerEndsAt(expiredEndsAt, 1, now)).toBe(now + 60_000);
+  });
+
+  it('extends timer from current endsAt when it is still in the future', () => {
+    const now = 1_000_000;
+    const futureEndsAt = now + 30_000;
+    expect(computeExtendedTimerEndsAt(futureEndsAt, 3, now)).toBe(futureEndsAt + 180_000);
+  });
+
+  it('extends timer from now when timerEndsAt is null', () => {
+    const now = 1_000_000;
+    expect(computeExtendedTimerEndsAt(null, 5, now)).toBe(now + 300_000);
   });
 });

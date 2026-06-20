@@ -7,7 +7,11 @@ import {
   earlyFinishVoteExpired,
   shouldFinishFromEarlyVote,
 } from '../online/early-finish-vote.js';
-import { shouldApplyAddTimeFromVote, shouldClearAddTimeVote } from '../online/add-time-vote.js';
+import {
+  computeExtendedTimerEndsAt,
+  shouldApplyAddTimeFromVote,
+  shouldClearAddTimeVote,
+} from '../online/add-time-vote.js';
 import { shouldActivatePauseFromVote } from '../online/pause-vote.js';
 import { resumeVoteRequiredIds, shouldResumeFromVote } from '../online/resume-vote.js';
 import { getFirebaseDatabase } from './init.js';
@@ -75,9 +79,16 @@ function finishPlayingSession(session: GameSession): GameSession {
   return session;
 }
 
+function finishIfTimerExpired(session: GameSession): GameSession {
+  const endsAt = session.timerEndsAt;
+  if (endsAt !== null && getServerNow() >= endsAt) {
+    return finishPlayingSession(session);
+  }
+  return session;
+}
+
 function applyAddTime(session: GameSession, addMinutes: number): GameSession {
-  const base = session.timerEndsAt ?? getServerNow();
-  session.timerEndsAt = base + addMinutes * 60_000;
+  session.timerEndsAt = computeExtendedTimerEndsAt(session.timerEndsAt, addMinutes, getServerNow());
   session.addTimeVote = null;
   return session;
 }
@@ -277,7 +288,9 @@ export async function voteAddTime(gameId: string, uid: string, choice: VoteChoic
 
       if (anyRequiredVotedNo(vote, required)) {
         session.addTimeVote = null;
-      } else if (shouldApplyAddTimeFromVote(session, vote)) {
+        return finishIfTimerExpired(session);
+      }
+      if (shouldApplyAddTimeFromVote(session, vote)) {
         return applyAddTime(session, vote.addMinutes);
       }
       return session;
@@ -298,7 +311,7 @@ export async function cancelAddTimeVote(gameId: string, uid: string): Promise<vo
         return undefined;
       }
       session.addTimeVote = null;
-      return session;
+      return finishIfTimerExpired(session);
     },
     { requirePlaying: true },
   );
@@ -319,7 +332,7 @@ export async function resolveAddTimeVoteIfExpired(gameId: string): Promise<void>
       const required = earlyFinishRequiredVoterIds(session, vote.proposedBy);
       if (anyRequiredVotedNo(vote, required)) {
         session.addTimeVote = null;
-        return session;
+        return finishIfTimerExpired(session);
       }
 
       if (shouldApplyAddTimeFromVote(session, vote)) {
@@ -328,7 +341,7 @@ export async function resolveAddTimeVoteIfExpired(gameId: string): Promise<void>
 
       if (shouldClearAddTimeVote(session, vote, getServerNow())) {
         session.addTimeVote = null;
-        return session;
+        return finishIfTimerExpired(session);
       }
 
       return undefined;
