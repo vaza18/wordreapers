@@ -9,7 +9,7 @@ import type { AllPlayerWords } from './clone-player-words.js';
 const FINISHED_ARCHIVES_KEY = 'wordreapers.finishedOnlineRounds';
 const MAX_FINISHED_ARCHIVES = 40;
 
-export const FINISHED_ARCHIVE_VERSION = 1 as const;
+export const FINISHED_ARCHIVE_VERSION = 2 as const;
 
 export interface FinishedRoundArchive {
   gameId: string;
@@ -29,7 +29,6 @@ export interface PlayingRoundSnapshot {
   baseWord: string;
   settings: GameSession['settings'];
   players: GameSession['players'];
-  wordCounts?: GameSession['wordCounts'];
   wordFirst?: GameSession['wordFirst'];
   wordPlayers?: GameSession['wordPlayers'];
   pauseState?: GameSession['pauseState'];
@@ -132,7 +131,6 @@ export function playingRoundSnapshotFromSession(session: GameSession): PlayingRo
     baseWord: session.baseWord,
     settings: session.settings,
     players: session.players,
-    wordCounts: session.wordCounts,
     wordFirst: session.wordFirst,
     wordPlayers: session.wordPlayers,
     pauseState: session.pauseState,

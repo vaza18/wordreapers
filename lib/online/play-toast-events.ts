@@ -1,7 +1,8 @@
 import type { PlayerGender } from '../game/grammar.js';
-import { assignDisplayRanks, buildStandingsFromSession } from '../game/scoring.js';
+import { assignDisplayRanks } from '../game/scoring.js';
 import { resolveGameSessionSettingsForSession } from '../firebase/session-settings.js';
 import type { GameSession } from '../firebase/types.js';
+import { buildLiveStandingsFromSession } from './live-standings.js';
 import { votingPlayerIds } from './voting-player-ids.js';
 
 export type PlayToastEvent =
@@ -57,7 +58,7 @@ function isCompetingInRound(session: GameSession, playerId: string): boolean {
 
 function detectRosterEvents(prev: GameSession, curr: GameSession, myUid: string): PlayToastEvent[] {
   const events: PlayToastEvent[] = [];
-  const currRanks = assignDisplayRanks(buildStandingsFromSession(curr));
+  const currRanks = assignDisplayRanks(buildLiveStandingsFromSession(curr));
 
   for (const [playerId, player] of Object.entries(curr.players)) {
     if (playerId === myUid) {
@@ -132,12 +133,14 @@ function detectRosterEvents(prev: GameSession, curr: GameSession, myUid: string)
   return events;
 }
 
-function playerScore(session: GameSession, playerId: string): number {
-  return session.players[playerId]?.score ?? 0;
-}
-
-function playerWordCount(session: GameSession, playerId: string): number {
-  return session.players[playerId]?.wordCount ?? 0;
+/** Same totals as the live standings header (word maps when present). */
+function rankMetric(session: GameSession, playerId: string): number {
+  const useScoreRanking = resolveGameSessionSettingsForSession(session).uniqueBonusEnabled;
+  const row = buildLiveStandingsFromSession(session).find((entry) => entry.playerId === playerId);
+  if (!row) {
+    return 0;
+  }
+  return useScoreRanking ? row.score : row.wordCount;
 }
 
 function activeCompetitorIds(session: GameSession): string[] {
@@ -149,12 +152,10 @@ function detectRankEvents(prev: GameSession, curr: GameSession, myUid: string): 
     return [];
   }
 
-  const useScoreRanking = resolveGameSessionSettingsForSession(curr).uniqueBonusEnabled;
-  const metric = useScoreRanking ? playerScore : playerWordCount;
-
   const rankChanged = Object.keys(curr.players).some(
     (playerId) =>
-      isCompetingInRound(curr, playerId) && metric(prev, playerId) !== metric(curr, playerId),
+      isCompetingInRound(curr, playerId) &&
+      rankMetric(prev, playerId) !== rankMetric(curr, playerId),
   );
   if (!rankChanged) {
     return [];
@@ -167,21 +168,21 @@ function detectRankEvents(prev: GameSession, curr: GameSession, myUid: string): 
       continue;
     }
 
-    if (metric(curr, playerId) === metric(curr, myUid)) {
+    if (rankMetric(curr, playerId) === rankMetric(curr, myUid)) {
       continue;
     }
 
-    const opponentChanged = metric(prev, playerId) !== metric(curr, playerId);
-    const myChanged = metric(prev, myUid) !== metric(curr, myUid);
+    const opponentChanged = rankMetric(prev, playerId) !== rankMetric(curr, playerId);
+    const myChanged = rankMetric(prev, myUid) !== rankMetric(curr, myUid);
 
     const theyTookLead =
-      metric(curr, playerId) > metric(curr, myUid) &&
-      metric(prev, playerId) <= metric(prev, myUid) &&
+      rankMetric(curr, playerId) > rankMetric(curr, myUid) &&
+      rankMetric(prev, playerId) <= rankMetric(prev, myUid) &&
       (opponentChanged || myChanged);
 
     const iTookLead =
-      metric(curr, myUid) > metric(curr, playerId) &&
-      metric(prev, myUid) <= metric(prev, playerId) &&
+      rankMetric(curr, myUid) > rankMetric(curr, playerId) &&
+      rankMetric(prev, myUid) <= rankMetric(prev, playerId) &&
       (myChanged || opponentChanged);
 
     if (theyTookLead) {

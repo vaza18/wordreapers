@@ -37,6 +37,9 @@ import {
   isFinishedArchiveStale,
 } from '@/lib/online/online-session-archive';
 import { buildOnlineResultsView } from '@/lib/online/online-results-data';
+import { mergeSessionWithWordMaps } from '@/lib/firebase/session-word-maps';
+import { subscribeSessionWordMaps } from '@/lib/firebase/session-word-maps-service';
+import type { SessionWordMaps } from '@/lib/firebase/types';
 import type { RoundResultsViewData } from '@/lib/online/online-results-data';
 import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
 import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
@@ -55,7 +58,12 @@ export default function OnlineResultsScreen() {
   const [resolvedUid, setResolvedUid] = useState(storeUid ?? '');
   const myUid = resolvedUid || storeUid || '';
 
-  const [liveSession, setLiveSession] = useState<GameSessionSnapshot | null>(null);
+  const [liveSessionCore, setLiveSessionCore] = useState<GameSessionSnapshot | null>(null);
+  const [liveWordMaps, setLiveWordMaps] = useState<SessionWordMaps | null>(null);
+  const liveSession = useMemo(
+    () => (liveSessionCore ? mergeSessionWithWordMaps(liveSessionCore, liveWordMaps) : null),
+    [liveSessionCore, liveWordMaps],
+  );
   const [liveWords, setLiveWords] = useState(EMPTY_WORDS);
   const [frozenRound, setFrozenRound] = useState<FrozenFinishedRound | null>(null);
   const [localLoadComplete, setLocalLoadComplete] = useState(false);
@@ -187,10 +195,14 @@ export default function OnlineResultsScreen() {
       return undefined;
     }
     const unsubSession = subscribeGameSession(gameId, (next) => {
-      setLiveSession(next);
+      setLiveSessionCore(next);
       setSessionLoaded(true);
     });
-    return unsubSession;
+    const unsubMaps = subscribeSessionWordMaps(gameId, setLiveWordMaps);
+    return () => {
+      unsubSession();
+      unsubMaps();
+    };
   }, [gameId]);
 
   useEffect(() => {

@@ -21,7 +21,6 @@ function playingSession(overrides?: Partial<GameSession>): GameSession {
       p1: { name: 'A', score: 0, wordCount: 0, avatarColorIndex: 0, online: true },
       p2: { name: 'B', score: 0, wordCount: 0, avatarColorIndex: 1, online: true },
     },
-    wordCounts: {},
     wordFirst: {},
     wordPlayers: {},
     ...overrides,
@@ -45,7 +44,6 @@ describe('applyWordSubmitToSession', () => {
 
   it('rejects duplicate submission from same player', () => {
     const session = playingSession({
-      wordCounts: { порт: 1 },
       wordFirst: { порт: 'p1' },
       wordPlayers: { порт: { p1: true } },
       players: {

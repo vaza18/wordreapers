@@ -55,9 +55,6 @@ export function buildSoloFinishedArchiveWords(words: readonly OrganizerSoloWord[
   for (const word of words) {
     soloWords.set(word.normalized, {
       display: word.display,
-      kind: word.kind,
-      points: word.points,
-      badge: word.badge,
       at: word.at,
     });
   }

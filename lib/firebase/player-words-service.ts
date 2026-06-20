@@ -9,18 +9,23 @@ import {
   type Unsubscribe,
 } from 'firebase/database';
 
-import { toScoredWordEntry, type ScoredWordEntry, type WordScoreKind } from '../game/scoring.js';
+import { toScoredWordEntry, type ScoredWordEntry } from '../game/scoring.js';
+
+import {
+  applyPlayerScoreFromWordSubmit,
+  applyWordSubmitToWordMaps,
+} from '../online/apply-word-submit-to-session.js';
+import type { SubmitWordProfile } from '../online/submit-word-profile.js';
+import { wordsAreFromPreviousRound } from '../online/stale-player-words.js';
 
 import { ensureAnonymousAuth } from './auth.js';
 import { isFirebasePermissionDenied } from './rtdb-errors.js';
 import { getFirebaseDatabase } from './init.js';
 import { gameSessionPath, playerWordsPath } from './paths.js';
 import { normalizeRoomCode } from './room-code.js';
+import { globalWordCount } from './session-word-maps.js';
+import { sessionWordMapsRef } from './session-word-maps-service.js';
 import type { GameSession } from './types.js';
-
-import { applyWordSubmitToSession } from '../online/apply-word-submit-to-session.js';
-import type { SubmitWordProfile } from '../online/submit-word-profile.js';
-import { wordsAreFromPreviousRound } from '../online/stale-player-words.js';
 
 export {
   roundStartMsFromSession,
@@ -29,9 +34,6 @@ export {
 
 export interface StoredPlayerWord {
   display: string;
-  kind: WordScoreKind;
-  points: number;
-  badge: string | null;
   at: number;
 }
 
@@ -48,9 +50,42 @@ function roomPlayerWordsRef(gameId: string): DatabaseReference {
   return ref(getFirebaseDatabase(), `player_words/${roomId}`);
 }
 
+function sessionRef(gameId: string): DatabaseReference {
+  return ref(getFirebaseDatabase(), gameSessionPath(gameId));
+}
+
+function parseStoredPlayerWord(raw: unknown): StoredPlayerWord | null {
+  if (raw == null || typeof raw !== 'object') {
+    return null;
+  }
+  const row = raw as { display?: unknown; at?: unknown };
+  if (typeof row.display !== 'string') {
+    return null;
+  }
+  const at = typeof row.at === 'number' ? row.at : Date.now();
+  return { display: row.display, at };
+}
+
+function parsePlayerWordsSnapshot(snapshot: {
+  exists: () => boolean;
+  val: () => unknown;
+}): Map<string, StoredPlayerWord> {
+  const map = new Map<string, StoredPlayerWord>();
+  if (!snapshot.exists()) {
+    return map;
+  }
+  const raw = snapshot.val() as Record<string, unknown>;
+  for (const [key, value] of Object.entries(raw)) {
+    const parsed = parseStoredPlayerWord(value);
+    if (parsed) {
+      map.set(key, parsed);
+    }
+  }
+  return map;
+}
+
 /**
  * Remove all per-player word nodes (rematch or new round).
- * Deletes each `player_words/{gameId}/{uid}` child — not the room parent (rules deny parent writes).
  */
 export async function clearAllPlayerWords(
   gameId: string,
@@ -90,10 +125,6 @@ export async function clearAllPlayerWords(
   );
 }
 
-/**
- * Organizer clears stale `player_words` when entering a waiting lobby (rematch / rejoin).
- * Works with default RTDB rules (organizer-only delete during `waiting`).
- */
 export async function clearWaitingLobbyPlayerWordsAsOrganizer(
   gameId: string,
   session: Pick<GameSession, 'players' | 'organizerId' | 'status'>,
@@ -110,8 +141,6 @@ export async function clearWaitingLobbyPlayerWordsAsOrganizer(
 export async function resetOwnPlayerWordsNode(gameId: string, uid: string): Promise<void> {
   const roomId = normalizeRoomCode(gameId);
   try {
-    // remove(), not set({}): replacing a populated node with {} is evaluated as
-    // per-child deletes, which rules deny during `playing`.
     await remove(playerWordsRootRef(roomId, uid));
   } catch (error) {
     if (isFirebasePermissionDenied(error)) {
@@ -123,9 +152,6 @@ export async function resetOwnPlayerWordsNode(gameId: string, uid: string): Prom
   }
 }
 
-/**
- * Drop stale RTDB words when session scores were reset but `player_words` was not cleared.
- */
 export async function reconcileOwnPlayerWordsWithSession(
   gameId: string,
   uid: string,
@@ -154,17 +180,11 @@ export async function getOwnPlayerWords(
   return parsePlayerWordsSnapshot(snapshot);
 }
 
-/**
- * Remove one player's words (left mid-round / app background — progress parked locally).
- */
 export async function clearPlayerWords(gameId: string, uid: string): Promise<void> {
   const roomId = normalizeRoomCode(gameId);
   await remove(playerWordsRootRef(roomId, uid));
 }
 
-/**
- * Re-upload parked words after the player returns before timer ends.
- */
 export async function restorePlayerWordsToFirebase(
   gameId: string,
   uid: string,
@@ -185,7 +205,7 @@ export async function restorePlayerWordsToFirebase(
 
   const record: Record<string, StoredPlayerWord> = {};
   for (const [key, value] of words) {
-    record[key] = value;
+    record[key] = { display: value.display, at: value.at };
   }
   try {
     await update(playerWordsRootRef(roomId, uid), record);
@@ -199,27 +219,6 @@ export async function restorePlayerWordsToFirebase(
   }
 }
 
-function sessionRef(gameId: string): DatabaseReference {
-  return ref(getFirebaseDatabase(), gameSessionPath(gameId));
-}
-
-function parsePlayerWordsSnapshot(snapshot: {
-  exists: () => boolean;
-  val: () => unknown;
-}): Map<string, StoredPlayerWord> {
-  const map = new Map<string, StoredPlayerWord>();
-  if (!snapshot.exists()) {
-    return map;
-  }
-  const raw = snapshot.val() as Record<string, StoredPlayerWord>;
-  for (const [key, value] of Object.entries(raw)) {
-    if (value && typeof value.display === 'string') {
-      map.set(key, value);
-    }
-  }
-  return map;
-}
-
 function emitMergedPlayerWords(
   byPlayer: Map<string, Map<string, StoredPlayerWord>>,
   listener: (byPlayer: Map<string, Map<string, StoredPlayerWord>>) => void,
@@ -231,9 +230,6 @@ function emitMergedPlayerWords(
   listener(merged);
 }
 
-/**
- * One-shot fetch of every roster player's words (results screen bootstrap).
- */
 export async function fetchSessionPlayerWords(
   gameId: string,
   playerIds: readonly string[],
@@ -256,9 +252,6 @@ export async function fetchSessionPlayerWords(
   return byPlayer;
 }
 
-/**
- * Live merge of each player's `player_words/{gameId}/{uid}` node (reliable vs parent listen).
- */
 export function subscribeSessionPlayerWords(
   gameId: string,
   playerIds: readonly string[],
@@ -294,9 +287,6 @@ export function subscribeSessionPlayerWords(
   };
 }
 
-/**
- * Live list of accepted words for the current player.
- */
 export function subscribePlayerWords(
   gameId: string,
   uid: string,
@@ -306,18 +296,7 @@ export function subscribePlayerWords(
   return onValue(
     playerWordsRootRef(normalized, uid),
     (snapshot) => {
-      const map = new Map<string, StoredPlayerWord>();
-      if (!snapshot.exists()) {
-        listener(map);
-        return;
-      }
-      const raw = snapshot.val() as Record<string, StoredPlayerWord>;
-      for (const [key, value] of Object.entries(raw)) {
-        if (value && typeof value.display === 'string') {
-          map.set(key, value);
-        }
-      }
-      listener(map);
+      listener(parsePlayerWordsSnapshot(snapshot));
     },
     (error) => {
       if (__DEV__) {
@@ -328,21 +307,21 @@ export function subscribePlayerWords(
   );
 }
 
-/**
- * Convert stored words to scored entries for the word list UI.
- */
-export function storedWordsToScoredEntries(words: Map<string, StoredPlayerWord>): {
+export function storedWordsToScoredEntries(
+  words: Map<string, StoredPlayerWord>,
+  session: GameSession,
+  uniqueBonusEnabled: boolean,
+): {
   entries: ScoredWordEntry[];
   displays: string[];
 } {
   const sorted = [...words.entries()].sort((a, b) => a[1].at - b[1].at);
   return {
-    entries: sorted.map(([normalized, row]) => ({
-      normalized,
-      kind: row.kind,
-      points: row.points,
-      badge: row.badge as ScoredWordEntry['badge'],
-    })),
+    entries: sorted.map(([normalized]) => {
+      const globalCount = globalWordCount(session.wordPlayers, normalized) || 1;
+      const kind = globalCount > 1 ? 'normal' : 'unique';
+      return toScoredWordEntry(normalized, kind, uniqueBonusEnabled, globalCount);
+    }),
     displays: sorted.map(([, row]) => row.display),
   };
 }
@@ -354,7 +333,7 @@ export type SubmitOnlineWordOptions = {
 };
 
 /**
- * Persist an accepted word: session transaction + player word node (2 RTT).
+ * Persist an accepted word: word maps tx + session players tx + player word node.
  */
 export async function submitOnlineWord(
   gameId: string,
@@ -371,6 +350,42 @@ export async function submitOnlineWord(
     const roomId = normalizeRoomCode(gameId);
 
     let entry: ScoredWordEntry = toScoredWordEntry(normalized, 'normal', uniqueBonusEnabled, 1);
+    let committedMaps;
+
+    try {
+      committedMaps = await runTransaction(sessionWordMapsRef(roomId), (current) => {
+        const maps = (current ?? {}) as {
+          wordFirst?: GameSession['wordFirst'];
+          wordPlayers?: GameSession['wordPlayers'];
+        };
+        const applied = applyWordSubmitToWordMaps(
+          { wordFirst: maps.wordFirst, wordPlayers: maps.wordPlayers },
+          uid,
+          normalized,
+          uniqueBonusEnabled,
+        );
+        if (!applied.ok) {
+          return undefined;
+        }
+        entry = applied.entry;
+        return applied.maps;
+      });
+    } catch (error) {
+      if (isFirebasePermissionDenied(error)) {
+        return { ok: false, error: 'NOT_PLAYING' };
+      }
+      throw error;
+    }
+    profile?.mark('wordMapsTx');
+
+    if (!committedMaps.committed) {
+      return { ok: false, error: 'DUPLICATE' };
+    }
+
+    const maps = committedMaps.snapshot.val() as {
+      wordFirst?: GameSession['wordFirst'];
+      wordPlayers?: GameSession['wordPlayers'];
+    };
 
     let sessionTx;
     try {
@@ -378,10 +393,12 @@ export async function submitOnlineWord(
         if (current == null) {
           return undefined;
         }
-        const applied = applyWordSubmitToSession(
+        const applied = applyPlayerScoreFromWordSubmit(
           current as GameSession,
+          maps,
           uid,
           normalized,
+          entry,
           uniqueBonusEnabled,
         );
         if (!applied.ok) {
@@ -399,17 +416,6 @@ export async function submitOnlineWord(
     profile?.mark('sessionTx');
 
     if (!sessionTx.committed) {
-      const snapshot = await get(sessionRef(roomId));
-      if (!snapshot.exists()) {
-        return { ok: false, error: 'SESSION_MISSING' };
-      }
-      const session = snapshot.val() as GameSession;
-      if (session.status !== 'playing' || !session.players[uid]) {
-        return { ok: false, error: 'NOT_PLAYING' };
-      }
-      if (session.wordPlayers?.[normalized]?.[uid]) {
-        return { ok: false, error: 'DUPLICATE' };
-      }
       return { ok: false, error: 'NOT_PLAYING' };
     }
 
@@ -421,9 +427,6 @@ export async function submitOnlineWord(
         }
         return {
           display,
-          kind: entry.kind,
-          points: entry.points,
-          badge: entry.badge,
           at: Date.now(),
         };
       });

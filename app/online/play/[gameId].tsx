@@ -49,7 +49,10 @@ import {
   syncSessionPlayerScores,
   type GameSessionSnapshot,
 } from '@/lib/firebase/game-session-service';
+import { mergeSessionWithWordMaps } from '@/lib/firebase/session-word-maps';
+import { subscribeSessionWordMaps } from '@/lib/firebase/session-word-maps-service';
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
+import type { SessionWordMaps } from '@/lib/firebase/types';
 import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
 import { markPendingRoundArchive } from '@/lib/online/pending-round-archive';
 import {
@@ -124,7 +127,12 @@ export default function OnlinePlayScreen() {
   const timerAlertMode = useSettingsStore((state) => state.timerAlertMode);
   const viewerGender = useProfileStore((state) => state.gender);
 
-  const [session, setSession] = useState<GameSessionSnapshot | null>(null);
+  const [sessionCore, setSessionCore] = useState<GameSessionSnapshot | null>(null);
+  const [wordMaps, setWordMaps] = useState<SessionWordMaps | null>(null);
+  const session = useMemo(
+    () => (sessionCore ? mergeSessionWithWordMaps(sessionCore, wordMaps) : null),
+    [sessionCore, wordMaps],
+  );
   const [myWords, setMyWords] = useState<Map<string, StoredPlayerWord>>(new Map());
   const [loading, setLoading] = useState(true);
   const [dictionary, setDictionary] = useState<DictionaryIndex | null>(null);
@@ -220,12 +228,14 @@ export default function OnlinePlayScreen() {
       return undefined;
     }
     const unsubSession = subscribeGameSession(gameId, (next) => {
-      setSession(next);
+      setSessionCore(next);
       setLoading(false);
     });
+    const unsubMaps = subscribeSessionWordMaps(gameId, setWordMaps);
     const unsubWords = subscribePlayerWords(gameId, myUid, setMyWords);
     return () => {
       unsubSession();
+      unsubMaps();
       unsubWords();
     };
   }, [gameId, myUid]);
@@ -524,9 +534,6 @@ export default function OnlinePlayScreen() {
       const display = result.display ?? toDisplayUpper(result.normalized);
       const optimisticWord: StoredPlayerWord = {
         display,
-        kind: result.entry.kind,
-        points: result.entry.points,
-        badge: result.entry.badge,
         at: Date.now(),
       };
 

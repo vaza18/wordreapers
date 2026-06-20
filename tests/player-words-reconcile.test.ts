@@ -8,7 +8,7 @@ import {
 } from '../lib/online/stale-player-words.js';
 
 function word(at: number): StoredPlayerWord {
-  return { display: 'ТЕСТ', kind: 'normal', points: 1, badge: null, at };
+  return { display: 'ТЕСТ', at };
 }
 
 function playingSession(timerEndsAt: number): GameSession {

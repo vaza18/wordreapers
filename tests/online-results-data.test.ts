@@ -29,9 +29,6 @@ function session(): GameSession {
 function storedWord(display: string): StoredPlayerWord {
   return {
     display,
-    kind: 'unique',
-    points: 2,
-    badge: 'x2',
     at: 10,
   };
 }
@@ -58,12 +55,7 @@ describe('buildOnlineResultsView', () => {
   it('builds headline and standings from firebase words', () => {
     const byPlayer = new Map([
       ['p1', new Map([['рот', storedWord('РОТ')]])],
-      [
-        'p2',
-        new Map([
-          ['тор', { ...storedWord('ТОР'), kind: 'normal' as const, points: 1, badge: null }],
-        ]),
-      ],
+      ['p2', new Map([['тор', { ...storedWord('ТОР'), at: 20 }]])],
     ]);
 
     const view = buildOnlineResultsView(t, session(), byPlayer);

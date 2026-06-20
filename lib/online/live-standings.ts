@@ -2,9 +2,9 @@ import { resolveGameSessionSettingsForSession } from '../firebase/session-settin
 import type { GameSession } from '../firebase/types.js';
 import { buildStandingsFromSessionWordMaps, type PlayerStandings } from '../game/scoring.js';
 
-type SessionForStandings = Pick<GameSession, 'players' | 'wordCounts' | 'wordPlayers' | 'settings'>;
+type SessionForStandings = Pick<GameSession, 'players' | 'wordPlayers' | 'settings'>;
 
-/** Standings with scores derived from wordCounts / wordPlayers (matches x2 badges). */
+/** Standings with scores derived from wordPlayers (matches x2 badges). */
 export function buildLiveStandingsFromSession(session: SessionForStandings): PlayerStandings[] {
   const uniqueBonusEnabled = resolveGameSessionSettingsForSession(session).uniqueBonusEnabled;
   return buildStandingsFromSessionWordMaps(session, uniqueBonusEnabled);

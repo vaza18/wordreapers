@@ -1,3 +1,5 @@
+import { globalWordCount } from '../firebase/session-word-maps.js';
+
 /** Whether the x2 unique-word bonus applies: auto (3+ players) or off. */
 export type UniqueBonusMode = 'auto' | 'off';
 
@@ -194,12 +196,10 @@ export function compareStandings(a: PlayerStandings, b: PlayerStandings): number
 export function recomputeSessionPlayerScores(
   session: {
     players: Record<string, { score?: number; wordCount?: number }>;
-    wordCounts?: Record<string, number>;
     wordPlayers?: Record<string, Record<string, boolean>>;
   },
   uniqueBonusEnabled: boolean,
 ): void {
-  const wordCounts = session.wordCounts ?? {};
   const wordPlayers = session.wordPlayers ?? {};
 
   for (const [playerId, player] of Object.entries(session.players)) {
@@ -209,7 +209,7 @@ export function recomputeSessionPlayerScores(
       if (!playersOnWord[playerId]) {
         continue;
       }
-      const globalCount = wordCounts[normalized] ?? 1;
+      const globalCount = globalWordCount(wordPlayers, normalized);
       const kind: WordScoreKind = globalCount > 1 ? 'normal' : 'unique';
       score += toScoredWordEntry(normalized, kind, uniqueBonusEnabled, globalCount).points;
       wordCount += 1;
@@ -225,7 +225,6 @@ export function recomputeSessionPlayerScores(
 export function buildStandingsFromSessionWordMaps(
   session: {
     players: Record<string, { score?: number; wordCount?: number }>;
-    wordCounts?: Record<string, number>;
     wordPlayers?: Record<string, Record<string, boolean>>;
   },
   uniqueBonusEnabled: boolean,
@@ -238,10 +237,7 @@ export function buildStandingsFromSessionWordMaps(
   const players = Object.fromEntries(
     Object.entries(session.players).map(([playerId, player]) => [playerId, { ...player }]),
   );
-  recomputeSessionPlayerScores(
-    { players, wordCounts: session.wordCounts, wordPlayers: session.wordPlayers },
-    uniqueBonusEnabled,
-  );
+  recomputeSessionPlayerScores({ players, wordPlayers: session.wordPlayers }, uniqueBonusEnabled);
   return buildStandingsFromSession({ players });
 }
 

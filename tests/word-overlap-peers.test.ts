@@ -24,7 +24,6 @@ function session(overrides: Partial<GameSession> = {}): GameSession {
       a: { name: 'Аня', wordCount: 1, score: 1, avatarColorIndex: 1 },
       b: { name: 'Богдан', wordCount: 1, score: 1, avatarColorIndex: 2 },
     },
-    wordCounts: {},
     ...overrides,
   };
 }
@@ -32,7 +31,6 @@ function session(overrides: Partial<GameSession> = {}): GameSession {
 describe('overlapPeersFromSession', () => {
   it('returns other players from wordPlayers map', () => {
     const s = session({
-      wordCounts: { рот: 3 },
       wordPlayers: {
         рот: { org: true, a: true, b: true },
       },
@@ -42,14 +40,11 @@ describe('overlapPeersFromSession', () => {
     expect(peers[0]?.name).toBe('Аня');
   });
 
-  it('falls back to wordFirst when wordPlayers is missing', () => {
+  it('returns empty when wordPlayers entry is missing', () => {
     const s = session({
-      wordCounts: { рот: 2 },
       wordFirst: { рот: 'a' },
     });
-    const peers = overlapPeersFromSession('рот', s, 'org');
-    expect(peers).toHaveLength(1);
-    expect(peers[0]?.playerId).toBe('a');
+    expect(overlapPeersFromSession('рот', s, 'org')).toEqual([]);
   });
 });
 

@@ -21,9 +21,6 @@ function sessionWithCounts(counts: Record<string, number>): GameSession {
 function stubWord(normalized: string): StoredPlayerWord {
   return {
     display: normalized,
-    kind: 'unique',
-    points: 1,
-    badge: null,
     at: 0,
   };
 }

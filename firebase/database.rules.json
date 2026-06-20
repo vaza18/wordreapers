@@ -29,6 +29,12 @@
         }
       }
     },
+    "session_word_maps": {
+      "$gameId": {
+        ".read": "auth != null && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists()",
+        ".write": "auth != null && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && (root.child('game_sessions').child($gameId).child('status').val() == 'playing' || root.child('game_sessions').child($gameId).child('status').val() == 'finished' || (root.child('game_sessions').child($gameId).child('status').val() == 'waiting' && root.child('game_sessions').child($gameId).child('organizerId').val() === auth.uid))"
+      }
+    },
     "player_words": {
       "$gameId": {
         ".read": "auth != null && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists()",

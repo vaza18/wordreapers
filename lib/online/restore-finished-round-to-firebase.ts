@@ -3,6 +3,11 @@ import { get, ref, set } from 'firebase/database';
 import { getFirebaseDatabase } from '../firebase/init.js';
 import { gameSessionPath, playerWordsPath } from '../firebase/paths.js';
 import { normalizeRoomCode } from '../firebase/room-code.js';
+import { sessionWordMapsRef } from '../firebase/session-word-maps-service.js';
+import {
+  sessionWordMapsFromSession,
+  stripWordMapsFromSession,
+} from '../firebase/session-word-maps.js';
 import type { GameSession } from '../firebase/types.js';
 
 import { getFinishedRoundArchive } from './online-session-archive.js';
@@ -35,10 +40,15 @@ export async function restoreFinishedRoundToFirebase(
   }
 
   const session: GameSession = {
-    ...archive.session,
+    ...stripWordMapsFromSession(archive.session),
     status: 'finished',
   };
   await set(node, session);
+
+  const wordMaps = sessionWordMapsFromSession(archive.session);
+  if (Object.keys(wordMaps.wordPlayers ?? {}).length > 0) {
+    await set(sessionWordMapsRef(normalized), wordMaps);
+  }
 
   await Promise.all(
     Object.entries(archive.playerWords).map(async ([playerId, words]) => {

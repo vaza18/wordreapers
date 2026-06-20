@@ -21,7 +21,6 @@ function session(overrides: Partial<GameSession> = {}): GameSession {
     timerEndsAt: Date.now() + 60_000,
     organizerId: 'org',
     players: {},
-    wordCounts: {},
     ...overrides,
   };
 }
@@ -34,7 +33,6 @@ describe('buildLiveStandingsFromSession', () => {
         a: { name: 'А', score: 1, wordCount: 1, avatarColorIndex: 1 },
         b: { name: 'Б', score: 0, wordCount: 0, avatarColorIndex: 2 },
       },
-      wordCounts: { ера: 1, мор: 1, фора: 1 },
       wordPlayers: {
         ера: { org: true },
         мор: { org: true },
