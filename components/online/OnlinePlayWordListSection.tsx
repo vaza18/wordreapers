@@ -29,12 +29,6 @@ export const OnlinePlayWordListSection = memo(function OnlinePlayWordListSection
 }: OnlinePlayWordListSectionProps) {
   return (
     <View style={styles.wordListSection}>
-      <View style={styles.feedbackSlot}>
-        {feedback ? <Text style={styles.feedbackToast}>{feedback}</Text> : null}
-        {backgroundSyncing ? (
-          <ActivityIndicator size="small" color={colors.accent} style={styles.syncIndicator} />
-        ) : null}
-      </View>
       <WordList
         entries={entries}
         displays={displays}
@@ -42,6 +36,12 @@ export const OnlinePlayWordListSection = memo(function OnlinePlayWordListSection
         showScoreBadges={showScoreBadges}
         showOverlapPeers={showOverlapPeers}
       />
+      <View style={styles.feedbackSlot}>
+        {feedback ? <Text style={styles.feedbackToast}>{feedback}</Text> : null}
+        {backgroundSyncing ? (
+          <ActivityIndicator size="small" color={colors.accent} style={styles.syncIndicator} />
+        ) : null}
+      </View>
     </View>
   );
 });

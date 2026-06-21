@@ -1,4 +1,6 @@
-import { get, ref, runTransaction } from 'firebase/database';
+import { get, ref } from 'firebase/database';
+
+import { runRtdbTransaction } from './rtdb-transaction.js';
 
 import {
   allRequiredVotedYes,
@@ -15,7 +17,7 @@ import {
 import { shouldActivatePauseFromVote } from '../online/pause-vote.js';
 import { resumeVoteRequiredIds, shouldResumeFromVote } from '../online/resume-vote.js';
 import { getFirebaseDatabase } from './init.js';
-import { isFirebasePermissionDenied } from './rtdb-errors.js';
+import { isFirebaseIgnorableRtdbError } from './rtdb-errors.js';
 import { computePurgeAfterAt } from './session-purge.js';
 import { getServerNow } from './server-clock.js';
 import {
@@ -47,7 +49,7 @@ async function runSessionVoteTransaction(
     return;
   }
   try {
-    await runTransaction(sessionRef(roomId), (current) => {
+    await runRtdbTransaction(sessionRef(roomId), (current) => {
       if (current == null) {
         return undefined;
       }
@@ -58,7 +60,7 @@ async function runSessionVoteTransaction(
       return mutate(session);
     });
   } catch (error) {
-    if (isFirebasePermissionDenied(error)) {
+    if (isFirebaseIgnorableRtdbError(error)) {
       return;
     }
     throw error;

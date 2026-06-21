@@ -1,4 +1,6 @@
-import { ref, runTransaction } from 'firebase/database';
+import { ref } from 'firebase/database';
+
+import { runRtdbTransaction } from './rtdb-transaction.js';
 
 import { getFirebaseUid, isRegisteredFirebaseUser } from './auth.js';
 import { getFirebaseDatabase } from './init.js';
@@ -22,7 +24,7 @@ export async function incrementCloudPlayerStatsIfRegistered(won: boolean): Promi
     return;
   }
 
-  await runTransaction(userStatsRef(uid), (current) => {
+  await runRtdbTransaction(userStatsRef(uid), (current) => {
     const stats = (current as PlayerStats | null) ?? {
       gamesPlayed: 0,
       gamesWon: 0,

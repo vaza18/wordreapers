@@ -1,4 +1,6 @@
-import { ref, runTransaction, set } from 'firebase/database';
+import { ref, set } from 'firebase/database';
+
+import { runRtdbTransaction } from '../firebase/rtdb-transaction.js';
 
 import type { OrganizerSoloWord } from '@/store/organizer-solo-store';
 
@@ -83,7 +85,7 @@ async function writeSession(
   session: GameSession,
   organizerUid: string,
 ): Promise<void> {
-  const result = await runTransaction(sessionRef(gameId), (current) => {
+  const result = await runRtdbTransaction(sessionRef(gameId), (current) => {
     if (current == null) {
       if (session.organizerId !== organizerUid) {
         return undefined;

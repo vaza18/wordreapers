@@ -56,10 +56,10 @@ export const OnlinePlayComposePanel = memo(function OnlinePlayComposePanel({
           style={[
             styles.composeKey,
             { width: composeKeySize, height: composeKeySize },
-            styles.composeKeyOk,
+            styles.composeKeyAlert,
           ]}
         >
-          <Text style={[styles.composeKeyLabel, { fontSize: composeKeyFontSize }]}>←</Text>
+          <Text style={[styles.composeKeyLabel, { fontSize: composeKeyFontSize }]}>⌫</Text>
         </FeedbackPressable>
       </View>
 
@@ -80,10 +80,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   composeKeyDanger: {
-    backgroundColor: '#E24B4A',
+    backgroundColor: colors.dangerLight,
   },
-  composeKeyOk: {
-    backgroundColor: colors.accent,
+  composeKeyAlert: {
+    backgroundColor: colors.alert,
   },
   composeKeyLabel: {
     color: '#FFFFFF',

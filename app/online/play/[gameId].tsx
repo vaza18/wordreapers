@@ -974,36 +974,6 @@ export default function OnlinePlayScreen() {
             />
           )}
 
-          <View style={styles.playerHeader}>
-            <Text style={styles.playerName} numberOfLines={1}>
-              {myName}
-            </Text>
-            <Text style={styles.playRules} numberOfLines={2}>
-              {playRulesLabel}
-            </Text>
-          </View>
-
-          <OnlinePlayComposePanel
-            draft={draft}
-            draftKeyIndices={draftKeyIndices}
-            letterKeys={letterKeys}
-            composeKeySize={composeKeySize}
-            composeKeyFontSize={composeKeyFontSize}
-            onPressKey={pressKey}
-            onClearDraft={clearDraft}
-            onBackspaceDraft={backspaceDraft}
-          />
-
-          <OnlinePlayWordListSection
-            entries={scoredWords}
-            displays={displays}
-            draftPrefix={draft}
-            feedback={feedback}
-            backgroundSyncing={backgroundSyncing}
-            showScoreBadges={showPointUi && hasOpponent}
-            showOverlapPeers={hasOpponent}
-          />
-
           <View style={styles.footer}>
             {!roundEnded ? (
               <>
@@ -1028,6 +998,36 @@ export default function OnlinePlayScreen() {
               </>
             ) : null}
           </View>
+
+          <View style={styles.playerHeader}>
+            <Text style={styles.playerName} numberOfLines={1}>
+              {myName}
+            </Text>
+            <Text style={styles.playRules} numberOfLines={2}>
+              {playRulesLabel}
+            </Text>
+          </View>
+
+          <OnlinePlayWordListSection
+            entries={scoredWords}
+            displays={displays}
+            draftPrefix={draft}
+            feedback={feedback}
+            backgroundSyncing={backgroundSyncing}
+            showScoreBadges={showPointUi && hasOpponent}
+            showOverlapPeers={hasOpponent}
+          />
+
+          <OnlinePlayComposePanel
+            draft={draft}
+            draftKeyIndices={draftKeyIndices}
+            letterKeys={letterKeys}
+            composeKeySize={composeKeySize}
+            composeKeyFontSize={composeKeyFontSize}
+            onPressKey={pressKey}
+            onClearDraft={clearDraft}
+            onBackspaceDraft={backspaceDraft}
+          />
         </>
       ) : null}
 
@@ -1311,43 +1311,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textSecondary,
     textAlign: 'right',
-  },
-  composeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  composeKey: {
-    borderRadius: radii.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  composeKeyDanger: {
-    backgroundColor: '#E24B4A',
-  },
-  composeKeyOk: {
-    backgroundColor: colors.accent,
-  },
-  composeKeyLabel: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  draftBox: {
-    flex: 1,
-    backgroundColor: '#FAEEDA',
-    borderRadius: radii.sm,
-    paddingHorizontal: spacing.md,
-    justifyContent: 'center',
-  },
-  draftText: {
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: 1,
-    color: '#412402',
-  },
-  wordListSection: {
-    flex: 1,
-    minHeight: 0,
   },
   feedbackSlot: {
     height: 32,

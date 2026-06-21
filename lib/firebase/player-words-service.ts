@@ -3,12 +3,13 @@ import {
   onValue,
   ref,
   remove,
-  runTransaction,
   set,
   update,
   type DatabaseReference,
   type Unsubscribe,
 } from 'firebase/database';
+
+import { runRtdbTransaction } from './rtdb-transaction.js';
 
 import { toScoredWordEntry, type ScoredWordEntry } from '../game/scoring.js';
 
@@ -366,7 +367,7 @@ async function commitPlayerScorePlan(
   profile: SubmitWordProfile | null,
 ): Promise<boolean> {
   if (plan.mode === 'single') {
-    const tx = await runTransaction(sessionPlayerRef(gameId, plan.uid), (player) => {
+    const tx = await runRtdbTransaction(sessionPlayerRef(gameId, plan.uid), (player) => {
       if (player == null || typeof player !== 'object') {
         return undefined;
       }
@@ -382,7 +383,7 @@ async function commitPlayerScorePlan(
     return tx.committed;
   }
 
-  const tx = await runTransaction(sessionPlayersRef(gameId), (players) => {
+  const tx = await runRtdbTransaction(sessionPlayersRef(gameId), (players) => {
     if (players == null || typeof players !== 'object') {
       return undefined;
     }
@@ -427,7 +428,7 @@ export async function submitOnlineWord(
     let playersOnWord: Record<string, boolean>;
     let prevGlobal: number;
     try {
-      const committedShard = await runTransaction(
+      const committedShard = await runRtdbTransaction(
         wordPlayersPerWordRef(roomId, normalized),
         (current) => {
           const applied = applyWordSubmitToWordPlayersShard(
@@ -464,7 +465,7 @@ export async function submitOnlineWord(
     let firstUid: string | undefined;
     if (prevGlobal === 0) {
       try {
-        const firstCommit = await runTransaction(
+        const firstCommit = await runRtdbTransaction(
           wordFirstPerWordRef(roomId, normalized),
           (current) => {
             if (current != null && typeof current === 'string') {

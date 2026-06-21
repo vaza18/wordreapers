@@ -7,6 +7,12 @@ export interface PanelScrollbarState {
   thumbOffset: number;
 }
 
+export interface PanelScrollMetrics {
+  viewportHeight: number;
+  contentHeight: number;
+  scrollOffset: number;
+}
+
 const MIN_THUMB_HEIGHT = 28;
 const SCROLL_OVERFLOW_THRESHOLD = 4;
 
@@ -48,8 +54,18 @@ export function useScrollablePanelMetrics() {
     setScrollOffset(event.nativeEvent.contentOffset.y);
   }, []);
 
+  const scrollMetrics = useMemo(
+    (): PanelScrollMetrics => ({
+      viewportHeight,
+      contentHeight,
+      scrollOffset,
+    }),
+    [contentHeight, scrollOffset, viewportHeight],
+  );
+
   return {
     scrollbar,
+    scrollMetrics,
     onViewportLayout,
     onContentSizeChange,
     onScroll,

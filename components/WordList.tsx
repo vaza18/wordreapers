@@ -4,6 +4,7 @@ import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { ScrollableWordPanel } from '@/components/ScrollableWordPanel';
 import { WordOverlapAvatars } from '@/components/WordOverlapAvatars';
 import { useScrollablePanelMetrics } from '@/hooks/useScrollablePanelMetrics';
+import { WORD_LIST_ROW_HEIGHT } from '@/constants/notebook';
 import { colors, radii, spacing } from '@/constants/theme';
 import { normalizeUk, toDisplayUpper } from '@/lib/dictionary/normalize';
 import { dismissWordOverlapTooltips } from '@/lib/ui/word-overlap-tooltip';
@@ -59,7 +60,7 @@ function findPrefixScrollIndex(rows: readonly WordRow[], prefix: string): number
   return row && row.entry.normalized.startsWith(prefix) ? lo : -1;
 }
 
-const ROW_HEIGHT = 42;
+const ROW_HEIGHT = WORD_LIST_ROW_HEIGHT;
 
 /**
  * Split display text at the end of a normalized prefix (handles apostrophes in display).
@@ -185,14 +186,25 @@ export function WordList({
   }
 
   return (
-    <ScrollableWordPanel scrollbar={panelScroll.scrollbar}>
+    <ScrollableWordPanel
+      scrollbar={panelScroll.scrollbar}
+      scrollMetrics={panelScroll.scrollMetrics}
+    >
       <View style={styles.listViewport} onLayout={panelScroll.onViewportLayout}>
         <FlatList
           ref={listRef}
           data={rows}
           keyExtractor={(row) => row.key}
           style={styles.list}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            panelScroll.scrollMetrics.viewportHeight > 0
+              ? {
+                  flexGrow: 1,
+                  minHeight: panelScroll.scrollMetrics.viewportHeight,
+                }
+              : null,
+          ]}
           showsVerticalScrollIndicator={false}
           removeClippedSubviews={false}
           onScroll={panelScroll.onScroll}
@@ -233,6 +245,7 @@ const styles = StyleSheet.create({
   },
   list: {
     flex: 1,
+    backgroundColor: 'transparent',
   },
   staticList: {
     gap: 0,
@@ -244,8 +257,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    minHeight: ROW_HEIGHT,
-    paddingVertical: spacing.xs,
+    height: ROW_HEIGHT,
     paddingHorizontal: spacing.sm,
     overflow: 'visible',
     zIndex: 1,

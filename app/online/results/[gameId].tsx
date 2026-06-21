@@ -8,7 +8,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { RoundResultsView } from '@/components/RoundResultsView';
 import { useResultsRematchToast } from '@/hooks/useResultsRematchToast';
 import { StackHeaderTitle } from '@/components/StackHeaderTitle';
-import { colors } from '@/constants/theme';
+import { colors, spacing } from '@/constants/theme';
 import { ensureAnonymousAuth } from '@/lib/firebase/auth';
 import { markResultsExited } from '@/lib/firebase/results-coordination-service';
 import {
@@ -454,7 +454,7 @@ export default function OnlineResultsScreen() {
           </>
         }
       />
-      <PlaySessionToastStack toasts={rematchToasts} bottomOffset={120} />
+      <PlaySessionToastStack toasts={rematchToasts} topOffset={spacing.md} />
     </>
   );
 }

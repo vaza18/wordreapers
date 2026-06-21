@@ -4,11 +4,12 @@ import {
   onValue,
   ref,
   remove,
-  runTransaction,
   update,
   type DatabaseReference,
   type Unsubscribe,
 } from 'firebase/database';
+
+import { runRtdbTransaction } from './rtdb-transaction.js';
 
 import { isOrphanGameSessionShell, orphanShellHasPlayer } from '../online/orphan-game-session.js';
 import type { PlayerProfile } from '../profile/player-profile.js';
@@ -29,7 +30,7 @@ import {
 } from './player-words-service.js';
 import { getServerNow } from './server-clock.js';
 import { ensureAnonymousAuth, getFirebaseUid } from './auth.js';
-import { isFirebasePermissionDenied } from './rtdb-errors.js';
+import { isFirebaseIgnorableRtdbError, isFirebasePermissionDenied } from './rtdb-errors.js';
 import { withFinishedPurgeFields } from './session-purge.js';
 import { stripWordMapsFromSession } from './session-word-maps.js';
 import type { SessionWordMaps } from './session-word-maps.js';
@@ -272,7 +273,7 @@ export async function joinGameSession(
 
   const wordMaps = await fetchSessionWordMaps(normalized);
 
-  await runTransaction(sessionRef(normalized), (current) => {
+  await runRtdbTransaction(sessionRef(normalized), (current) => {
     if (current == null) {
       return undefined;
     }
@@ -332,7 +333,7 @@ export async function syncSessionPlayerScores(
     return;
   }
   try {
-    await runTransaction(sessionRef(normalized), (current) => {
+    await runRtdbTransaction(sessionRef(normalized), (current) => {
       if (current == null) {
         return undefined;
       }
@@ -637,7 +638,7 @@ export async function finishGameSessionIfExpired(
   }
   const wordMaps = mapsOverride ?? (await fetchSessionWordMaps(normalized));
   try {
-    const result = await runTransaction(sessionRef(normalized), (current) => {
+    const result = await runRtdbTransaction(sessionRef(normalized), (current) => {
       if (current == null) {
         return undefined;
       }
@@ -678,7 +679,7 @@ export async function finishGameSessionIfExpired(
     });
     return result.committed;
   } catch (error) {
-    if (isFirebasePermissionDenied(error)) {
+    if (isFirebaseIgnorableRtdbError(error)) {
       return false;
     }
     throw error;
@@ -696,7 +697,7 @@ export async function finishGameSession(
   await ensureAnonymousAuth();
   const finishedAt = getServerNow();
   const wordMaps = mapsOverride ?? (await fetchSessionWordMaps(normalized));
-  await runTransaction(sessionRef(normalized), (current) => {
+  await runRtdbTransaction(sessionRef(normalized), (current) => {
     if (current == null) {
       return undefined;
     }
@@ -777,7 +778,7 @@ export async function rematchFinishedSessionToWaiting(
   );
   await clearSessionWordMaps(normalized);
 
-  const result = await runTransaction(sessionRef(normalized), (current) => {
+  const result = await runRtdbTransaction(sessionRef(normalized), (current) => {
     if (current == null) {
       return undefined;
     }

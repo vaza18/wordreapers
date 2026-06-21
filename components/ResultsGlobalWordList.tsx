@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { playerAvatarColors } from '@/constants/player-avatars';
+import { WORD_LIST_ROW_HEIGHT } from '@/constants/notebook';
 import { colors, spacing } from '@/constants/theme';
 import type { GlobalResultWordRow, GlobalWordAuthor } from '@/lib/game/results-view';
 
@@ -57,14 +58,15 @@ function AuthorChip({ author }: { author: GlobalWordAuthor }) {
 
 const styles = StyleSheet.create({
   list: {
-    gap: 2,
+    gap: 0,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
-    paddingVertical: spacing.xs,
+    height: WORD_LIST_ROW_HEIGHT,
+    paddingHorizontal: spacing.sm,
   },
   word: {
     flex: 1,
