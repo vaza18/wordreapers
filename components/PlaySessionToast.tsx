@@ -5,19 +5,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { spacing } from '@/constants/theme';
 import { PLAY_TOAST_FADE_OUT_MS, type PlayToastItem } from '@/hooks/useToastQueue';
 
-/** Space above footer buttons (menu + standings). */
-const FOOTER_CLEARANCE = 52;
+/** Space below status bar / header strip. */
+const HEADER_CLEARANCE = 52;
 export const PLAY_TOAST_LINE_HEIGHT = 18;
 export const PLAY_TOAST_MAX_LINES = 2;
 /** Fixed slot height so stack shifts animate without LayoutAnimation. */
 export const PLAY_TOAST_SLOT_HEIGHT =
   PLAY_TOAST_LINE_HEIGHT * PLAY_TOAST_MAX_LINES + spacing.sm * 2;
 const STACK_SHIFT_MS = 220;
+const ENTRANCE_OFFSET = 14;
 
 interface PlaySessionToastStackProps {
   toasts: readonly PlayToastItem[];
-  /** Override bottom offset when there is no play footer (e.g. results screen). */
-  bottomOffset?: number;
+  /** Override top offset (e.g. results screen below stack header). */
+  topOffset?: number;
 }
 
 function ToastBubble({
@@ -30,8 +31,8 @@ function ToastBubble({
   stackSlot: number;
 }) {
   const opacity = useRef(new Animated.Value(0)).current;
-  const stackOffset = -stackSlot * PLAY_TOAST_SLOT_HEIGHT;
-  const translateY = useRef(new Animated.Value(stackOffset + 14)).current;
+  const stackOffset = stackSlot * PLAY_TOAST_SLOT_HEIGHT;
+  const translateY = useRef(new Animated.Value(stackOffset - ENTRANCE_OFFSET)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -76,9 +77,9 @@ function ToastBubble({
 }
 
 /**
- * Stacked play toasts above the footer; each new toast pushes older ones up.
+ * Stacked play toasts below the header; each new toast pushes older ones down.
  */
-export function PlaySessionToastStack({ toasts, bottomOffset }: PlaySessionToastStackProps) {
+export function PlaySessionToastStack({ toasts, topOffset }: PlaySessionToastStackProps) {
   const insets = useSafeAreaInsets();
 
   if (toasts.length === 0) {
@@ -86,7 +87,7 @@ export function PlaySessionToastStack({ toasts, bottomOffset }: PlaySessionToast
   }
 
   const stackHeight = toasts.length * PLAY_TOAST_SLOT_HEIGHT;
-  const bottom = bottomOffset ?? insets.bottom + spacing.md + FOOTER_CLEARANCE;
+  const top = topOffset ?? insets.top + spacing.md + HEADER_CLEARANCE;
 
   return (
     <View
@@ -94,7 +95,7 @@ export function PlaySessionToastStack({ toasts, bottomOffset }: PlaySessionToast
       style={[
         playToastStyles.stack,
         {
-          bottom,
+          top,
           height: stackHeight,
         },
       ]}
@@ -122,7 +123,7 @@ export const playToastStyles = StyleSheet.create({
   },
   toastSlot: {
     position: 'absolute',
-    bottom: 0,
+    top: 0,
     height: PLAY_TOAST_SLOT_HEIGHT,
     justifyContent: 'center',
   },

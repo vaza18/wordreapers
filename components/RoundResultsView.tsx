@@ -94,11 +94,23 @@ export function RoundResultsView({
         ) : null}
       </View>
 
-      <ScrollableWordPanel style={styles.wordPanel} scrollbar={panelScroll.scrollbar}>
+      <ScrollableWordPanel
+        style={styles.wordPanel}
+        scrollbar={panelScroll.scrollbar}
+        scrollMetrics={panelScroll.scrollMetrics}
+      >
         <View style={styles.panelScrollViewport} onLayout={panelScroll.onViewportLayout}>
           <ScrollView
             style={styles.panelScroll}
-            contentContainerStyle={styles.panelScrollContent}
+            contentContainerStyle={[
+              styles.panelScrollContent,
+              panelScroll.scrollMetrics.viewportHeight > 0
+                ? {
+                    flexGrow: 1,
+                    minHeight: panelScroll.scrollMetrics.viewportHeight,
+                  }
+                : null,
+            ]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             onScroll={panelScroll.onScroll}
@@ -218,9 +230,10 @@ const styles = StyleSheet.create({
   },
   panelScroll: {
     flex: 1,
+    backgroundColor: 'transparent',
   },
   panelScrollContent: {
-    padding: spacing.sm,
+    paddingHorizontal: spacing.sm,
     paddingBottom: spacing.md,
   },
   actions: {

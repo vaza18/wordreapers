@@ -4,11 +4,12 @@ import {
   onValue,
   ref,
   remove,
-  runTransaction,
   update,
   type DatabaseReference,
   type Unsubscribe,
 } from 'firebase/database';
+
+import { runRtdbTransaction } from './rtdb-transaction.js';
 
 import { isOrphanGameSessionShell, orphanShellHasPlayer } from '../online/orphan-game-session.js';
 import type { PlayerProfile } from '../profile/player-profile.js';
@@ -18,6 +19,7 @@ import { clearAllActiveRoundCachesForGame } from '../online/active-round-cache.j
 import { setOrganizerWaitingRoom } from '../online/organizer-waiting-room.js';
 import { resolveGameSessionSettings } from './session-settings.js';
 import { recomputeSessionPlayerScores } from '../game/scoring.js';
+import { computeRoundPlayedSecondsAtFinish } from '../game/round-duration.js';
 import {
   resolveEarlyFinishVoteIfExpired,
   resolveResumeVoteIfExpired,
@@ -28,8 +30,11 @@ import {
 } from './player-words-service.js';
 import { getServerNow } from './server-clock.js';
 import { ensureAnonymousAuth, getFirebaseUid } from './auth.js';
-import { isFirebasePermissionDenied } from './rtdb-errors.js';
+import { isFirebaseIgnorableRtdbError, isFirebasePermissionDenied } from './rtdb-errors.js';
 import { withFinishedPurgeFields } from './session-purge.js';
+import { stripWordMapsFromSession } from './session-word-maps.js';
+import type { SessionWordMaps } from './session-word-maps.js';
+import { clearSessionWordMaps, fetchSessionWordMaps } from './session-word-maps-service.js';
 import { getFirebaseDatabase } from './init.js';
 import { gameSessionPath, GAME_SESSIONS_PATH } from './paths.js';
 import { isValidRoomCode, normalizeRoomCode } from './room-code.js';
@@ -38,6 +43,17 @@ import type { GameSession, GameSessionPlayer, GameSessionSettings } from './type
 export { resolveGameSessionSettings } from './session-settings.js';
 
 export type GameSessionSnapshot = GameSession & { id: string };
+
+/** Reset per-player totals and presence when a new round or rematch lobby opens. */
+function playerForFreshRound(player: GameSessionPlayer): GameSessionPlayer {
+  return {
+    ...player,
+    score: 0,
+    wordCount: 0,
+    hasLeft: false,
+    online: true,
+  };
+}
 
 function sessionRef(gameId: string): DatabaseReference {
   return ref(getFirebaseDatabase(), gameSessionPath(gameId));
@@ -202,7 +218,7 @@ export async function rejoinExistingPlayer(
   await update(node, {
     ...profilePatch(profile),
     online: true,
-    hasLeft: null,
+    hasLeft: false,
   });
   await setPlayerOnlinePresence(normalized, uid);
 }
@@ -255,7 +271,9 @@ export async function joinGameSession(
     [user.uid]: newPlayer,
   });
 
-  await runTransaction(sessionRef(normalized), (current) => {
+  const wordMaps = await fetchSessionWordMaps(normalized);
+
+  await runRtdbTransaction(sessionRef(normalized), (current) => {
     if (current == null) {
       return undefined;
     }
@@ -284,9 +302,12 @@ export async function joinGameSession(
       changed = true;
     }
 
-    const hasWords = Object.keys(next.wordPlayers ?? {}).length > 0;
+    const hasWords = Object.keys(wordMaps.wordPlayers ?? {}).length > 0;
     if (next.status === 'playing' && hasWords) {
-      recomputeSessionPlayerScores(next, resolvedSettings.uniqueBonusEnabled);
+      recomputeSessionPlayerScores(
+        { ...next, wordPlayers: wordMaps.wordPlayers },
+        resolvedSettings.uniqueBonusEnabled,
+      );
       changed = true;
     }
 
@@ -298,17 +319,26 @@ export async function joinGameSession(
 }
 
 /**
- * Rewrite session player totals from wordCounts / wordPlayers when they drift (e.g. solo → 3+).
+ * Rewrite session player totals from wordPlayers when they drift (e.g. solo → 3+).
+ * Pass `mapsOverride` from a live listener to skip a redundant RTDB read on play.
  */
-export async function syncSessionPlayerScores(gameId: string): Promise<void> {
+export async function syncSessionPlayerScores(
+  gameId: string,
+  mapsOverride?: SessionWordMaps,
+): Promise<void> {
+  await ensureAnonymousAuth();
   const normalized = normalizeRoomCode(gameId);
+  const maps = mapsOverride ?? (await fetchSessionWordMaps(normalized));
+  if (Object.keys(maps.wordPlayers ?? {}).length === 0) {
+    return;
+  }
   try {
-    await runTransaction(sessionRef(normalized), (current) => {
+    await runRtdbTransaction(sessionRef(normalized), (current) => {
       if (current == null) {
         return undefined;
       }
       const session = current as GameSession;
-      if (session.status !== 'playing' || Object.keys(session.wordPlayers ?? {}).length === 0) {
+      if (session.status !== 'playing') {
         return undefined;
       }
 
@@ -318,7 +348,7 @@ export async function syncSessionPlayerScores(gameId: string): Promise<void> {
         Object.entries(session.players).map(([playerId, player]) => [playerId, { ...player }]),
       );
       recomputeSessionPlayerScores(
-        { players, wordCounts: session.wordCounts, wordPlayers: session.wordPlayers },
+        { players, wordPlayers: maps.wordPlayers },
         resolvedSettings.uniqueBonusEnabled,
       );
 
@@ -377,7 +407,7 @@ export function subscribeGameSession(
         return;
       }
       const session = raw as GameSession;
-      listener({ id: normalized, ...session });
+      listener({ id: normalized, ...stripWordMapsFromSession(session) });
     },
     (error) => {
       if (__DEV__) {
@@ -519,10 +549,11 @@ export async function startGameSession(gameId: string, actorUid: string): Promis
     Object.keys(session.players).length,
   );
 
-  const endsAt = getServerNow() + settings.durationSeconds * 1000;
+  const now = getServerNow();
+  const endsAt = now + settings.durationSeconds * 1000;
   const players: Record<string, GameSessionPlayer> = {};
   for (const [uid, player] of Object.entries(session.players)) {
-    players[uid] = { ...player, score: 0, wordCount: 0 };
+    players[uid] = playerForFreshRound(player);
   }
 
   setOrganizerWaitingRoom(null);
@@ -538,14 +569,16 @@ export async function startGameSession(gameId: string, actorUid: string): Promis
     { everyPlayer: true },
   );
 
+  await clearSessionWordMaps(normalized);
+
   await update(sessionRef(normalized), {
     status: 'playing',
     timerEndsAt: endsAt,
+    roundStartedAt: now,
+    roundTimerBudgetSeconds: settings.durationSeconds,
+    roundPlayedSeconds: null,
     settings,
     players,
-    wordCounts: {},
-    wordFirst: {},
-    wordPlayers: {},
     earlyFinishVote: null,
     pauseVote: null,
     resumeVote: null,
@@ -583,8 +616,12 @@ export async function gameSessionExists(gameId: string): Promise<boolean> {
 /**
  * End the round when server timer has elapsed (any connected client may commit).
  */
-export async function finishGameSessionIfExpired(gameId: string): Promise<boolean> {
+export async function finishGameSessionIfExpired(
+  gameId: string,
+  mapsOverride?: SessionWordMaps,
+): Promise<boolean> {
   const normalized = normalizeRoomCode(gameId);
+  await ensureAnonymousAuth();
   const preSnapshot = await get(sessionRef(normalized));
   if (!preSnapshot.exists()) {
     return false;
@@ -596,8 +633,12 @@ export async function finishGameSessionIfExpired(gameId: string): Promise<boolea
   if (getServerNow() < preSession.timerEndsAt) {
     return false;
   }
+  if (preSession.addTimeVote) {
+    return false;
+  }
+  const wordMaps = mapsOverride ?? (await fetchSessionWordMaps(normalized));
   try {
-    const result = await runTransaction(sessionRef(normalized), (current) => {
+    const result = await runRtdbTransaction(sessionRef(normalized), (current) => {
       if (current == null) {
         return undefined;
       }
@@ -608,25 +649,37 @@ export async function finishGameSessionIfExpired(gameId: string): Promise<boolea
       if (getServerNow() < session.timerEndsAt) {
         return undefined;
       }
+      if (session.addTimeVote) {
+        return undefined;
+      }
       const playerCount = Object.keys(session.players).length;
       const resolvedSettings = resolveGameSessionSettings(session.settings, playerCount);
-      if (Object.keys(session.wordPlayers ?? {}).length > 0) {
-        recomputeSessionPlayerScores(session, resolvedSettings.uniqueBonusEnabled);
+      if (Object.keys(wordMaps.wordPlayers ?? {}).length > 0) {
+        recomputeSessionPlayerScores(
+          { ...session, wordPlayers: wordMaps.wordPlayers },
+          resolvedSettings.uniqueBonusEnabled,
+        );
         session.settings = resolvedSettings;
       }
       const finishAt = session.timerEndsAt;
+      const roundPlayedSeconds = computeRoundPlayedSecondsAtFinish(session, finishAt);
       return withFinishedPurgeFields(
         {
           ...session,
           status: 'finished',
           timerEndsAt: null,
+          addTimeVote: null,
+          pauseState: null,
+          pauseVote: null,
+          resumeVote: null,
+          roundPlayedSeconds,
         },
         finishAt,
       );
     });
     return result.committed;
   } catch (error) {
-    if (isFirebasePermissionDenied(error)) {
+    if (isFirebaseIgnorableRtdbError(error)) {
       return false;
     }
     throw error;
@@ -636,10 +689,15 @@ export async function finishGameSessionIfExpired(gameId: string): Promise<boolea
 /**
  * Force-finish round (organizer / dev).
  */
-export async function finishGameSession(gameId: string): Promise<void> {
+export async function finishGameSession(
+  gameId: string,
+  mapsOverride?: SessionWordMaps,
+): Promise<void> {
   const normalized = normalizeRoomCode(gameId);
+  await ensureAnonymousAuth();
   const finishedAt = getServerNow();
-  await runTransaction(sessionRef(normalized), (current) => {
+  const wordMaps = mapsOverride ?? (await fetchSessionWordMaps(normalized));
+  await runRtdbTransaction(sessionRef(normalized), (current) => {
     if (current == null) {
       return undefined;
     }
@@ -649,16 +707,23 @@ export async function finishGameSession(gameId: string): Promise<void> {
     }
     const playerCount = Object.keys(session.players).length;
     const resolvedSettings = resolveGameSessionSettings(session.settings, playerCount);
-    if (Object.keys(session.wordPlayers ?? {}).length > 0) {
-      recomputeSessionPlayerScores(session, resolvedSettings.uniqueBonusEnabled);
+    if (Object.keys(wordMaps.wordPlayers ?? {}).length > 0) {
+      recomputeSessionPlayerScores(
+        { ...session, wordPlayers: wordMaps.wordPlayers },
+        resolvedSettings.uniqueBonusEnabled,
+      );
       session.settings = resolvedSettings;
     }
+    const roundPlayedSeconds = computeRoundPlayedSecondsAtFinish(session, finishedAt);
     return withFinishedPurgeFields(
       {
         ...session,
         status: 'finished',
         timerEndsAt: null,
-        finishedAt,
+        pauseState: null,
+        pauseVote: null,
+        resumeVote: null,
+        roundPlayedSeconds,
       },
       finishedAt,
     );
@@ -711,8 +776,9 @@ export async function rematchFinishedSessionToWaiting(
     preSession.organizerId,
     { everyPlayer: actorUid === preSession.organizerId },
   );
+  await clearSessionWordMaps(normalized);
 
-  const result = await runTransaction(sessionRef(normalized), (current) => {
+  const result = await runRtdbTransaction(sessionRef(normalized), (current) => {
     if (current == null) {
       return undefined;
     }
@@ -723,7 +789,7 @@ export async function rematchFinishedSessionToWaiting(
 
     const players: Record<string, GameSessionPlayer> = {};
     for (const [uid, player] of Object.entries(session.players)) {
-      players[uid] = { ...player, score: 0, wordCount: 0 };
+      players[uid] = playerForFreshRound(player);
     }
 
     return {
@@ -731,11 +797,12 @@ export async function rematchFinishedSessionToWaiting(
       status: 'waiting',
       settings: resolveGameSessionSettings(session.settings, Object.keys(session.players).length),
       timerEndsAt: null,
+      roundStartedAt: null,
+      roundTimerBudgetSeconds: null,
+      roundPlayedSeconds: null,
       baseWord: '',
       baseWordRound: (session.baseWordRound ?? 0) + 1,
       players,
-      wordCounts: {},
-      wordFirst: {},
       earlyFinishVote: null,
       pauseVote: null,
       pauseState: null,
@@ -789,6 +856,7 @@ export async function abandonWaitingGameSession(
   const playerIds = Object.keys(session.players);
   await Promise.all(playerIds.map((playerUid) => cancelPlayerOnDisconnect(normalized, playerUid)));
   await clearAllPlayerWords(normalized, playerIds, organizerUid, organizerUid);
+  await clearSessionWordMaps(normalized);
   try {
     await remove(sessionRef(normalized));
   } catch (error) {

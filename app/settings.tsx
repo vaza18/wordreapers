@@ -186,6 +186,6 @@ const styles = StyleSheet.create({
   },
   linkAction: {
     fontSize: 16,
-    color: colors.textTertiary,
+    color: colors.textSecondary,
   },
 });

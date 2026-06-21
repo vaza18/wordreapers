@@ -26,8 +26,12 @@ export function SettingSwitch({ label, hint, value, onChange }: SettingSwitchPro
         {hint ? <Text style={styles.hint}>{hint}</Text> : null}
       </View>
       <Switch
-        trackColor={{ false: colors.borderSecondary, true: colors.accentMuted }}
-        thumbColor={value ? colors.accent : colors.textTertiary}
+        accessibilityLabel={label}
+        accessibilityHint={hint}
+        accessibilityState={{ checked: value }}
+        trackColor={{ false: colors.switchTrackOff, true: colors.switchTrackOn }}
+        thumbColor={value ? colors.switchThumbOn : colors.switchThumbOff}
+        ios_backgroundColor={colors.switchTrackOff}
         value={value}
         onValueChange={(next) => {
           playButtonFeedback(buttonFeedback);
@@ -95,7 +99,7 @@ const styles = StyleSheet.create({
   },
   hint: {
     fontSize: 12,
-    color: colors.textTertiary,
+    color: colors.textSecondary,
   },
   stepperBlock: {
     gap: spacing.sm,

@@ -9,7 +9,7 @@ import type { AllPlayerWords } from './clone-player-words.js';
 const FINISHED_ARCHIVES_KEY = 'wordreapers.finishedOnlineRounds';
 const MAX_FINISHED_ARCHIVES = 40;
 
-export const FINISHED_ARCHIVE_VERSION = 1 as const;
+export const FINISHED_ARCHIVE_VERSION = 2 as const;
 
 export interface FinishedRoundArchive {
   gameId: string;
@@ -29,11 +29,12 @@ export interface PlayingRoundSnapshot {
   baseWord: string;
   settings: GameSession['settings'];
   players: GameSession['players'];
-  wordCounts?: GameSession['wordCounts'];
   wordFirst?: GameSession['wordFirst'];
   wordPlayers?: GameSession['wordPlayers'];
   pauseState?: GameSession['pauseState'];
   timerEndsAt: number;
+  roundStartedAt?: number;
+  roundTimerBudgetSeconds?: number;
   organizerId: string;
   baseWordRound: number;
   baseWordPickerOrder?: string[];
@@ -125,18 +126,19 @@ function trimFinishedStore(store: FinishedArchiveStore): FinishedArchiveStore {
 }
 
 export function playingRoundSnapshotFromSession(session: GameSession): PlayingRoundSnapshot | null {
-  if (session.status !== 'playing' || session.timerEndsAt == null) {
+  if (session.status !== 'playing' || typeof session.roundStartedAt !== 'number') {
     return null;
   }
   return {
     baseWord: session.baseWord,
     settings: session.settings,
     players: session.players,
-    wordCounts: session.wordCounts,
     wordFirst: session.wordFirst,
     wordPlayers: session.wordPlayers,
     pauseState: session.pauseState,
-    timerEndsAt: session.timerEndsAt,
+    timerEndsAt: session.timerEndsAt ?? session.roundStartedAt,
+    roundStartedAt: session.roundStartedAt,
+    roundTimerBudgetSeconds: session.roundTimerBudgetSeconds ?? undefined,
     organizerId: session.organizerId,
     baseWordRound: session.baseWordRound ?? 0,
     baseWordPickerOrder: session.baseWordPickerOrder,

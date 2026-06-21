@@ -27,14 +27,55 @@ export function collectWordTimestamps(
   return times;
 }
 
+/** Countdown budget in seconds (settings duration + approved add-time). */
+export function resolveRoundTimerBudgetSeconds(session: GameSession): number {
+  const configured = resolveGameSessionSettings(session.settings).durationSeconds;
+  return typeof session.roundTimerBudgetSeconds === 'number'
+    ? session.roundTimerBudgetSeconds
+    : configured;
+}
+
+/** Remaining countdown ms at finish (respects pause freeze). */
+export function remainingMsAtFinishMoment(session: GameSession, now: number): number {
+  if (session.pauseState?.active) {
+    return session.pauseState.frozenRemainingMs;
+  }
+  if (session.timerEndsAt != null) {
+    return Math.max(0, session.timerEndsAt - now);
+  }
+  return 0;
+}
+
+/** Timer seconds consumed from budget and remaining countdown. */
+export function computeRoundPlayedSecondsFromTimerState(params: {
+  budgetSeconds: number;
+  remainingMs: number;
+}): number {
+  const remainingSec = Math.ceil(params.remainingMs / 1000);
+  return Math.max(0, params.budgetSeconds - remainingSec);
+}
+
+/** Snapshot timer/game seconds consumed before clearing `timerEndsAt` / `pauseState`. */
+export function computeRoundPlayedSecondsAtFinish(session: GameSession, now: number): number {
+  return computeRoundPlayedSecondsFromTimerState({
+    budgetSeconds: resolveRoundTimerBudgetSeconds(session),
+    remainingMs: remainingMsAtFinishMoment(session, now),
+  });
+}
+
 /**
- * Approximate wall-clock round length from session settings and word timestamps.
+ * Round length shown in results/history: timer/game seconds (pauses excluded).
+ * Falls back for legacy sessions without `roundPlayedSeconds`.
  */
 export function computeRoundDurationSeconds(
   session: GameSession,
   byPlayer?: ReadonlyMap<string, ReadonlyMap<string, WordTimestampSource>>,
   finishedAtMs?: number,
 ): number {
+  if (typeof session.roundPlayedSeconds === 'number') {
+    return session.roundPlayedSeconds;
+  }
+
   const configured = resolveGameSessionSettings(session.settings).durationSeconds;
   const wordTimes = collectWordTimestamps(byPlayer);
 
@@ -47,22 +88,20 @@ export function computeRoundDurationSeconds(
     return configured;
   }
 
-  let startMs: number | null = null;
-  if (session.timerEndsAt != null) {
-    startMs = roundStartMsFromSession(session);
-  }
-  if (startMs == null && wordTimes.length > 0) {
-    startMs = Math.min(...wordTimes);
-  }
-  if (startMs == null) {
-    startMs = endMs - configured * 1000;
+  const startMs = roundStartMsFromSession(session);
+  if (startMs != null) {
+    const elapsedSec = Math.max(0, Math.floor((endMs - startMs) / 1000));
+    return elapsedSec === 0 ? configured : elapsedSec;
   }
 
-  const elapsedSec = Math.max(0, Math.floor((endMs - startMs) / 1000));
-  if (elapsedSec === 0) {
-    return configured;
+  if (wordTimes.length > 0) {
+    const elapsedSec = Math.max(0, Math.floor((endMs - Math.min(...wordTimes)) / 1000));
+    if (elapsedSec > 0) {
+      return elapsedSec;
+    }
   }
-  return elapsedSec;
+
+  return configured;
 }
 
 /** Human-readable round length for the results header (e.g. `10 хв`, `9:45`). */

@@ -11,7 +11,11 @@
     "development": {
       "extends": "base",
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "environment": "production",
+      "android": {
+        "buildType": "apk"
+      }
     },
     "preview": {
       "extends": "base",
@@ -31,7 +35,8 @@
         "buildArtifactPaths": ["android/app/build/outputs/mapping/**/mapping.txt"]
       },
       "env": {
-        "APP_VARIANT": "production"
+        "APP_VARIANT": "production",
+        "NODE_ENV": "production"
       }
     }
   },

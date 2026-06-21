@@ -3,8 +3,11 @@ import type { GameSession } from '../firebase/types.js';
 
 const ROUND_START_SKEW_MS = 5000;
 
-/** Approximate start of the current playing round from timer + duration. */
+/** Approximate start of the current playing round (stored at round start, or inferred from timer). */
 export function roundStartMsFromSession(session: GameSession): number | null {
+  if (typeof session.roundStartedAt === 'number') {
+    return session.roundStartedAt;
+  }
   if (session.timerEndsAt == null) {
     return null;
   }

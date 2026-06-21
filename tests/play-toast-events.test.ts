@@ -382,6 +382,37 @@ describe('detectPlayToastEvents', () => {
     expect(detectPlayToastEvents(wordOnlyPrev, wordOnlyCurr, 'me')).toEqual([]);
   });
 
+  it('detects overtakes from word maps before player nodes catch up', () => {
+    const prev = scoringSession({
+      me: { name: 'Я', wordCount: 3, score: 3, online: true },
+      opp: { name: 'Суперник', gender: 'm', wordCount: 3, score: 3, online: true },
+    });
+    const curr: GameSession = {
+      ...scoringSession({
+        me: { name: 'Я', wordCount: 3, score: 3, online: true },
+        opp: { name: 'Суперник', gender: 'm', wordCount: 3, score: 3, online: true },
+      }),
+      wordPlayers: {
+        a: { me: true },
+        b: { me: true },
+        c: { me: true },
+        d: { opp: true },
+        e: { opp: true },
+        g: { opp: true },
+        h: { opp: true },
+      },
+    };
+
+    expect(detectPlayToastEvents(prev, curr, 'me')).toEqual([
+      {
+        type: 'overtook_me',
+        playerId: 'opp',
+        name: 'Суперник',
+        gender: 'm',
+      },
+    ]);
+  });
+
   it('uses word count for rank toasts when unique bonus is off', () => {
     const prev = session({
       me: { name: 'Я', wordCount: 0, score: 0, online: true },
@@ -400,6 +431,35 @@ describe('detectPlayToastEvents', () => {
         gender: 'f',
       },
     ]);
+  });
+
+  it('does not treat first word with stale hasLeft as player_joined', () => {
+    const prev = session({
+      org: { name: 'Org', wordCount: 0, score: 0, online: true },
+      a: {
+        name: 'Василь',
+        gender: 'm',
+        wordCount: 0,
+        score: 0,
+        online: false,
+        hasLeft: true,
+      },
+    });
+    const curr = session({
+      org: { name: 'Org', wordCount: 0, score: 0, online: true },
+      a: {
+        name: 'Василь',
+        gender: 'm',
+        wordCount: 1,
+        score: 1,
+        online: true,
+        hasLeft: true,
+      },
+    });
+
+    expect(
+      detectPlayToastEvents(prev, curr, 'org').filter((event) => event.type === 'player_joined'),
+    ).toEqual([]);
   });
 
   it('returns nothing outside playing status', () => {

@@ -1,3 +1,4 @@
+import { globalWordCount } from '@/lib/firebase/session-word-maps';
 import type { GameSession } from '../firebase/types.js';
 
 /** Player shown in a word-overlap tooltip (same word as viewer). */
@@ -28,26 +29,21 @@ export function overlapPeersFromSession(
   session: GameSession,
   viewerPlayerId: string,
 ): WordOverlapPeer[] {
-  const globalCount = session.wordCounts?.[normalized] ?? 1;
+  const globalCount = globalWordCount(session.wordPlayers, normalized);
   if (globalCount <= 1) {
     return [];
   }
 
   const peerIds = session.wordPlayers?.[normalized];
-  if (peerIds) {
-    return sortPeers(
-      Object.keys(peerIds)
-        .filter((playerId) => playerId !== viewerPlayerId)
-        .map((playerId) => peerFromSession(session, playerId)),
-    );
+  if (!peerIds) {
+    return [];
   }
 
-  const firstUid = session.wordFirst?.[normalized];
-  if (firstUid && firstUid !== viewerPlayerId) {
-    return [peerFromSession(session, firstUid)];
-  }
-
-  return [];
+  return sortPeers(
+    Object.keys(peerIds)
+      .filter((playerId) => playerId !== viewerPlayerId)
+      .map((playerId) => peerFromSession(session, playerId)),
+  );
 }
 
 /**

@@ -54,8 +54,11 @@ export default function HomeScreen() {
       </View>
 
       <View style={styles.actions}>
-        <PrimaryButton label={t('online.createGame')} onPress={handleCreateOnline} />
+        <PrimaryButton label={t('nav.newGame')} onPress={handleCreateOnline} />
+        <Text style={styles.description}>{t('nav.newGameDescription')}</Text>
+        {/* <Text style={styles.tagline}>{t('nav.or')}</Text> */}
         <PrimaryButton label={t('nav.join')} onPress={handleJoinOnline} variant="secondary" />
+        <Text style={styles.description}>{t('nav.joinDescription')}</Text>
       </View>
 
       <View style={styles.bottomSection}>
@@ -88,9 +91,9 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   appIcon: {
-    width: 96,
-    height: 96,
-    borderRadius: 22,
+    width: 64,
+    height: 64,
+    borderRadius: 16,
     marginBottom: spacing.sm,
   },
   brand: {
@@ -108,6 +111,13 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     textAlign: 'center',
     marginTop: spacing.sm,
+  },
+  description: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    lineHeight: 20,
+    marginBottom: spacing.md,
+    textAlign: 'center',
   },
   actions: {
     gap: spacing.sm,

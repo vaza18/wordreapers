@@ -1,6 +1,7 @@
 import { toScoredWordEntry, type ScoredWordEntry, type WordScoreKind } from '@/lib/game/scoring';
 import { overlapPeersFromSession } from '@/lib/game/word-overlap-peers';
 import type { StoredPlayerWord } from '@/lib/firebase/player-words-service';
+import { globalWordCount } from '@/lib/firebase/session-word-maps';
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import type { GameSession } from '@/lib/firebase/types';
 
@@ -13,7 +14,7 @@ export interface OnlineWordListRow extends ScoredWordEntry {
  */
 export function resolveOnlineWordEntry(normalized: string, session: GameSession): ScoredWordEntry {
   const uniqueBonusEnabled = resolveGameSessionSettingsForSession(session).uniqueBonusEnabled;
-  const globalCount = session.wordCounts?.[normalized] ?? 1;
+  const globalCount = globalWordCount(session.wordPlayers, normalized);
   const kind: WordScoreKind = globalCount > 1 ? 'normal' : 'unique';
   return toScoredWordEntry(normalized, kind, uniqueBonusEnabled, globalCount);
 }

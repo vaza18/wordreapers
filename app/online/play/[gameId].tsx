@@ -29,26 +29,33 @@ import { PlaySessionToastStack } from '@/components/PlaySessionToast';
 import { PauseRoundModal } from '@/components/PauseRoundModal';
 import { PauseVoteModal } from '@/components/PauseVoteModal';
 import { RoomInviteModal } from '@/components/RoomInviteModal';
-import { LetterKeyboard } from '@/components/LetterKeyboard';
+import { OnlinePlayComposePanel } from '@/components/online/OnlinePlayComposePanel';
+import { OnlinePlayWordListSection } from '@/components/online/OnlinePlayWordListSection';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { WordList } from '@/components/WordList';
 import { colors, radii, spacing } from '@/constants/theme';
+import { useAutoPauseOnAppBackground } from '@/hooks/useAutoPauseOnAppBackground';
 import { usePlaySessionToasts } from '@/hooks/usePlaySessionToasts';
+import { useResultsRematchToast } from '@/hooks/useResultsRematchToast';
 import { useServerNow } from '@/hooks/useServerNow';
 import { useRoundTimeUpModal } from '@/hooks/useRoundTimeUpModal';
 import { useTimerAlerts } from '@/hooks/useTimerAlerts';
 import { DictionaryIndex } from '@/lib/dictionary/dictionary-index';
 import { toDisplayUpper } from '@/lib/dictionary/normalize';
 import { playWordAcceptedFeedback } from '@/lib/feedback/game-feedback';
+import { ensureAnonymousAuth } from '@/lib/firebase/auth';
 import {
   finishGameSession,
   finishGameSessionIfExpired,
   leaveGameSession,
+  rejoinExistingPlayer,
   subscribeGameSession,
   syncSessionPlayerScores,
   type GameSessionSnapshot,
 } from '@/lib/firebase/game-session-service';
+import { mergeSessionWithWordMaps } from '@/lib/firebase/session-word-maps';
+import { subscribeSessionWordMaps } from '@/lib/firebase/session-word-maps-service';
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
+import type { SessionWordMaps } from '@/lib/firebase/types';
 import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
 import { markPendingRoundArchive } from '@/lib/online/pending-round-archive';
 import {
@@ -88,6 +95,10 @@ import {
   sessionPlayerScoresMatchWordMaps,
 } from '@/lib/online/live-standings';
 import { formatPlayRulesLabel } from '@/lib/online/play-rules-label';
+import {
+  createSubmitWordProfile,
+  flushSubmitLatencySummary,
+} from '@/lib/online/submit-word-profile';
 import { buildLetterKeys, computeLetterKeySize } from '@/lib/game/letter-keyboard';
 import { letterKeyFontSizeForKeySize } from '@/lib/game/letter-key-style';
 import { acceptWord, type PlayWordErrorCode } from '@/lib/game/play-word';
@@ -122,7 +133,12 @@ export default function OnlinePlayScreen() {
   const timerAlertMode = useSettingsStore((state) => state.timerAlertMode);
   const viewerGender = useProfileStore((state) => state.gender);
 
-  const [session, setSession] = useState<GameSessionSnapshot | null>(null);
+  const [sessionCore, setSessionCore] = useState<GameSessionSnapshot | null>(null);
+  const [wordMaps, setWordMaps] = useState<SessionWordMaps | null>(null);
+  const session = useMemo(
+    () => (sessionCore ? mergeSessionWithWordMaps(sessionCore, wordMaps) : null),
+    [sessionCore, wordMaps],
+  );
   const [myWords, setMyWords] = useState<Map<string, StoredPlayerWord>>(new Map());
   const [loading, setLoading] = useState(true);
   const [dictionary, setDictionary] = useState<DictionaryIndex | null>(null);
@@ -132,20 +148,32 @@ export default function OnlinePlayScreen() {
   const [draft, setDraft] = useState('');
   const [draftKeyIndices, setDraftKeyIndices] = useState<number[]>([]);
   const [feedback, setFeedback] = useState<string | null>(null);
-  const playToasts = usePlaySessionToasts(session, myUid);
   const [showStandings, setShowStandings] = useState(false);
   const [showGameMenu, setShowGameMenu] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showEndEarlyConfirm, setShowEndEarlyConfirm] = useState(false);
   const [showAddTimeModal, setShowAddTimeModal] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [backgroundSyncing, setBackgroundSyncing] = useState(false);
+  const [optimisticWords, setOptimisticWords] = useState<Map<string, StoredPlayerWord>>(new Map());
   const serverNow = useServerNow(250);
-  const roundEnded = session?.status === 'finished';
+  const [roundOverPendingResults, setRoundOverPendingResults] = useState(false);
+  const roundEnded = session?.status === 'finished' || roundOverPendingResults;
   const { timeUpModalVisible } = useRoundTimeUpModal(roundEnded);
+  const skipRematchToastRef = useRef(false);
+  const rematchToasts = useResultsRematchToast(sessionCore, skipRematchToastRef);
+  const playToasts = usePlaySessionToasts(session, myUid);
+  const sessionToasts = useMemo(
+    () => [...playToasts, ...rematchToasts],
+    [playToasts, rematchToasts],
+  );
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastValidatedDraft = useRef('');
+  const submittingRef = useRef(false);
+  const pendingSubmitDraftRef = useRef<string | null>(null);
+  const pendingListenerWordRef = useRef<string | null>(null);
+  const activeSubmitProfileRef = useRef<ReturnType<typeof createSubmitWordProfile>>(null);
   const finishAttemptedRef = useRef(false);
   const resultsNavigatedRef = useRef(false);
   const leftNavigatedRef = useRef(false);
@@ -153,8 +181,13 @@ export default function OnlinePlayScreen() {
   const playRoundKeyRef = useRef<number | null>(null);
   const staleWordsReconcileKeyRef = useRef<string | null>(null);
   const scoresSyncInFlightRef = useRef(false);
+  const finishedArchiveRoundRef = useRef<number | null>(null);
+  const wordMapsRef = useRef(wordMaps);
+  wordMapsRef.current = wordMaps;
   const myWordsRef = useRef(myWords);
   myWordsRef.current = myWords;
+  const draftKeyIndicesRef = useRef(draftKeyIndices);
+  draftKeyIndicesRef.current = draftKeyIndices;
 
   const navigateAfterLeave = useCallback(() => {
     if (!gameId || leftNavigatedRef.current) {
@@ -193,6 +226,8 @@ export default function OnlinePlayScreen() {
     void purgeStaleActiveRoundCaches();
   }, []);
 
+  const staleHasLeftReconcileRef = useRef<string | null>(null);
+
   const myHasLeft = session?.players[myUid]?.hasLeft === true;
   usePlayerOnlinePresence(
     gameId,
@@ -207,17 +242,52 @@ export default function OnlinePlayScreen() {
   );
 
   useEffect(() => {
+    if (!gameId || !myUid || !session || session.status !== 'playing') {
+      return;
+    }
+    if (session.players[myUid]?.hasLeft !== true) {
+      return;
+    }
+    const roundKey = `${session.baseWordRound ?? 0}:${session.timerEndsAt ?? 0}`;
+    if (staleHasLeftReconcileRef.current === roundKey) {
+      return;
+    }
+    staleHasLeftReconcileRef.current = roundKey;
+    const { name, gender, avatarColorIndex } = useProfileStore.getState();
+    void rejoinExistingPlayer(gameId, myUid, { name, gender, avatarColorIndex }).catch((error) => {
+      staleHasLeftReconcileRef.current = null;
+      if (__DEV__) {
+        console.warn('rejoinExistingPlayer stale hasLeft', error);
+      }
+    });
+  }, [gameId, myUid, session]);
+
+  useEffect(() => {
     if (!gameId || !myUid) {
       return undefined;
     }
-    const unsubSession = subscribeGameSession(gameId, (next) => {
-      setSession(next);
-      setLoading(false);
+    let cancelled = false;
+    let unsubSession: (() => void) | undefined;
+    let unsubMaps: (() => void) | undefined;
+    let unsubWords: (() => void) | undefined;
+
+    void ensureAnonymousAuth().then(() => {
+      if (cancelled) {
+        return;
+      }
+      unsubSession = subscribeGameSession(gameId, (next) => {
+        setSessionCore(next);
+        setLoading(false);
+      });
+      unsubMaps = subscribeSessionWordMaps(gameId, setWordMaps);
+      unsubWords = subscribePlayerWords(gameId, myUid, setMyWords);
     });
-    const unsubWords = subscribePlayerWords(gameId, myUid, setMyWords);
+
     return () => {
-      unsubSession();
-      unsubWords();
+      cancelled = true;
+      unsubSession?.();
+      unsubMaps?.();
+      unsubWords?.();
     };
   }, [gameId, myUid]);
 
@@ -256,6 +326,7 @@ export default function OnlinePlayScreen() {
     }
     const sub = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'background') {
+        flushSubmitLatencySummary();
         void cacheActiveRoundProgress(gameId, myUid, session, myWordsRef.current);
       }
     });
@@ -279,24 +350,52 @@ export default function OnlinePlayScreen() {
     playRoundKeyRef.current = round;
   }, [session?.baseWordRound]);
 
+  useEffect(() => {
+    if (session?.status === 'finished') {
+      setRoundOverPendingResults(true);
+    }
+  }, [session?.status]);
+
+  useEffect(() => {
+    if (!gameId || !session || session.status !== 'finished') {
+      return;
+    }
+    const round = session.baseWordRound ?? 0;
+    if (finishedArchiveRoundRef.current === round) {
+      return;
+    }
+    finishedArchiveRoundRef.current = round;
+    void archiveFinishedRoundFromFirebase(gameId, session).catch((error) => {
+      if (__DEV__) {
+        console.warn('archiveFinishedRoundFromFirebase', error);
+      }
+    });
+  }, [gameId, session]);
+
   const navigateToResults = useCallback(async () => {
-    if (!gameId || resultsNavigatedRef.current || !session || session.status !== 'finished') {
+    if (!gameId || resultsNavigatedRef.current || !session) {
+      return;
+    }
+    if (session.status !== 'finished' && !roundOverPendingResults) {
       return;
     }
     resultsNavigatedRef.current = true;
+    setRoundOverPendingResults(false);
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
       debounceRef.current = null;
     }
     try {
-      await archiveFinishedRoundFromFirebase(gameId, session);
+      if (session.status === 'finished') {
+        await archiveFinishedRoundFromFirebase(gameId, session);
+      }
     } catch (error) {
       if (__DEV__) {
         console.warn('archiveFinishedRoundFromFirebase', error);
       }
     }
     router.replace({ pathname: '/online/results/[gameId]', params: { gameId } });
-  }, [gameId, session]);
+  }, [gameId, roundOverPendingResults, session]);
 
   useEffect(() => {
     void Promise.all([loadBundledDictionary(), loadBundledSupplements()]).then(
@@ -318,26 +417,55 @@ export default function OnlinePlayScreen() {
   const isPaused = session?.pauseState?.active === true;
 
   useEffect(() => {
-    if (isPaused || session?.status !== 'playing' || endsAt === null || serverNow < endsAt) {
+    if (session?.addTimeVote) {
+      finishAttemptedRef.current = false;
+    }
+  }, [session?.addTimeVote]);
+
+  useEffect(() => {
+    if (
+      isPaused ||
+      session?.status !== 'playing' ||
+      endsAt === null ||
+      serverNow < endsAt ||
+      session?.addTimeVote
+    ) {
       return;
     }
     if (!finishAttemptedRef.current) {
-      finishAttemptedRef.current = true;
-      void finishGameSessionIfExpired(gameId);
+      void finishGameSessionIfExpired(gameId, wordMapsRef.current ?? undefined).then(
+        (committed) => {
+          if (committed) {
+            finishAttemptedRef.current = true;
+          }
+        },
+      );
     }
-  }, [endsAt, gameId, isPaused, serverNow, session?.status]);
+  }, [endsAt, gameId, isPaused, serverNow, session?.addTimeVote, session?.status]);
 
   const baseWord = session?.baseWord ?? '';
   const baseWordDisplay = dictionary?.lookupDisplayUpper(baseWord) ?? toDisplayUpper(baseWord);
   const letterKeys = useMemo(() => buildLetterKeys(baseWordDisplay), [baseWordDisplay]);
-  const usedKeyIndices = useMemo(() => new Set(draftKeyIndices), [draftKeyIndices]);
+
+  const wordsForDisplay = useMemo(() => {
+    if (optimisticWords.size === 0) {
+      return myWords;
+    }
+    const merged = new Map(myWords);
+    for (const [normalized, word] of optimisticWords) {
+      if (!merged.has(normalized)) {
+        merged.set(normalized, word);
+      }
+    }
+    return merged;
+  }, [myWords, optimisticWords]);
 
   const { entries: scoredWords, displays } = useMemo(() => {
     if (!session) {
       return { entries: [], displays: [] };
     }
-    return buildOnlineWordListDisplay(myWords, session, myUid);
-  }, [myUid, myWords, session]);
+    return buildOnlineWordListDisplay(wordsForDisplay, session, myUid);
+  }, [myUid, session, wordsForDisplay]);
 
   const myPlayer = session?.players[myUid];
   const standings = useMemo((): PlayerStandings[] => {
@@ -362,17 +490,17 @@ export default function OnlinePlayScreen() {
   useTimerAlerts(remainingMs, isPaused, timerAlertMode, session?.status === 'playing');
 
   useEffect(() => {
-    if (!gameId || !session || session.status !== 'playing') {
+    if (!gameId || !myUid || !session || session.status !== 'playing' || !wordMaps) {
       return;
     }
     if (sessionPlayerScoresMatchWordMaps(session) || scoresSyncInFlightRef.current) {
       return;
     }
     scoresSyncInFlightRef.current = true;
-    void syncSessionPlayerScores(gameId).finally(() => {
+    void syncSessionPlayerScores(gameId, wordMaps).finally(() => {
       scoresSyncInFlightRef.current = false;
     });
-  }, [gameId, session]);
+  }, [gameId, myUid, session, wordMaps]);
 
   const displayRanks = useMemo(() => assignDisplayRanks(standings), [standings]);
   const playerRank = displayRankForPlayer(standings, myUid);
@@ -391,6 +519,41 @@ export default function OnlinePlayScreen() {
     };
   }, [feedback]);
 
+  useEffect(() => {
+    setOptimisticWords((prev) => {
+      if (prev.size === 0) {
+        return prev;
+      }
+      let changed = false;
+      const next = new Map(prev);
+      for (const normalized of prev.keys()) {
+        if (myWords.has(normalized)) {
+          next.delete(normalized);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+
+    const pendingWord = pendingListenerWordRef.current;
+    if (pendingWord && myWords.has(pendingWord)) {
+      activeSubmitProfileRef.current?.mark('listener');
+      activeSubmitProfileRef.current?.finish();
+      activeSubmitProfileRef.current = null;
+      pendingListenerWordRef.current = null;
+    }
+  }, [myWords]);
+
+  const runPendingSubmit = useCallback((submitFn: (draftValue: string) => Promise<void>) => {
+    const pending = pendingSubmitDraftRef.current;
+    if (!pending || pending === lastValidatedDraft.current) {
+      pendingSubmitDraftRef.current = null;
+      return;
+    }
+    pendingSubmitDraftRef.current = null;
+    void submitFn(pending);
+  }, []);
+
   const submitDraft = useCallback(
     async (draftValue: string) => {
       if (
@@ -404,12 +567,19 @@ export default function OnlinePlayScreen() {
       ) {
         return;
       }
-      if (draftValue === lastValidatedDraft.current || submitting) {
+      if (draftValue === lastValidatedDraft.current) {
         return;
       }
-      lastValidatedDraft.current = draftValue;
+      if (submittingRef.current) {
+        pendingSubmitDraftRef.current = draftValue;
+        return;
+      }
 
-      const ownNormals = Array.from(myWords.keys());
+      const profile = createSubmitWordProfile(draftValue);
+      profile?.mark('debounce');
+      activeSubmitProfileRef.current = profile;
+
+      const ownNormals = Array.from(wordsForDisplay.keys());
       const playerWordsMap = new Map<string, readonly string[]>([[myUid, ownNormals]]);
       const result = acceptWord({
         input: draftValue,
@@ -426,8 +596,10 @@ export default function OnlinePlayScreen() {
         },
         lookupDisplayUpper: (word) => dictionary.lookupDisplayUpper(word) ?? toDisplayUpper(word),
       });
+      profile?.mark('acceptWord');
 
-      if (!result.accepted) {
+      if (!result.accepted || !result.entry) {
+        activeSubmitProfileRef.current = null;
         if (result.error === 'NOT_IN_DICTIONARY') {
           return;
         }
@@ -438,42 +610,85 @@ export default function OnlinePlayScreen() {
         return;
       }
 
-      setSubmitting(true);
+      lastValidatedDraft.current = draftValue;
+      const savedDraft = draftValue;
+      const savedKeyIndices = [...draftKeyIndices];
+      const display = result.display ?? toDisplayUpper(result.normalized);
+      const optimisticWord: StoredPlayerWord = {
+        display,
+        at: Date.now(),
+      };
+
+      setOptimisticWords((prev) => {
+        const next = new Map(prev);
+        next.set(result.normalized, optimisticWord);
+        return next;
+      });
+      setDraft('');
+      setDraftKeyIndices([]);
+      setFeedback(t('game.wordAccepted'));
+      playWordAcceptedFeedback(wordAcceptedFeedback);
+      profile?.mark('optimisticUi');
+
+      submittingRef.current = true;
+      setBackgroundSyncing(true);
+      pendingListenerWordRef.current = result.normalized;
+
       const remote = await submitOnlineWord(
         gameId,
         myUid,
         result.normalized,
-        result.display ?? toDisplayUpper(result.normalized),
+        display,
         uniqueBonusEnabled,
+        { profile },
       );
-      setSubmitting(false);
+
+      submittingRef.current = false;
+      setBackgroundSyncing(false);
+      profile?.mark('remoteDone');
 
       if (!remote.ok) {
+        pendingListenerWordRef.current = null;
+        profile?.finish();
+        activeSubmitProfileRef.current = null;
+        setOptimisticWords((prev) => {
+          const next = new Map(prev);
+          next.delete(result.normalized);
+          return next;
+        });
+        setDraft(savedDraft);
+        setDraftKeyIndices(savedKeyIndices);
+        lastValidatedDraft.current = '';
         if (remote.error === 'DUPLICATE') {
           setFeedback(t('game.errorAlreadySubmitted'));
         }
+        runPendingSubmit(submitDraft);
         return;
       }
 
-      setDraft('');
-      setDraftKeyIndices([]);
       lastValidatedDraft.current = '';
-      setFeedback(t('game.wordAccepted'));
-      playWordAcceptedFeedback(wordAcceptedFeedback);
+      if (myWordsRef.current.has(result.normalized)) {
+        profile?.mark('listener');
+        profile?.finish();
+        activeSubmitProfileRef.current = null;
+        pendingListenerWordRef.current = null;
+      }
+      runPendingSubmit(submitDraft);
     },
     [
       dictionary,
+      draftKeyIndices,
       gameId,
       myUid,
-      myWords,
-      uniqueBonusEnabled,
       properNouns,
+      runPendingSubmit,
       session,
       slang,
-      submitting,
       supplementsReady,
       t,
+      uniqueBonusEnabled,
       wordAcceptedFeedback,
+      wordsForDisplay,
     ],
   );
 
@@ -502,6 +717,40 @@ export default function OnlinePlayScreen() {
       }
     };
   }, [draft, session?.status, submitDraft]);
+
+  const pressKey = useCallback(
+    (index: number) => {
+      if (
+        roundEnded ||
+        isPaused ||
+        remainingMs <= 0 ||
+        draftKeyIndicesRef.current.includes(index)
+      ) {
+        return;
+      }
+      const key = letterKeys[index];
+      if (!key) {
+        return;
+      }
+      setDraft((prev) => prev + key.value);
+      setDraftKeyIndices((prev) => [...prev, index]);
+      setFeedback(null);
+    },
+    [isPaused, letterKeys, remainingMs, roundEnded],
+  );
+
+  const clearDraft = useCallback(() => {
+    setDraft('');
+    setDraftKeyIndices([]);
+    setFeedback(null);
+    lastValidatedDraft.current = '';
+  }, []);
+
+  const backspaceDraft = useCallback(() => {
+    setDraft((prev) => prev.slice(0, -1));
+    setDraftKeyIndices((prev) => prev.slice(0, -1));
+    setFeedback(null);
+  }, []);
 
   const leaveToHome = () => {
     setShowExitConfirm(false);
@@ -573,6 +822,13 @@ export default function OnlinePlayScreen() {
     [myUid, session],
   );
 
+  useAutoPauseOnAppBackground(
+    session?.status === 'playing' && !isPaused && !hasOnlineOpponentInRound,
+    () => {
+      void proposePause(gameId, myUid);
+    },
+  );
+
   useEffect(() => {
     if (!hasOnlineOpponentInRound) {
       return;
@@ -598,7 +854,7 @@ export default function OnlinePlayScreen() {
       void proposeEarlyFinish(gameId, myUid);
       return;
     }
-    void finishGameSession(gameId);
+    void finishGameSession(gameId, wordMaps ?? undefined);
   };
 
   useEffect(() => {
@@ -664,7 +920,7 @@ export default function OnlinePlayScreen() {
     );
   }
 
-  if (session.status !== 'playing' && session.status !== 'finished') {
+  if (session.status !== 'playing' && !roundOverPendingResults) {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={colors.accent} />
@@ -677,32 +933,6 @@ export default function OnlinePlayScreen() {
   const addTimeVote = session.addTimeVote;
   const resumeVote = session.resumeVote;
   const canProposeAddTime = !isPaused && !earlyVote && !pauseVote && !addTimeVote;
-
-  const pressKey = (index: number) => {
-    if (roundEnded || isPaused || usedKeyIndices.has(index)) {
-      return;
-    }
-    const key = letterKeys[index];
-    if (!key) {
-      return;
-    }
-    setDraft((prev) => prev + key.value);
-    setDraftKeyIndices((prev) => [...prev, index]);
-    setFeedback(null);
-  };
-
-  const clearDraft = () => {
-    setDraft('');
-    setDraftKeyIndices([]);
-    setFeedback(null);
-    lastValidatedDraft.current = '';
-  };
-
-  const backspaceDraft = () => {
-    setDraft((prev) => prev.slice(0, -1));
-    setDraftKeyIndices((prev) => prev.slice(0, -1));
-    setFeedback(null);
-  };
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
@@ -744,58 +974,6 @@ export default function OnlinePlayScreen() {
             />
           )}
 
-          <View style={styles.playerHeader}>
-            <Text style={styles.playerName} numberOfLines={1}>
-              {myName}
-            </Text>
-            <Text style={styles.playRules} numberOfLines={2}>
-              {playRulesLabel}
-            </Text>
-          </View>
-
-          <View style={styles.composeRow}>
-            <FeedbackPressable
-              accessibilityRole="button"
-              onPress={clearDraft}
-              style={[
-                styles.composeKey,
-                { width: composeKeySize, height: composeKeySize },
-                styles.composeKeyDanger,
-              ]}
-            >
-              <Text style={[styles.composeKeyLabel, { fontSize: composeKeyFontSize }]}>✕</Text>
-            </FeedbackPressable>
-            <View style={[styles.draftBox, { height: composeKeySize }]}>
-              <Text style={styles.draftText}>{toDisplayUpper(draft) || ' '}</Text>
-            </View>
-            <FeedbackPressable
-              accessibilityRole="button"
-              onPress={backspaceDraft}
-              style={[
-                styles.composeKey,
-                { width: composeKeySize, height: composeKeySize },
-                styles.composeKeyOk,
-              ]}
-            >
-              <Text style={[styles.composeKeyLabel, { fontSize: composeKeyFontSize }]}>←</Text>
-            </FeedbackPressable>
-          </View>
-
-          <LetterKeyboard keys={letterKeys} usedKeyIndices={usedKeyIndices} onPressKey={pressKey} />
-
-          <View style={styles.wordListSection}>
-            <View style={styles.feedbackSlot}>
-              {feedback ? <Text style={styles.feedbackToast}>{feedback}</Text> : null}
-            </View>
-            <WordList
-              entries={scoredWords}
-              displays={displays}
-              draftPrefix={draft}
-              showScoreBadges={showPointUi && hasOpponent}
-              showOverlapPeers={hasOpponent}
-            />
-          </View>
-
           <View style={styles.footer}>
             {!roundEnded ? (
               <>
@@ -820,6 +998,36 @@ export default function OnlinePlayScreen() {
               </>
             ) : null}
           </View>
+
+          <View style={styles.playerHeader}>
+            <Text style={styles.playerName} numberOfLines={1}>
+              {myName}
+            </Text>
+            <Text style={styles.playRules} numberOfLines={2}>
+              {playRulesLabel}
+            </Text>
+          </View>
+
+          <OnlinePlayWordListSection
+            entries={scoredWords}
+            displays={displays}
+            draftPrefix={draft}
+            feedback={feedback}
+            backgroundSyncing={backgroundSyncing}
+            showScoreBadges={showPointUi && hasOpponent}
+            showOverlapPeers={hasOpponent}
+          />
+
+          <OnlinePlayComposePanel
+            draft={draft}
+            draftKeyIndices={draftKeyIndices}
+            letterKeys={letterKeys}
+            composeKeySize={composeKeySize}
+            composeKeyFontSize={composeKeyFontSize}
+            onPressKey={pressKey}
+            onClearDraft={clearDraft}
+            onBackspaceDraft={backspaceDraft}
+          />
         </>
       ) : null}
 
@@ -973,7 +1181,7 @@ export default function OnlinePlayScreen() {
         />
       ) : null}
 
-      {addTimeVote && !isPaused && !earlyVote && !pauseVote ? (
+      {addTimeVote && session.status === 'playing' && !isPaused && !earlyVote && !pauseVote ? (
         <AddTimeVoteModal
           visible
           session={session}
@@ -1032,7 +1240,7 @@ export default function OnlinePlayScreen() {
         }}
       />
 
-      <PlaySessionToastStack toasts={playToasts} />
+      <PlaySessionToastStack toasts={sessionToasts} />
 
       <GameTimeUpModal
         visible={timeUpModalVisible}
@@ -1103,43 +1311,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textSecondary,
     textAlign: 'right',
-  },
-  composeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  composeKey: {
-    borderRadius: radii.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  composeKeyDanger: {
-    backgroundColor: '#E24B4A',
-  },
-  composeKeyOk: {
-    backgroundColor: colors.accent,
-  },
-  composeKeyLabel: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  draftBox: {
-    flex: 1,
-    backgroundColor: '#FAEEDA',
-    borderRadius: radii.sm,
-    paddingHorizontal: spacing.md,
-    justifyContent: 'center',
-  },
-  draftText: {
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: 1,
-    color: '#412402',
-  },
-  wordListSection: {
-    flex: 1,
-    minHeight: 0,
   },
   feedbackSlot: {
     height: 32,

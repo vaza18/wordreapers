@@ -1,4 +1,6 @@
-import { ref, runTransaction, set } from 'firebase/database';
+import { ref, set } from 'firebase/database';
+
+import { runRtdbTransaction } from '../firebase/rtdb-transaction.js';
 
 import type { OrganizerSoloWord } from '@/store/organizer-solo-store';
 
@@ -13,8 +15,14 @@ import {
   defaultGameSessionSettings,
   resolveGameSessionSettings,
 } from '../firebase/session-settings.js';
+import { sessionWordMapsRef } from '../firebase/session-word-maps-service.js';
 import type { StoredPlayerWord } from '../firebase/player-words-service.js';
-import type { GameSession, GameSessionPlayer, GameSessionSettings } from '../firebase/types.js';
+import type {
+  GameSession,
+  GameSessionPlayer,
+  GameSessionSettings,
+  SessionWordMaps,
+} from '../firebase/types.js';
 import { normalizeRoomCode } from '../firebase/room-code.js';
 
 import {
@@ -54,19 +62,13 @@ function settingsFromSetup(setup: LocalRoomSetup, playerCount: number): GameSess
   );
 }
 
-function buildWordSessionFields(
+function buildWordSessionMaps(
   words: readonly OrganizerSoloWord[],
   organizerUid: string,
-): {
-  wordCounts: Record<string, number>;
-  wordFirst: Record<string, string>;
-  wordPlayers: Record<string, Record<string, boolean>>;
-} {
-  const wordCounts: Record<string, number> = {};
+): SessionWordMaps {
   const wordFirst: Record<string, string> = {};
   const wordPlayers: Record<string, Record<string, boolean>> = {};
   for (const word of words) {
-    wordCounts[word.normalized] = (wordCounts[word.normalized] ?? 0) + 1;
     if (!wordFirst[word.normalized]) {
       wordFirst[word.normalized] = organizerUid;
     }
@@ -75,7 +77,7 @@ function buildWordSessionFields(
       [organizerUid]: true,
     };
   }
-  return { wordCounts, wordFirst, wordPlayers };
+  return { wordFirst, wordPlayers };
 }
 
 async function writeSession(
@@ -83,7 +85,7 @@ async function writeSession(
   session: GameSession,
   organizerUid: string,
 ): Promise<void> {
-  const result = await runTransaction(sessionRef(gameId), (current) => {
+  const result = await runRtdbTransaction(sessionRef(gameId), (current) => {
     if (current == null) {
       if (session.organizerId !== organizerUid) {
         return undefined;
@@ -123,9 +125,6 @@ export async function publishWaitingRoom(input: PublishWaitingRoomInput): Promis
     players: {
       [input.organizerUid]: profileToPlayer(input.draft.profile),
     },
-    wordCounts: {},
-    wordFirst: {},
-    wordPlayers: {},
     baseWordPickerOrder: [input.organizerUid],
     baseWordRound: 0,
   };
@@ -150,6 +149,8 @@ export interface PublishPlayingSoloInput {
   remainingMs: number;
   /** True when the organizer paused locally before inviting. */
   paused: boolean;
+  /** Solo countdown budget (duration + local add-time) for timer-based results duration. */
+  roundTimerBudgetSeconds?: number;
 }
 
 /**
@@ -159,15 +160,13 @@ export async function publishPlayingSoloRound(input: PublishPlayingSoloInput): P
   const gameId = await reserveUniqueRoomCode(input.draft.preferredCode, input.organizerUid);
   const normalized = normalizeRoomCode(gameId);
   const settings = settingsFromSetup(input.setup, 1);
+  const serverNow = getServerNow();
   const { timerEndsAt, pauseState } = buildPlayingSoloTimerFields(
     input.remainingMs,
     input.paused,
-    getServerNow(),
+    serverNow,
   );
-  const { wordCounts, wordFirst, wordPlayers } = buildWordSessionFields(
-    input.words,
-    input.organizerUid,
-  );
+  const wordMaps = buildWordSessionMaps(input.words, input.organizerUid);
 
   const player: GameSessionPlayer = {
     ...profileToPlayer(input.draft.profile),
@@ -180,13 +179,13 @@ export async function publishPlayingSoloRound(input: PublishPlayingSoloInput): P
     status: 'playing',
     settings: resolveGameSessionSettings(settings),
     timerEndsAt,
+    roundStartedAt: serverNow,
+    roundTimerBudgetSeconds:
+      input.roundTimerBudgetSeconds ?? resolveGameSessionSettings(settings).durationSeconds,
     organizerId: input.organizerUid,
     players: {
       [input.organizerUid]: player,
     },
-    wordCounts,
-    wordFirst,
-    wordPlayers,
     baseWordPickerOrder: [input.organizerUid],
     baseWordRound: 0,
     earlyFinishVote: null,
@@ -198,13 +197,11 @@ export async function publishPlayingSoloRound(input: PublishPlayingSoloInput): P
   await writeSession(normalized, session, input.organizerUid);
 
   if (input.words.length > 0) {
+    await set(sessionWordMapsRef(normalized), wordMaps);
     const record: Record<string, StoredPlayerWord> = {};
     for (const word of input.words) {
       record[word.normalized] = {
         display: word.display,
-        kind: word.kind,
-        points: word.points,
-        badge: word.badge,
         at: word.at,
       };
     }
@@ -237,6 +234,7 @@ export async function publishPlayingSoloForDraft(
     wordCount: number;
     remainingMs: number;
     paused: boolean;
+    roundTimerBudgetSeconds?: number;
   },
 ): Promise<string> {
   const user = await ensureAnonymousAuth();

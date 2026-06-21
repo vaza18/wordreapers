@@ -7,6 +7,8 @@ import { gameSessionPath } from '../firebase/paths.js';
 import { getServerNow } from '../firebase/server-clock.js';
 import { restorePlayerWordsToFirebase } from '../firebase/player-words-service.js';
 import { normalizeRoomCode } from '../firebase/room-code.js';
+import { sessionWordMapsRef } from '../firebase/session-word-maps-service.js';
+import { sessionWordMapsFromSession } from '../firebase/session-word-maps.js';
 import type { GameSession } from '../firebase/types.js';
 import type { PlayerProfile } from '../profile/player-profile.js';
 
@@ -32,17 +34,16 @@ async function readSessionSnapshot(gameId: string): Promise<GameSessionSnapshot>
   return { id: normalized, ...(snapshot.val() as GameSession) };
 }
 
-function sessionFromSnapshot(snap: PlayingRoundSnapshot): GameSession {
+function sessionCoreFromSnapshot(snap: PlayingRoundSnapshot): GameSession {
   return {
     baseWord: snap.baseWord,
     status: 'playing',
     settings: snap.settings,
     timerEndsAt: snap.timerEndsAt,
+    roundStartedAt: snap.roundStartedAt,
+    roundTimerBudgetSeconds: snap.roundTimerBudgetSeconds,
     organizerId: snap.organizerId,
     players: snap.players,
-    wordCounts: snap.wordCounts,
-    wordFirst: snap.wordFirst,
-    wordPlayers: snap.wordPlayers,
     pauseState: snap.pauseState,
     baseWordPickerOrder: snap.baseWordPickerOrder,
     baseWordRound: snap.baseWordRound,
@@ -83,7 +84,11 @@ export async function restorePlayingSessionFromLocalCache(
   }
   const afterOrphan = await get(sessionRef(normalized));
   if (!afterOrphan.exists()) {
-    await set(sessionRef(normalized), sessionFromSnapshot(entry.sessionSnapshot));
+    await set(sessionRef(normalized), sessionCoreFromSnapshot(entry.sessionSnapshot));
+    const wordMaps = sessionWordMapsFromSession(entry.sessionSnapshot);
+    if (Object.keys(wordMaps.wordPlayers ?? {}).length > 0) {
+      await set(sessionWordMapsRef(normalized), wordMaps);
+    }
   }
 
   const words = wordsMapFromCache(entry);

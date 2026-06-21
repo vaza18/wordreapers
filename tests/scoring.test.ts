@@ -144,7 +144,6 @@ describe('recomputeSessionPlayerScores', () => {
         p2: { score: 1, wordCount: 1 },
         p3: { score: 0, wordCount: 0 },
       },
-      wordCounts: { вада: 1, вал: 1, ванна: 1, рот: 2 },
       wordPlayers: {
         вада: { org: true },
         вал: { org: true },

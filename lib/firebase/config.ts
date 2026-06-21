@@ -109,3 +109,77 @@ export function loadFirebaseConfig(): FirebasePublicConfig {
 export function isFirebaseConfigured(): boolean {
   return resolveFirebaseConfig() != null;
 }
+
+/** Temporary alpha UI: append missing-key diagnostics to Firebase config errors. */
+export const FIREBASE_CONFIG_ALPHA_DIAGNOSTICS = true;
+
+const REQUIRED_EXTRA_FIELDS = [
+  'firebaseApiKey',
+  'firebaseDatabaseURL',
+  'firebaseProjectId',
+] as const satisfies readonly (keyof FirebaseExtra)[];
+
+const REQUIRED_ENV_VARS = [
+  'EXPO_PUBLIC_FIREBASE_API_KEY',
+  'EXPO_PUBLIC_FIREBASE_DATABASE_URL',
+  'EXPO_PUBLIC_FIREBASE_PROJECT_ID',
+] as const;
+
+const OPTIONAL_ENV_VARS = [
+  'EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN',
+  'EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET',
+  'EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
+  'EXPO_PUBLIC_FIREBASE_APP_ID',
+  'EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID',
+] as const;
+
+function fieldPresence(value: string | undefined): string {
+  if (!value?.length) {
+    return 'порожньо';
+  }
+  return `${value.length} симв.`;
+}
+
+/**
+ * Human-readable gap report for alpha debugging (no secret values).
+ * Returns null when Firebase config resolves successfully.
+ */
+export function describeFirebaseConfigGap(): string | null {
+  if (isFirebaseConfigured()) {
+    return null;
+  }
+
+  const extra = extraConfig();
+  const missingExtra = REQUIRED_EXTRA_FIELDS.filter((key) => !extra[key]?.length);
+  const missingRequiredEnv = REQUIRED_ENV_VARS.filter((name) => !envString(name));
+  const missingOptionalEnv = OPTIONAL_ENV_VARS.filter((name) => !envString(name));
+
+  const lines = ['[α] Firebase config'];
+  lines.push(
+    `expo.extra: ${missingExtra.length ? `немає ${missingExtra.join(', ')}` : 'ключові поля є'}`,
+  );
+  for (const key of REQUIRED_EXTRA_FIELDS) {
+    lines.push(`  ${key}: ${fieldPresence(extra[key])}`);
+  }
+
+  lines.push(
+    `process.env: ${
+      missingRequiredEnv.length
+        ? `немає ${missingRequiredEnv.join(', ')}`
+        : 'ключові EXPO_PUBLIC_* є'
+    }`,
+  );
+  if (missingOptionalEnv.length > 0) {
+    lines.push(`  також порожні: ${missingOptionalEnv.join(', ')}`);
+  }
+
+  const source = configFromExtra()
+    ? 'expo.extra'
+    : configFromProcessEnv()
+      ? 'process.env'
+      : 'немає';
+  lines.push(`resolve(): ${source}`);
+  lines.push('Збірка: .env / eas env:pull → eas build --profile production');
+
+  return lines.join('\n');
+}

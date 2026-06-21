@@ -31,6 +31,7 @@ export function SegmentedControl<T extends string>({
           <FeedbackPressable
             key={option.value}
             accessibilityRole="button"
+            accessibilityState={{ selected: active }}
             onPress={() => {
               onChange(option.value);
             }}

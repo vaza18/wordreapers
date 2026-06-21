@@ -18,6 +18,7 @@ import { LetterKeyboard } from '@/components/LetterKeyboard';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { WordList } from '@/components/WordList';
 import { colors, radii, spacing } from '@/constants/theme';
+import { useAutoPauseOnAppBackground } from '@/hooks/useAutoPauseOnAppBackground';
 import { useTimerAlerts } from '@/hooks/useTimerAlerts';
 import { useRoundTimeUpModal } from '@/hooks/useRoundTimeUpModal';
 import { DictionaryIndex } from '@/lib/dictionary/dictionary-index';
@@ -169,6 +170,7 @@ export default function OrganizerSoloPlayScreen() {
   const timerUrgent = remainingMs > 0 && remainingMs <= 60_000;
 
   useTimerAlerts(remainingMs, isPaused, timerAlertMode, status === 'playing');
+  useAutoPauseOnAppBackground(status === 'playing', pauseRound);
   const playRulesLabel = formatPlayRulesLabel(
     t,
     setup
@@ -369,6 +371,17 @@ export default function OrganizerSoloPlayScreen() {
               />
             </FeedbackPressable>
 
+            <View style={styles.footer}>
+              <PrimaryButton
+                label={t('game.menu')}
+                variant="secondary"
+                style={styles.footerButtonSolo}
+                onPress={() => {
+                  setShowGameMenu(true);
+                }}
+              />
+            </View>
+
             <View style={styles.playerHeader}>
               <Text style={styles.playerName} numberOfLines={1}>
                 {myName}
@@ -378,6 +391,20 @@ export default function OrganizerSoloPlayScreen() {
                   {playRulesLabel}
                 </Text>
               ) : null}
+            </View>
+
+            <View style={styles.wordListSection}>
+              <WordList
+                entries={scoredWords}
+                displays={displays}
+                draftPrefix={draft}
+                showScoreBadges={false}
+                showOverlapPeers={false}
+              />
+              <View style={styles.feedbackSlot}>
+                {feedback ? <Text style={styles.feedbackToast}>{feedback}</Text> : null}
+                {publishError ? <Text style={styles.publishError}>{publishError}</Text> : null}
+              </View>
             </View>
 
             <View style={styles.composeRow}>
@@ -401,10 +428,10 @@ export default function OrganizerSoloPlayScreen() {
                 style={[
                   styles.composeKey,
                   { width: composeKeySize, height: composeKeySize },
-                  styles.composeKeyOk,
+                  styles.composeKeyAlert,
                 ]}
               >
-                <Text style={[styles.composeKeyLabel, { fontSize: composeKeyFontSize }]}>←</Text>
+                <Text style={[styles.composeKeyLabel, { fontSize: composeKeyFontSize }]}>⌫</Text>
               </FeedbackPressable>
             </View>
 
@@ -413,31 +440,6 @@ export default function OrganizerSoloPlayScreen() {
               usedKeyIndices={usedKeyIndices}
               onPressKey={pressKey}
             />
-
-            <View style={styles.wordListSection}>
-              <View style={styles.feedbackSlot}>
-                {feedback ? <Text style={styles.feedbackToast}>{feedback}</Text> : null}
-                {publishError ? <Text style={styles.publishError}>{publishError}</Text> : null}
-              </View>
-              <WordList
-                entries={scoredWords}
-                displays={displays}
-                draftPrefix={draft}
-                showScoreBadges={false}
-                showOverlapPeers={false}
-              />
-            </View>
-
-            <View style={styles.footer}>
-              <PrimaryButton
-                label={t('game.menu')}
-                variant="secondary"
-                style={styles.footerButtonSolo}
-                onPress={() => {
-                  setShowGameMenu(true);
-                }}
-              />
-            </View>
           </>
         ) : (
           <View style={styles.pauseOverlay}>
@@ -557,10 +559,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   composeKeyDanger: {
-    backgroundColor: '#E24B4A',
+    backgroundColor: colors.dangerLight,
   },
-  composeKeyOk: {
-    backgroundColor: colors.accent,
+  composeKeyAlert: {
+    backgroundColor: colors.alert,
   },
   composeKeyLabel: {
     color: '#FFFFFF',

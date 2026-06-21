@@ -35,6 +35,7 @@ export default function OrganizerSoloResultsScreen() {
   const words = useOrganizerSoloStore((state) => state.words);
   const uniqueBonusEnabled = useOrganizerSoloStore((state) => state.uniqueBonusEnabled);
   const finishedAt = useOrganizerSoloStore((state) => state.endsAt);
+  const roundPlayedSeconds = useOrganizerSoloStore((state) => state.roundPlayedSeconds);
   const clear = useOrganizerSoloStore((state) => state.clear);
   const profileName = useProfileStore((state) => state.name);
   const avatarColorIndex = useProfileStore((state) => state.avatarColorIndex);
@@ -77,6 +78,7 @@ export default function OrganizerSoloResultsScreen() {
           avatarColorIndex: profile.avatarColorIndex,
         },
         state.endsAt ?? undefined,
+        state.roundPlayedSeconds ?? undefined,
       ).catch((error) => {
         archiveRecordedRef.current = false;
         if (__DEV__) {
@@ -109,6 +111,7 @@ export default function OrganizerSoloResultsScreen() {
       uniqueBonusEnabled,
       soloProfile,
       finishedAt ?? undefined,
+      roundPlayedSeconds ?? undefined,
     );
     const soloWordsArchive = buildSoloFinishedArchiveWords(words);
     const roundDurationSeconds = computeRoundDurationSeconds(soloSession, soloWordsArchive);
@@ -139,6 +142,7 @@ export default function OrganizerSoloResultsScreen() {
     finishedAt,
     profileGender,
     profileName,
+    roundPlayedSeconds,
     setup,
     t,
     uniqueBonusEnabled,

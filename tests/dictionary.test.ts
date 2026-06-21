@@ -8,7 +8,6 @@ import {
 } from '../lib/dictionary/normalize.js';
 import {
   isGameDictionaryEntry,
-  isGradableAdjectiveLemma,
   isMainDictionaryEntry,
   isNounNominativeSingular,
   isNounPluraliaTantumNominative,
@@ -58,8 +57,8 @@ describe('vesum tags', () => {
     expect(isPronoun('noun:inanim:n:v_naz:pron:dem')).toBe(true);
     expect(isPronoun('noun:unanim:m:v_naz:pron:pers:3')).toBe(true);
     expect(isGameDictionaryEntry('noun:inanim:n:v_naz:pron:dem')).toBe(false);
-    expect(isMainDictionaryEntry('noun:inanim:n:v_naz:pron:dem', 'те', new Set())).toBe(false);
-    expect(isMainDictionaryEntry('noun:anim:m:v_naz', 'стіл', new Set())).toBe(true);
+    expect(isMainDictionaryEntry('noun:inanim:n:v_naz:pron:dem')).toBe(false);
+    expect(isMainDictionaryEntry('noun:anim:m:v_naz')).toBe(true);
   });
 
   it('routes proper nouns to supplement', () => {
@@ -85,10 +84,10 @@ describe('vesum tags', () => {
     expect(isExcludedStylistic('noun:anim:m:v_naz:subst')).toBe(true);
     expect(isExcludedStylistic('noun:anim:f:v_naz:vulg')).toBe(true);
     expect(isExcludedStylistic('noun:inanim:m:v_naz:obsc')).toBe(true);
-    expect(isMainDictionaryEntry('noun:anim:f:v_naz:arch', 'утка', new Set())).toBe(false);
-    expect(isMainDictionaryEntry('noun:anim:f:v_naz', 'качка', new Set())).toBe(true);
-    expect(isMainDictionaryEntry('noun:inanim:m:v_naz:obsc', 'хуїльйон', new Set())).toBe(false);
-    expect(isMainDictionaryEntry('noun:anim:m:v_naz:vulg', 'бздіти', new Set())).toBe(false);
+    expect(isMainDictionaryEntry('noun:anim:f:v_naz:arch')).toBe(false);
+    expect(isMainDictionaryEntry('noun:anim:f:v_naz')).toBe(true);
+    expect(isMainDictionaryEntry('noun:inanim:m:v_naz:obsc')).toBe(false);
+    expect(isMainDictionaryEntry('noun:anim:m:v_naz:vulg')).toBe(false);
   });
 
   it('keeps profanity out of slang supplement', () => {
@@ -96,12 +95,9 @@ describe('vesum tags', () => {
     expect(isSupplementSlangEntry('noun:anim:f:v_naz:slang')).toBe(true);
   });
 
-  it('excludes gradable adjective homographs from main dictionary', () => {
-    const homographs = new Set(['чорний']);
-    expect(isMainDictionaryEntry('noun:anim:m:v_naz', 'чорний', homographs)).toBe(false);
-    expect(isMainDictionaryEntry('noun:anim:m:v_naz', 'демобілізований', homographs)).toBe(true);
-    expect(isGradableAdjectiveLemma('adj:m:v_naz:compb')).toBe(true);
-    expect(isGradableAdjectiveLemma('adj:m:v_naz:adjp:pasv:imperf')).toBe(false);
+  it('allows nouns that share spelling with gradable adjectives', () => {
+    expect(isMainDictionaryEntry('noun:inanim:f:v_naz')).toBe(true);
+    expect(isMainDictionaryEntry('noun:anim:m:v_naz')).toBe(true);
   });
 });
 

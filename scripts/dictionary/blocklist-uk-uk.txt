@@ -4,5 +4,6 @@
 # Example: obscure or disputed VESUM entries you do not want in the game.
 # літіотерапія
 #
-# Russian calque; modern standard is «качка» (VESUM marks «утка» as :arch only).
-утка
+# VESUM noun:anim:m:v_naz with comment «негр» — образливе substantivized значення прикметника.
+чорний
+чорна

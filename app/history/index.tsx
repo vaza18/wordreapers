@@ -115,6 +115,7 @@ export default function RoundHistoryScreen() {
                   <FeedbackPressable
                     key={archiveRouteKey(archive.gameId, archive.baseWordRound)}
                     accessibilityRole="button"
+                    feedback={false}
                     style={styles.card}
                     onPress={() => {
                       router.push({

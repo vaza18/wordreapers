@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Markdown, { type RenderRules } from 'react-native-markdown-display';
 
+import { AppVersionLabel } from '@/components/AppVersionLabel';
 import { colors, spacing } from '@/constants/theme';
 import { legalDocumentsUk, type LegalDocumentKey } from '@/lib/legal/bundled-legal';
 import { markdownAstPlainText } from '@/lib/legal/markdown-ast-text';
@@ -10,6 +11,8 @@ import { markdownHeadingSlug } from '@/lib/legal/markdown-links';
 
 interface LegalDocumentViewProps {
   documentKey: LegalDocumentKey;
+  /** Render muted app version line below the markdown body. */
+  showAppVersion?: boolean;
 }
 
 type MarkdownAstNode = {
@@ -121,7 +124,7 @@ const ANCHOR_SCROLL_MAX_ATTEMPTS = 4;
 /**
  * Styled markdown renderer for bundled legal/about documents.
  */
-export function LegalDocumentView({ documentKey }: LegalDocumentViewProps) {
+export function LegalDocumentView({ documentKey, showAppVersion = false }: LegalDocumentViewProps) {
   const text = legalDocumentsUk[documentKey];
   const scrollRef = useRef<ScrollView>(null);
   const anchorOffsets = useRef(new Map<string, number>());
@@ -225,6 +228,7 @@ export function LegalDocumentView({ documentKey }: LegalDocumentViewProps) {
       <Markdown style={markdownStyles} rules={rules} onLinkPress={onLinkPress}>
         {text}
       </Markdown>
+      {showAppVersion ? <AppVersionLabel style={styles.versionLabel} /> : null}
     </ScrollView>
   );
 }
@@ -237,5 +241,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
     paddingBottom: spacing.xl,
+  },
+  versionLabel: {
+    marginTop: spacing.lg,
   },
 });

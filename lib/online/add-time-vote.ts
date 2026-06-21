@@ -8,6 +8,28 @@ import {
 
 export const ADD_TIME_MINUTE_OPTIONS = [1, 3, 5, 10, 20] as const;
 
+export function shouldDeferTimerFinishForAddTimeVote(
+  addTimeVote: AddTimeVote | null | undefined,
+): boolean {
+  return addTimeVote != null;
+}
+
+export function shouldFinishRoundAfterTimerExpired(
+  timerEndsAt: number | null,
+  now: number,
+): boolean {
+  return timerEndsAt !== null && now >= timerEndsAt;
+}
+
+export function computeExtendedTimerEndsAt(
+  timerEndsAt: number | null,
+  addMinutes: number,
+  now: number,
+): number {
+  const base = Math.max(timerEndsAt ?? now, now);
+  return base + addMinutes * 60_000;
+}
+
 export function addTimeVoteRequiredIds(session: GameSession, proposerId: string): string[] {
   return earlyFinishRequiredVoterIds(session, proposerId);
 }

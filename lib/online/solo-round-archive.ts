@@ -15,6 +15,7 @@ export function buildSoloFinishedSession(
   uniqueBonusEnabled: boolean,
   profile: PlayerProfile,
   finishedAtMs?: number,
+  roundPlayedSeconds?: number,
 ): GameSession {
   const scored: ScoredWordEntry[] = words.map((word) => ({
     normalized: word.normalized,
@@ -36,6 +37,7 @@ export function buildSoloFinishedSession(
     ),
     timerEndsAt: null,
     finishedAt: finishedAtMs ?? undefined,
+    roundPlayedSeconds: roundPlayedSeconds ?? undefined,
     organizerId: 'solo',
     players: {
       solo: {
@@ -55,9 +57,6 @@ export function buildSoloFinishedArchiveWords(words: readonly OrganizerSoloWord[
   for (const word of words) {
     soloWords.set(word.normalized, {
       display: word.display,
-      kind: word.kind,
-      points: word.points,
-      badge: word.badge,
       at: word.at,
     });
   }
@@ -71,8 +70,16 @@ export async function saveSoloFinishedRoundArchive(
   uniqueBonusEnabled: boolean,
   profile: PlayerProfile,
   finishedAtMs?: number,
+  roundPlayedSeconds?: number,
 ): Promise<void> {
-  const session = buildSoloFinishedSession(setup, words, uniqueBonusEnabled, profile, finishedAtMs);
+  const session = buildSoloFinishedSession(
+    setup,
+    words,
+    uniqueBonusEnabled,
+    profile,
+    finishedAtMs,
+    roundPlayedSeconds,
+  );
   const archiveWords = buildSoloFinishedArchiveWords(words);
   await saveFinishedRoundArchive(gameId, session, archiveWords);
 }

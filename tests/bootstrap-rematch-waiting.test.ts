@@ -23,7 +23,7 @@ describe('bootstrap rematch waiting session shape', () => {
         org: { name: 'Org', wordCount: 5, score: 12, online: true },
         guest: { name: 'Guest', wordCount: 3, score: 8, online: false },
       },
-      wordCounts: { тест: 1 },
+      wordPlayers: { тест: { org: true } },
       purgeAfterAt: 1_800_000_000_000,
       resultsExitedBy: { org: true },
     };
@@ -34,7 +34,7 @@ describe('bootstrap rematch waiting session shape', () => {
     expect(waiting.baseWordRound).toBe(3);
     expect(waiting.players.org?.score).toBe(0);
     expect(waiting.players.guest?.wordCount).toBe(0);
-    expect(waiting.wordCounts).toEqual({});
+    expect(waiting.wordPlayers).toBeUndefined();
     expect(waiting.purgeAfterAt).toBeUndefined();
     expect(waiting.resultsExitedBy).toBeUndefined();
   });

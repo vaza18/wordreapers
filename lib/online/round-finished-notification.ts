@@ -36,15 +36,15 @@ export async function notifyRoundFinished(params: {
   gameId: string;
   title: string;
   body: string;
-}): Promise<void> {
+}): Promise<boolean> {
   const Notifications = await loadExpoNotifications();
   if (!Notifications) {
-    return;
+    return false;
   }
 
   const granted = await ensureNotificationPermissions();
   if (!granted) {
-    return;
+    return false;
   }
 
   await Notifications.scheduleNotificationAsync({
@@ -58,4 +58,5 @@ export async function notifyRoundFinished(params: {
     },
     trigger: null,
   });
+  return true;
 }

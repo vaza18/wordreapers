@@ -15,7 +15,7 @@ export interface PurgeResult {
 }
 
 /**
- * Delete game_sessions + player_words when purgeAfterAt has passed.
+ * Delete game_sessions + session_word_maps + player_words when purgeAfterAt has passed.
  * Admin SDK bypasses RTDB security rules.
  */
 export async function purgeExpiredRtdbSessions(now = Date.now()): Promise<PurgeResult> {
@@ -50,7 +50,7 @@ export async function purgeExpiredRtdbSessions(now = Date.now()): Promise<PurgeR
   return { scanned, purged };
 }
 
-/** Remove one finished session and all player word nodes from RTDB. */
+/** Remove one finished session and all related RTDB nodes. */
 async function purgeGameSession(
   db: admin.database.Database,
   gameId: string,
@@ -58,6 +58,7 @@ async function purgeGameSession(
 ): Promise<void> {
   const updates: Record<string, null> = {
     [`game_sessions/${gameId}`]: null,
+    [`session_word_maps/${gameId}`]: null,
   };
   for (const playerId of Object.keys(players)) {
     updates[`player_words/${gameId}/${playerId}`] = null;

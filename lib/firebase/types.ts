@@ -31,6 +31,14 @@ export interface SessionPauseState {
   frozenAt: number;
 }
 
+/** Shared word maps under `session_word_maps/{gameId}`. */
+export interface SessionWordMaps {
+  /** First submitter per shared word (for score demotion). */
+  wordFirst?: Record<string, string>;
+  /** Player ids per normalized word (for overlap avatars and global counts). */
+  wordPlayers?: Record<string, Record<string, boolean>>;
+}
+
 export interface GameSessionPlayer {
   name: string;
   gender?: 'm' | 'f' | null;
@@ -52,13 +60,17 @@ export interface GameSession {
   status: GameSessionStatus;
   settings: GameSessionSettings;
   timerEndsAt: number | null;
+  /** Server clock ms when the playing round started (rejoin archives, stale-word cutoff). */
+  roundStartedAt?: number | null;
+  /** Countdown budget in seconds (settings duration + approved add-time); excludes pause wall time. */
+  roundTimerBudgetSeconds?: number | null;
+  /** Timer/game seconds consumed when the round finished (results, history, WPM). */
+  roundPlayedSeconds?: number | null;
   organizerId: string;
   players: Record<string, GameSessionPlayer>;
-  /** How many players submitted each normalized word (for x2 / overlap UI). */
-  wordCounts?: Record<string, number>;
-  /** First submitter per shared word (for score demotion). */
+  /** Merged client-side from `session_word_maps` (not stored on core RTDB node). */
   wordFirst?: Record<string, string>;
-  /** Player ids per normalized word (for overlap avatars). */
+  /** Merged client-side from `session_word_maps` (not stored on core RTDB node). */
   wordPlayers?: Record<string, Record<string, boolean>>;
   earlyFinishVote?: SessionVote | null;
   pauseVote?: SessionVote | null;

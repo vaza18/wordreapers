@@ -8,7 +8,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { RoundResultsView } from '@/components/RoundResultsView';
 import { useResultsRematchToast } from '@/hooks/useResultsRematchToast';
 import { StackHeaderTitle } from '@/components/StackHeaderTitle';
-import { colors } from '@/constants/theme';
+import { colors, spacing } from '@/constants/theme';
 import { ensureAnonymousAuth } from '@/lib/firebase/auth';
 import { markResultsExited } from '@/lib/firebase/results-coordination-service';
 import {
@@ -37,6 +37,9 @@ import {
   isFinishedArchiveStale,
 } from '@/lib/online/online-session-archive';
 import { buildOnlineResultsView } from '@/lib/online/online-results-data';
+import { mergeSessionWithWordMaps } from '@/lib/firebase/session-word-maps';
+import { subscribeSessionWordMaps } from '@/lib/firebase/session-word-maps-service';
+import type { SessionWordMaps } from '@/lib/firebase/types';
 import type { RoundResultsViewData } from '@/lib/online/online-results-data';
 import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
 import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
@@ -55,7 +58,12 @@ export default function OnlineResultsScreen() {
   const [resolvedUid, setResolvedUid] = useState(storeUid ?? '');
   const myUid = resolvedUid || storeUid || '';
 
-  const [liveSession, setLiveSession] = useState<GameSessionSnapshot | null>(null);
+  const [liveSessionCore, setLiveSessionCore] = useState<GameSessionSnapshot | null>(null);
+  const [liveWordMaps, setLiveWordMaps] = useState<SessionWordMaps | null>(null);
+  const liveSession = useMemo(
+    () => (liveSessionCore ? mergeSessionWithWordMaps(liveSessionCore, liveWordMaps) : null),
+    [liveSessionCore, liveWordMaps],
+  );
   const [liveWords, setLiveWords] = useState(EMPTY_WORDS);
   const [frozenRound, setFrozenRound] = useState<FrozenFinishedRound | null>(null);
   const [localLoadComplete, setLocalLoadComplete] = useState(false);
@@ -133,7 +141,11 @@ export default function OnlineResultsScreen() {
   }, [gameId]);
 
   useEffect(() => {
-    if (!sessionLoaded || liveSession || !gameId) {
+    if (!sessionLoaded || !gameId || frozenRound) {
+      return undefined;
+    }
+    const shouldRecoverFromArchive = !liveSession || liveSession.status === 'waiting';
+    if (!shouldRecoverFromArchive) {
       return undefined;
     }
     let cancelled = false;
@@ -169,7 +181,7 @@ export default function OnlineResultsScreen() {
     return () => {
       cancelled = true;
     };
-  }, [gameId, liveSession, sessionLoaded]);
+  }, [frozenRound, gameId, liveSession, sessionLoaded]);
 
   useEffect(() => {
     if (!liveSession || liveSession.status !== 'finished') {
@@ -187,10 +199,14 @@ export default function OnlineResultsScreen() {
       return undefined;
     }
     const unsubSession = subscribeGameSession(gameId, (next) => {
-      setLiveSession(next);
+      setLiveSessionCore(next);
       setSessionLoaded(true);
     });
-    return unsubSession;
+    const unsubMaps = subscribeSessionWordMaps(gameId, setLiveWordMaps);
+    return () => {
+      unsubSession();
+      unsubMaps();
+    };
   }, [gameId]);
 
   useEffect(() => {
@@ -438,7 +454,7 @@ export default function OnlineResultsScreen() {
           </>
         }
       />
-      <PlaySessionToastStack toasts={rematchToasts} bottomOffset={120} />
+      <PlaySessionToastStack toasts={rematchToasts} topOffset={spacing.md} />
     </>
   );
 }

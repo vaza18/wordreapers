@@ -9,10 +9,7 @@ import { ensureDictionaryDirs, UK_LOCALE } from '../../lib/dictionary/index.js';
 import { ukDictionaryPaths } from '../../lib/dictionary/paths.js';
 import {
   isBaseWordGeographicalEntry,
-  isGameDictionaryEntry,
-  isGradableAdjectiveLemma,
   isMainDictionaryEntry,
-  isSlang,
   isSupplementProperNounEntry,
   isSupplementSlangEntry,
   parseVesumLine,
@@ -28,7 +25,6 @@ interface BuildStats {
   linesRead: number;
   entriesAccepted: number;
   duplicatesSkipped: number;
-  excludedGradableAdjHomographs: number;
   excludedBlocklist: number;
   mainWords: number;
   supplementProperNouns: number;
@@ -54,27 +50,6 @@ function addCanonical(
   }
 }
 
-async function buildGradableAdjectiveHomographs(sourcePath: string): Promise<Set<string>> {
-  const homographs = new Set<string>();
-  const rl = createInterface({
-    input: createReadStream(sourcePath, { encoding: 'utf8' }),
-    crlfDelay: Infinity,
-  });
-
-  for await (const line of rl) {
-    const parsed = parseVesumLine(line);
-    if (!parsed || !isGradableAdjectiveLemma(parsed.tags)) {
-      continue;
-    }
-    const normalized = normalizeUk(parsed.word);
-    if (normalized) {
-      homographs.add(normalized);
-    }
-  }
-
-  return homographs;
-}
-
 async function loadBlocklist(blocklistPath: string): Promise<Set<string>> {
   try {
     const raw = await readFile(blocklistPath, 'utf8');
@@ -92,7 +67,6 @@ async function loadBlocklist(blocklistPath: string): Promise<Set<string>> {
 
 async function buildFromVesum(
   sourcePath: string,
-  gradableAdjectiveHomographs: ReadonlySet<string>,
   blocklist: ReadonlySet<string>,
 ): Promise<{
   main: Map<string, string>;
@@ -109,7 +83,6 @@ async function buildFromVesum(
     linesRead: 0,
     entriesAccepted: 0,
     duplicatesSkipped: 0,
-    excludedGradableAdjHomographs: 0,
     excludedBlocklist: 0,
     mainWords: 0,
     supplementProperNouns: 0,
@@ -141,16 +114,7 @@ async function buildFromVesum(
     const surface = parsed.word.toLowerCase();
     const { tags } = parsed;
 
-    if (
-      isGameDictionaryEntry(tags) &&
-      !isSlang(tags) &&
-      gradableAdjectiveHomographs.has(normalized)
-    ) {
-      stats.excludedGradableAdjHomographs += 1;
-      continue;
-    }
-
-    if (isMainDictionaryEntry(tags, normalized, gradableAdjectiveHomographs)) {
+    if (isMainDictionaryEntry(tags)) {
       addCanonical(main, normalized, surface, stats);
       continue;
     }
@@ -229,10 +193,9 @@ async function main(): Promise<void> {
   }
 
   console.log('Building dictionary from VESUM…');
-  const gradableAdjectiveHomographs = await buildGradableAdjectiveHomographs(VESUM_TXT);
   const blocklist = await loadBlocklist(paths.blocklist);
   const { main, supplementProperNouns, geographicalProperNouns, supplementSlang, stats } =
-    await buildFromVesum(VESUM_TXT, gradableAdjectiveHomographs, blocklist);
+    await buildFromVesum(VESUM_TXT, blocklist);
 
   ensureDictionaryDirs(ROOT, UK_LOCALE);
 
@@ -270,7 +233,6 @@ async function main(): Promise<void> {
     baseWordCount: baseWords.length,
     baseWordGeoCount,
     minBaseWordLength: MIN_BASE_WORD_LENGTH,
-    excludedGradableAdjHomographCount: stats.excludedGradableAdjHomographs,
     excludedBlocklistCount: stats.excludedBlocklist,
     blocklistFile: paths.blocklist,
     sourceFile: VESUM_TXT,
@@ -282,9 +244,6 @@ async function main(): Promise<void> {
   console.log(`Main dictionary: ${mainWords.length.toLocaleString()}`);
   console.log(`Supplement proper nouns: ${supplementProperNouns.size.toLocaleString()}`);
   console.log(`Supplement slang: ${supplementSlang.size.toLocaleString()}`);
-  console.log(
-    `Excluded gradable-adj homographs: ${stats.excludedGradableAdjHomographs.toLocaleString()}`,
-  );
   console.log(`Excluded blocklist: ${stats.excludedBlocklist.toLocaleString()}`);
   console.log(`Normalization map: ${Object.keys(normalization).length.toLocaleString()}`);
   console.log(
