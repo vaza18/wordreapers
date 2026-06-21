@@ -32,7 +32,12 @@
     "session_word_maps": {
       "$gameId": {
         ".read": "auth != null && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists()",
-        ".write": "auth != null && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && (root.child('game_sessions').child($gameId).child('status').val() == 'playing' || root.child('game_sessions').child($gameId).child('status').val() == 'finished' || (root.child('game_sessions').child($gameId).child('status').val() == 'waiting' && root.child('game_sessions').child($gameId).child('organizerId').val() === auth.uid))"
+        ".write": "auth != null && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && (root.child('game_sessions').child($gameId).child('status').val() == 'playing' || root.child('game_sessions').child($gameId).child('status').val() == 'finished' || (root.child('game_sessions').child($gameId).child('status').val() == 'waiting' && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists()))",
+        "wordFirst": {
+          "$normalized": {
+            ".validate": "!newData.exists() || !data.exists()"
+          }
+        }
       }
     },
     "player_words": {
@@ -40,7 +45,10 @@
         ".read": "auth != null && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists()",
         "$playerId": {
           ".read": "auth != null && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && (auth.uid == $playerId || root.child('game_sessions').child($gameId).child('status').val() == 'finished')",
-          ".write": "auth != null && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && ((!newData.exists() && ((root.child('game_sessions').child($gameId).child('status').val() == 'waiting' && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists()) || (root.child('game_sessions').child($gameId).child('status').val() == 'finished' && (auth.uid == $playerId || root.child('game_sessions').child($gameId).child('organizerId').val() === auth.uid)) || (root.child('game_sessions').child($gameId).child('status').val() == 'playing' && auth.uid == $playerId))) || (newData.exists() && (auth.uid == $playerId || root.child('game_sessions').child($gameId).child('organizerId').val() === auth.uid || root.child('game_sessions').child($gameId).child('status').val() == 'finished')))"
+          ".write": "auth != null && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && ((!newData.exists() && ((root.child('game_sessions').child($gameId).child('status').val() == 'waiting' && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists()) || (root.child('game_sessions').child($gameId).child('status').val() == 'finished' && (auth.uid == $playerId || root.child('game_sessions').child($gameId).child('organizerId').val() === auth.uid)) || (root.child('game_sessions').child($gameId).child('status').val() == 'playing' && auth.uid == $playerId))) || (newData.exists() && (auth.uid == $playerId || root.child('game_sessions').child($gameId).child('organizerId').val() === auth.uid || root.child('game_sessions').child($gameId).child('status').val() == 'finished')))",
+          "$normalized": {
+            ".validate": "!newData.exists() || !data.exists()"
+          }
         }
       }
     },

@@ -1,5 +1,6 @@
 import { get, ref } from 'firebase/database';
 
+import { ensureAnonymousAuth } from '../firebase/auth.js';
 import { getFirebaseDatabase } from '../firebase/init.js';
 import { gameSessionPath } from '../firebase/paths.js';
 import {
@@ -53,6 +54,7 @@ export async function tryRestoreActiveRoundCache(
   firebaseWordCount: number,
 ): Promise<void> {
   try {
+    await ensureAnonymousAuth();
     const roomId = normalizeRoomCode(gameId);
     if (session.status !== 'playing' || session.timerEndsAt == null) {
       return;

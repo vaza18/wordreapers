@@ -32,6 +32,15 @@ async function writeNotifiedStore(store: NotifiedStore): Promise<void> {
   await AsyncStorage.setItem(NOTIFIED_KEY, JSON.stringify(store));
 }
 
+/** Whether this device already recorded a finished-round notification for the round. */
+export async function isRoundFinishedNotified(
+  gameId: string,
+  baseWordRound: number,
+): Promise<boolean> {
+  const store = await readNotifiedStore();
+  return Boolean(store[onlineRoundKey(normalizeRoomCode(gameId), baseWordRound)]);
+}
+
 /**
  * Local push once per device per round (left screen, sync coordinator, home foreground).
  */
@@ -46,13 +55,17 @@ export async function notifyRoundFinishedOnce(
     return false;
   }
 
-  await notifyRoundFinished({
+  const sent = await notifyRoundFinished({
     gameId: normalizeRoomCode(gameId),
     title: i18n.t('game.roundFinishedNotificationTitle'),
     body: i18n.t('game.roundFinishedNotificationBody', {
       word: toDisplayUpper(baseWord),
     }),
   });
+
+  if (!sent) {
+    return false;
+  }
 
   store[key] = Date.now();
   await writeNotifiedStore(store);

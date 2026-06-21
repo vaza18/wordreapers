@@ -4,6 +4,7 @@ import {
   ref,
   remove,
   runTransaction,
+  set,
   update,
   type DatabaseReference,
   type Unsubscribe,
@@ -12,20 +13,32 @@ import {
 import { toScoredWordEntry, type ScoredWordEntry } from '../game/scoring.js';
 
 import {
-  applyPlayerScoreFromWordSubmit,
-  applyWordSubmitToWordMaps,
+  applyWordSubmitToWordPlayersShard,
+  buildPartialWordMaps,
+  planPlayerScoreUpdate,
+  type PlayerScoreUpdatePlan,
 } from '../online/apply-word-submit-to-session.js';
 import type { SubmitWordProfile } from '../online/submit-word-profile.js';
+import {
+  rollbackWordMapsShard,
+  wordFirstPerWordRef,
+  wordPlayersPerWordRef,
+} from '../online/word-maps-shard-rollback.js';
 import { wordsAreFromPreviousRound } from '../online/stale-player-words.js';
 
 import { ensureAnonymousAuth } from './auth.js';
 import { isFirebasePermissionDenied } from './rtdb-errors.js';
 import { getFirebaseDatabase } from './init.js';
-import { gameSessionPath, playerWordsPath } from './paths.js';
+import {
+  gameSessionPath,
+  gameSessionPlayerPath,
+  gameSessionPlayersPath,
+  playerWordLeafPath,
+  playerWordsPath,
+} from './paths.js';
 import { normalizeRoomCode } from './room-code.js';
 import { globalWordCount } from './session-word-maps.js';
-import { sessionWordMapsRef } from './session-word-maps-service.js';
-import type { GameSession } from './types.js';
+import type { GameSession, SessionWordMaps } from './types.js';
 
 export {
   roundStartMsFromSession,
@@ -38,7 +51,7 @@ export interface StoredPlayerWord {
 }
 
 function playerWordRef(gameId: string, uid: string, normalized: string): DatabaseReference {
-  return ref(getFirebaseDatabase(), `${playerWordsPath(gameId, uid)}/${normalized}`);
+  return ref(getFirebaseDatabase(), playerWordLeafPath(gameId, uid, normalized));
 }
 
 function playerWordsRootRef(gameId: string, uid: string): DatabaseReference {
@@ -52,6 +65,14 @@ function roomPlayerWordsRef(gameId: string): DatabaseReference {
 
 function sessionRef(gameId: string): DatabaseReference {
   return ref(getFirebaseDatabase(), gameSessionPath(gameId));
+}
+
+function sessionPlayersRef(gameId: string): DatabaseReference {
+  return ref(getFirebaseDatabase(), gameSessionPlayersPath(gameId));
+}
+
+function sessionPlayerRef(gameId: string, uid: string): DatabaseReference {
+  return ref(getFirebaseDatabase(), gameSessionPlayerPath(gameId, uid));
 }
 
 function parseStoredPlayerWord(raw: unknown): StoredPlayerWord | null {
@@ -193,6 +214,7 @@ export async function restorePlayerWordsToFirebase(
   if (words.size === 0) {
     return;
   }
+  await ensureAnonymousAuth();
   const roomId = normalizeRoomCode(gameId);
   const sessionSnapshot = await get(sessionRef(roomId));
   if (!sessionSnapshot.exists()) {
@@ -211,6 +233,12 @@ export async function restorePlayerWordsToFirebase(
     await update(playerWordsRootRef(roomId, uid), record);
   } catch (error) {
     if (isFirebasePermissionDenied(error)) {
+      if (__DEV__) {
+        console.warn('restorePlayerWordsToFirebase permission_denied', {
+          uid,
+          wordCount: words.size,
+        });
+      }
       return;
     }
     if (__DEV__) {
@@ -332,8 +360,53 @@ export type SubmitOnlineWordOptions = {
   profile?: SubmitWordProfile | null;
 };
 
+async function commitPlayerScorePlan(
+  gameId: string,
+  plan: PlayerScoreUpdatePlan,
+  profile: SubmitWordProfile | null,
+): Promise<boolean> {
+  if (plan.mode === 'single') {
+    const tx = await runTransaction(sessionPlayerRef(gameId, plan.uid), (player) => {
+      if (player == null || typeof player !== 'object') {
+        return undefined;
+      }
+      return {
+        ...(player as GameSession['players'][string]),
+        score: plan.nextScore,
+        wordCount: plan.nextWordCount,
+        online: true,
+        hasLeft: false,
+      };
+    });
+    profile?.mark('sessionFastTx');
+    return tx.committed;
+  }
+
+  const tx = await runTransaction(sessionPlayersRef(gameId), (players) => {
+    if (players == null || typeof players !== 'object') {
+      return undefined;
+    }
+    const next = { ...(players as GameSession['players']) };
+    const firstPlayer = next[plan.firstUid];
+    if (!firstPlayer || !next[plan.uid]) {
+      return undefined;
+    }
+    next[plan.firstUid] = { ...firstPlayer, score: plan.firstNextScore };
+    next[plan.uid] = {
+      ...next[plan.uid],
+      score: plan.nextScore,
+      wordCount: plan.nextWordCount,
+      online: true,
+      hasLeft: false,
+    };
+    return next;
+  });
+  profile?.mark('sessionDualTx');
+  return tx.committed;
+}
+
 /**
- * Persist an accepted word: word maps tx + session players tx + player word node.
+ * Persist an accepted word: sharded word maps + fast session score + player word node.
  */
 export async function submitOnlineWord(
   gameId: string,
@@ -350,97 +423,152 @@ export async function submitOnlineWord(
     const roomId = normalizeRoomCode(gameId);
 
     let entry: ScoredWordEntry = toScoredWordEntry(normalized, 'normal', uniqueBonusEnabled, 1);
-    let committedMaps;
 
+    let playersOnWord: Record<string, boolean>;
+    let prevGlobal: number;
     try {
-      committedMaps = await runTransaction(sessionWordMapsRef(roomId), (current) => {
-        const maps = (current ?? {}) as {
-          wordFirst?: GameSession['wordFirst'];
-          wordPlayers?: GameSession['wordPlayers'];
-        };
-        const applied = applyWordSubmitToWordMaps(
-          { wordFirst: maps.wordFirst, wordPlayers: maps.wordPlayers },
-          uid,
-          normalized,
-          uniqueBonusEnabled,
-        );
-        if (!applied.ok) {
-          return undefined;
-        }
-        entry = applied.entry;
-        return applied.maps;
-      });
+      const committedShard = await runTransaction(
+        wordPlayersPerWordRef(roomId, normalized),
+        (current) => {
+          const applied = applyWordSubmitToWordPlayersShard(
+            (current as Record<string, boolean> | null) ?? null,
+            uid,
+            normalized,
+            uniqueBonusEnabled,
+          );
+          if (!applied.ok) {
+            return undefined;
+          }
+          entry = applied.entry;
+          return applied.maps.wordPlayers?.[normalized];
+        },
+      );
+      profile?.mark('wordPlayersShardTx');
+
+      if (!committedShard.committed) {
+        return { ok: false, error: 'DUPLICATE' };
+      }
+
+      playersOnWord = (committedShard.snapshot.val() as Record<string, boolean> | null) ?? {};
+      if (!playersOnWord[uid]) {
+        return { ok: false, error: 'NOT_PLAYING' };
+      }
+      prevGlobal = Math.max(0, Object.keys(playersOnWord).length - 1);
     } catch (error) {
       if (isFirebasePermissionDenied(error)) {
         return { ok: false, error: 'NOT_PLAYING' };
       }
       throw error;
     }
-    profile?.mark('wordMapsTx');
 
-    if (!committedMaps.committed) {
-      return { ok: false, error: 'DUPLICATE' };
+    let firstUid: string | undefined;
+    if (prevGlobal === 0) {
+      try {
+        const firstCommit = await runTransaction(
+          wordFirstPerWordRef(roomId, normalized),
+          (current) => {
+            if (current != null && typeof current === 'string') {
+              return undefined;
+            }
+            return uid;
+          },
+        );
+        profile?.mark('wordFirstSet');
+        const value = firstCommit.snapshot.val();
+        firstUid = typeof value === 'string' ? value : uid;
+      } catch (error) {
+        if (isFirebasePermissionDenied(error)) {
+          try {
+            const firstSnapshot = await get(wordFirstPerWordRef(roomId, normalized));
+            if (firstSnapshot.exists() && typeof firstSnapshot.val() === 'string') {
+              firstUid = firstSnapshot.val() as string;
+              profile?.mark('wordFirstSet');
+            } else {
+              await rollbackWordMapsShard(roomId, normalized, uid);
+              return { ok: false, error: 'NOT_PLAYING' };
+            }
+          } catch {
+            await rollbackWordMapsShard(roomId, normalized, uid);
+            return { ok: false, error: 'NOT_PLAYING' };
+          }
+        } else {
+          await rollbackWordMapsShard(roomId, normalized, uid);
+          throw error;
+        }
+      }
+    } else {
+      try {
+        const firstSnapshot = await get(wordFirstPerWordRef(roomId, normalized));
+        firstUid =
+          firstSnapshot.exists() && typeof firstSnapshot.val() === 'string'
+            ? (firstSnapshot.val() as string)
+            : undefined;
+      } catch {
+        firstUid = undefined;
+      }
     }
 
-    const maps = committedMaps.snapshot.val() as {
-      wordFirst?: GameSession['wordFirst'];
-      wordPlayers?: GameSession['wordPlayers'];
-    };
+    const maps: SessionWordMaps = buildPartialWordMaps(normalized, playersOnWord, firstUid);
 
-    let sessionTx;
+    let sessionSnapshot;
     try {
-      sessionTx = await runTransaction(sessionRef(roomId), (current) => {
-        if (current == null) {
-          return undefined;
-        }
-        const applied = applyPlayerScoreFromWordSubmit(
-          current as GameSession,
-          maps,
-          uid,
-          normalized,
-          entry,
-          uniqueBonusEnabled,
-        );
-        if (!applied.ok) {
-          return undefined;
-        }
-        entry = applied.entry;
-        return applied.session;
-      });
+      sessionSnapshot = await get(sessionRef(roomId));
     } catch (error) {
+      await rollbackWordMapsShard(roomId, normalized, uid);
       if (isFirebasePermissionDenied(error)) {
         return { ok: false, error: 'NOT_PLAYING' };
       }
       throw error;
     }
-    profile?.mark('sessionTx');
 
-    if (!sessionTx.committed) {
+    if (!sessionSnapshot.exists()) {
+      await rollbackWordMapsShard(roomId, normalized, uid);
+      return { ok: false, error: 'SESSION_MISSING' };
+    }
+
+    const session = sessionSnapshot.val() as GameSession;
+    const planned = planPlayerScoreUpdate(
+      session,
+      maps,
+      uid,
+      normalized,
+      entry,
+      uniqueBonusEnabled,
+    );
+    if (!planned.ok) {
+      await rollbackWordMapsShard(roomId, normalized, uid);
+      return { ok: false, error: planned.error };
+    }
+
+    let sessionCommitted = false;
+    try {
+      sessionCommitted = await commitPlayerScorePlan(roomId, planned.plan, profile);
+    } catch (error) {
+      await rollbackWordMapsShard(roomId, normalized, uid);
+      if (isFirebasePermissionDenied(error)) {
+        return { ok: false, error: 'NOT_PLAYING' };
+      }
+      throw error;
+    }
+
+    if (!sessionCommitted) {
+      await rollbackWordMapsShard(roomId, normalized, uid);
       return { ok: false, error: 'NOT_PLAYING' };
     }
 
-    let wordTx;
     try {
-      wordTx = await runTransaction(playerWordRef(roomId, uid, normalized), (current) => {
-        if (current != null) {
-          return undefined;
-        }
-        return {
-          display,
-          at: Date.now(),
-        };
+      await set(playerWordRef(roomId, uid, normalized), {
+        display,
+        at: Date.now(),
       });
     } catch (error) {
+      await rollbackWordMapsShard(roomId, normalized, uid);
       if (isFirebasePermissionDenied(error)) {
-        return { ok: false, error: 'NOT_PLAYING' };
+        return { ok: false, error: 'DUPLICATE' };
       }
       throw error;
     }
-    profile?.mark('wordTx');
-
-    if (!wordTx.committed) {
-      return { ok: false, error: 'DUPLICATE' };
-    }
+    profile?.mark('wordSet');
 
     profile?.mark('done');
     return { ok: true, entry };

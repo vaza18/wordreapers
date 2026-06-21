@@ -43,6 +43,17 @@ export { resolveGameSessionSettings } from './session-settings.js';
 
 export type GameSessionSnapshot = GameSession & { id: string };
 
+/** Reset per-player totals and presence when a new round or rematch lobby opens. */
+function playerForFreshRound(player: GameSessionPlayer): GameSessionPlayer {
+  return {
+    ...player,
+    score: 0,
+    wordCount: 0,
+    hasLeft: false,
+    online: true,
+  };
+}
+
 function sessionRef(gameId: string): DatabaseReference {
   return ref(getFirebaseDatabase(), gameSessionPath(gameId));
 }
@@ -206,7 +217,7 @@ export async function rejoinExistingPlayer(
   await update(node, {
     ...profilePatch(profile),
     online: true,
-    hasLeft: null,
+    hasLeft: false,
   });
   await setPlayerOnlinePresence(normalized, uid);
 }
@@ -541,7 +552,7 @@ export async function startGameSession(gameId: string, actorUid: string): Promis
   const endsAt = now + settings.durationSeconds * 1000;
   const players: Record<string, GameSessionPlayer> = {};
   for (const [uid, player] of Object.entries(session.players)) {
-    players[uid] = { ...player, score: 0, wordCount: 0 };
+    players[uid] = playerForFreshRound(player);
   }
 
   setOrganizerWaitingRoom(null);
@@ -777,7 +788,7 @@ export async function rematchFinishedSessionToWaiting(
 
     const players: Record<string, GameSessionPlayer> = {};
     for (const [uid, player] of Object.entries(session.players)) {
-      players[uid] = { ...player, score: 0, wordCount: 0 };
+      players[uid] = playerForFreshRound(player);
     }
 
     return {

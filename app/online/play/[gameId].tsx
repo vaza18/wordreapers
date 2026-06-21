@@ -47,6 +47,7 @@ import {
   finishGameSession,
   finishGameSessionIfExpired,
   leaveGameSession,
+  rejoinExistingPlayer,
   subscribeGameSession,
   syncSessionPlayerScores,
   type GameSessionSnapshot,
@@ -94,7 +95,10 @@ import {
   sessionPlayerScoresMatchWordMaps,
 } from '@/lib/online/live-standings';
 import { formatPlayRulesLabel } from '@/lib/online/play-rules-label';
-import { createSubmitWordProfile } from '@/lib/online/submit-word-profile';
+import {
+  createSubmitWordProfile,
+  flushSubmitLatencySummary,
+} from '@/lib/online/submit-word-profile';
 import { buildLetterKeys, computeLetterKeySize } from '@/lib/game/letter-keyboard';
 import { letterKeyFontSizeForKeySize } from '@/lib/game/letter-key-style';
 import { acceptWord, type PlayWordErrorCode } from '@/lib/game/play-word';
@@ -222,6 +226,8 @@ export default function OnlinePlayScreen() {
     void purgeStaleActiveRoundCaches();
   }, []);
 
+  const staleHasLeftReconcileRef = useRef<string | null>(null);
+
   const myHasLeft = session?.players[myUid]?.hasLeft === true;
   usePlayerOnlinePresence(
     gameId,
@@ -234,6 +240,27 @@ export default function OnlinePlayScreen() {
       !leavingIntentionallyRef.current,
     ),
   );
+
+  useEffect(() => {
+    if (!gameId || !myUid || !session || session.status !== 'playing') {
+      return;
+    }
+    if (session.players[myUid]?.hasLeft !== true) {
+      return;
+    }
+    const roundKey = `${session.baseWordRound ?? 0}:${session.timerEndsAt ?? 0}`;
+    if (staleHasLeftReconcileRef.current === roundKey) {
+      return;
+    }
+    staleHasLeftReconcileRef.current = roundKey;
+    const { name, gender, avatarColorIndex } = useProfileStore.getState();
+    void rejoinExistingPlayer(gameId, myUid, { name, gender, avatarColorIndex }).catch((error) => {
+      staleHasLeftReconcileRef.current = null;
+      if (__DEV__) {
+        console.warn('rejoinExistingPlayer stale hasLeft', error);
+      }
+    });
+  }, [gameId, myUid, session]);
 
   useEffect(() => {
     if (!gameId || !myUid) {
@@ -299,6 +326,7 @@ export default function OnlinePlayScreen() {
     }
     const sub = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'background') {
+        flushSubmitLatencySummary();
         void cacheActiveRoundProgress(gameId, myUid, session, myWordsRef.current);
       }
     });

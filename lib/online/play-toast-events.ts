@@ -99,6 +99,11 @@ function detectRosterEvents(prev: GameSession, curr: GameSession, myUid: string)
     }
 
     if (wasPresent && !wasOnline && isOnline && player.hasLeft === true) {
+      const prevWordCount = prev.players[playerId]?.wordCount ?? 0;
+      const currWordCount = player.wordCount ?? 0;
+      if (prevWordCount === 0 && currWordCount <= 1) {
+        continue;
+      }
       events.push({
         type: 'player_joined',
         playerId,

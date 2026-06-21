@@ -33,7 +33,10 @@ import { maskResultsForEarlyExit } from '@/lib/online/mask-results-for-viewer';
 import { buildOnlineResultsView } from '@/lib/online/online-results-data';
 import { resolvePostJoinRoute } from '@/lib/online/post-join-route';
 import { rejoinOnlineRound } from '@/lib/online/rejoin-online-round';
-import { notifyRoundFinishedOnce } from '@/lib/online/round-finished-notification-once';
+import {
+  notifyRoundFinishedOnce,
+  isRoundFinishedNotified,
+} from '@/lib/online/round-finished-notification-once';
 import { useFirebaseStore } from '@/store/firebase-store';
 import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
 import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
@@ -63,6 +66,7 @@ export default function OnlineLeftRoundScreen() {
   const finishedArchiveRef = useRef(false);
   const finishedNotifyRef = useRef(false);
   const freezeAttemptedRef = useRef(false);
+  const pendingMarkedRoundRef = useRef<number | null>(null);
 
   const roundStillActive = session?.status === 'playing';
   const displaySession = frozenRound?.session ?? session;
@@ -86,6 +90,18 @@ export default function OnlineLeftRoundScreen() {
   }, []);
 
   useEffect(() => {
+    if (skipAutoLeaveRef.current || rejoinLoading || !gameId || !myUid) {
+      return;
+    }
+    const round = session?.baseWordRound ?? 0;
+    if (pendingMarkedRoundRef.current === round) {
+      return;
+    }
+    pendingMarkedRoundRef.current = round;
+    void markPendingRoundArchive(gameId, round, myUid);
+  }, [gameId, myUid, rejoinLoading, session?.baseWordRound]);
+
+  useEffect(() => {
     if (
       skipAutoLeaveRef.current ||
       rejoinLoading ||
@@ -97,11 +113,16 @@ export default function OnlineLeftRoundScreen() {
     }
     const me = session?.players[myUid];
     if (me && me.hasLeft !== true) {
-      void leaveGameSession(gameId, myUid);
-      return;
-    }
-    if (me?.hasLeft === true) {
-      void markPendingRoundArchive(gameId, session.baseWordRound ?? 0, myUid);
+      void (async () => {
+        try {
+          await leaveGameSession(gameId, myUid);
+          await markPendingRoundArchive(gameId, session.baseWordRound ?? 0, myUid);
+        } catch (error) {
+          if (__DEV__) {
+            console.warn('left screen leaveGameSession', error);
+          }
+        }
+      })();
     }
   }, [gameId, myUid, rejoinLoading, session]);
 
@@ -188,8 +209,13 @@ export default function OnlineLeftRoundScreen() {
     if (!gameId || !session || session.status !== 'finished' || finishedNotifyRef.current) {
       return;
     }
-    finishedNotifyRef.current = true;
-    void notifyRoundFinishedOnce(gameId, session.baseWordRound ?? 0, session.baseWord);
+    const round = session.baseWordRound ?? 0;
+    void (async () => {
+      const sent = await notifyRoundFinishedOnce(gameId, round, session.baseWord);
+      if (sent || (await isRoundFinishedNotified(gameId, round))) {
+        finishedNotifyRef.current = true;
+      }
+    })();
   }, [gameId, session]);
 
   const viewData = useMemo(() => {

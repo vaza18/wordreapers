@@ -125,11 +125,14 @@ async function syncWorkItem(item: SyncWorkItem, context: SyncCoordinatorContext)
     return;
   }
 
+  if (item.fromPending) {
+    void notifyRoundFinishedOnce(item.gameId, item.baseWordRound, session.baseWord);
+  }
+
   if (uid && session.players[uid]) {
     await persistArchiveIfNeeded(item.gameId, uid, session);
     if (item.fromPending) {
       await clearPendingRoundArchive(item.gameId, item.baseWordRound);
-      void notifyRoundFinishedOnce(item.gameId, item.baseWordRound, session.baseWord);
     }
   }
 }

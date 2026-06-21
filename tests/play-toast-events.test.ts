@@ -433,6 +433,35 @@ describe('detectPlayToastEvents', () => {
     ]);
   });
 
+  it('does not treat first word with stale hasLeft as player_joined', () => {
+    const prev = session({
+      org: { name: 'Org', wordCount: 0, score: 0, online: true },
+      a: {
+        name: 'Василь',
+        gender: 'm',
+        wordCount: 0,
+        score: 0,
+        online: false,
+        hasLeft: true,
+      },
+    });
+    const curr = session({
+      org: { name: 'Org', wordCount: 0, score: 0, online: true },
+      a: {
+        name: 'Василь',
+        gender: 'm',
+        wordCount: 1,
+        score: 1,
+        online: true,
+        hasLeft: true,
+      },
+    });
+
+    expect(
+      detectPlayToastEvents(prev, curr, 'org').filter((event) => event.type === 'player_joined'),
+    ).toEqual([]);
+  });
+
   it('returns nothing outside playing status', () => {
     const prev = session({ org: { name: 'Org', wordCount: 0, score: 0, online: true } });
     const curr = session(
