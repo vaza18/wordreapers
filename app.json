@@ -25,8 +25,8 @@
       "package": "com.wordreapers.app",
       "blockedPermissions": ["android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"],
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icons/app-icon.png",
-        "backgroundColor": "#7b5323"
+        "foregroundImage": "./assets/icons/adaptive-icon-foreground.png",
+        "backgroundColor": "#1579f1"
       }
     },
     "androidStatusBar": {

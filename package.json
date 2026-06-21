@@ -27,6 +27,7 @@
     "legal:bundle": "tsx scripts/bundle-legal-docs.ts",
     "legal:pages": "tsx scripts/build-legal-pages.ts",
     "icons:generate": "tsx scripts/generate-app-icons.ts",
+    "icons:adaptive": "tsx scripts/generate-adaptive-icon.ts",
     "eas-build-post-install": "npm run dict:all",
     "eas-build-pre-install": "npm install -g npm@11.6.2",
     "sounds:generate": "tsx scripts/generate-feedback-sounds.ts",
