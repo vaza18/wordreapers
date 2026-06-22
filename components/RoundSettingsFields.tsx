@@ -4,6 +4,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { DurationSlider } from '@/components/DurationSlider';
 import { FeedbackPressable } from '@/components/FeedbackPressable';
+import { InfoIcon } from '@/components/HeaderIcons';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { SegmentedControl } from '@/components/SegmentedControl';
 import { SettingSwitch } from '@/components/SettingSwitch';
@@ -54,7 +55,7 @@ export function RoundSettingsFields({
           onPress={() => setShowUniqueBonusHint(true)}
           style={styles.infoButton}
         >
-          <Text style={styles.infoLabel}>ℹ</Text>
+          <InfoIcon size={16} color={colors.accent} />
         </FeedbackPressable>
       </View>
       <SegmentedControl
@@ -108,10 +109,6 @@ const styles = StyleSheet.create({
   },
   infoButton: {
     padding: spacing.xs,
-  },
-  infoLabel: {
-    fontSize: 16,
-    color: colors.accent,
   },
   modalOverlay: {
     flex: 1,

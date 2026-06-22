@@ -105,6 +105,9 @@ export default function OrganizerSoloPlayScreen() {
   const [draft, setDraft] = useState('');
   const [draftKeyIndices, setDraftKeyIndices] = useState<number[]>([]);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [scrollRequest, setScrollRequest] = useState<{ normalized: string; id: number } | null>(
+    null,
+  );
   const [showGameMenu, setShowGameMenu] = useState(false);
   const [showAddTimeModal, setShowAddTimeModal] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -232,6 +235,7 @@ export default function OrganizerSoloPlayScreen() {
         badge: null,
         at: Date.now(),
       });
+      setScrollRequest({ normalized: result.normalized, id: Date.now() });
       setDraft('');
       setDraftKeyIndices([]);
       lastValidatedDraft.current = '';
@@ -398,6 +402,8 @@ export default function OrganizerSoloPlayScreen() {
                 entries={scoredWords}
                 displays={displays}
                 draftPrefix={draft}
+                scrollToNormalized={scrollRequest?.normalized ?? null}
+                scrollToRequestId={scrollRequest?.id}
                 showScoreBadges={false}
                 showOverlapPeers={false}
               />

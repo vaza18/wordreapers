@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { playerAvatarColors } from '@/constants/player-avatars';
-import { WORD_LIST_ROW_HEIGHT } from '@/constants/notebook';
+import { notebookRowLineStyle } from '@/components/notebook/NotebookLineFiller';
 import { colors, spacing } from '@/constants/theme';
 import type { GlobalResultWordRow, GlobalWordAuthor } from '@/lib/game/results-view';
 
@@ -22,7 +22,7 @@ export function ResultsGlobalWordList({
   return (
     <View style={styles.list}>
       {rows.map((row) => (
-        <View key={row.normalized} style={styles.row}>
+        <View key={row.normalized} style={[notebookRowLineStyle.row, styles.row]}>
           <Text style={styles.word}>{row.display}</Text>
           <View style={styles.badges}>
             {showAuthors
@@ -65,7 +65,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
-    height: WORD_LIST_ROW_HEIGHT,
     paddingHorizontal: spacing.sm,
   },
   word: {

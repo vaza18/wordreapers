@@ -9,6 +9,8 @@ export interface OnlinePlayWordListSectionProps {
   entries: readonly OnlineWordListRow[];
   displays: readonly string[];
   draftPrefix: string;
+  scrollToNormalized?: string | null;
+  scrollToRequestId?: number;
   feedback: string | null;
   backgroundSyncing: boolean;
   showScoreBadges: boolean;
@@ -22,6 +24,8 @@ export const OnlinePlayWordListSection = memo(function OnlinePlayWordListSection
   entries,
   displays,
   draftPrefix,
+  scrollToNormalized = null,
+  scrollToRequestId,
   feedback,
   backgroundSyncing,
   showScoreBadges,
@@ -33,6 +37,8 @@ export const OnlinePlayWordListSection = memo(function OnlinePlayWordListSection
         entries={entries}
         displays={displays}
         draftPrefix={draftPrefix}
+        scrollToNormalized={scrollToNormalized}
+        scrollToRequestId={scrollToRequestId}
         showScoreBadges={showScoreBadges}
         showOverlapPeers={showOverlapPeers}
       />

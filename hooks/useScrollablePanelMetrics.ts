@@ -14,7 +14,7 @@ export interface PanelScrollMetrics {
 }
 
 const MIN_THUMB_HEIGHT = 28;
-const SCROLL_OVERFLOW_THRESHOLD = 4;
+export const SCROLL_OVERFLOW_THRESHOLD = 4;
 
 /**
  * Tracks scroll metrics for a flex-growing panel and derives a visible scrollbar thumb.

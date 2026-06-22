@@ -156,6 +156,9 @@ export default function OnlinePlayScreen() {
   const [showAddTimeModal, setShowAddTimeModal] = useState(false);
   const [backgroundSyncing, setBackgroundSyncing] = useState(false);
   const [optimisticWords, setOptimisticWords] = useState<Map<string, StoredPlayerWord>>(new Map());
+  const [scrollRequest, setScrollRequest] = useState<{ normalized: string; id: number } | null>(
+    null,
+  );
   const serverNow = useServerNow(250);
   const [roundOverPendingResults, setRoundOverPendingResults] = useState(false);
   const roundEnded = session?.status === 'finished' || roundOverPendingResults;
@@ -624,6 +627,7 @@ export default function OnlinePlayScreen() {
         next.set(result.normalized, optimisticWord);
         return next;
       });
+      setScrollRequest({ normalized: result.normalized, id: Date.now() });
       setDraft('');
       setDraftKeyIndices([]);
       setFeedback(t('game.wordAccepted'));
@@ -1012,6 +1016,8 @@ export default function OnlinePlayScreen() {
             entries={scoredWords}
             displays={displays}
             draftPrefix={draft}
+            scrollToNormalized={scrollRequest?.normalized ?? null}
+            scrollToRequestId={scrollRequest?.id}
             feedback={feedback}
             backgroundSyncing={backgroundSyncing}
             showScoreBadges={showPointUi && hasOpponent}

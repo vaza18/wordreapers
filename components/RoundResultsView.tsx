@@ -1,10 +1,19 @@
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
-import { useScrollablePanelMetrics } from '@/hooks/useScrollablePanelMetrics';
+import {
+  NotebookLineFiller,
+  notebookFillerRowCount,
+  notebookListCanScroll,
+} from '@/components/notebook/NotebookLineFiller';
+import { NotebookRuledFill } from '@/components/notebook/NotebookRuledFill';
+import {
+  SCROLL_OVERFLOW_THRESHOLD,
+  useScrollablePanelMetrics,
+} from '@/hooks/useScrollablePanelMetrics';
 import { ResultsByPlayer } from '@/components/ResultsByPlayer';
 import { ResultsGlobalWordList } from '@/components/ResultsGlobalWordList';
 import { Screen } from '@/components/Screen';
@@ -52,9 +61,28 @@ export function RoundResultsView({
 }: RoundResultsViewProps) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<ResultsTab>('all');
+  const [playerBodyHeight, setPlayerBodyHeight] = useState(0);
   const panelScroll = useScrollablePanelMetrics();
   const roundDurationLabel =
     roundDurationSeconds != null ? formatRoundDuration(roundDurationSeconds) : null;
+  const viewportHeight = panelScroll.scrollMetrics.viewportHeight;
+  const contentHeight = panelScroll.scrollMetrics.contentHeight;
+  const fillerRowCount =
+    tab === 'all' ? notebookFillerRowCount(globalWords.length, viewportHeight, spacing.md) : 0;
+  const playersRuledHeight =
+    tab === 'players' && viewportHeight > 0 ? Math.max(viewportHeight, playerBodyHeight) : 0;
+  const canScroll =
+    tab === 'all'
+      ? notebookListCanScroll(globalWords.length, viewportHeight, spacing.md)
+      : viewportHeight > 0 && contentHeight > viewportHeight + SCROLL_OVERFLOW_THRESHOLD;
+
+  const onPlayerBodyLayout = useCallback(
+    (event: { nativeEvent: { layout: { height: number } } }) => {
+      const nextHeight = event.nativeEvent.layout.height;
+      setPlayerBodyHeight((prev) => (prev === nextHeight ? prev : nextHeight));
+    },
+    [],
+  );
 
   return (
     <Screen scroll={false} style={styles.screen}>
@@ -67,6 +95,7 @@ export function RoundResultsView({
             active={tab === 'all'}
             onPress={() => {
               setTab('all');
+              setPlayerBodyHeight(0);
             }}
           />
           <TabButton
@@ -74,6 +103,7 @@ export function RoundResultsView({
             active={tab === 'players'}
             onPress={() => {
               setTab('players');
+              setPlayerBodyHeight(0);
             }}
           />
         </View>
@@ -94,24 +124,13 @@ export function RoundResultsView({
         ) : null}
       </View>
 
-      <ScrollableWordPanel
-        style={styles.wordPanel}
-        scrollbar={panelScroll.scrollbar}
-        scrollMetrics={panelScroll.scrollMetrics}
-      >
+      <ScrollableWordPanel style={styles.wordPanel} scrollbar={panelScroll.scrollbar}>
         <View style={styles.panelScrollViewport} onLayout={panelScroll.onViewportLayout}>
           <ScrollView
             style={styles.panelScroll}
-            contentContainerStyle={[
-              styles.panelScrollContent,
-              panelScroll.scrollMetrics.viewportHeight > 0
-                ? {
-                    flexGrow: 1,
-                    minHeight: panelScroll.scrollMetrics.viewportHeight,
-                  }
-                : null,
-            ]}
+            contentContainerStyle={styles.panelScrollContent}
             showsVerticalScrollIndicator={false}
+            scrollEnabled={canScroll}
             keyboardShouldPersistTaps="handled"
             onScroll={panelScroll.onScroll}
             onScrollBeginDrag={() => {
@@ -120,26 +139,34 @@ export function RoundResultsView({
             onContentSizeChange={panelScroll.onContentSizeChange}
             scrollEventThrottle={panelScroll.scrollEventThrottle}
           >
-            {tab === 'all' ? (
-              <ResultsGlobalWordList
-                rows={globalWords}
-                showAuthors={showWordAuthors}
-                showScoreBadges={showScores}
-              />
-            ) : (
-              <ResultsByPlayer
-                rankGroups={playerRankGroups}
-                pointsShort={t('game.pointsShort')}
-                wordsShort={t('game.wordsShort')}
-                youLabel={t('game.resultsYou')}
-                highlightPlayerId={highlightPlayerId}
-                defaultExpandedPlayerId={defaultExpandedPlayerId}
-                showScores={showScores}
-                showScoreBadges={showScores}
-                showOverlapPeers={showWordAuthors}
-                showWordsPerMinute={roundDurationSeconds != null}
-              />
-            )}
+            <View style={styles.scrollBody}>
+              {tab === 'players' && playersRuledHeight > 0 ? (
+                <NotebookRuledFill height={playersRuledHeight} style={styles.ruledBackdrop} />
+              ) : null}
+              {tab === 'all' ? (
+                <ResultsGlobalWordList
+                  rows={globalWords}
+                  showAuthors={showWordAuthors}
+                  showScoreBadges={showScores}
+                />
+              ) : (
+                <View onLayout={onPlayerBodyLayout} style={styles.playerBody}>
+                  <ResultsByPlayer
+                    rankGroups={playerRankGroups}
+                    pointsShort={t('game.pointsShort')}
+                    wordsShort={t('game.wordsShort')}
+                    youLabel={t('game.resultsYou')}
+                    highlightPlayerId={highlightPlayerId}
+                    defaultExpandedPlayerId={defaultExpandedPlayerId}
+                    showScores={showScores}
+                    showScoreBadges={showScores}
+                    showOverlapPeers={showWordAuthors}
+                    showWordsPerMinute={roundDurationSeconds != null}
+                  />
+                </View>
+              )}
+              {tab === 'all' ? <NotebookLineFiller rowCount={fillerRowCount} /> : null}
+            </View>
           </ScrollView>
         </View>
       </ScrollableWordPanel>
@@ -235,6 +262,21 @@ const styles = StyleSheet.create({
   panelScrollContent: {
     paddingHorizontal: spacing.sm,
     paddingBottom: spacing.md,
+  },
+  scrollBody: {
+    flexGrow: 1,
+    backgroundColor: colors.notebookPaper,
+    position: 'relative',
+  },
+  ruledBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 0,
+  },
+  playerBody: {
+    zIndex: 1,
   },
   actions: {
     padding: spacing.md,

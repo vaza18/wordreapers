@@ -2,47 +2,25 @@ import type { ReactNode } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { NotebookHolesHeader } from '@/components/notebook/NotebookHolesHeader';
-import { NotebookRuledFill } from '@/components/notebook/NotebookRuledFill';
 import { NOTEBOOK_HOLES_HEADER_HEIGHT } from '@/constants/notebook';
-import type { PanelScrollbarState, PanelScrollMetrics } from '@/hooks/useScrollablePanelMetrics';
+import type { PanelScrollbarState } from '@/hooks/useScrollablePanelMetrics';
 import { colors, radii } from '@/constants/theme';
 
 interface ScrollableWordPanelProps {
   children: ReactNode;
   scrollbar?: PanelScrollbarState;
-  scrollMetrics?: PanelScrollMetrics;
   style?: StyleProp<ViewStyle>;
 }
 
 /**
  * Notebook-styled flex-growing frame for scrollable accepted-word lists.
+ * Ruled paper lives inside scroll content (not here) for native scroll sync.
  */
-export function ScrollableWordPanel({
-  children,
-  scrollbar,
-  scrollMetrics,
-  style,
-}: ScrollableWordPanelProps) {
-  const ruledHeight = scrollMetrics
-    ? Math.max(scrollMetrics.viewportHeight, scrollMetrics.contentHeight)
-    : 0;
-
+export function ScrollableWordPanel({ children, scrollbar, style }: ScrollableWordPanelProps) {
   return (
     <View style={[styles.panel, style]}>
       <View style={styles.contentRow}>
         <View style={styles.body}>
-          {scrollMetrics && ruledHeight > 0 ? (
-            <NotebookRuledFill
-              height={ruledHeight + scrollMetrics.scrollOffset}
-              style={{
-                position: 'absolute',
-                top: NOTEBOOK_HOLES_HEADER_HEIGHT - scrollMetrics.scrollOffset,
-                left: 0,
-                right: 0,
-                zIndex: 0,
-              }}
-            />
-          ) : null}
           <View style={styles.scrollContent}>{children}</View>
         </View>
         {scrollbar?.visible ? (
@@ -108,7 +86,8 @@ const styles = StyleSheet.create({
   },
   scrollbarTrack: {
     width: SCROLLBAR_WIDTH,
-    marginVertical: 6,
+    marginTop: NOTEBOOK_HOLES_HEADER_HEIGHT + 6,
+    marginBottom: 6,
     marginRight: 4,
     borderRadius: SCROLLBAR_WIDTH / 2,
     backgroundColor: 'rgba(0, 0, 0, 0.08)',
