@@ -80,12 +80,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderTertiary,
     borderRadius: radii.md,
+    boxShadow: '2px 2px 2px 0px rgba(0, 0, 0, 0.1)',
     overflow: 'hidden',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 5,
   },
   contentRow: {
     flex: 1,
