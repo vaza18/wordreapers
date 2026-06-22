@@ -26,8 +26,7 @@ export const colors = {
   /** Notebook word-list panel */
   notebookPaper: '#FFFFFF',
   notebookLine: '#A8C4E0',
-  notebookHole: '#2A2A2A',
-  notebookHoleRing: '#888888',
+  notebookHole: '#F5F3ED',
 } as const;
 
 export const spacing = {

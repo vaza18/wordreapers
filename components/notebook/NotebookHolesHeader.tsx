@@ -4,9 +4,7 @@ import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import {
   NOTEBOOK_HOLES_BAND_HEIGHT,
   NOTEBOOK_HOLES_END_GAP,
-  NOTEBOOK_HOLES_PADDING_HORIZONTAL,
   NOTEBOOK_HOLES_PADDING_TOP,
-  NOTEBOOK_HOLES_SHADOW_HEIGHT,
   NOTEBOOK_HOLES_STEP,
   NOTEBOOK_HOLE_DIAMETER,
 } from '@/constants/notebook';
@@ -37,7 +35,6 @@ export function NotebookHolesHeader() {
           </View>
         ))}
       </View>
-      <View style={styles.shadowStrip} />
     </View>
   );
 }
@@ -46,7 +43,6 @@ const styles = StyleSheet.create({
   wrapper: {
     backgroundColor: colors.notebookPaper,
     paddingTop: NOTEBOOK_HOLES_PADDING_TOP,
-    paddingHorizontal: NOTEBOOK_HOLES_PADDING_HORIZONTAL,
     paddingBottom: 0,
   },
   holesRow: {
@@ -64,12 +60,7 @@ const styles = StyleSheet.create({
     width: NOTEBOOK_HOLE_DIAMETER,
     height: NOTEBOOK_HOLE_DIAMETER,
     borderRadius: NOTEBOOK_HOLE_DIAMETER / 2,
-    backgroundColor: colors.notebookHole,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.notebookHoleRing,
-  },
-  shadowStrip: {
-    height: NOTEBOOK_HOLES_SHADOW_HEIGHT,
-    backgroundColor: 'rgba(0, 0, 0, 0.06)',
+    backgroundColor: colors.backgroundSecondary,
+    boxShadow: '2px 2px 2px 0px rgba(0, 0, 0, 0.1) inset',
   },
 });
