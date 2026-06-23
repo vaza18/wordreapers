@@ -1,7 +1,8 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 export interface BaseWordSuggestItem {
   display: string;
@@ -19,6 +20,64 @@ interface BaseWordSuggestDropdownProps {
 const ROW_HEIGHT = 40;
 const MAX_LIST_HEIGHT = 200;
 
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    dropdown: {
+      backgroundColor: colors.backgroundPrimary,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSecondary,
+      borderRadius: radii.sm,
+      marginTop: spacing.xs,
+      overflow: 'hidden',
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.08,
+      shadowRadius: 10,
+      elevation: 3,
+    },
+    item: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      minHeight: ROW_HEIGHT,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderTertiary,
+    },
+    itemActive: {
+      backgroundColor: colors.accentMuted,
+    },
+    itemWord: {
+      flex: 1,
+      fontSize: 15,
+      fontWeight: '500',
+      color: colors.textPrimary,
+    },
+    itemWordActive: {
+      color: '#085041',
+    },
+    itemMeta: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      marginLeft: spacing.sm,
+    },
+    itemMetaActive: {
+      color: '#0F6E56',
+    },
+    moreRow: {
+      backgroundColor: colors.backgroundSecondary,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+    },
+    moreText: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      textAlign: 'center',
+    },
+  });
+}
+
 /**
  * Scrollable autocomplete dropdown for base word setup (mockup screen 3).
  */
@@ -28,6 +87,8 @@ export function BaseWordSuggestDropdown({
   moreLabel,
   onSelect,
 }: BaseWordSuggestDropdownProps) {
+  const styles = useThemedStyles(createStyles);
+
   if (items.length === 0) {
     return null;
   }
@@ -72,59 +133,3 @@ export function BaseWordSuggestDropdown({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  dropdown: {
-    backgroundColor: colors.backgroundPrimary,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSecondary,
-    borderRadius: radii.sm,
-    marginTop: spacing.xs,
-    overflow: 'hidden',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: ROW_HEIGHT,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderTertiary,
-  },
-  itemActive: {
-    backgroundColor: colors.accentMuted,
-  },
-  itemWord: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '500',
-    color: colors.textPrimary,
-  },
-  itemWordActive: {
-    color: '#085041',
-  },
-  itemMeta: {
-    fontSize: 12,
-    color: colors.textTertiary,
-    marginLeft: spacing.sm,
-  },
-  itemMetaActive: {
-    color: '#0F6E56',
-  },
-  moreRow: {
-    backgroundColor: colors.backgroundSecondary,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
-  moreText: {
-    fontSize: 12,
-    color: colors.textTertiary,
-    textAlign: 'center',
-  },
-});

@@ -10,6 +10,12 @@ import {
   type GameSetupPreferences,
 } from '@/lib/settings/game-setup-preferences';
 import {
+  APPEARANCE_MODE_STORAGE_KEY,
+  DEFAULT_APPEARANCE_MODE,
+  parseAppearanceMode,
+  type AppearanceMode,
+} from '@/lib/settings/appearance-mode';
+import {
   DEFAULT_BUTTON_FEEDBACK,
   DEFAULT_TIMER_ALERT_FEEDBACK,
   DEFAULT_WORD_ACCEPTED_FEEDBACK,
@@ -63,11 +69,13 @@ async function persistGameSetup(preferences: GameSetupPreferences): Promise<void
 /** App-wide preferences persisted via AsyncStorage. */
 export interface SettingsState {
   locale: AppLocale;
+  appearanceMode: AppearanceMode;
   buttonFeedback: FeedbackMode;
   wordAcceptedFeedback: FeedbackMode;
   timerAlertMode: FeedbackMode;
   gameSetup: GameSetupPreferences;
   setLocale: (locale: AppLocale) => void;
+  setAppearanceMode: (mode: AppearanceMode) => void;
   setButtonFeedback: (mode: FeedbackMode) => void;
   setWordAcceptedFeedback: (mode: FeedbackMode) => void;
   setTimerAlertMode: (mode: FeedbackMode) => void;
@@ -75,12 +83,14 @@ export interface SettingsState {
   setGameSetupUniqueBonusMode: (uniqueBonusMode: UniqueBonusMode) => void;
   setGameSetupAllowProperNouns: (allow: boolean) => void;
   setGameSetupAllowSlang: (allow: boolean) => void;
+  hydrateAppearancePreference: () => Promise<void>;
   hydrateFeedbackPreferences: () => Promise<void>;
   hydrateGameSetupPreferences: () => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   locale: 'uk',
+  appearanceMode: DEFAULT_APPEARANCE_MODE,
   buttonFeedback: DEFAULT_BUTTON_FEEDBACK,
   wordAcceptedFeedback: DEFAULT_WORD_ACCEPTED_FEEDBACK,
   timerAlertMode: DEFAULT_TIMER_ALERT_FEEDBACK,
@@ -88,6 +98,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   setLocale: (locale) => {
     set({ locale });
+  },
+
+  setAppearanceMode: (mode) => {
+    set({ appearanceMode: mode });
+    void AsyncStorage.setItem(APPEARANCE_MODE_STORAGE_KEY, mode);
   },
 
   setButtonFeedback: (mode) => {
@@ -127,6 +142,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const gameSetup = { ...get().gameSetup, allowSlang };
     set({ gameSetup });
     void persistGameSetup(gameSetup);
+  },
+
+  hydrateAppearancePreference: async () => {
+    const raw = await AsyncStorage.getItem(APPEARANCE_MODE_STORAGE_KEY);
+    set({ appearanceMode: parseAppearanceMode(raw) });
   },
 
   hydrateFeedbackPreferences: async () => {

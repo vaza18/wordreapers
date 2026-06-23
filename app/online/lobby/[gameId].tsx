@@ -9,7 +9,9 @@ import { LobbyQrCode } from '@/components/LobbyQrCode';
 import { PlayerAvatar } from '@/components/PlayerAvatar';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { Screen } from '@/components/Screen';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { formatRoomCodeDisplay } from '@/lib/firebase/format-room-code';
 import {
   startGameSession,
@@ -46,6 +48,8 @@ import { useFirebaseStore } from '@/store/firebase-store';
  * Waiting lobby — room code, players; base-word picker starts the round.
  */
 export default function LobbyScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const navigation = useNavigation();
   const { gameId: rawGameId } = useLocalSearchParams<{ gameId: string }>();
@@ -450,117 +454,119 @@ export default function LobbyScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  codeCard: {
-    backgroundColor: colors.backgroundPrimary,
-    borderRadius: radii.md,
-    padding: spacing.md,
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  code: {
-    fontSize: 28,
-    fontWeight: '600',
-    color: colors.accent,
-    letterSpacing: 6,
-  },
-  codeLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  pickerBanner: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#633806',
-    backgroundColor: '#FAEEDA',
-    borderRadius: radii.sm,
-    padding: spacing.sm,
-    textAlign: 'center',
-  },
-  baseWordBanner: {
-    fontSize: 13,
-    color: colors.accent,
-    textAlign: 'center',
-  },
-  baseWordBannerPressable: {
-    backgroundColor: colors.accentMuted,
-    borderRadius: radii.sm,
-    padding: spacing.sm,
-    gap: spacing.xs,
-  },
-  baseWordChangeHint: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  settingsBanner: {
-    fontSize: 12,
-    color: '#633806',
-    backgroundColor: '#FAEEDA',
-    borderRadius: radii.sm,
-    padding: spacing.sm,
-    textAlign: 'center',
-  },
-  playableWordsHint: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: spacing.xs,
-  },
-  sectionLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.textSecondary,
-  },
-  playerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  playerName: {
-    flex: 1,
-    fontSize: 16,
-    color: colors.textPrimary,
-  },
-  organizerTag: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.accent,
-    backgroundColor: colors.accentMuted,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radii.sm,
-  },
-  pickerTag: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#633806',
-    backgroundColor: '#FAEEDA',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radii.sm,
-  },
-  offlineTag: {
-    fontSize: 14,
-  },
-  startHint: {
-    fontSize: 12,
-    color: colors.textTertiary,
-    textAlign: 'center',
-  },
-  waitingHint: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  error: {
-    color: '#E24B4A',
-    fontSize: 14,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    center: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    codeCard: {
+      backgroundColor: colors.backgroundPrimary,
+      borderRadius: radii.md,
+      padding: spacing.md,
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    code: {
+      fontSize: 28,
+      fontWeight: '600',
+      color: colors.accent,
+      letterSpacing: 6,
+    },
+    codeLabel: {
+      fontSize: 12,
+      color: colors.textSecondary,
+    },
+    pickerBanner: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: '#633806',
+      backgroundColor: '#FAEEDA',
+      borderRadius: radii.sm,
+      padding: spacing.sm,
+      textAlign: 'center',
+    },
+    baseWordBanner: {
+      fontSize: 13,
+      color: colors.accent,
+      textAlign: 'center',
+    },
+    baseWordBannerPressable: {
+      backgroundColor: colors.accentMuted,
+      borderRadius: radii.sm,
+      padding: spacing.sm,
+      gap: spacing.xs,
+    },
+    baseWordChangeHint: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    settingsBanner: {
+      fontSize: 12,
+      color: '#633806',
+      backgroundColor: '#FAEEDA',
+      borderRadius: radii.sm,
+      padding: spacing.sm,
+      textAlign: 'center',
+    },
+    playableWordsHint: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      marginTop: spacing.xs,
+    },
+    sectionLabel: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: colors.textSecondary,
+    },
+    playerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.xs,
+    },
+    playerName: {
+      flex: 1,
+      fontSize: 16,
+      color: colors.textPrimary,
+    },
+    organizerTag: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.accent,
+      backgroundColor: colors.accentMuted,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+      borderRadius: radii.sm,
+    },
+    pickerTag: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: '#633806',
+      backgroundColor: '#FAEEDA',
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+      borderRadius: radii.sm,
+    },
+    offlineTag: {
+      fontSize: 14,
+    },
+    startHint: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      textAlign: 'center',
+    },
+    waitingHint: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    error: {
+      color: '#E24B4A',
+      fontSize: 14,
+    },
+  });
+}

@@ -15,7 +15,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { PlayerAvatar } from '@/components/PlayerAvatar';
 import { playerAvatarColors, playerAvatarSwatch } from '@/constants/player-avatars';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import type { GlobalWordAuthor } from '@/lib/game/results-view';
 import { splitResultWordAuthors } from '@/lib/ui/result-word-authors';
 import {
@@ -55,6 +56,7 @@ function AuthorNameLine({
   author: GlobalWordAuthor;
   showUniqueBadge: boolean;
 }) {
+  const styles = useThemedStyles(createStyles);
   const palette = playerAvatarColors(author.avatarColorIndex);
 
   return (
@@ -77,6 +79,7 @@ export function ResultWordAuthorAvatars({
   authors,
   showUniqueBadge = false,
 }: ResultWordAuthorAvatarsProps) {
+  const styles = useThemedStyles(createStyles);
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [reveal, setReveal] = useState<RevealState>(null);
@@ -232,92 +235,94 @@ export function ResultWordAuthorAvatars({
   );
 }
 
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  avatarSlot: {
-    width: AVATAR_SIZE,
-    height: AVATAR_SIZE,
-  },
-  avatarAnchor: {
-    width: AVATAR_SIZE,
-    height: AVATAR_SIZE,
-  },
-  avatarButton: {
-    borderRadius: AVATAR_SIZE / 2,
-  },
-  overflowSlot: {
-    height: AVATAR_SIZE,
-    justifyContent: 'center',
-  },
-  overflowAnchor: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  overflowButton: {
-    minWidth: AVATAR_SIZE,
-    height: AVATAR_SIZE,
-    paddingHorizontal: 4,
-    borderRadius: AVATAR_SIZE / 2,
-    backgroundColor: colors.backgroundSecondary,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderTertiary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  overflowLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.textSecondary,
-  },
-  popoverBackdrop: {
-    backgroundColor: 'rgba(0, 0, 0, 0.12)',
-  },
-  popoverBubble: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 5,
-    borderRadius: radii.sm,
-    borderWidth: 1,
-    maxWidth: 280,
-  },
-  tooltipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  overflowPopover: {
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.xs,
-    borderRadius: radii.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderTertiary,
-    backgroundColor: colors.notebookPaper,
-    maxWidth: 280,
-  },
-  overflowScroll: {
-    maxHeight: OVERFLOW_LIST_MAX_HEIGHT,
-  },
-  overflowScrollContent: {
-    gap: spacing.xs,
-    paddingHorizontal: spacing.xs,
-  },
-  overflowRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: 2,
-  },
-  overflowName: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  overflowX2: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.accent,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    avatarSlot: {
+      width: AVATAR_SIZE,
+      height: AVATAR_SIZE,
+    },
+    avatarAnchor: {
+      width: AVATAR_SIZE,
+      height: AVATAR_SIZE,
+    },
+    avatarButton: {
+      borderRadius: AVATAR_SIZE / 2,
+    },
+    overflowSlot: {
+      height: AVATAR_SIZE,
+      justifyContent: 'center',
+    },
+    overflowAnchor: {
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    overflowButton: {
+      minWidth: AVATAR_SIZE,
+      height: AVATAR_SIZE,
+      paddingHorizontal: 4,
+      borderRadius: AVATAR_SIZE / 2,
+      backgroundColor: colors.backgroundSecondary,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderTertiary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    overflowLabel: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.textSecondary,
+    },
+    popoverBackdrop: {
+      backgroundColor: 'rgba(0, 0, 0, 0.12)',
+    },
+    popoverBubble: {
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 5,
+      borderRadius: radii.sm,
+      borderWidth: 1,
+      maxWidth: 280,
+    },
+    tooltipText: {
+      fontSize: 12,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
+    overflowPopover: {
+      paddingVertical: spacing.xs,
+      paddingHorizontal: spacing.xs,
+      borderRadius: radii.sm,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderTertiary,
+      backgroundColor: colors.notebookPaper,
+      maxWidth: 280,
+    },
+    overflowScroll: {
+      maxHeight: OVERFLOW_LIST_MAX_HEIGHT,
+    },
+    overflowScrollContent: {
+      gap: spacing.xs,
+      paddingHorizontal: spacing.xs,
+    },
+    overflowRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingVertical: 2,
+    },
+    overflowName: {
+      flex: 1,
+      fontSize: 13,
+      fontWeight: '600',
+    },
+    overflowX2: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.accent,
+    },
+  });
+}

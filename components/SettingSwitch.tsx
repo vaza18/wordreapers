@@ -4,7 +4,9 @@ import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { playButtonFeedback } from '@/lib/feedback/game-feedback';
 import { useSettingsStore } from '@/store/settings-store';
 
-import { colors, spacing } from '@/constants/theme';
+import { spacing, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 interface SettingSwitchProps {
   label: string;
@@ -13,11 +15,67 @@ interface SettingSwitchProps {
   onChange: (value: boolean) => void;
 }
 
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+    },
+    textBlock: {
+      flex: 1,
+      gap: 2,
+    },
+    label: {
+      fontSize: 15,
+      color: colors.textPrimary,
+      fontWeight: '500',
+    },
+    hint: {
+      fontSize: 12,
+      color: colors.textSecondary,
+    },
+    stepperBlock: {
+      gap: spacing.sm,
+    },
+    stepperRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.xs,
+    },
+    step: {
+      borderRadius: 8,
+      borderWidth: 1,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+    },
+    stepActive: {
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
+    },
+    stepIdle: {
+      backgroundColor: colors.backgroundPrimary,
+      borderColor: colors.borderSecondary,
+    },
+    stepLabel: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: colors.textPrimary,
+    },
+    stepLabelActive: {
+      color: colors.textOnAccent,
+    },
+  });
+}
+
 /**
  * Label + switch row from setup mockups.
  */
 export function SettingSwitch({ label, hint, value, onChange }: SettingSwitchProps) {
   const buttonFeedback = useSettingsStore((state) => state.buttonFeedback);
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
 
   return (
     <View style={styles.row}>
@@ -54,6 +112,8 @@ interface StepperProps {
  * Discrete stepper for duration and similar numeric settings.
  */
 export function Stepper({ label, value, options, suffix, onChange }: StepperProps) {
+  const styles = useThemedStyles(createStyles);
+
   return (
     <View style={styles.stepperBlock}>
       <Text style={styles.label}>{label}</Text>
@@ -80,55 +140,3 @@ export function Stepper({ label, value, options, suffix, onChange }: StepperProp
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  textBlock: {
-    flex: 1,
-    gap: 2,
-  },
-  label: {
-    fontSize: 15,
-    color: colors.textPrimary,
-    fontWeight: '500',
-  },
-  hint: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  stepperBlock: {
-    gap: spacing.sm,
-  },
-  stepperRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-  },
-  step: {
-    borderRadius: 8,
-    borderWidth: 1,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
-  stepActive: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
-  stepIdle: {
-    backgroundColor: colors.backgroundPrimary,
-    borderColor: colors.borderSecondary,
-  },
-  stepLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.textPrimary,
-  },
-  stepLabelActive: {
-    color: '#FFFFFF',
-  },
-});

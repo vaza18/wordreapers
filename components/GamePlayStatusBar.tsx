@@ -1,7 +1,8 @@
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors, spacing } from '@/constants/theme';
+import { spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 interface GamePlayStatusBarProps {
   timerLabel: string;
@@ -16,6 +17,37 @@ interface GamePlayStatusBarProps {
   showRank?: boolean;
   showScore?: boolean;
   style?: ViewStyle;
+}
+
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    wrap: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderTertiary,
+      paddingBottom: spacing.sm,
+      gap: spacing.sm,
+    },
+    timer: {
+      fontSize: 24,
+      fontWeight: '700',
+      color: colors.accent,
+      flexShrink: 0,
+    },
+    timerUrgent: {
+      fontSize: 26,
+      color: colors.dangerLight,
+    },
+    stats: {
+      flex: 1,
+      fontSize: 17,
+      fontWeight: '600',
+      color: colors.textSecondary,
+      textAlign: 'right',
+    },
+  });
 }
 
 /**
@@ -35,6 +67,7 @@ export function GamePlayStatusBar({
   style,
 }: GamePlayStatusBarProps) {
   const insets = useSafeAreaInsets();
+  const styles = useThemedStyles(createStyles);
   const horizontal = Math.max(insets.left, insets.right, spacing.md);
 
   const statsParts: string[] = [];
@@ -67,32 +100,3 @@ export function GamePlayStatusBar({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderTertiary,
-    paddingBottom: spacing.sm,
-    gap: spacing.sm,
-  },
-  timer: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.accent,
-    flexShrink: 0,
-  },
-  timerUrgent: {
-    fontSize: 26,
-    color: '#E24B4A',
-  },
-  stats: {
-    flex: 1,
-    fontSize: 17,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    textAlign: 'right',
-  },
-});

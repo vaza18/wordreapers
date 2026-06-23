@@ -1,7 +1,8 @@
 import { useRef } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { normalizeRoomCode } from '@/lib/firebase/room-code';
 
 const CODE_LENGTH = 4;
@@ -11,10 +12,47 @@ interface RoomCodeInputProps {
   onChange: (value: string) => void;
 }
 
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    wrap: {
+      alignItems: 'center',
+    },
+    hiddenInput: {
+      position: 'absolute',
+      opacity: 0,
+      width: 1,
+      height: 1,
+    },
+    row: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+    },
+    cell: {
+      width: 44,
+      height: 48,
+      borderWidth: 1.5,
+      borderColor: colors.borderSecondary,
+      borderRadius: radii.sm,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.backgroundPrimary,
+    },
+    cellFilled: {
+      borderColor: colors.accent,
+    },
+    cellText: {
+      fontSize: 20,
+      fontWeight: '600',
+      color: colors.accent,
+    },
+  });
+}
+
 /**
  * Four-cell room code entry (mockup screen 8).
  */
 export function RoomCodeInput({ value, onChange }: RoomCodeInputProps) {
+  const styles = useThemedStyles(createStyles);
   const inputRef = useRef<TextInput>(null);
   const normalized = normalizeRoomCode(value).slice(0, CODE_LENGTH);
   const cells = Array.from({ length: CODE_LENGTH }, (_, index) => normalized[index] ?? '');
@@ -47,37 +85,3 @@ export function RoomCodeInput({ value, onChange }: RoomCodeInputProps) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: {
-    alignItems: 'center',
-  },
-  hiddenInput: {
-    position: 'absolute',
-    opacity: 0,
-    width: 1,
-    height: 1,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  cell: {
-    width: 44,
-    height: 48,
-    borderWidth: 1.5,
-    borderColor: colors.borderSecondary,
-    borderRadius: radii.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.backgroundPrimary,
-  },
-  cellFilled: {
-    borderColor: colors.accent,
-  },
-  cellText: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.accent,
-  },
-});

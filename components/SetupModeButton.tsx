@@ -2,7 +2,8 @@ import type { ReactNode } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 interface SetupModeButtonProps {
   icon: ReactNode;
@@ -12,6 +13,59 @@ interface SetupModeButtonProps {
   disabled?: boolean;
   variant?: 'primary' | 'secondary';
   style?: StyleProp<ViewStyle>;
+}
+
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    base: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.xs,
+      borderRadius: radii.md,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.sm,
+      minHeight: 108,
+    },
+    primary: {
+      backgroundColor: colors.accent,
+    },
+    secondary: {
+      backgroundColor: colors.backgroundPrimary,
+      borderWidth: 1,
+      borderColor: colors.borderSecondary,
+      alignSelf: 'center',
+      minHeight: 92,
+      paddingVertical: spacing.sm,
+    },
+    disabled: {
+      opacity: 0.5,
+    },
+    iconSlot: {
+      height: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    label: {
+      color: colors.textOnAccent,
+      fontSize: 14,
+      fontWeight: '600',
+      textAlign: 'center',
+      lineHeight: 18,
+    },
+    labelSecondary: {
+      color: colors.textPrimary,
+    },
+    hint: {
+      color: '#D8F3EA',
+      fontSize: 12,
+      fontWeight: '500',
+      textAlign: 'center',
+    },
+    hintSecondary: {
+      color: colors.textSecondary,
+    },
+  });
 }
 
 /**
@@ -26,6 +80,7 @@ export function SetupModeButton({
   variant = 'primary',
   style,
 }: SetupModeButtonProps) {
+  const styles = useThemedStyles(createStyles);
   const isSecondary = variant === 'secondary';
 
   return (
@@ -46,54 +101,3 @@ export function SetupModeButton({
     </FeedbackPressable>
   );
 }
-
-const styles = StyleSheet.create({
-  base: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    borderRadius: radii.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
-    minHeight: 108,
-  },
-  primary: {
-    backgroundColor: colors.accent,
-  },
-  secondary: {
-    backgroundColor: colors.backgroundPrimary,
-    borderWidth: 1,
-    borderColor: colors.borderSecondary,
-    alignSelf: 'center',
-    minHeight: 92,
-    paddingVertical: spacing.sm,
-  },
-  disabled: {
-    opacity: 0.5,
-  },
-  iconSlot: {
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  label: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  labelSecondary: {
-    color: colors.textPrimary,
-  },
-  hint: {
-    color: '#D8F3EA',
-    fontSize: 12,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  hintSecondary: {
-    color: colors.textSecondary,
-  },
-});

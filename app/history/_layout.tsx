@@ -1,12 +1,14 @@
 import { Stack } from 'expo-router';
 
 import { stackScreenOptions } from '@/constants/stack-screen-options';
-import { colors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 
 /**
  * Finished round archive list and detail.
  */
 export default function HistoryLayout() {
+  const { colors } = useTheme();
+
   return (
     <Stack
       screenOptions={{

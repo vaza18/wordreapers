@@ -8,7 +8,9 @@ import { InfoIcon } from '@/components/HeaderIcons';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { SegmentedControl } from '@/components/SegmentedControl';
 import { SettingSwitch } from '@/components/SettingSwitch';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import type { UniqueBonusMode } from '@/lib/game/scoring';
 
 export interface RoundSettingsFieldsProps {
@@ -35,6 +37,8 @@ export function RoundSettingsFields({
   allowSlang,
   onAllowSlangChange,
 }: RoundSettingsFieldsProps) {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const [showUniqueBonusHint, setShowUniqueBonusHint] = useState(false);
 
@@ -96,40 +100,42 @@ export function RoundSettingsFields({
   );
 }
 
-const styles = StyleSheet.create({
-  sectionLabel: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: colors.textSecondary,
-  },
-  uniqueBonusHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  infoButton: {
-    padding: spacing.xs,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: spacing.lg,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  modalCard: {
-    backgroundColor: colors.backgroundPrimary,
-    borderRadius: radii.md,
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  modalBody: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: colors.textSecondary,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    sectionLabel: {
+      fontSize: 15,
+      fontWeight: '500',
+      color: colors.textSecondary,
+    },
+    uniqueBonusHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    infoButton: {
+      padding: spacing.xs,
+    },
+    modalOverlay: {
+      flex: 1,
+      justifyContent: 'center',
+      padding: spacing.lg,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+    },
+    modalCard: {
+      backgroundColor: colors.backgroundPrimary,
+      borderRadius: radii.md,
+      padding: spacing.lg,
+      gap: spacing.md,
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: colors.textPrimary,
+    },
+    modalBody: {
+      fontSize: 14,
+      lineHeight: 20,
+      color: colors.textSecondary,
+    },
+  });
+}

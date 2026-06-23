@@ -2,7 +2,8 @@ import type { ReactNode } from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 interface BottomSheetModalProps {
   visible: boolean;
@@ -10,8 +11,31 @@ interface BottomSheetModalProps {
   children: ReactNode;
 }
 
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    overlay: {
+      flex: 1,
+      justifyContent: 'flex-end',
+      backgroundColor: 'rgba(0,0,0,0.35)',
+    },
+    backdrop: {
+      ...StyleSheet.absoluteFillObject,
+      zIndex: 0,
+    },
+    sheet: {
+      zIndex: 1,
+      backgroundColor: colors.backgroundPrimary,
+      borderTopLeftRadius: radii.lg,
+      borderTopRightRadius: radii.lg,
+      padding: spacing.lg,
+      gap: spacing.sm,
+    },
+  });
+}
+
 function BottomSheetBody({ onClose, children }: { onClose: () => void; children: ReactNode }) {
   const { bottom } = useSafeAreaInsets();
+  const styles = useThemedStyles(createStyles);
 
   return (
     <View style={styles.overlay}>
@@ -39,23 +63,3 @@ export function BottomSheetModal({ visible, onClose, children }: BottomSheetModa
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.35)',
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 0,
-  },
-  sheet: {
-    zIndex: 1,
-    backgroundColor: colors.backgroundPrimary,
-    borderTopLeftRadius: radii.lg,
-    borderTopRightRadius: radii.lg,
-    padding: spacing.lg,
-    gap: spacing.sm,
-  },
-});

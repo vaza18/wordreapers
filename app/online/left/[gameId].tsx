@@ -5,7 +5,9 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { RoundResultsView } from '@/components/RoundResultsView';
-import { colors, spacing } from '@/constants/theme';
+import { spacing, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { ensureAnonymousAuth } from '@/lib/firebase/auth';
 import {
   leaveGameSession,
@@ -51,6 +53,8 @@ const EMPTY_WORDS: AllPlayerWords = new Map();
  * Summary after leaving an active online round — live RTDB while playing, local snapshot when finished.
  */
 export default function OnlineLeftRoundScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const { gameId: rawGameId } = useLocalSearchParams<{ gameId: string }>();
   const gameId = rawGameId ?? '';
@@ -386,23 +390,25 @@ export default function OnlineLeftRoundScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.backgroundSecondary,
-  },
-  notice: {
-    fontSize: 13,
-    lineHeight: 20,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: spacing.xs,
-  },
-  error: {
-    color: '#E24B4A',
-    fontSize: 14,
-    textAlign: 'center',
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    center: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.backgroundSecondary,
+    },
+    notice: {
+      fontSize: 13,
+      lineHeight: 20,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      marginBottom: spacing.xs,
+    },
+    error: {
+      color: '#E24B4A',
+      fontSize: 14,
+      textAlign: 'center',
+    },
+  });
+}

@@ -5,7 +5,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { PlayerAvatar } from '@/components/PlayerAvatar';
 import { WordOverlapAvatars } from '@/components/WordOverlapAvatars';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import type { PlayerResultRankGroup } from '@/lib/game/results-view';
 
 interface ResultsByPlayerProps {
@@ -36,6 +37,7 @@ export function ResultsByPlayer({
   showOverlapPeers,
   showWordsPerMinute = false,
 }: ResultsByPlayerProps) {
+  const styles = useThemedStyles(createStyles);
   const showX2Badges = showScoreBadges ?? showScores;
   const showPeerAvatars = showOverlapPeers ?? showX2Badges;
   const { t } = useTranslation();
@@ -175,106 +177,108 @@ export function ResultsByPlayer({
   );
 }
 
-const styles = StyleSheet.create({
-  list: {
-    gap: spacing.sm,
-  },
-  tier: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderTertiary,
-    borderRadius: radii.sm,
-    padding: spacing.sm,
-    gap: spacing.sm,
-    backgroundColor: colors.backgroundPrimary,
-  },
-  tierTop: {
-    backgroundColor: '#FAEEDA',
-    borderColor: '#FAC775',
-  },
-  tierMulti: {
-    padding: spacing.sm,
-  },
-  tierLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  tierLabelTop: {
-    color: '#633806',
-  },
-  playersRow: {
-    gap: spacing.xs,
-  },
-  playersRowMulti: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-  },
-  card: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderTertiary,
-    borderRadius: radii.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.backgroundPrimary,
-  },
-  cardInRow: {
-    flex: 1,
-    minWidth: 0,
-  },
-  cardYou: {
-    borderColor: '#9FE1CB',
-    borderWidth: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    flex: 1,
-    minWidth: 0,
-  },
-  name: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.textPrimary,
-    flexShrink: 1,
-  },
-  nameYou: {
-    color: colors.accent,
-  },
-  meta: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  wordsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    marginTop: spacing.sm,
-    gap: 2,
-  },
-  wordChipWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  sep: {
-    fontSize: 12,
-    color: colors.textTertiary,
-    marginHorizontal: 2,
-  },
-  wordChip: {
-    fontSize: 14,
-    color: colors.textPrimary,
-  },
-  wordChipX2: {
-    color: colors.accent,
-    fontWeight: '600',
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    list: {
+      gap: spacing.sm,
+    },
+    tier: {
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderTertiary,
+      borderRadius: radii.sm,
+      padding: spacing.sm,
+      gap: spacing.sm,
+      backgroundColor: colors.backgroundPrimary,
+    },
+    tierTop: {
+      backgroundColor: '#FAEEDA',
+      borderColor: '#FAC775',
+    },
+    tierMulti: {
+      padding: spacing.sm,
+    },
+    tierLabel: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    tierLabelTop: {
+      color: '#633806',
+    },
+    playersRow: {
+      gap: spacing.xs,
+    },
+    playersRowMulti: {
+      flexDirection: 'row',
+      alignItems: 'stretch',
+    },
+    card: {
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderTertiary,
+      borderRadius: radii.sm,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.sm,
+      backgroundColor: colors.backgroundPrimary,
+    },
+    cardInRow: {
+      flex: 1,
+      minWidth: 0,
+    },
+    cardYou: {
+      borderColor: '#9FE1CB',
+      borderWidth: 1,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.sm,
+    },
+    headerLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      flex: 1,
+      minWidth: 0,
+    },
+    name: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: colors.textPrimary,
+      flexShrink: 1,
+    },
+    nameYou: {
+      color: colors.accent,
+    },
+    meta: {
+      fontSize: 12,
+      color: colors.textSecondary,
+    },
+    wordsRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      marginTop: spacing.sm,
+      gap: 2,
+    },
+    wordChipWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    sep: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      marginHorizontal: 2,
+    },
+    wordChip: {
+      fontSize: 14,
+      color: colors.textPrimary,
+    },
+    wordChipX2: {
+      color: colors.accent,
+      fontWeight: '600',
+    },
+  });
+}

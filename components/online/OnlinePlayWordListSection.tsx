@@ -2,7 +2,9 @@ import { memo } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { WordList } from '@/components/WordList';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import type { OnlineWordListRow } from '@/lib/online/online-word-display';
 
 export interface OnlinePlayWordListSectionProps {
@@ -15,6 +17,35 @@ export interface OnlinePlayWordListSectionProps {
   backgroundSyncing: boolean;
   showScoreBadges: boolean;
   showOverlapPeers: boolean;
+}
+
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    wordListSection: {
+      flex: 1,
+      minHeight: 0,
+    },
+    feedbackSlot: {
+      height: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'row',
+      gap: spacing.sm,
+    },
+    feedbackToast: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.textPrimary,
+      backgroundColor: 'rgba(255,255,255,0.92)',
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs,
+      borderRadius: radii.sm,
+      overflow: 'hidden',
+    },
+    syncIndicator: {
+      opacity: 0.7,
+    },
+  });
 }
 
 /**
@@ -31,6 +62,9 @@ export const OnlinePlayWordListSection = memo(function OnlinePlayWordListSection
   showScoreBadges,
   showOverlapPeers,
 }: OnlinePlayWordListSectionProps) {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
+
   return (
     <View style={styles.wordListSection}>
       <WordList
@@ -50,31 +84,4 @@ export const OnlinePlayWordListSection = memo(function OnlinePlayWordListSection
       </View>
     </View>
   );
-});
-
-const styles = StyleSheet.create({
-  wordListSection: {
-    flex: 1,
-    minHeight: 0,
-  },
-  feedbackSlot: {
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  feedbackToast: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.sm,
-    overflow: 'hidden',
-  },
-  syncIndicator: {
-    opacity: 0.7,
-  },
 });

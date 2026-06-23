@@ -33,7 +33,9 @@ import { RoomInviteModal } from '@/components/RoomInviteModal';
 import { OnlinePlayComposePanel } from '@/components/online/OnlinePlayComposePanel';
 import { OnlinePlayWordListSection } from '@/components/online/OnlinePlayWordListSection';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useAutoPauseOnAppBackground } from '@/hooks/useAutoPauseOnAppBackground';
 import { usePlaySessionToasts } from '@/hooks/usePlaySessionToasts';
 import { useResultsRematchToast } from '@/hooks/useResultsRematchToast';
@@ -120,6 +122,8 @@ const FEEDBACK_DISMISS_MS = 2200;
  * Online multiplayer play — per-device keyboard, Firebase sync (M2.3).
  */
 export default function OnlinePlayScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const { gameId: rawGameId, openInvite: rawOpenInvite } = useLocalSearchParams<{
     gameId: string;
@@ -1326,91 +1330,93 @@ function errorMessage(
   }
 }
 
-const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.backgroundSecondary,
-  },
-  container: {
-    flex: 1,
-    position: 'relative',
-    backgroundColor: colors.backgroundSecondary,
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
-    paddingTop: spacing.xs,
-    gap: spacing.sm,
-  },
-  playerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  playerName: {
-    flexShrink: 1,
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  playRules: {
-    flex: 1,
-    fontSize: 12,
-    color: colors.textSecondary,
-    textAlign: 'right',
-  },
-  feedbackSlot: {
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  feedbackToast: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.sm,
-    overflow: 'hidden',
-  },
-  footer: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    width: '100%',
-  },
-  footerButton: {
-    flex: 1,
-  },
-  footerButtonSolo: {
-    flex: 1,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  standingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderTertiary,
-  },
-  standingRank: {
-    width: 20,
-    fontWeight: '700',
-    color: colors.accent,
-  },
-  standingName: {
-    flex: 1,
-    fontSize: 15,
-    color: colors.textPrimary,
-  },
-  standingMeta: {
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    center: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.backgroundSecondary,
+    },
+    container: {
+      flex: 1,
+      position: 'relative',
+      backgroundColor: colors.backgroundSecondary,
+      paddingHorizontal: spacing.md,
+      paddingBottom: spacing.md,
+      paddingTop: spacing.xs,
+      gap: spacing.sm,
+    },
+    playerHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.sm,
+    },
+    playerName: {
+      flexShrink: 1,
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.textPrimary,
+    },
+    playRules: {
+      flex: 1,
+      fontSize: 12,
+      color: colors.textSecondary,
+      textAlign: 'right',
+    },
+    feedbackSlot: {
+      height: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    feedbackToast: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.textPrimary,
+      backgroundColor: 'rgba(255,255,255,0.92)',
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs,
+      borderRadius: radii.sm,
+      overflow: 'hidden',
+    },
+    footer: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      width: '100%',
+    },
+    footerButton: {
+      flex: 1,
+    },
+    footerButtonSolo: {
+      flex: 1,
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: colors.textPrimary,
+    },
+    standingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.xs,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderTertiary,
+    },
+    standingRank: {
+      width: 20,
+      fontWeight: '700',
+      color: colors.accent,
+    },
+    standingName: {
+      flex: 1,
+      fontSize: 15,
+      color: colors.textPrimary,
+    },
+    standingMeta: {
+      fontSize: 13,
+      color: colors.textSecondary,
+    },
+  });
+}

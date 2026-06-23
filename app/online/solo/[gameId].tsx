@@ -18,7 +18,9 @@ import { GameTimeUpModal } from '@/components/GameTimeUpModal';
 import { LetterKeyboard } from '@/components/LetterKeyboard';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { WordList } from '@/components/WordList';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useAutoPauseOnAppBackground } from '@/hooks/useAutoPauseOnAppBackground';
 import { useTimerAlerts } from '@/hooks/useTimerAlerts';
 import { useRoundTimeUpModal } from '@/hooks/useRoundTimeUpModal';
@@ -76,6 +78,8 @@ function errorMessage(
  * Organizer solo round — local only until invite publishes to Firebase.
  */
 export default function OrganizerSoloPlayScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const { gameId: rawGameId } = useLocalSearchParams<{ gameId: string }>();
   const gameId = rawGameId ?? '';
@@ -540,127 +544,129 @@ export default function OrganizerSoloPlayScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.backgroundSecondary,
-  },
-  container: {
-    flex: 1,
-    position: 'relative',
-    backgroundColor: colors.backgroundSecondary,
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
-    paddingTop: spacing.xs,
-    gap: spacing.sm,
-  },
-  playerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  playerName: {
-    flexShrink: 1,
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  playRules: {
-    flex: 1,
-    fontSize: 12,
-    color: colors.textSecondary,
-    textAlign: 'right',
-  },
-  composeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  composeKey: {
-    borderRadius: radii.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  composeKeyDanger: {
-    backgroundColor: colors.dangerLight,
-  },
-  composeKeyAlert: {
-    backgroundColor: colors.alert,
-  },
-  composeKeyLabel: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  draftBox: {
-    flex: 1,
-    backgroundColor: '#FAEEDA',
-    borderRadius: radii.sm,
-    paddingHorizontal: spacing.md,
-    justifyContent: 'center',
-  },
-  draftText: {
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: 1,
-    color: '#412402',
-  },
-  wordListSection: {
-    flex: 1,
-    minHeight: 0,
-  },
-  feedbackSlot: {
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  feedbackToast: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.sm,
-    overflow: 'hidden',
-  },
-  publishError: {
-    fontSize: 13,
-    color: '#E24B4A',
-    textAlign: 'center',
-  },
-  footer: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    width: '100%',
-  },
-  footerButtonSolo: {
-    flex: 1,
-  },
-  pauseOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: spacing.md,
-    padding: spacing.lg,
-  },
-  pauseTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    textAlign: 'center',
-  },
-  pauseTimer: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: spacing.sm,
-  },
-  publishingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    center: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.backgroundSecondary,
+    },
+    container: {
+      flex: 1,
+      position: 'relative',
+      backgroundColor: colors.backgroundSecondary,
+      paddingHorizontal: spacing.md,
+      paddingBottom: spacing.md,
+      paddingTop: spacing.xs,
+      gap: spacing.sm,
+    },
+    playerHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.sm,
+    },
+    playerName: {
+      flexShrink: 1,
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.textPrimary,
+    },
+    playRules: {
+      flex: 1,
+      fontSize: 12,
+      color: colors.textSecondary,
+      textAlign: 'right',
+    },
+    composeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    composeKey: {
+      borderRadius: radii.sm,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    composeKeyDanger: {
+      backgroundColor: colors.dangerLight,
+    },
+    composeKeyAlert: {
+      backgroundColor: colors.alert,
+    },
+    composeKeyLabel: {
+      color: colors.textOnAccent,
+      fontWeight: '700',
+    },
+    draftBox: {
+      flex: 1,
+      backgroundColor: '#FAEEDA',
+      borderRadius: radii.sm,
+      paddingHorizontal: spacing.md,
+      justifyContent: 'center',
+    },
+    draftText: {
+      fontSize: 16,
+      fontWeight: '600',
+      letterSpacing: 1,
+      color: '#412402',
+    },
+    wordListSection: {
+      flex: 1,
+      minHeight: 0,
+    },
+    feedbackSlot: {
+      height: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    feedbackToast: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.textPrimary,
+      backgroundColor: 'rgba(255,255,255,0.92)',
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs,
+      borderRadius: radii.sm,
+      overflow: 'hidden',
+    },
+    publishError: {
+      fontSize: 13,
+      color: '#E24B4A',
+      textAlign: 'center',
+    },
+    footer: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      width: '100%',
+    },
+    footerButtonSolo: {
+      flex: 1,
+    },
+    pauseOverlay: {
+      flex: 1,
+      justifyContent: 'center',
+      gap: spacing.md,
+      padding: spacing.lg,
+    },
+    pauseTitle: {
+      fontSize: 20,
+      fontWeight: '600',
+      color: colors.textPrimary,
+      textAlign: 'center',
+    },
+    pauseTimer: {
+      fontSize: 16,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      marginBottom: spacing.sm,
+    },
+    publishingOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(0,0,0,0.35)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+  });
+}

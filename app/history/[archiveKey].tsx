@@ -6,7 +6,9 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { RoundResultsView } from '@/components/RoundResultsView';
 import { StackHeaderTitle } from '@/components/StackHeaderTitle';
-import { colors } from '@/constants/theme';
+import { type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { ensureAnonymousAuth } from '@/lib/firebase/auth';
 import type { GameSession } from '@/lib/firebase/types';
 import { stackHeaderWithBackAndSettings } from '@/lib/navigation/stack-header-options';
@@ -21,6 +23,8 @@ import { useFirebaseStore } from '@/store/firebase-store';
  * Archived online round results (offline snapshot).
  */
 export default function ArchivedRoundResultsScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const { archiveKey: rawArchiveKey } = useLocalSearchParams<{ archiveKey: string }>();
   const archiveKey = rawArchiveKey ?? '';
@@ -158,13 +162,15 @@ export default function ArchivedRoundResultsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.backgroundSecondary,
-    padding: 24,
-    gap: 16,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    center: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.backgroundSecondary,
+      padding: 24,
+      gap: 16,
+    },
+  });
+}

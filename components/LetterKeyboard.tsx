@@ -1,7 +1,8 @@
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
-import { colors } from '@/constants/theme';
+import { type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { computeLetterKeySize } from '@/lib/game/letter-keyboard';
 import { letterKeyFontSizeForKeySize, letterKeyProportions } from '@/lib/game/letter-key-style';
 import type { LetterKey } from '@/lib/game/letter-keyboard';
@@ -13,9 +14,40 @@ interface LetterKeyboardProps {
   onPressKey: (index: number) => void;
 }
 
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    grid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'center',
+    },
+    key: {
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    keyAvailable: {
+      backgroundColor: colors.penBlue,
+    },
+    keyUsed: {
+      backgroundColor: colors.backgroundSecondary,
+    },
+    keyLabel: {
+      fontWeight: '600',
+    },
+    keyLabelAvailable: {
+      color: colors.penBlueMuted,
+    },
+    keyLabelUsed: {
+      color: colors.textSecondary,
+      fontWeight: '500',
+    },
+  });
+}
+
 /** Interactive keyboard built from the base word letters. */
 export function LetterKeyboard({ keys, usedKeyIndices, onPressKey }: LetterKeyboardProps) {
   const { width: screenWidth } = useWindowDimensions();
+  const styles = useThemedStyles(createStyles);
   const keySize = computeLetterKeySize(screenWidth);
   const { gap, borderRadius } = letterKeyProportions(screenWidth);
   const labelFontSize = letterKeyFontSizeForKeySize(keySize);
@@ -53,31 +85,3 @@ export function LetterKeyboard({ keys, usedKeyIndices, onPressKey }: LetterKeybo
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-  },
-  key: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  keyAvailable: {
-    backgroundColor: colors.penBlue,
-  },
-  keyUsed: {
-    backgroundColor: colors.backgroundSecondary,
-  },
-  keyLabel: {
-    fontWeight: '600',
-  },
-  keyLabelAvailable: {
-    color: colors.penBlueMuted,
-  },
-  keyLabelUsed: {
-    color: colors.textSecondary,
-    fontWeight: '500',
-  },
-});

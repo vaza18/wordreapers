@@ -3,7 +3,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Markdown, { type RenderRules } from 'react-native-markdown-display';
 
 import { AppVersionLabel } from '@/components/AppVersionLabel';
-import { colors, spacing } from '@/constants/theme';
+import { spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { legalDocumentsUk, type LegalDocumentKey } from '@/lib/legal/bundled-legal';
 import { markdownAstPlainText } from '@/lib/legal/markdown-ast-text';
 import { handleMarkdownLinkPress } from '@/lib/legal/handle-markdown-link';
@@ -22,100 +23,102 @@ type MarkdownAstNode = {
   attributes?: { href?: string };
 };
 
-const markdownStyles = StyleSheet.create({
-  body: {
-    color: colors.textSecondary,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  heading1: {
-    color: colors.textPrimary,
-    fontSize: 24,
-    fontWeight: '700',
-    lineHeight: 30,
-    marginTop: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  heading2: {
-    color: colors.textPrimary,
-    fontSize: 20,
-    fontWeight: '600',
-    lineHeight: 26,
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
-  },
-  heading3: {
-    color: colors.textPrimary,
-    fontSize: 17,
-    fontWeight: '600',
-    lineHeight: 24,
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
-  },
-  paragraph: {
-    marginTop: 0,
-    marginBottom: spacing.sm,
-  },
-  bullet_list: {
-    marginBottom: spacing.sm,
-  },
-  ordered_list: {
-    marginBottom: spacing.sm,
-  },
-  list_item: {
-    marginBottom: spacing.xs,
-  },
-  link: {
-    color: colors.accent,
-    textDecorationLine: 'underline',
-  },
-  strong: {
-    color: colors.textPrimary,
-    fontWeight: '600',
-  },
-  em: {
-    fontStyle: 'italic',
-  },
-  hr: {
-    backgroundColor: colors.borderTertiary,
-    height: StyleSheet.hairlineWidth,
-    marginVertical: spacing.md,
-  },
-  blockquote: {
-    backgroundColor: colors.accentMuted,
-    borderLeftColor: colors.accent,
-    borderLeftWidth: 3,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    marginBottom: spacing.sm,
-  },
-  code_inline: {
-    backgroundColor: colors.accentMuted,
-    color: colors.textPrimary,
-    fontFamily: 'Menlo',
-    fontSize: 14,
-    borderRadius: 4,
-    paddingHorizontal: 4,
-  },
-  fence: {
-    backgroundColor: colors.backgroundPrimary,
-    borderColor: colors.borderTertiary,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
-    padding: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  code_block: {
-    fontFamily: 'Menlo',
-    fontSize: 13,
-    color: colors.textPrimary,
-  },
-  inlineRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-  },
-});
+function createMarkdownStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    body: {
+      color: colors.textSecondary,
+      fontSize: 15,
+      lineHeight: 22,
+    },
+    heading1: {
+      color: colors.textPrimary,
+      fontSize: 24,
+      fontWeight: '700',
+      lineHeight: 30,
+      marginTop: spacing.sm,
+      marginBottom: spacing.sm,
+    },
+    heading2: {
+      color: colors.textPrimary,
+      fontSize: 20,
+      fontWeight: '600',
+      lineHeight: 26,
+      marginTop: spacing.lg,
+      marginBottom: spacing.sm,
+    },
+    heading3: {
+      color: colors.textPrimary,
+      fontSize: 17,
+      fontWeight: '600',
+      lineHeight: 24,
+      marginTop: spacing.md,
+      marginBottom: spacing.xs,
+    },
+    paragraph: {
+      marginTop: 0,
+      marginBottom: spacing.sm,
+    },
+    bullet_list: {
+      marginBottom: spacing.sm,
+    },
+    ordered_list: {
+      marginBottom: spacing.sm,
+    },
+    list_item: {
+      marginBottom: spacing.xs,
+    },
+    link: {
+      color: colors.accent,
+      textDecorationLine: 'underline',
+    },
+    strong: {
+      color: colors.textPrimary,
+      fontWeight: '600',
+    },
+    em: {
+      fontStyle: 'italic',
+    },
+    hr: {
+      backgroundColor: colors.borderTertiary,
+      height: StyleSheet.hairlineWidth,
+      marginVertical: spacing.md,
+    },
+    blockquote: {
+      backgroundColor: colors.accentMuted,
+      borderLeftColor: colors.accent,
+      borderLeftWidth: 3,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs,
+      marginBottom: spacing.sm,
+    },
+    code_inline: {
+      backgroundColor: colors.accentMuted,
+      color: colors.textPrimary,
+      fontFamily: 'Menlo',
+      fontSize: 14,
+      borderRadius: 4,
+      paddingHorizontal: 4,
+    },
+    fence: {
+      backgroundColor: colors.backgroundPrimary,
+      borderColor: colors.borderTertiary,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderRadius: 8,
+      padding: spacing.sm,
+      marginBottom: spacing.sm,
+    },
+    code_block: {
+      fontFamily: 'Menlo',
+      fontSize: 13,
+      color: colors.textPrimary,
+    },
+    inlineRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+    },
+  });
+}
 
 const CONTENT_PADDING_TOP = spacing.sm;
 const ANCHOR_SCROLL_RETRY_MS = 50;
@@ -125,6 +128,8 @@ const ANCHOR_SCROLL_MAX_ATTEMPTS = 4;
  * Styled markdown renderer for bundled legal/about documents.
  */
 export function LegalDocumentView({ documentKey, showAppVersion = false }: LegalDocumentViewProps) {
+  const styles = useMemo(() => createLayoutStyles(), []);
+  const markdownStyles = useThemedStyles(createMarkdownStyles);
   const text = legalDocumentsUk[documentKey];
   const scrollRef = useRef<ScrollView>(null);
   const anchorOffsets = useRef(new Map<string, number>());
@@ -221,7 +226,7 @@ export function LegalDocumentView({ documentKey, showAppVersion = false }: Legal
         </Pressable>
       ),
     };
-  }, [onLinkPress]);
+  }, [markdownStyles.inlineRow, onLinkPress]);
 
   return (
     <ScrollView ref={scrollRef} style={styles.scroll} contentContainerStyle={styles.content}>
@@ -233,16 +238,18 @@ export function LegalDocumentView({ documentKey, showAppVersion = false }: Legal
   );
 }
 
-const styles = StyleSheet.create({
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xl,
-  },
-  versionLabel: {
-    marginTop: spacing.lg,
-  },
-});
+function createLayoutStyles() {
+  return StyleSheet.create({
+    scroll: {
+      flex: 1,
+    },
+    content: {
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.sm,
+      paddingBottom: spacing.xl,
+    },
+    versionLabel: {
+      marginTop: spacing.lg,
+    },
+  });
+}

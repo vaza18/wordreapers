@@ -2,14 +2,11 @@ import type { NativeStackNavigationOptions } from '@react-navigation/native-stac
 import { createElement } from 'react';
 
 import { StackHeaderBar } from '@/components/StackHeaderBar';
-import { colors } from '@/constants/theme';
 
 /** Shared stack header (custom bar — no iOS liquid-glass button chrome). */
 export const stackScreenOptions: NativeStackNavigationOptions = {
   header: (props: Parameters<NonNullable<NativeStackNavigationOptions['header']>>[0]) =>
     createElement(StackHeaderBar, props),
-  headerStyle: { backgroundColor: colors.backgroundSecondary },
-  headerTintColor: colors.textPrimary,
   headerShadowVisible: false,
   headerBackTitle: '',
   headerLargeTitle: false,

@@ -2,7 +2,8 @@ import { StyleSheet, View } from 'react-native';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { PLAYER_AVATAR_PALETTE, playerAvatarSwatch } from '@/constants/player-avatars';
-import { colors, spacing } from '@/constants/theme';
+import { spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 interface AvatarColorPickerProps {
   value: number;
@@ -15,6 +16,7 @@ interface AvatarColorPickerProps {
  * Pick avatar palette slot (0–5).
  */
 export function AvatarColorPicker({ value, onChange, compact = false }: AvatarColorPickerProps) {
+  const styles = useThemedStyles(createStyles);
   const swatchSize = compact ? 28 : 36;
 
   return (
@@ -47,23 +49,25 @@ export function AvatarColorPicker({ value, onChange, compact = false }: AvatarCo
   );
 }
 
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  rowCompact: {
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  swatch: {
-    borderWidth: 2,
-  },
-  swatchIdle: {
-    borderColor: colors.borderSecondary,
-  },
-  swatchActive: {
-    borderColor: '#085041',
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+    },
+    rowCompact: {
+      justifyContent: 'center',
+      gap: spacing.sm,
+    },
+    swatch: {
+      borderWidth: 2,
+    },
+    swatchIdle: {
+      borderColor: colors.borderSecondary,
+    },
+    swatchActive: {
+      borderColor: '#085041',
+    },
+  });
+}

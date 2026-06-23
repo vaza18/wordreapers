@@ -1,17 +1,20 @@
 import { StyleSheet, View } from 'react-native';
 
 import { WORD_LIST_ROW_HEIGHT } from '@/constants/notebook';
-import { colors } from '@/constants/theme';
+import { type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 /** One ruled notebook row — height and bottom line stay in sync. */
-export const notebookRowLineStyle = StyleSheet.create({
-  row: {
-    height: WORD_LIST_ROW_HEIGHT,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.notebookLine,
-    backgroundColor: colors.notebookPaper,
-  },
-});
+export function createNotebookRowLineStyle(colors: ThemeColors) {
+  return StyleSheet.create({
+    row: {
+      height: WORD_LIST_ROW_HEIGHT,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.notebookLine,
+      backgroundColor: colors.notebookPaper,
+    },
+  });
+}
 
 interface NotebookLineFillerProps {
   rowCount: number;
@@ -19,6 +22,8 @@ interface NotebookLineFillerProps {
 
 /** Empty ruled rows (e.g. unfilled viewport below the last word). */
 export function NotebookLineFiller({ rowCount }: NotebookLineFillerProps) {
+  const notebookRowLineStyle = useThemedStyles(createNotebookRowLineStyle);
+
   if (rowCount <= 0) {
     return null;
   }

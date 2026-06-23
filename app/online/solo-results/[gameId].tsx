@@ -6,7 +6,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
 import { RoundResultsView } from '@/components/RoundResultsView';
-import { colors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { formatResultsHeadline } from '@/lib/game/results-headline';
 import { createSoloResultsDirectory } from '@/lib/game/results-directory';
 import { buildGlobalResultWords, buildPlayerResultRankGroups } from '@/lib/game/results-view';
@@ -25,6 +25,7 @@ import { useProfileStore } from '@/store/profile-store';
  * Local results after an organizer solo round (no Firebase).
  */
 export default function OrganizerSoloResultsScreen() {
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const { gameId: rawGameId } = useLocalSearchParams<{ gameId: string }>();
   const gameId = rawGameId ?? '';

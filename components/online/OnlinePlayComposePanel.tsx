@@ -3,7 +3,8 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { LetterKeyboard } from '@/components/LetterKeyboard';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { toDisplayUpper } from '@/lib/dictionary/normalize';
 import type { LetterKey } from '@/lib/game/letter-keyboard';
 
@@ -31,6 +32,7 @@ export const OnlinePlayComposePanel = memo(function OnlinePlayComposePanel({
   onClearDraft,
   onBackspaceDraft,
 }: OnlinePlayComposePanelProps) {
+  const styles = useThemedStyles(createStyles);
   const usedKeyIndices = new Set(draftKeyIndices);
 
   return (
@@ -68,38 +70,40 @@ export const OnlinePlayComposePanel = memo(function OnlinePlayComposePanel({
   );
 });
 
-const styles = StyleSheet.create({
-  composeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  composeKey: {
-    borderRadius: radii.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  composeKeyDanger: {
-    backgroundColor: colors.dangerLight,
-  },
-  composeKeyAlert: {
-    backgroundColor: colors.alert,
-  },
-  composeKeyLabel: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  draftBox: {
-    flex: 1,
-    backgroundColor: '#FAEEDA',
-    borderRadius: radii.sm,
-    paddingHorizontal: spacing.md,
-    justifyContent: 'center',
-  },
-  draftText: {
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: 1,
-    color: '#412402',
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    composeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    composeKey: {
+      borderRadius: radii.sm,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    composeKeyDanger: {
+      backgroundColor: colors.dangerLight,
+    },
+    composeKeyAlert: {
+      backgroundColor: colors.alert,
+    },
+    composeKeyLabel: {
+      color: colors.textOnAccent,
+      fontWeight: '700',
+    },
+    draftBox: {
+      flex: 1,
+      backgroundColor: '#FAEEDA',
+      borderRadius: radii.sm,
+      paddingHorizontal: spacing.md,
+      justifyContent: 'center',
+    },
+    draftText: {
+      fontSize: 16,
+      fontWeight: '600',
+      letterSpacing: 1,
+      color: '#412402',
+    },
+  });
+}

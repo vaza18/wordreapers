@@ -4,7 +4,8 @@ import { Modal, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import type { GameSession, SessionVote } from '@/lib/firebase/types';
 import { formatPlayerLeftLabel, formatVoteStatusLabel } from '@/lib/game/vote-status-label';
 import {
@@ -36,6 +37,7 @@ function VoteCard({
   onLeaveNow,
   onCancelProposal,
 }: Omit<EarlyFinishVoteModalProps, 'visible'>) {
+  const styles = useThemedStyles(createStyles);
   const { t } = useTranslation();
   const { bottom } = useSafeAreaInsets();
   const isProposer = vote.proposedBy === myUid;
@@ -144,70 +146,72 @@ export function EarlyFinishVoteModal({
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  card: {
-    backgroundColor: colors.backgroundPrimary,
-    borderRadius: radii.md,
-    padding: spacing.lg,
-    gap: spacing.md,
-    alignItems: 'stretch',
-    maxHeight: '85%',
-  },
-  message: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: colors.textPrimary,
-    textAlign: 'center',
-  },
-  timer: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  participantList: {
-    gap: spacing.xs,
-  },
-  participantRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderTertiary,
-  },
-  participantMain: {
-    flex: 1,
-    gap: 2,
-  },
-  participantName: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.textPrimary,
-  },
-  participantPresence: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  participantVote: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: colors.accent,
-    maxWidth: 110,
-    textAlign: 'right',
-  },
-  row: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  btn: {
-    flex: 1,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    overlay: {
+      flex: 1,
+      justifyContent: 'center',
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.lg,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+    },
+    card: {
+      backgroundColor: colors.backgroundPrimary,
+      borderRadius: radii.md,
+      padding: spacing.lg,
+      gap: spacing.md,
+      alignItems: 'stretch',
+      maxHeight: '85%',
+    },
+    message: {
+      fontSize: 15,
+      lineHeight: 22,
+      color: colors.textPrimary,
+      textAlign: 'center',
+    },
+    timer: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    participantList: {
+      gap: spacing.xs,
+    },
+    participantRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.sm,
+      paddingVertical: spacing.xs,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderTertiary,
+    },
+    participantMain: {
+      flex: 1,
+      gap: 2,
+    },
+    participantName: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: colors.textPrimary,
+    },
+    participantPresence: {
+      fontSize: 12,
+      color: colors.textSecondary,
+    },
+    participantVote: {
+      fontSize: 12,
+      fontWeight: '500',
+      color: colors.accent,
+      maxWidth: 110,
+      textAlign: 'right',
+    },
+    row: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+    },
+    btn: {
+      flex: 1,
+    },
+  });
+}

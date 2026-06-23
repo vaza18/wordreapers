@@ -5,7 +5,8 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { parseJoinQrPayload, type JoinQrPayload } from '@/lib/online/parse-join-qr';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 interface RoomQrScannerCameraProps {
   onClose: () => void;
@@ -16,6 +17,7 @@ interface RoomQrScannerCameraProps {
  * Camera UI — only loaded when {@link isExpoCameraAvailable} is true.
  */
 export function RoomQrScannerCamera({ onClose, onCodeScanned }: RoomQrScannerCameraProps) {
+  const styles = useThemedStyles(createStyles);
   const { t } = useTranslation();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
@@ -65,25 +67,27 @@ export function RoomQrScannerCamera({ onClose, onCodeScanned }: RoomQrScannerCam
   );
 }
 
-const styles = StyleSheet.create({
-  messageBox: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: spacing.md,
-  },
-  message: {
-    fontSize: 15,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  cameraWrap: {
-    flex: 1,
-    borderRadius: radii.md,
-    overflow: 'hidden',
-    backgroundColor: '#000',
-  },
-  camera: {
-    flex: 1,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    messageBox: {
+      flex: 1,
+      justifyContent: 'center',
+      gap: spacing.md,
+    },
+    message: {
+      fontSize: 15,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      lineHeight: 22,
+    },
+    cameraWrap: {
+      flex: 1,
+      borderRadius: radii.md,
+      overflow: 'hidden',
+      backgroundColor: '#000',
+    },
+    camera: {
+      flex: 1,
+    },
+  });
+}

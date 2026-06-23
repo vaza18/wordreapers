@@ -6,7 +6,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { toDisplayUpper } from '@/lib/dictionary/normalize';
 import { formatResultsHeadline } from '@/lib/game/results-headline';
 import { createOnlineResultsDirectory } from '@/lib/game/results-directory';
@@ -28,6 +30,8 @@ import { useProfileStore } from '@/store/profile-store';
  * Browse locally archived finished online rounds.
  */
 export default function RoundHistoryScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const [archives, setArchives] = useState<FinishedRoundArchive[] | null>(null);
   const gamesPlayed = usePlayerStatsStore((state) => state.gamesPlayed);
@@ -152,74 +156,76 @@ export default function RoundHistoryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: colors.backgroundSecondary,
-  },
-  statsBand: {
-    minHeight: 56,
-    paddingHorizontal: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statsSummary: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyState: {
-    flex: 1,
-  },
-  emptyBody: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: spacing.md,
-    gap: spacing.md,
-  },
-  empty: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  list: {
-    flex: 1,
-  },
-  listContent: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
-    gap: spacing.sm,
-  },
-  card: {
-    backgroundColor: colors.backgroundPrimary,
-    borderRadius: radii.md,
-    padding: spacing.md,
-    gap: spacing.xs,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSecondary,
-  },
-  cardDate: {
-    fontSize: 13,
-    color: colors.textTertiary,
-  },
-  cardBaseWord: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.accent,
-  },
-  cardHeadline: {
-    fontSize: 15,
-    color: colors.textPrimary,
-    lineHeight: 20,
-  },
-  cardMeta: {
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    root: {
+      flex: 1,
+      backgroundColor: colors.backgroundSecondary,
+    },
+    statsBand: {
+      minHeight: 56,
+      paddingHorizontal: spacing.md,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    statsSummary: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    centered: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    emptyState: {
+      flex: 1,
+    },
+    emptyBody: {
+      flex: 1,
+      justifyContent: 'center',
+      padding: spacing.md,
+      gap: spacing.md,
+    },
+    empty: {
+      fontSize: 15,
+      lineHeight: 22,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    list: {
+      flex: 1,
+    },
+    listContent: {
+      paddingHorizontal: spacing.md,
+      paddingBottom: spacing.md,
+      gap: spacing.sm,
+    },
+    card: {
+      backgroundColor: colors.backgroundPrimary,
+      borderRadius: radii.md,
+      padding: spacing.md,
+      gap: spacing.xs,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSecondary,
+    },
+    cardDate: {
+      fontSize: 13,
+      color: colors.textTertiary,
+    },
+    cardBaseWord: {
+      fontSize: 20,
+      fontWeight: '600',
+      color: colors.accent,
+    },
+    cardHeadline: {
+      fontSize: 15,
+      color: colors.textPrimary,
+      lineHeight: 20,
+    },
+    cardMeta: {
+      fontSize: 13,
+      color: colors.textSecondary,
+    },
+  });
+}

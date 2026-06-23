@@ -19,7 +19,8 @@ import { ResultsGlobalWordList } from '@/components/ResultsGlobalWordList';
 import { Screen } from '@/components/Screen';
 import { ScrollableWordPanel } from '@/components/ScrollableWordPanel';
 import { SettingSwitch } from '@/components/SettingSwitch';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import type { RoundPlayableLexicon } from '@/lib/dictionary/round-playable-lexicon';
 import type { GlobalResultWordRow, PlayerResultRankGroup } from '@/lib/game/results-view';
 import { buildResultsWordList } from '@/lib/game/results-missing-words';
@@ -68,6 +69,7 @@ export function RoundResultsView({
   showWordAuthors = true,
   roundDurationSeconds,
 }: RoundResultsViewProps) {
+  const styles = useThemedStyles(createStyles);
   const { t } = useTranslation();
   const [tab, setTab] = useState<ResultsTab>('all');
   const [showMissingWords, setShowMissingWords] = useState(false);
@@ -220,6 +222,7 @@ function TabButton({
   active: boolean;
   onPress: () => void;
 }) {
+  const styles = useThemedStyles(createStyles);
   return (
     <FeedbackPressable
       accessibilityRole="button"
@@ -233,91 +236,93 @@ function TabButton({
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    padding: 0,
-    gap: 0,
-  },
-  header: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-    gap: spacing.sm,
-  },
-  headline: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: colors.accent,
-  },
-  tabs: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-  },
-  tab: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderRadius: radii.sm,
-  },
-  tabActive: {
-    backgroundColor: colors.accent,
-  },
-  tabIdle: {
-    backgroundColor: colors.backgroundPrimary,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderTertiary,
-  },
-  tabLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  tabLabelActive: {
-    color: '#E1F5EE',
-  },
-  tabLabelIdle: {
-    color: colors.textSecondary,
-  },
-  meta: {
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
-  wordPanel: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  panelScrollViewport: {
-    flex: 1,
-    minHeight: 0,
-  },
-  panelScroll: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
-  panelScrollContent: {
-    paddingHorizontal: spacing.sm,
-    paddingBottom: spacing.md,
-  },
-  scrollBody: {
-    flexGrow: 1,
-    backgroundColor: colors.notebookPaper,
-    position: 'relative',
-  },
-  ruledBackdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 0,
-  },
-  playerBody: {
-    zIndex: 1,
-  },
-  actions: {
-    padding: spacing.md,
-    gap: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderTertiary,
-    backgroundColor: colors.backgroundSecondary,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    screen: {
+      flex: 1,
+      padding: 0,
+      gap: 0,
+    },
+    header: {
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.md,
+      paddingBottom: spacing.sm,
+      gap: spacing.sm,
+    },
+    headline: {
+      fontSize: 17,
+      fontWeight: '600',
+      color: colors.accent,
+    },
+    tabs: {
+      flexDirection: 'row',
+      gap: spacing.xs,
+    },
+    tab: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: spacing.sm,
+      borderRadius: radii.sm,
+    },
+    tabActive: {
+      backgroundColor: colors.accent,
+    },
+    tabIdle: {
+      backgroundColor: colors.backgroundPrimary,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderTertiary,
+    },
+    tabLabel: {
+      fontSize: 14,
+      fontWeight: '500',
+    },
+    tabLabelActive: {
+      color: '#E1F5EE',
+    },
+    tabLabelIdle: {
+      color: colors.textSecondary,
+    },
+    meta: {
+      fontSize: 13,
+      color: colors.textSecondary,
+    },
+    wordPanel: {
+      marginHorizontal: spacing.md,
+      marginBottom: spacing.sm,
+    },
+    panelScrollViewport: {
+      flex: 1,
+      minHeight: 0,
+    },
+    panelScroll: {
+      flex: 1,
+      backgroundColor: 'transparent',
+    },
+    panelScrollContent: {
+      paddingHorizontal: spacing.sm,
+      paddingBottom: spacing.md,
+    },
+    scrollBody: {
+      flexGrow: 1,
+      backgroundColor: colors.notebookPaper,
+      position: 'relative',
+    },
+    ruledBackdrop: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      zIndex: 0,
+    },
+    playerBody: {
+      zIndex: 1,
+    },
+    actions: {
+      padding: spacing.md,
+      gap: spacing.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderTertiary,
+      backgroundColor: colors.backgroundSecondary,
+    },
+  });
+}

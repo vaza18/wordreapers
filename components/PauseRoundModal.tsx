@@ -5,7 +5,8 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { SettingsIconButton } from '@/components/SettingsIconButton';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { tGendered, type PlayerGender } from '@/lib/game/grammar';
 import type { GameSession, SessionVote } from '@/lib/firebase/types';
 import { buildEarlyFinishParticipantRows } from '@/lib/online/early-finish-vote';
@@ -61,6 +62,7 @@ function PauseBody({
   onOpenMenu,
   onOpenSettings,
 }: Omit<PauseRoundModalProps, 'visible'>) {
+  const styles = useThemedStyles(createStyles);
   const { t } = useTranslation();
   const { top, bottom } = useSafeAreaInsets();
   const frozenMs = session.pauseState?.frozenRemainingMs ?? 0;
@@ -236,148 +238,150 @@ export function PauseRoundModal(props: PauseRoundModalProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.backgroundSecondary,
-  },
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    paddingBottom: spacing.xs,
-  },
-  card: {
-    flex: 1,
-    backgroundColor: colors.backgroundPrimary,
-    borderRadius: radii.lg,
-    overflow: 'hidden',
-  },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: spacing.lg,
-    paddingBottom: spacing.sm,
-    gap: spacing.sm,
-  },
-  footer: {
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.lg,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderTertiary,
-    backgroundColor: colors.backgroundPrimary,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    textAlign: 'center',
-  },
-  timerLine: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: colors.accent,
-    textAlign: 'center',
-    letterSpacing: 1,
-  },
-  body: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginTop: spacing.xs,
-  },
-  standingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderTertiary,
-  },
-  standingRank: {
-    width: 24,
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.accent,
-    textAlign: 'center',
-  },
-  standingMain: {
-    flex: 1,
-    gap: 2,
-  },
-  standingName: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.textPrimary,
-  },
-  standingMeta: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  resumeVoteSection: {
-    gap: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderTertiary,
-    paddingTop: spacing.sm,
-    marginTop: spacing.xs,
-  },
-  resumeHeadline: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: colors.textPrimary,
-    textAlign: 'center',
-  },
-  resumeTimer: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  participantList: {
-    gap: spacing.xs,
-  },
-  participantRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderTertiary,
-  },
-  participantMain: {
-    flex: 1,
-    gap: 2,
-  },
-  participantName: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.textPrimary,
-  },
-  participantPresence: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  participantVote: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: colors.accent,
-    maxWidth: 110,
-    textAlign: 'right',
-  },
-  row: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  btn: {
-    flex: 1,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    overlay: {
+      flex: 1,
+      paddingHorizontal: spacing.md,
+      backgroundColor: colors.backgroundSecondary,
+    },
+    topBar: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      paddingBottom: spacing.xs,
+    },
+    card: {
+      flex: 1,
+      backgroundColor: colors.backgroundPrimary,
+      borderRadius: radii.lg,
+      overflow: 'hidden',
+    },
+    scroll: {
+      flex: 1,
+    },
+    scrollContent: {
+      padding: spacing.lg,
+      paddingBottom: spacing.sm,
+      gap: spacing.sm,
+    },
+    footer: {
+      gap: spacing.sm,
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.sm,
+      paddingBottom: spacing.lg,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderTertiary,
+      backgroundColor: colors.backgroundPrimary,
+    },
+    title: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: colors.textPrimary,
+      textAlign: 'center',
+    },
+    timerLine: {
+      fontSize: 24,
+      fontWeight: '600',
+      color: colors.accent,
+      textAlign: 'center',
+      letterSpacing: 1,
+    },
+    body: {
+      fontSize: 14,
+      lineHeight: 20,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    sectionTitle: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.textPrimary,
+      marginTop: spacing.xs,
+    },
+    standingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.xs,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderTertiary,
+    },
+    standingRank: {
+      width: 24,
+      fontSize: 15,
+      fontWeight: '700',
+      color: colors.accent,
+      textAlign: 'center',
+    },
+    standingMain: {
+      flex: 1,
+      gap: 2,
+    },
+    standingName: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: colors.textPrimary,
+    },
+    standingMeta: {
+      fontSize: 12,
+      color: colors.textSecondary,
+    },
+    resumeVoteSection: {
+      gap: spacing.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderTertiary,
+      paddingTop: spacing.sm,
+      marginTop: spacing.xs,
+    },
+    resumeHeadline: {
+      fontSize: 14,
+      lineHeight: 20,
+      color: colors.textPrimary,
+      textAlign: 'center',
+    },
+    resumeTimer: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    participantList: {
+      gap: spacing.xs,
+    },
+    participantRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.sm,
+      paddingVertical: spacing.xs,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderTertiary,
+    },
+    participantMain: {
+      flex: 1,
+      gap: 2,
+    },
+    participantName: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: colors.textPrimary,
+    },
+    participantPresence: {
+      fontSize: 12,
+      color: colors.textSecondary,
+    },
+    participantVote: {
+      fontSize: 12,
+      fontWeight: '500',
+      color: colors.accent,
+      maxWidth: 110,
+      textAlign: 'right',
+    },
+    row: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+    },
+    btn: {
+      flex: 1,
+    },
+  });
+}

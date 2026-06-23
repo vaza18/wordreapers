@@ -4,14 +4,15 @@ import { FlatList, InteractionManager, StyleSheet, Text, View } from 'react-nati
 import { ScrollableWordPanel } from '@/components/ScrollableWordPanel';
 import {
   NotebookLineFiller,
+  createNotebookRowLineStyle,
   notebookFillerRowCount,
   notebookListCanScroll,
-  notebookRowLineStyle,
 } from '@/components/notebook/NotebookLineFiller';
 import { WordOverlapAvatars } from '@/components/WordOverlapAvatars';
 import { useScrollablePanelMetrics } from '@/hooks/useScrollablePanelMetrics';
 import { WORD_LIST_ROW_HEIGHT } from '@/constants/notebook';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { normalizeUk, toDisplayUpper } from '@/lib/dictionary/normalize';
 import { dismissWordOverlapTooltips } from '@/lib/ui/word-overlap-tooltip';
 import {
@@ -133,16 +134,20 @@ function WordListRow({
   prefix,
   showScoreBadges,
   showOverlapPeers,
+  styles,
+  notebookRow,
 }: {
   row: WordRow;
   prefix: string;
   showScoreBadges: boolean;
   showOverlapPeers: boolean;
+  styles: ReturnType<typeof createStyles>;
+  notebookRow: ReturnType<typeof createNotebookRowLineStyle>;
 }) {
   const split = splitDisplayByNormalizedPrefix(row.display, prefix);
 
   return (
-    <View style={[notebookRowLineStyle.row, styles.row, split ? styles.rowPrefixMatch : null]}>
+    <View style={[notebookRow.row, styles.row, split ? styles.rowPrefixMatch : null]}>
       {split ? (
         <Text style={styles.word}>
           <Text style={styles.wordPrefixStrong}>{split.prefix}</Text>
@@ -176,6 +181,8 @@ export function WordList({
   scrollToNormalized = null,
   scrollToRequestId,
 }: WordListProps) {
+  const styles = useThemedStyles(createStyles);
+  const notebookRow = useThemedStyles(createNotebookRowLineStyle);
   const prefix = normalizeUk(draftPrefix);
   const listRef = useRef<FlatList<WordRow>>(null);
   const rowsRef = useRef<readonly WordRow[]>([]);
@@ -305,6 +312,8 @@ export function WordList({
             prefix={prefix}
             showScoreBadges={showScoreBadges}
             showOverlapPeers={showOverlapPeers}
+            styles={styles}
+            notebookRow={notebookRow}
           />
         ))}
       </View>
@@ -347,6 +356,8 @@ export function WordList({
               prefix={prefix}
               showScoreBadges={showScoreBadges}
               showOverlapPeers={showOverlapPeers}
+              styles={styles}
+              notebookRow={notebookRow}
             />
           )}
         />
@@ -355,53 +366,55 @@ export function WordList({
   );
 }
 
-const styles = StyleSheet.create({
-  listViewport: {
-    flex: 1,
-    minHeight: 0,
-  },
-  list: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
-  staticList: {
-    gap: 0,
-  },
-  listContent: {
-    paddingBottom: spacing.sm,
-    backgroundColor: colors.notebookPaper,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    overflow: 'visible',
-    zIndex: 1,
-  },
-  rowPrefixMatch: {
-    backgroundColor: colors.prefixHighlightBg,
-    borderRadius: radii.sm,
-    marginHorizontal: -spacing.xs,
-    paddingHorizontal: spacing.sm,
-  },
-  word: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: '500',
-    color: colors.penBlue,
-  },
-  wordPrefixStrong: {
-    fontWeight: '800',
-    color: colors.textPrimary,
-  },
-  wordRest: {
-    fontWeight: '500',
-    color: colors.penBlue,
-  },
-  badgeX2: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.accent,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    listViewport: {
+      flex: 1,
+      minHeight: 0,
+    },
+    list: {
+      flex: 1,
+      backgroundColor: 'transparent',
+    },
+    staticList: {
+      gap: 0,
+    },
+    listContent: {
+      paddingBottom: spacing.sm,
+      backgroundColor: colors.notebookPaper,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.sm,
+      overflow: 'visible',
+      zIndex: 1,
+    },
+    rowPrefixMatch: {
+      backgroundColor: colors.prefixHighlightBg,
+      borderRadius: radii.sm,
+      marginHorizontal: -spacing.xs,
+      paddingHorizontal: spacing.sm,
+    },
+    word: {
+      flex: 1,
+      fontSize: 18,
+      fontWeight: '500',
+      color: colors.penBlue,
+    },
+    wordPrefixStrong: {
+      fontWeight: '800',
+      color: colors.textPrimary,
+    },
+    wordRest: {
+      fontWeight: '500',
+      color: colors.penBlue,
+    },
+    badgeX2: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.accent,
+    },
+  });
+}

@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { APPEARANCE_MODE_STORAGE_KEY } from '@/lib/settings/appearance-mode';
 import { LOCALE_STORAGE_KEY } from '@/i18n';
 import { PROFILE_STORAGE_KEY } from '@/lib/profile/player-profile';
 import { PLAYER_STATS_STORAGE_KEY } from '@/lib/profile/player-stats';
@@ -19,6 +20,7 @@ const LOCAL_DATA_STORAGE_KEYS = [
   WORD_ACCEPTED_FEEDBACK_STORAGE_KEY,
   TIMER_ALERT_FEEDBACK_STORAGE_KEY,
   LOCALE_STORAGE_KEY,
+  APPEARANCE_MODE_STORAGE_KEY,
 ] as const;
 
 /**

@@ -136,6 +136,10 @@
   "settings": {
     "title": "Налаштування",
     "language": "Мова інтерфейсу",
+    "appearance": "Тема",
+    "appearanceAuto": "Авто",
+    "appearanceLight": "Світла",
+    "appearanceDark": "Темна",
     "languageUk": "Українська",
     "feedbackSection": "Відгук",
     "feedbackOsNote": "Налаштування звуку та вібрації системної клавіатури ОС у додатку прочитати не можна. Оберіть відгук для кнопок і зарахування слова нижче.",

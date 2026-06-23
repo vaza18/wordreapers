@@ -5,7 +5,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { BottomSheetModal } from '@/components/BottomSheetModal';
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { formatTimerMs } from '@/lib/game/timer-label';
 import { ADD_TIME_MINUTE_OPTIONS } from '@/lib/online/add-time-vote';
 
@@ -27,6 +28,7 @@ export function AddTimeModal({
   remainingMs,
   requiresConsensus,
 }: AddTimeModalProps) {
+  const styles = useThemedStyles(createStyles);
   const { t } = useTranslation();
   const [selectedMinutes, setSelectedMinutes] = useState<number | null>(null);
 
@@ -108,71 +110,73 @@ export function AddTimeModal({
   );
 }
 
-const styles = StyleSheet.create({
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    textAlign: 'center',
-    marginBottom: spacing.xs,
-  },
-  subtitle: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: spacing.md,
-  },
-  options: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    justifyContent: 'center',
-    marginBottom: spacing.md,
-  },
-  option: {
-    minWidth: 72,
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  optionWide: {
-    minWidth: '100%',
-  },
-  optionIdle: {
-    backgroundColor: colors.backgroundPrimary,
-    borderColor: colors.borderTertiary,
-  },
-  optionSelected: {
-    backgroundColor: '#E1F5EE',
-    borderColor: colors.accent,
-    borderWidth: 1.5,
-  },
-  optionLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.textPrimary,
-  },
-  optionLabelSelected: {
-    color: '#085041',
-  },
-  preview: {
-    backgroundColor: '#E1F5EE',
-    borderRadius: radii.sm,
-    padding: spacing.sm,
-    marginBottom: spacing.md,
-    gap: 2,
-  },
-  previewTitle: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#085041',
-    textAlign: 'center',
-  },
-  previewRange: {
-    fontSize: 13,
-    color: '#085041',
-    textAlign: 'center',
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    title: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: colors.textPrimary,
+      textAlign: 'center',
+      marginBottom: spacing.xs,
+    },
+    subtitle: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      marginBottom: spacing.md,
+    },
+    options: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+      justifyContent: 'center',
+      marginBottom: spacing.md,
+    },
+    option: {
+      minWidth: 72,
+      alignItems: 'center',
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderRadius: radii.sm,
+      borderWidth: StyleSheet.hairlineWidth,
+    },
+    optionWide: {
+      minWidth: '100%',
+    },
+    optionIdle: {
+      backgroundColor: colors.backgroundPrimary,
+      borderColor: colors.borderTertiary,
+    },
+    optionSelected: {
+      backgroundColor: '#E1F5EE',
+      borderColor: colors.accent,
+      borderWidth: 1.5,
+    },
+    optionLabel: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: colors.textPrimary,
+    },
+    optionLabelSelected: {
+      color: '#085041',
+    },
+    preview: {
+      backgroundColor: '#E1F5EE',
+      borderRadius: radii.sm,
+      padding: spacing.sm,
+      marginBottom: spacing.md,
+      gap: 2,
+    },
+    previewTitle: {
+      fontSize: 13,
+      fontWeight: '500',
+      color: '#085041',
+      textAlign: 'center',
+    },
+    previewRange: {
+      fontSize: 13,
+      color: '#085041',
+      textAlign: 'center',
+    },
+  });
+}

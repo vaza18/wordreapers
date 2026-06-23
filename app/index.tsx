@@ -12,7 +12,8 @@ import { continueWithProfileOrRedirect } from '@/lib/online/require-profile';
 import { navigateToNewOnlineRoom } from '@/lib/online/create-room';
 import { joinErrorMessage } from '@/lib/firebase/join-error-message';
 import { useProfileStore } from '@/store/profile-store';
-import { colors, spacing } from '@/constants/theme';
+import { spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 const appIcon = require('../assets/icons/app-icon.png');
 
@@ -20,6 +21,7 @@ const appIcon = require('../assets/icons/app-icon.png');
  * Welcome / home screen (mockup screen 1).
  */
 export default function HomeScreen() {
+  const styles = useThemedStyles(createStyles);
   const { t } = useTranslation();
 
   const handleCreateOnline = () => {
@@ -71,68 +73,70 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.backgroundSecondary,
-  },
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xs,
-  },
-  hero: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    gap: spacing.xs,
-  },
-  appIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    marginBottom: spacing.sm,
-  },
-  brand: {
-    fontSize: 28,
-    fontWeight: '600',
-    color: colors.accent,
-  },
-  appName: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  tagline: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    lineHeight: 22,
-    textAlign: 'center',
-    marginTop: spacing.sm,
-  },
-  description: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    marginBottom: spacing.md,
-    textAlign: 'center',
-  },
-  actions: {
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
-  },
-  bottomSection: {
-    paddingTop: spacing.sm,
-  },
-  footerDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSecondary,
-    marginHorizontal: spacing.md,
-  },
-  documentsDivider: {
-    marginTop: spacing.md,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    safe: {
+      flex: 1,
+      backgroundColor: colors.backgroundSecondary,
+    },
+    topBar: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.xs,
+    },
+    hero: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: spacing.lg,
+      gap: spacing.xs,
+    },
+    appIcon: {
+      width: 64,
+      height: 64,
+      borderRadius: 16,
+      marginBottom: spacing.sm,
+    },
+    brand: {
+      fontSize: 28,
+      fontWeight: '600',
+      color: colors.accent,
+    },
+    appName: {
+      fontSize: 14,
+      color: colors.textSecondary,
+    },
+    tagline: {
+      fontSize: 16,
+      color: colors.textSecondary,
+      lineHeight: 22,
+      textAlign: 'center',
+      marginTop: spacing.sm,
+    },
+    description: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      lineHeight: 20,
+      marginBottom: spacing.md,
+      textAlign: 'center',
+    },
+    actions: {
+      gap: spacing.sm,
+      paddingHorizontal: spacing.md,
+      paddingBottom: spacing.md,
+    },
+    bottomSection: {
+      paddingTop: spacing.sm,
+    },
+    footerDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.borderSecondary,
+      marginHorizontal: spacing.md,
+    },
+    documentsDivider: {
+      marginTop: spacing.md,
+    },
+  });
+}

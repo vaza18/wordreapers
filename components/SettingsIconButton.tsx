@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { HeaderBarButton } from '@/components/HeaderBarButton';
 import { SettingsGearIcon } from '@/components/HeaderIcons';
-import { colors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 
 interface SettingsIconButtonProps {
   onPress?: () => void;
@@ -14,6 +14,7 @@ interface SettingsIconButtonProps {
  */
 export function SettingsIconButton({ onPress }: SettingsIconButtonProps = {}) {
   const { t } = useTranslation();
+  const { colors } = useTheme();
 
   const handlePress = () => {
     if (onPress) {
