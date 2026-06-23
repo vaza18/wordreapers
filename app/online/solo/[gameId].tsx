@@ -19,6 +19,7 @@ import { LetterKeyboard } from '@/components/LetterKeyboard';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { WordList } from '@/components/WordList';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { modalOverlayBackground } from '@/lib/ui/modal-chrome';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useAutoPauseOnAppBackground } from '@/hooks/useAutoPauseOnAppBackground';
@@ -601,7 +602,7 @@ function createStyles(colors: ThemeColors) {
     },
     draftBox: {
       flex: 1,
-      backgroundColor: '#FAEEDA',
+      backgroundColor: colors.composeDraftBg,
       borderRadius: radii.sm,
       paddingHorizontal: spacing.md,
       justifyContent: 'center',
@@ -610,7 +611,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: 16,
       fontWeight: '600',
       letterSpacing: 1,
-      color: '#412402',
+      color: colors.composeDraftText,
     },
     wordListSection: {
       flex: 1,
@@ -625,7 +626,9 @@ function createStyles(colors: ThemeColors) {
       fontSize: 13,
       fontWeight: '600',
       color: colors.textPrimary,
-      backgroundColor: 'rgba(255,255,255,0.92)',
+      backgroundColor: colors.feedbackToastBg,
+      borderWidth: 1,
+      borderColor: colors.borderSecondary,
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.xs,
       borderRadius: radii.sm,
@@ -664,7 +667,7 @@ function createStyles(colors: ThemeColors) {
     },
     publishingOverlay: {
       ...StyleSheet.absoluteFillObject,
-      backgroundColor: 'rgba(0,0,0,0.35)',
+      backgroundColor: modalOverlayBackground(colors),
       alignItems: 'center',
       justifyContent: 'center',
     },

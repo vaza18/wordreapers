@@ -5,6 +5,7 @@ import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
+import { modalCardChrome, modalOverlayBackground } from '@/lib/ui/modal-chrome';
 
 interface GameMenuModalProps {
   visible: boolean;
@@ -96,10 +97,10 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
       justifyContent: 'center',
       padding: spacing.lg,
-      backgroundColor: 'rgba(0,0,0,0.45)',
+      backgroundColor: modalOverlayBackground(colors),
     },
     card: {
-      backgroundColor: colors.backgroundPrimary,
+      ...modalCardChrome(colors),
       borderRadius: radii.lg,
       padding: spacing.lg,
       gap: spacing.sm,

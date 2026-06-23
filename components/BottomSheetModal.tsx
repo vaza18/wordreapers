@@ -4,6 +4,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
+import { modalOverlayBackground, modalSheetChrome } from '@/lib/ui/modal-chrome';
 
 interface BottomSheetModalProps {
   visible: boolean;
@@ -16,7 +17,7 @@ function createStyles(colors: ThemeColors) {
     overlay: {
       flex: 1,
       justifyContent: 'flex-end',
-      backgroundColor: 'rgba(0,0,0,0.35)',
+      backgroundColor: modalOverlayBackground(colors),
     },
     backdrop: {
       ...StyleSheet.absoluteFillObject,
@@ -24,7 +25,7 @@ function createStyles(colors: ThemeColors) {
     },
     sheet: {
       zIndex: 1,
-      backgroundColor: colors.backgroundPrimary,
+      ...modalSheetChrome(colors),
       borderTopLeftRadius: radii.lg,
       borderTopRightRadius: radii.lg,
       padding: spacing.lg,

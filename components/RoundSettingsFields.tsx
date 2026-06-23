@@ -11,6 +11,7 @@ import { SettingSwitch } from '@/components/SettingSwitch';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
+import { modalCardChrome, modalOverlayBackground } from '@/lib/ui/modal-chrome';
 import type { UniqueBonusMode } from '@/lib/game/scoring';
 
 export interface RoundSettingsFieldsProps {
@@ -119,10 +120,10 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
       justifyContent: 'center',
       padding: spacing.lg,
-      backgroundColor: 'rgba(0,0,0,0.5)',
+      backgroundColor: modalOverlayBackground(colors),
     },
     modalCard: {
-      backgroundColor: colors.backgroundPrimary,
+      ...modalCardChrome(colors),
       borderRadius: radii.md,
       padding: spacing.lg,
       gap: spacing.md,

@@ -6,6 +6,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
+import { modalCardChrome, modalOverlayBackground } from '@/lib/ui/modal-chrome';
 import type { GameSession, SessionVote } from '@/lib/firebase/types';
 import { formatPlayerLeftLabel, formatVoteStatusLabel } from '@/lib/game/vote-status-label';
 import {
@@ -153,10 +154,10 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
       paddingHorizontal: spacing.lg,
       paddingTop: spacing.lg,
-      backgroundColor: 'rgba(0,0,0,0.5)',
+      backgroundColor: modalOverlayBackground(colors),
     },
     card: {
-      backgroundColor: colors.backgroundPrimary,
+      ...modalCardChrome(colors),
       borderRadius: radii.md,
       padding: spacing.lg,
       gap: spacing.md,

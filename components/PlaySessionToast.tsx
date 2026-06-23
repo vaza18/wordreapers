@@ -29,11 +29,16 @@ interface PlaySessionToastStackProps {
 
 function getToastVariantStyles(
   colors: ThemeColors,
-): Record<PlayToastVariant, { backgroundColor: string; textColor: string }> {
+): Record<
+  PlayToastVariant,
+  { backgroundColor: string; textColor: string; borderColor?: string; borderWidth?: number }
+> {
   return {
     default: {
-      backgroundColor: 'rgba(26,26,26,0.92)',
-      textColor: colors.textOnAccent,
+      backgroundColor: colors.sessionToastBg,
+      textColor: colors.sessionToastText,
+      borderColor: colors.borderSecondary,
+      borderWidth: 1,
     },
     success: {
       backgroundColor: colors.accent,
@@ -137,6 +142,9 @@ function ToastBubble({
         playToastStyles.toastWrap,
         playToastStyles.toastSlot,
         { backgroundColor: variantStyle.backgroundColor, opacity, transform: [{ translateY }] },
+        variantStyle.borderWidth != null
+          ? { borderColor: variantStyle.borderColor, borderWidth: variantStyle.borderWidth }
+          : null,
       ]}
     >
       <Text style={[playToastStyles.toastText, { color: variantStyle.textColor }]}>{message}</Text>

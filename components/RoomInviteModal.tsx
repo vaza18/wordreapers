@@ -6,6 +6,7 @@ import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { LobbyQrCode } from '@/components/LobbyQrCode';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
+import { modalOverlayBackground, modalSheetChrome } from '@/lib/ui/modal-chrome';
 import { formatRoomCodeDisplay } from '@/lib/firebase/format-room-code';
 
 interface RoomInviteModalProps {
@@ -85,12 +86,12 @@ function createStyles(colors: ThemeColors) {
     overlay: {
       flex: 1,
       justifyContent: 'flex-end',
-      backgroundColor: 'rgba(0,0,0,0.45)',
+      backgroundColor: modalOverlayBackground(colors),
       paddingHorizontal: spacing.md,
       paddingTop: spacing.lg,
     },
     card: {
-      backgroundColor: colors.backgroundPrimary,
+      ...modalSheetChrome(colors),
       borderTopLeftRadius: radii.lg,
       borderTopRightRadius: radii.lg,
       padding: spacing.lg,

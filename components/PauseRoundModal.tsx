@@ -7,6 +7,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { SettingsIconButton } from '@/components/SettingsIconButton';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
+import { modalCardChrome, modalOverlayBackground } from '@/lib/ui/modal-chrome';
 import { tGendered, type PlayerGender } from '@/lib/game/grammar';
 import type { GameSession, SessionVote } from '@/lib/firebase/types';
 import { buildEarlyFinishParticipantRows } from '@/lib/online/early-finish-vote';
@@ -243,7 +244,7 @@ function createStyles(colors: ThemeColors) {
     overlay: {
       flex: 1,
       paddingHorizontal: spacing.md,
-      backgroundColor: colors.backgroundSecondary,
+      backgroundColor: modalOverlayBackground(colors),
     },
     topBar: {
       flexDirection: 'row',
@@ -252,7 +253,7 @@ function createStyles(colors: ThemeColors) {
     },
     card: {
       flex: 1,
-      backgroundColor: colors.backgroundPrimary,
+      ...modalCardChrome(colors),
       borderRadius: radii.lg,
       overflow: 'hidden',
     },
@@ -271,7 +272,7 @@ function createStyles(colors: ThemeColors) {
       paddingBottom: spacing.lg,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.borderTertiary,
-      backgroundColor: colors.backgroundPrimary,
+      backgroundColor: colors.modalSurface,
     },
     title: {
       fontSize: 20,

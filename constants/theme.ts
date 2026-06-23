@@ -33,6 +33,18 @@ export const lightColors = {
   /** Warning / host badge chips */
   warningBg: '#FAEEDA',
   warningText: '#633806',
+  /** Inline word accept/reject feedback chip above compose */
+  feedbackToastBg: '#FFFFFF',
+  /** Compose row — draft word before acceptance */
+  composeDraftBg: '#FAEEDA',
+  composeDraftText: '#412402',
+  /** Play-session roster / standings toast (join, leave, alone) */
+  sessionToastBg: '#1A1A1A',
+  sessionToastText: '#FFFFFF',
+  /** Modal scrim and elevated card / sheet surfaces */
+  modalOverlay: 'rgba(0,0,0,0.45)',
+  modalSurface: '#FFFFFF',
+  modalBorder: '#D1D1D1',
   shadow: '#000000',
 } as const;
 
@@ -65,6 +77,14 @@ export const darkColors = {
   notebookHoleRing: '#636366',
   warningBg: '#3D3420',
   warningText: '#F5D78E',
+  feedbackToastBg: '#3A3A3C',
+  composeDraftBg: '#3D3420',
+  composeDraftText: '#F5D78E',
+  sessionToastBg: '#48484A',
+  sessionToastText: '#F5F5F5',
+  modalOverlay: 'rgba(0,0,0,0.72)',
+  modalSurface: '#2C2C2E',
+  modalBorder: '#48484A',
   shadow: '#000000',
 } as const;
 

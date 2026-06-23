@@ -94,7 +94,7 @@ function createStyles(colors: ThemeColors) {
     },
     draftBox: {
       flex: 1,
-      backgroundColor: '#FAEEDA',
+      backgroundColor: colors.composeDraftBg,
       borderRadius: radii.sm,
       paddingHorizontal: spacing.md,
       justifyContent: 'center',
@@ -103,7 +103,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: 16,
       fontWeight: '600',
       letterSpacing: 1,
-      color: '#412402',
+      color: colors.composeDraftText,
     },
   });
 }

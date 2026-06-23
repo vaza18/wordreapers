@@ -33,7 +33,7 @@ import { RoomInviteModal } from '@/components/RoomInviteModal';
 import { OnlinePlayComposePanel } from '@/components/online/OnlinePlayComposePanel';
 import { OnlinePlayWordListSection } from '@/components/online/OnlinePlayWordListSection';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { spacing, type ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useAutoPauseOnAppBackground } from '@/hooks/useAutoPauseOnAppBackground';
@@ -1364,21 +1364,6 @@ function createStyles(colors: ThemeColors) {
       fontSize: 12,
       color: colors.textSecondary,
       textAlign: 'right',
-    },
-    feedbackSlot: {
-      height: 32,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    feedbackToast: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: colors.textPrimary,
-      backgroundColor: 'rgba(255,255,255,0.92)',
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.xs,
-      borderRadius: radii.sm,
-      overflow: 'hidden',
     },
     footer: {
       flexDirection: 'row',
