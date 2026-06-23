@@ -18,7 +18,8 @@
       "infoPlist": {
         "UIDesignRequiresCompatibility": true,
         "UIStatusBarHidden": true,
-        "UIViewControllerBasedStatusBarAppearance": false
+        "UIViewControllerBasedStatusBarAppearance": false,
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
