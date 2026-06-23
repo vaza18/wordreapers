@@ -31,6 +31,11 @@ const WORD_FORMS: Record<UkPluralForm, string> = {
   many: 'слів',
 };
 
+/** «слово» / «слова» / «слів» for a given count (without the number). */
+export function ukWordForm(count: number): string {
+  return WORD_FORMS[ukPluralForm(count)];
+}
+
 /** «1 гравець», «2 гравці», «5 гравців», … */
 export function formatUkPlayers(count: number): string {
   return `${count} ${PLAYER_FORMS[ukPluralForm(count)]}`;

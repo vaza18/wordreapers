@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, View } from 'react-native';
 
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
 import { RoundResultsView } from '@/components/RoundResultsView';
 import { colors } from '@/constants/theme';
 import { formatResultsHeadline } from '@/lib/game/results-headline';
@@ -149,6 +150,13 @@ export default function OrganizerSoloResultsScreen() {
     words,
   ]);
 
+  const { lexicon: roundLexicon, loading: lexiconLoading } = useRoundPlayableLexicon({
+    baseWord: setup?.baseWord ?? '',
+    allowProperNouns: setup?.allowProperNouns ?? false,
+    allowSlang: setup?.allowSlang ?? false,
+    enabled: Boolean(setup?.baseWord),
+  });
+
   if (!setup || !viewData) {
     return (
       <View
@@ -171,6 +179,9 @@ export default function OrganizerSoloResultsScreen() {
         headline={viewData.headline}
         baseWordDisplay={setup.baseWordDisplay}
         totalDistinctWords={viewData.totalDistinctWords}
+        maxPlayableWords={roundLexicon?.maxCount ?? null}
+        roundLexicon={roundLexicon}
+        lexiconLoading={lexiconLoading}
         globalWords={viewData.globalWords}
         playerRankGroups={viewData.playerRankGroups}
         highlightPlayerId="solo"

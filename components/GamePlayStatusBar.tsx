@@ -8,6 +8,8 @@ interface GamePlayStatusBarProps {
   timerUrgent?: boolean;
   rank: number;
   wordCount: number;
+  /** When set, shows `found/max` (e.g. 12/571сл). */
+  maxWordCount?: number | null;
   score: number;
   wordsShort: string;
   pointsShort: string;
@@ -24,6 +26,7 @@ export function GamePlayStatusBar({
   timerUrgent = false,
   rank,
   wordCount,
+  maxWordCount = null,
   score,
   wordsShort,
   pointsShort,
@@ -38,7 +41,11 @@ export function GamePlayStatusBar({
   if (showRank) {
     statsParts.push(`${rank}м`);
   }
-  statsParts.push(`${wordCount}${wordsShort}`);
+  const wordsLabel =
+    maxWordCount != null && maxWordCount > 0
+      ? `${wordCount}/${maxWordCount}${wordsShort}`
+      : `${wordCount}${wordsShort}`;
+  statsParts.push(wordsLabel);
   if (showScore) {
     statsParts.push(`${score}${pointsShort}`);
   }

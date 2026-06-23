@@ -5,11 +5,15 @@ import type { GameSession } from '../firebase/types.js';
 import { normalizeRoomCode } from '../firebase/room-code.js';
 
 import type { AllPlayerWords } from './clone-player-words.js';
+import { playableLexiconSnapshotForSession } from './playable-lexicon-archive.js';
+import type { PlayableLexiconSnapshot } from '../dictionary/round-playable-lexicon.js';
 
 const FINISHED_ARCHIVES_KEY = 'wordreapers.finishedOnlineRounds';
 const MAX_FINISHED_ARCHIVES = 40;
 
-export const FINISHED_ARCHIVE_VERSION = 2 as const;
+export const FINISHED_ARCHIVE_VERSION = 3 as const;
+
+export type { PlayableLexiconSnapshot };
 
 export interface FinishedRoundArchive {
   gameId: string;
@@ -23,6 +27,8 @@ export interface FinishedRoundArchive {
   ackSent?: boolean;
   /** Snapshot of RTDB `players[*].wordCount` when archived — used for staleness checks. */
   playerWordCounts?: Record<string, number>;
+  /** Playable words for this base word — avoids rebuild in history/results. */
+  playableLexicon?: PlayableLexiconSnapshot;
 }
 
 export interface PlayingRoundSnapshot {
@@ -156,6 +162,7 @@ export async function saveFinishedRoundArchive(
   const baseWordRound = session.baseWordRound ?? 0;
   const store = await readFinishedStore();
   const existing = store[finishedArchiveKey(gameId, baseWordRound)];
+  const playableLexicon = playableLexiconSnapshotForSession(session);
   store[finishedArchiveKey(gameId, baseWordRound)] = {
     gameId: normalizeRoomCode(gameId),
     baseWordRound,
@@ -165,6 +172,7 @@ export async function saveFinishedRoundArchive(
     archiveVersion: FINISHED_ARCHIVE_VERSION,
     ackSent: existing?.ackSent === true ? true : false,
     playerWordCounts: playerWordCountsFromSession(session),
+    ...(playableLexicon ? { playableLexicon } : {}),
   };
   await writeFinishedStore(trimFinishedStore(store));
 }

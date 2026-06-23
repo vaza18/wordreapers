@@ -31,6 +31,7 @@ import {
 import { markPendingRoundArchive } from '@/lib/online/pending-round-archive';
 import { maskResultsForEarlyExit } from '@/lib/online/mask-results-for-viewer';
 import { buildOnlineResultsView } from '@/lib/online/online-results-data';
+import { getFinishedRoundArchive } from '@/lib/online/online-session-archive';
 import { resolvePostJoinRoute } from '@/lib/online/post-join-route';
 import { rejoinOnlineRound } from '@/lib/online/rejoin-online-round';
 import {
@@ -38,7 +39,9 @@ import {
   isRoundFinishedNotified,
 } from '@/lib/online/round-finished-notification-once';
 import { useFirebaseStore } from '@/store/firebase-store';
+import { useResultsRoundLexicon } from '@/hooks/useResultsRoundLexicon';
 import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
+import type { PlayableLexiconSnapshot } from '@/lib/dictionary/round-playable-lexicon';
 import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
 import { useProfileStore } from '@/store/profile-store';
 
@@ -67,10 +70,24 @@ export default function OnlineLeftRoundScreen() {
   const finishedNotifyRef = useRef(false);
   const freezeAttemptedRef = useRef(false);
   const pendingMarkedRoundRef = useRef<number | null>(null);
+  const [archiveLexicon, setArchiveLexicon] = useState<PlayableLexiconSnapshot | null>(null);
 
   const roundStillActive = session?.status === 'playing';
   const displaySession = frozenRound?.session ?? session;
   const wordsSnapshot = frozenRound?.words ?? liveWords;
+  const { lexicon: roundLexicon, loading: lexiconLoading } = useResultsRoundLexicon(
+    displaySession,
+    archiveLexicon,
+  );
+
+  useEffect(() => {
+    if (!gameId || displaySession?.baseWordRound == null) {
+      return;
+    }
+    void getFinishedRoundArchive(gameId, displaySession.baseWordRound).then((archive) => {
+      setArchiveLexicon(archive?.playableLexicon ?? null);
+    });
+  }, [displaySession?.baseWordRound, gameId]);
 
   const rosterPlayerIds = useMemo(() => {
     if (frozenRound || !session) {
@@ -323,6 +340,9 @@ export default function OnlineLeftRoundScreen() {
         headline={t('game.leftRoundTitle')}
         baseWordDisplay={viewData.baseWordDisplay}
         totalDistinctWords={viewData.totalDistinctWords}
+        maxPlayableWords={roundLexicon?.maxCount ?? null}
+        roundLexicon={roundLexicon}
+        lexiconLoading={lexiconLoading}
         globalWords={viewData.globalWords}
         playerRankGroups={viewData.playerRankGroups}
         highlightPlayerId={myUid}

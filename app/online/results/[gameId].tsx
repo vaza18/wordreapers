@@ -7,6 +7,8 @@ import { PlaySessionToastStack } from '@/components/PlaySessionToast';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { RoundResultsView } from '@/components/RoundResultsView';
 import { useResultsRematchToast } from '@/hooks/useResultsRematchToast';
+import { useResultsRoundLexicon } from '@/hooks/useResultsRoundLexicon';
+import type { PlayableLexiconSnapshot } from '@/lib/dictionary/round-playable-lexicon';
 import { StackHeaderTitle } from '@/components/StackHeaderTitle';
 import { colors, spacing } from '@/constants/theme';
 import { ensureAnonymousAuth } from '@/lib/firebase/auth';
@@ -72,6 +74,7 @@ export default function OnlineResultsScreen() {
   const [rematchLoading, setRematchLoading] = useState(false);
   const [rematchError, setRematchError] = useState<string | null>(null);
   const [archiveRecoveryPending, setArchiveRecoveryPending] = useState(false);
+  const [archiveLexicon, setArchiveLexicon] = useState<PlayableLexiconSnapshot | null>(null);
   const statsRecordedRef = useRef(false);
   const archivedRef = useRef(false);
   const archivePromiseRef = useRef<Promise<void> | null>(null);
@@ -92,6 +95,19 @@ export default function OnlineResultsScreen() {
   const session = frozenRound?.session ?? liveSession;
   const wordsSnapshot = frozenRound?.words ?? liveWords;
   const liveSessionStatus = liveSession?.status;
+  const { lexicon: roundLexicon, loading: lexiconLoading } = useResultsRoundLexicon(
+    session,
+    archiveLexicon,
+  );
+
+  useEffect(() => {
+    if (!gameId || session?.baseWordRound == null) {
+      return;
+    }
+    void getFinishedRoundArchive(gameId, session.baseWordRound).then((archive) => {
+      setArchiveLexicon(archive?.playableLexicon ?? null);
+    });
+  }, [gameId, session?.baseWordRound]);
 
   const ensureArchived = useCallback(async (): Promise<void> => {
     if (archivedRef.current) {
@@ -426,6 +442,9 @@ export default function OnlineResultsScreen() {
         headline={viewData.headline}
         baseWordDisplay={viewData.baseWordDisplay}
         totalDistinctWords={viewData.totalDistinctWords}
+        maxPlayableWords={roundLexicon?.maxCount ?? null}
+        roundLexicon={roundLexicon}
+        lexiconLoading={lexiconLoading}
         globalWords={viewData.globalWords}
         playerRankGroups={viewData.playerRankGroups}
         highlightPlayerId={myUid}

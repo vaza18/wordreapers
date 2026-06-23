@@ -42,6 +42,11 @@ export class DictionaryIndex {
     return canonical ? toDisplayUpper(canonical) : null;
   }
 
+  /** Sorted normalized main-dictionary entries (read-only view). */
+  readonlyWords(): readonly string[] {
+    return this.words;
+  }
+
   /**
    * Binary search index of `target` in the sorted word list, or `-1`.
    */

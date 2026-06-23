@@ -3,10 +3,10 @@ import { StyleSheet, Text, View } from 'react-native';
 import { ResultWordAuthorAvatars } from '@/components/ResultWordAuthorAvatars';
 import { notebookRowLineStyle } from '@/components/notebook/NotebookLineFiller';
 import { colors, spacing } from '@/constants/theme';
-import type { GlobalResultWordRow } from '@/lib/game/results-view';
+import type { ResultsWordListRow } from '@/lib/game/results-missing-words';
 
 interface ResultsGlobalWordListProps {
-  rows: readonly GlobalResultWordRow[];
+  rows: readonly ResultsWordListRow[];
   showAuthors?: boolean;
   showScoreBadges?: boolean;
 }
@@ -23,11 +23,11 @@ export function ResultsGlobalWordList({
     <View style={styles.list}>
       {rows.map((row) => (
         <View key={row.normalized} style={[notebookRowLineStyle.row, styles.row]}>
-          <Text style={styles.word} numberOfLines={1}>
+          <Text style={[styles.word, !row.found ? styles.wordMissing : null]} numberOfLines={1}>
             {row.display}
           </Text>
           <View style={styles.meta}>
-            {showAuthors ? (
+            {showAuthors && row.found && row.authors ? (
               <ResultWordAuthorAvatars authors={row.authors} showUniqueBadge={showScoreBadges} />
             ) : null}
             {showScoreBadges && row.showX2 ? <Text style={styles.x2}>x2</Text> : null}
@@ -56,6 +56,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: colors.penBlue,
+  },
+  wordMissing: {
+    color: colors.textSecondary,
+    fontWeight: '400',
   },
   meta: {
     flexDirection: 'row',

@@ -8,10 +8,13 @@ import { RoundResultsView } from '@/components/RoundResultsView';
 import { StackHeaderTitle } from '@/components/StackHeaderTitle';
 import { colors } from '@/constants/theme';
 import { ensureAnonymousAuth } from '@/lib/firebase/auth';
+import type { GameSession } from '@/lib/firebase/types';
 import { stackHeaderWithBackAndSettings } from '@/lib/navigation/stack-header-options';
 import { loadFrozenFinishedRoundFromArchive } from '@/lib/online/frozen-finished-round';
 import { buildOnlineResultsView } from '@/lib/online/online-results-data';
-import { parseArchiveRouteKey } from '@/lib/online/online-session-archive';
+import { getFinishedRoundArchive, parseArchiveRouteKey } from '@/lib/online/online-session-archive';
+import { useResultsRoundLexicon } from '@/hooks/useResultsRoundLexicon';
+import type { PlayableLexiconSnapshot } from '@/lib/dictionary/round-playable-lexicon';
 import { useFirebaseStore } from '@/store/firebase-store';
 
 /**
@@ -30,6 +33,12 @@ export default function ArchivedRoundResultsScreen() {
   const [missing, setMissing] = useState(false);
   const [viewData, setViewData] = useState<ReturnType<typeof buildOnlineResultsView> | null>(null);
   const [highlightPlayerId, setHighlightPlayerId] = useState('');
+  const [archiveSession, setArchiveSession] = useState<GameSession | null>(null);
+  const [archiveLexicon, setArchiveLexicon] = useState<PlayableLexiconSnapshot | null>(null);
+  const { lexicon: roundLexicon, loading: lexiconLoading } = useResultsRoundLexicon(
+    archiveSession,
+    archiveLexicon,
+  );
 
   useEffect(() => {
     void ensureAnonymousAuth().then((user) => {
@@ -48,6 +57,7 @@ export default function ArchivedRoundResultsScreen() {
     void (async () => {
       setLoading(true);
       const frozen = await loadFrozenFinishedRoundFromArchive(parsed.gameId, parsed.baseWordRound);
+      const archive = await getFinishedRoundArchive(parsed.gameId, parsed.baseWordRound);
       if (cancelled) {
         return;
       }
@@ -64,6 +74,8 @@ export default function ArchivedRoundResultsScreen() {
       const playerIds = Object.keys(frozen.session.players);
       const highlight = myUid && frozen.session.players[myUid] ? myUid : (playerIds[0] ?? '');
       setHighlightPlayerId(highlight);
+      setArchiveSession(frozen.session);
+      setArchiveLexicon(archive?.playableLexicon ?? null);
       setViewData(data);
       setMissing(false);
       setLoading(false);
@@ -130,6 +142,9 @@ export default function ArchivedRoundResultsScreen() {
         headline={viewData.headline}
         baseWordDisplay={viewData.baseWordDisplay}
         totalDistinctWords={viewData.totalDistinctWords}
+        maxPlayableWords={roundLexicon?.maxCount ?? null}
+        roundLexicon={roundLexicon}
+        lexiconLoading={lexiconLoading}
         globalWords={viewData.globalWords}
         playerRankGroups={viewData.playerRankGroups}
         highlightPlayerId={highlightPlayerId}

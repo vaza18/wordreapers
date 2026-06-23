@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
 import {
   hasWordInSortedList,
   loadBundledDictionary,
@@ -410,12 +411,21 @@ export default function OnlinePlayScreen() {
         setSupplementsReady(true);
       },
     );
+    return () => {
+      void Promise.all([loadBundledDictionary(), loadBundledSupplements()]);
+    };
   }, []);
 
   const endsAt = session?.timerEndsAt ?? null;
-  const uniqueBonusEnabled = session
-    ? resolveGameSessionSettingsForSession(session).uniqueBonusEnabled
-    : false;
+  const resolvedSessionSettings = session ? resolveGameSessionSettingsForSession(session) : null;
+  const uniqueBonusEnabled = resolvedSessionSettings?.uniqueBonusEnabled ?? false;
+  const { lexicon: roundLexicon } = useRoundPlayableLexicon({
+    baseWord: session?.baseWord ?? '',
+    allowProperNouns: resolvedSessionSettings?.allowProperNouns ?? false,
+    allowSlang: resolvedSessionSettings?.allowSlang ?? false,
+    releaseDictionaryAfterBuild: true,
+    enabled: Boolean(session?.baseWord && session.status === 'playing'),
+  });
   const showPointUi = shouldShowPointUi(uniqueBonusEnabled);
 
   const isPaused = session?.pauseState?.active === true;
@@ -613,14 +623,20 @@ export default function OnlinePlayScreen() {
         playerId: myUid,
         uniqueBonusEnabled,
         playerWords: playerWordsMap,
-        options: { minWordLength: 2 },
+        options: {
+          minWordLength: 2,
+          roundLexicon: roundLexicon?.words,
+        },
         deps: {
           hasInDictionary: (word) =>
             dictionary.hasWord(word) ||
             (session.settings.allowProperNouns && hasWordInSortedList(properNouns, word)) ||
             (session.settings.allowSlang && hasWordInSortedList(slang, word)),
         },
-        lookupDisplayUpper: (word) => dictionary.lookupDisplayUpper(word) ?? toDisplayUpper(word),
+        lookupDisplayUpper: (word) =>
+          roundLexicon?.displays.get(word) ??
+          dictionary.lookupDisplayUpper(word) ??
+          toDisplayUpper(word),
       });
       profile?.mark('acceptWord');
 
@@ -708,6 +724,7 @@ export default function OnlinePlayScreen() {
       gameId,
       myUid,
       properNouns,
+      roundLexicon,
       runPendingSubmit,
       session,
       slang,
@@ -978,6 +995,7 @@ export default function OnlinePlayScreen() {
                 timerUrgent={timerUrgent && !isPaused}
                 rank={playerRank}
                 wordCount={playerWordCount}
+                maxWordCount={roundLexicon?.maxCount ?? null}
                 score={playerScore}
                 wordsShort={t('game.wordsShort')}
                 pointsShort={t('game.pointsShort')}
@@ -992,6 +1010,7 @@ export default function OnlinePlayScreen() {
               timerUrgent={timerUrgent && !isPaused}
               rank={playerRank}
               wordCount={playerWordCount}
+              maxWordCount={roundLexicon?.maxCount ?? null}
               score={playerScore}
               wordsShort={t('game.wordsShort')}
               pointsShort={t('game.pointsShort')}

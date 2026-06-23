@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
 import {
   hasWordInSortedList,
   loadBundledDictionary,
@@ -137,7 +138,18 @@ export default function OrganizerSoloPlayScreen() {
         setSupplementsReady(true);
       },
     );
+    return () => {
+      void Promise.all([loadBundledDictionary(), loadBundledSupplements()]);
+    };
   }, []);
+
+  const { lexicon: roundLexicon } = useRoundPlayableLexicon({
+    baseWord: setup?.baseWord ?? '',
+    allowProperNouns: setup?.allowProperNouns ?? false,
+    allowSlang: setup?.allowSlang ?? false,
+    releaseDictionaryAfterBuild: true,
+    enabled: Boolean(setup?.baseWord && status === 'playing'),
+  });
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -206,14 +218,20 @@ export default function OrganizerSoloPlayScreen() {
         playerId: 'solo',
         uniqueBonusEnabled,
         playerWords: playerWordsMap,
-        options: { minWordLength: 2 },
+        options: {
+          minWordLength: 2,
+          roundLexicon: roundLexicon?.words,
+        },
         deps: {
           hasInDictionary: (word) =>
             dictionary.hasWord(word) ||
             (setup.allowProperNouns && hasWordInSortedList(properNouns, word)) ||
             (setup.allowSlang && hasWordInSortedList(slang, word)),
         },
-        lookupDisplayUpper: (word) => dictionary.lookupDisplayUpper(word) ?? toDisplayUpper(word),
+        lookupDisplayUpper: (word) =>
+          roundLexicon?.displays.get(word) ??
+          dictionary.lookupDisplayUpper(word) ??
+          toDisplayUpper(word),
       });
 
       if (!result.accepted || !result.entry) {
@@ -247,6 +265,7 @@ export default function OrganizerSoloPlayScreen() {
       dictionary,
       uniqueBonusEnabled,
       properNouns,
+      roundLexicon,
       setup,
       slang,
       supplementsReady,
@@ -368,6 +387,7 @@ export default function OrganizerSoloPlayScreen() {
                 showRank={false}
                 showScore={false}
                 wordCount={scoredWords.length}
+                maxWordCount={roundLexicon?.maxCount ?? null}
                 score={playerScore}
                 wordsShort={t('game.wordsShort')}
                 pointsShort={t('game.pointsShort')}

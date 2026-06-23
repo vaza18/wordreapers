@@ -111,6 +111,16 @@ export async function loadBundledSupplements(): Promise<{
 }
 
 /**
+ * Drop in-memory dictionary lists (e.g. after round lexicon is built on play screen).
+ */
+export function releaseBundledDictionaryCaches(): void {
+  cachedMain = null;
+  cachedBaseWords = null;
+  cachedSupplementProper = null;
+  cachedSupplementSlang = null;
+}
+
+/**
  * Binary search helper for supplement lists loaded at runtime.
  */
 export function hasWordInSortedList(words: string[], normalized: string): boolean {

@@ -38,6 +38,8 @@ export type ValidationErrorCode =
 export interface ValidateWordOptions {
   minWordLength?: number;
   allowProperNouns?: boolean;
+  /** When set, skips multiset + dictionary lookup (O(1) round lexicon). */
+  roundLexicon?: ReadonlySet<string>;
 }
 
 /** External dictionary lookup injected into {@link validateWord}. */
@@ -71,6 +73,17 @@ export function validateWord(
 
   if (normalized === baseNormalized) {
     return { valid: false, normalized, error: 'IS_BASE_WORD' };
+  }
+
+  if (options.roundLexicon) {
+    if (!options.roundLexicon.has(normalized)) {
+      const baseMultiset = buildLetterMultiset(baseWord);
+      if (!canSpellWord(normalized, baseMultiset)) {
+        return { valid: false, normalized, error: 'INVALID_LETTERS' };
+      }
+      return { valid: false, normalized, error: 'NOT_IN_DICTIONARY' };
+    }
+    return { valid: true, normalized };
   }
 
   const baseMultiset = buildLetterMultiset(baseWord);

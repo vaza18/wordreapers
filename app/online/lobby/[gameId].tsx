@@ -24,6 +24,8 @@ import {
   isCurrentBaseWordPicker,
 } from '@/lib/online/base-word-picker';
 import { formatLobbySettingsLabel } from '@/lib/online/lobby-settings-label';
+import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
+import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
 import {
   latestFinishedArchiveForGame,
   type FinishedRoundArchive,
@@ -135,6 +137,13 @@ export default function LobbyScreen() {
   const turnNumber = session ? baseWordPickerTurnNumber(session) : 1;
   const hasBaseWord = Boolean(session?.baseWord && session.baseWord.length >= 2);
   const isFirstRound = (session?.baseWordRound ?? 0) === 0;
+  const resolvedLobbySettings = session ? resolveGameSessionSettingsForSession(session) : null;
+  const { lexicon: lobbyLexicon, loading: lobbyLexiconLoading } = useRoundPlayableLexicon({
+    baseWord: session?.baseWord ?? '',
+    allowProperNouns: resolvedLobbySettings?.allowProperNouns ?? false,
+    allowSlang: resolvedLobbySettings?.allowSlang ?? false,
+    enabled: hasBaseWord,
+  });
 
   const players = useMemo(() => {
     if (!session) {
@@ -345,6 +354,14 @@ export default function LobbyScreen() {
           )
         ) : null}
 
+        {hasBaseWord && lobbyLexicon ? (
+          <Text style={styles.playableWordsHint}>
+            {t('online.playableWordsMax', { count: lobbyLexicon.maxCount })}
+          </Text>
+        ) : hasBaseWord && lobbyLexiconLoading ? (
+          <Text style={styles.playableWordsHint}>{t('game.playableWordsLoading')}</Text>
+        ) : null}
+
         <Text style={styles.settingsBanner}>{formatLobbySettingsLabel(t, session)}</Text>
 
         <Text style={styles.sectionLabel}>
@@ -488,6 +505,12 @@ const styles = StyleSheet.create({
     borderRadius: radii.sm,
     padding: spacing.sm,
     textAlign: 'center',
+  },
+  playableWordsHint: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: spacing.xs,
   },
   sectionLabel: {
     fontSize: 14,

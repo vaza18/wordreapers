@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -18,10 +18,13 @@ import { ResultsByPlayer } from '@/components/ResultsByPlayer';
 import { ResultsGlobalWordList } from '@/components/ResultsGlobalWordList';
 import { Screen } from '@/components/Screen';
 import { ScrollableWordPanel } from '@/components/ScrollableWordPanel';
+import { SettingSwitch } from '@/components/SettingSwitch';
 import { colors, radii, spacing } from '@/constants/theme';
+import type { RoundPlayableLexicon } from '@/lib/dictionary/round-playable-lexicon';
 import type { GlobalResultWordRow, PlayerResultRankGroup } from '@/lib/game/results-view';
+import { buildResultsWordList } from '@/lib/game/results-missing-words';
 import { formatRoundDuration } from '@/lib/game/round-duration';
-import { formatUkWords } from '@/lib/i18n/uk-plural';
+import { formatUkWords, ukWordForm } from '@/lib/i18n/uk-plural';
 import { dismissWordOverlapTooltips } from '@/lib/ui/word-overlap-tooltip';
 
 type ResultsTab = 'all' | 'players';
@@ -30,6 +33,9 @@ export interface RoundResultsViewProps {
   headline: string;
   baseWordDisplay: string;
   totalDistinctWords: number;
+  maxPlayableWords?: number | null;
+  roundLexicon?: RoundPlayableLexicon | null;
+  lexiconLoading?: boolean;
   globalWords: readonly GlobalResultWordRow[];
   playerRankGroups: readonly PlayerResultRankGroup[];
   highlightPlayerId: string;
@@ -49,6 +55,9 @@ export function RoundResultsView({
   headline,
   baseWordDisplay,
   totalDistinctWords,
+  maxPlayableWords = null,
+  roundLexicon = null,
+  lexiconLoading = false,
   globalWords,
   playerRankGroups,
   highlightPlayerId,
@@ -61,19 +70,25 @@ export function RoundResultsView({
 }: RoundResultsViewProps) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<ResultsTab>('all');
+  const [showMissingWords, setShowMissingWords] = useState(false);
   const [playerBodyHeight, setPlayerBodyHeight] = useState(0);
   const panelScroll = useScrollablePanelMetrics();
   const roundDurationLabel =
     roundDurationSeconds != null ? formatRoundDuration(roundDurationSeconds) : null;
+  const canShowMissingToggle = Boolean(roundLexicon) && !lexiconLoading;
+  const allWordRows = useMemo(
+    () => buildResultsWordList(globalWords, roundLexicon, showMissingWords),
+    [globalWords, roundLexicon, showMissingWords],
+  );
   const viewportHeight = panelScroll.scrollMetrics.viewportHeight;
   const contentHeight = panelScroll.scrollMetrics.contentHeight;
   const fillerRowCount =
-    tab === 'all' ? notebookFillerRowCount(globalWords.length, viewportHeight, spacing.md) : 0;
+    tab === 'all' ? notebookFillerRowCount(allWordRows.length, viewportHeight, spacing.md) : 0;
   const playersRuledHeight =
     tab === 'players' && viewportHeight > 0 ? Math.max(viewportHeight, playerBodyHeight) : 0;
   const canScroll =
     tab === 'all'
-      ? notebookListCanScroll(globalWords.length, viewportHeight, spacing.md)
+      ? notebookListCanScroll(allWordRows.length, viewportHeight, spacing.md)
       : viewportHeight > 0 && contentHeight > viewportHeight + SCROLL_OVERFLOW_THRESHOLD;
 
   const onPlayerBodyLayout = useCallback(
@@ -110,13 +125,33 @@ export function RoundResultsView({
 
         <Text style={styles.meta}>
           {showBaseWordInMeta
-            ? t('game.resultsBaseWordMeta', {
-                word: baseWordDisplay,
-                count: totalDistinctWords,
-                wordsLabel: formatUkWords(totalDistinctWords),
-              })
-            : formatUkWords(totalDistinctWords)}
+            ? maxPlayableWords != null && maxPlayableWords > 0
+              ? t('game.resultsBaseWordMetaWithMax', {
+                  word: baseWordDisplay,
+                  count: totalDistinctWords,
+                  max: maxPlayableWords,
+                  wordsLabel: ukWordForm(totalDistinctWords),
+                })
+              : t('game.resultsBaseWordMeta', {
+                  word: baseWordDisplay,
+                  count: totalDistinctWords,
+                  wordsLabel: formatUkWords(totalDistinctWords),
+                })
+            : maxPlayableWords != null && maxPlayableWords > 0
+              ? t('game.resultsWordsMetaWithMax', {
+                  count: totalDistinctWords,
+                  max: maxPlayableWords,
+                  wordsLabel: ukWordForm(totalDistinctWords),
+                })
+              : formatUkWords(totalDistinctWords)}
         </Text>
+        {tab === 'all' && canShowMissingToggle ? (
+          <SettingSwitch
+            label={t('game.showMissingWords')}
+            value={showMissingWords}
+            onChange={setShowMissingWords}
+          />
+        ) : null}
         {roundDurationLabel ? (
           <Text style={styles.meta}>
             {t('game.resultsRoundDuration', { duration: roundDurationLabel })}
@@ -145,7 +180,7 @@ export function RoundResultsView({
               ) : null}
               {tab === 'all' ? (
                 <ResultsGlobalWordList
-                  rows={globalWords}
+                  rows={allWordRows}
                   showAuthors={showWordAuthors}
                   showScoreBadges={showScores}
                 />
