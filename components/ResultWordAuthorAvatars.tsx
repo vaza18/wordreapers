@@ -57,12 +57,12 @@ function AuthorNameLine({
   showUniqueBadge: boolean;
 }) {
   const styles = useThemedStyles(createStyles);
-  const palette = playerAvatarColors(author.avatarColorIndex);
+  const swatch = playerAvatarSwatch(author.avatarColorIndex);
 
   return (
     <View style={styles.overflowRow}>
       <PlayerAvatar name={author.playerName} avatarColorIndex={author.avatarColorIndex} size={18} />
-      <Text style={[styles.overflowName, { color: palette.color }]} numberOfLines={2}>
+      <Text style={[styles.overflowName, { color: swatch }]} numberOfLines={2}>
         {author.playerName}
       </Text>
       {showUniqueBadge && author.kind === 'unique' ? (
@@ -126,7 +126,6 @@ export function ResultWordAuthorAvatars({
       {visible.map((author) => {
         const anchorRef = getAnchorRef(anchorRefs.current, author.playerId);
         const palette = playerAvatarColors(author.avatarColorIndex);
-        const borderColor = playerAvatarSwatch(author.avatarColorIndex);
         const isVisible = reveal?.kind === 'author' && reveal.playerId === author.playerId;
 
         return (
@@ -160,7 +159,7 @@ export function ResultWordAuthorAvatars({
                 styles.popoverBubble,
                 {
                   backgroundColor: palette.background,
-                  borderColor,
+                  borderColor: 'rgba(0, 0, 0, 0.18)',
                 },
               ]}
               displayAreaInsets={{

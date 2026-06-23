@@ -1,5 +1,7 @@
 import type { PlayerGender } from '@/lib/game/grammar';
 
+import { clampAvatarColorIndex } from '@/constants/player-avatars';
+
 export const PROFILE_STORAGE_KEY = 'wordreapers.playerProfile';
 
 /** Local guest profile for multiplayer (TZ §5). */
@@ -37,7 +39,7 @@ export function parsePlayerProfile(raw: string | null): PlayerProfile {
         : null;
     const index =
       typeof parsed.avatarColorIndex === 'number' && Number.isFinite(parsed.avatarColorIndex)
-        ? Math.max(0, Math.min(5, Math.round(parsed.avatarColorIndex)))
+        ? clampAvatarColorIndex(parsed.avatarColorIndex)
         : 0;
     return {
       name: typeof parsed.name === 'string' ? parsed.name : '',

@@ -1,11 +1,12 @@
 import { StyleSheet, Text, View } from 'react-native';
 
 import { playerAvatarColors } from '@/constants/player-avatars';
+import { getAvatarInitials } from '@/lib/profile/avatar-initials';
 
 interface PlayerAvatarProps {
   name: string;
   size?: number;
-  /** Palette index 0–5; falls back to `playerIndex` when omitted. */
+  /** Palette index; falls back to `playerIndex` when omitted. */
   avatarColorIndex?: number;
   /** Legacy slot index when `avatarColorIndex` is not set. */
   playerIndex?: number;
@@ -21,7 +22,8 @@ export function PlayerAvatar({
   playerIndex = 0,
 }: PlayerAvatarProps) {
   const colors = playerAvatarColors(avatarColorIndex ?? playerIndex);
-  const initial = name.trim().charAt(0).toLocaleUpperCase('uk-UA') || '?';
+  const initials = getAvatarInitials(name);
+  const fontSize = initials.length > 1 ? size * 0.36 : size * 0.45;
 
   return (
     <View
@@ -35,9 +37,7 @@ export function PlayerAvatar({
         },
       ]}
     >
-      <Text style={[styles.initial, { color: colors.color, fontSize: size * 0.45 }]}>
-        {initial}
-      </Text>
+      <Text style={[styles.initial, { color: colors.color, fontSize }]}>{initials}</Text>
     </View>
   );
 }

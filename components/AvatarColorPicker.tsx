@@ -13,7 +13,7 @@ interface AvatarColorPickerProps {
 }
 
 /**
- * Pick avatar palette slot (0–5).
+ * Pick avatar palette slot.
  */
 export function AvatarColorPicker({ value, onChange, compact = false }: AvatarColorPickerProps) {
   const styles = useThemedStyles(createStyles);
@@ -40,6 +40,7 @@ export function AvatarColorPicker({ value, onChange, compact = false }: AvatarCo
               },
               active ? styles.swatchActive : styles.swatchIdle,
             ]}
+            accessibilityState={{ selected: active }}
           >
             <View />
           </FeedbackPressable>
@@ -61,13 +62,16 @@ function createStyles(colors: ThemeColors) {
       gap: spacing.sm,
     },
     swatch: {
-      borderWidth: 2,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     swatchIdle: {
+      borderWidth: 2,
       borderColor: colors.borderSecondary,
     },
     swatchActive: {
-      borderColor: '#085041',
+      borderWidth: 3,
+      borderColor: colors.textPrimary,
     },
   });
 }
