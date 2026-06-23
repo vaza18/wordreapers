@@ -2,8 +2,12 @@ import { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { spacing } from '@/constants/theme';
-import { PLAY_TOAST_FADE_OUT_MS, type PlayToastItem } from '@/hooks/useToastQueue';
+import { colors, spacing } from '@/constants/theme';
+import {
+  PLAY_TOAST_FADE_OUT_MS,
+  type PlayToastItem,
+  type PlayToastVariant,
+} from '@/hooks/useToastQueue';
 
 /** Space below status bar / header strip. */
 const HEADER_CLEARANCE = 52;
@@ -21,15 +25,36 @@ interface PlaySessionToastStackProps {
   topOffset?: number;
 }
 
+const TOAST_VARIANT_STYLES: Record<
+  PlayToastVariant,
+  { backgroundColor: string; textColor: string }
+> = {
+  default: {
+    backgroundColor: 'rgba(26,26,26,0.92)',
+    textColor: '#FFFFFF',
+  },
+  success: {
+    backgroundColor: colors.accent,
+    textColor: '#FFFFFF',
+  },
+  warning: {
+    backgroundColor: colors.alert,
+    textColor: '#FFFFFF',
+  },
+};
+
 function ToastBubble({
   message,
+  variant,
   fading,
   stackSlot,
 }: {
   message: string;
+  variant: PlayToastVariant;
   fading: boolean;
   stackSlot: number;
 }) {
+  const variantStyle = TOAST_VARIANT_STYLES[variant];
   const opacity = useRef(new Animated.Value(0)).current;
   const stackOffset = stackSlot * PLAY_TOAST_SLOT_HEIGHT;
   const translateY = useRef(new Animated.Value(stackOffset - ENTRANCE_OFFSET)).current;
@@ -68,10 +93,10 @@ function ToastBubble({
       style={[
         playToastStyles.toastWrap,
         playToastStyles.toastSlot,
-        { opacity, transform: [{ translateY }] },
+        { backgroundColor: variantStyle.backgroundColor, opacity, transform: [{ translateY }] },
       ]}
     >
-      <Text style={playToastStyles.toastText}>{message}</Text>
+      <Text style={[playToastStyles.toastText, { color: variantStyle.textColor }]}>{message}</Text>
     </Animated.View>
   );
 }
@@ -104,6 +129,7 @@ export function PlaySessionToastStack({ toasts, topOffset }: PlaySessionToastSta
         <ToastBubble
           key={toast.id}
           message={toast.message}
+          variant={toast.variant}
           fading={toast.fading}
           stackSlot={toasts.length - 1 - index}
         />
@@ -128,7 +154,6 @@ export const playToastStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   toastWrap: {
-    backgroundColor: 'rgba(26,26,26,0.92)',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: 8,
@@ -145,7 +170,6 @@ export const playToastStyles = StyleSheet.create({
     fontSize: 14,
     lineHeight: PLAY_TOAST_LINE_HEIGHT,
     fontWeight: '600',
-    color: '#FFFFFF',
     textAlign: 'center',
   },
 });

@@ -18,5 +18,8 @@ export function liveScoreForPlayer(session: SessionForStandings, playerId: strin
 
 export function sessionPlayerScoresMatchWordMaps(session: SessionForStandings): boolean {
   const live = buildLiveStandingsFromSession(session);
-  return live.every((row) => (session.players[row.playerId]?.score ?? 0) === row.score);
+  return live.every((row) => {
+    const stored = session.players[row.playerId];
+    return (stored?.score ?? 0) === row.score && (stored?.wordCount ?? 0) === row.wordCount;
+  });
 }

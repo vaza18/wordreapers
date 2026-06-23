@@ -9,7 +9,7 @@ import {
   buildPartialWordMaps,
   planPlayerScoreUpdate,
 } from '../lib/online/apply-word-submit-to-session.js';
-import type { GameSession } from '../lib/firebase/types.js';
+import type { GameSession, SessionWordMaps } from '../lib/firebase/types.js';
 
 function playingSession(overrides?: Partial<GameSession>): GameSession {
   return {
@@ -122,6 +122,32 @@ describe('planPlayerScoreUpdate', () => {
     }
     expect(planned.plan.firstNextScore).toBe(1);
     expect(planned.plan.nextScore).toBe(1);
+    expect(planned.plan.nextWordCount).toBe(1);
+  });
+
+  it('uses map word count when session player totals lag behind maps', () => {
+    const session = playingSession({
+      players: {
+        p1: { name: 'A', score: 10, wordCount: 5, avatarColorIndex: 0, online: true },
+      },
+    });
+    const wordPlayers: SessionWordMaps['wordPlayers'] = {
+      а: { p1: true },
+      б: { p1: true },
+      в: { p1: true },
+      г: { p1: true },
+      д: { p1: true },
+      е: { p1: true },
+    };
+    const maps: SessionWordMaps = { wordFirst: {}, wordPlayers };
+    const entry = { normalized: 'е', kind: 'unique' as const, points: 2, badge: 'x2' as const };
+    const planned = planPlayerScoreUpdate(session, maps, 'p1', 'е', entry, true);
+    expect(planned.ok).toBe(true);
+    if (!planned.ok || planned.plan.mode !== 'single') {
+      return;
+    }
+    expect(planned.plan.nextWordCount).toBe(6);
+    expect(planned.plan.nextScore).toBe(12);
   });
 });
 

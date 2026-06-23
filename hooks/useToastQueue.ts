@@ -4,9 +4,19 @@ export const PLAY_TOAST_VISIBLE_MS = 3800;
 export const PLAY_TOAST_FADE_OUT_MS = 400;
 export const PLAY_TOAST_FADE_START_MS = PLAY_TOAST_VISIBLE_MS - PLAY_TOAST_FADE_OUT_MS;
 
+import type { PlayToastVariant } from '@/lib/online/play-toast-display';
+
+export type { PlayToastVariant } from '@/lib/online/play-toast-display';
+
+export interface PlayToastEnqueueInput {
+  message: string;
+  variant?: PlayToastVariant;
+}
+
 export interface PlayToastItem {
   id: string;
   message: string;
+  variant: PlayToastVariant;
   fading: boolean;
 }
 
@@ -15,7 +25,7 @@ export interface PlayToastItem {
  */
 export function useToastQueue(): {
   toasts: PlayToastItem[];
-  enqueueToasts: (messages: string[]) => void;
+  enqueueToasts: (items: readonly PlayToastEnqueueInput[]) => void;
 } {
   const [toasts, setToasts] = useState<PlayToastItem[]>([]);
   const nextIdRef = useRef(0);
@@ -37,14 +47,15 @@ export function useToastQueue(): {
     setToasts((current) => current.filter((toast) => toast.id !== id));
   };
 
-  const enqueueToasts = (messages: string[]) => {
-    if (messages.length === 0) {
+  const enqueueToasts = (items: readonly PlayToastEnqueueInput[]) => {
+    if (items.length === 0) {
       return;
     }
 
-    const newItems: PlayToastItem[] = messages.map((message) => ({
+    const newItems: PlayToastItem[] = items.map(({ message, variant = 'default' }) => ({
       id: String(++nextIdRef.current),
       message,
+      variant,
       fading: false,
     }));
 

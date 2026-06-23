@@ -184,6 +184,7 @@ export default function OnlinePlayScreen() {
   const playRoundKeyRef = useRef<number | null>(null);
   const staleWordsReconcileKeyRef = useRef<string | null>(null);
   const scoresSyncInFlightRef = useRef(false);
+  const scoresSyncDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const finishedArchiveRoundRef = useRef<number | null>(null);
   const wordMapsRef = useRef(wordMaps);
   wordMapsRef.current = wordMaps;
@@ -479,7 +480,9 @@ export default function OnlinePlayScreen() {
   }, [session]);
 
   const playerScore = standings.find((row) => row.playerId === myUid)?.score ?? 0;
-  const playerWordCount = myPlayer?.wordCount ?? scoredWords.length;
+  // Local word list is authoritative for the viewer — avoids flicker when session totals lag maps.
+  const playerWordCount =
+    wordsForDisplay.size > 0 ? wordsForDisplay.size : (myPlayer?.wordCount ?? 0);
   const myName = myPlayer?.name ?? t('profile.namePlaceholder');
 
   const remainingMs = isPaused
@@ -499,10 +502,29 @@ export default function OnlinePlayScreen() {
     if (sessionPlayerScoresMatchWordMaps(session) || scoresSyncInFlightRef.current) {
       return;
     }
-    scoresSyncInFlightRef.current = true;
-    void syncSessionPlayerScores(gameId, wordMaps).finally(() => {
-      scoresSyncInFlightRef.current = false;
-    });
+    if (scoresSyncDebounceRef.current) {
+      clearTimeout(scoresSyncDebounceRef.current);
+    }
+    scoresSyncDebounceRef.current = setTimeout(() => {
+      scoresSyncDebounceRef.current = null;
+      if (scoresSyncInFlightRef.current) {
+        return;
+      }
+      const maps = wordMapsRef.current;
+      if (!maps) {
+        return;
+      }
+      scoresSyncInFlightRef.current = true;
+      void syncSessionPlayerScores(gameId, maps).finally(() => {
+        scoresSyncInFlightRef.current = false;
+      });
+    }, 400);
+    return () => {
+      if (scoresSyncDebounceRef.current) {
+        clearTimeout(scoresSyncDebounceRef.current);
+        scoresSyncDebounceRef.current = null;
+      }
+    };
   }, [gameId, myUid, session, wordMaps]);
 
   const displayRanks = useMemo(() => assignDisplayRanks(standings), [standings]);
@@ -582,8 +604,9 @@ export default function OnlinePlayScreen() {
       profile?.mark('debounce');
       activeSubmitProfileRef.current = profile;
 
-      const ownNormals = Array.from(wordsForDisplay.keys());
-      const playerWordsMap = new Map<string, readonly string[]>([[myUid, ownNormals]]);
+      const playerWordsMap = new Map<string, readonly string[]>([
+        [myUid, [...wordsForDisplay.keys()]],
+      ]);
       const result = acceptWord({
         input: draftValue,
         baseWord: session.baseWord,
