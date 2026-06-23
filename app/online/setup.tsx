@@ -357,9 +357,10 @@ export default function OnlineSetupScreen() {
                 }}
               />
               <SetupModeButton
-                icon={<SoloPlayerIcon color="#FFFFFF" size={32} />}
+                icon={<SoloPlayerIcon color={colors.textPrimary} size={28} />}
                 label={t('online.soloPlay')}
                 hint={t('online.soloPlayHint')}
+                variant="secondary"
                 disabled={!canContinue || saving}
                 onPress={handleSoloPlay}
               />
@@ -421,6 +422,7 @@ const styles = StyleSheet.create({
   },
   modeRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.sm,
   },
   error: {

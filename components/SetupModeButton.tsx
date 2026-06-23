@@ -10,11 +10,12 @@ interface SetupModeButtonProps {
   hint: string;
   onPress: () => void;
   disabled?: boolean;
+  variant?: 'primary' | 'secondary';
   style?: StyleProp<ViewStyle>;
 }
 
 /**
- * Equal-weight setup mode choice — icon, label, and short player-count hint.
+ * Setup mode choice — icon, label, and short player-count hint.
  */
 export function SetupModeButton({
   icon,
@@ -22,18 +23,26 @@ export function SetupModeButton({
   hint,
   onPress,
   disabled = false,
+  variant = 'primary',
   style,
 }: SetupModeButtonProps) {
+  const isSecondary = variant === 'secondary';
+
   return (
     <FeedbackPressable
       accessibilityRole="button"
       disabled={disabled}
       onPress={onPress}
-      style={[styles.base, disabled ? styles.disabled : null, style]}
+      style={[
+        styles.base,
+        isSecondary ? styles.secondary : styles.primary,
+        disabled ? styles.disabled : null,
+        style,
+      ]}
     >
       <View style={styles.iconSlot}>{icon}</View>
-      <Text style={styles.label}>{label}</Text>
-      <Text style={styles.hint}>{hint}</Text>
+      <Text style={[styles.label, isSecondary ? styles.labelSecondary : null]}>{label}</Text>
+      <Text style={[styles.hint, isSecondary ? styles.hintSecondary : null]}>{hint}</Text>
     </FeedbackPressable>
   );
 }
@@ -47,8 +56,18 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.sm,
-    backgroundColor: colors.accent,
     minHeight: 108,
+  },
+  primary: {
+    backgroundColor: colors.accent,
+  },
+  secondary: {
+    backgroundColor: colors.backgroundPrimary,
+    borderWidth: 1,
+    borderColor: colors.borderSecondary,
+    alignSelf: 'center',
+    minHeight: 92,
+    paddingVertical: spacing.sm,
   },
   disabled: {
     opacity: 0.5,
@@ -65,10 +84,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
   },
+  labelSecondary: {
+    color: colors.textPrimary,
+  },
   hint: {
     color: '#D8F3EA',
     fontSize: 12,
     fontWeight: '500',
     textAlign: 'center',
+  },
+  hintSecondary: {
+    color: colors.textSecondary,
   },
 });
