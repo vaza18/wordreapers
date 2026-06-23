@@ -1,0 +1,323 @@
+import {
+  createRef,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type Component,
+  type RefObject,
+} from 'react';
+import { useTranslation } from 'react-i18next';
+import { ScrollView, StyleSheet, Text, View, type View as RNView } from 'react-native';
+import Popover, { PopoverPlacement } from 'react-native-popover-view';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { FeedbackPressable } from '@/components/FeedbackPressable';
+import { PlayerAvatar } from '@/components/PlayerAvatar';
+import { playerAvatarColors, playerAvatarSwatch } from '@/constants/player-avatars';
+import { colors, radii, spacing } from '@/constants/theme';
+import type { GlobalWordAuthor } from '@/lib/game/results-view';
+import { splitResultWordAuthors } from '@/lib/ui/result-word-authors';
+import {
+  dismissWordOverlapTooltips,
+  subscribeWordOverlapTooltipDismiss,
+} from '@/lib/ui/word-overlap-tooltip';
+
+const AVATAR_SIZE = 22;
+const OVERFLOW_LIST_MAX_HEIGHT = 220;
+const TOOLTIP_EDGE_PADDING = spacing.md;
+const TOOLTIP_GAP = 4;
+
+type RevealState = { kind: 'author'; playerId: string } | { kind: 'overflow' } | null;
+
+interface ResultWordAuthorAvatarsProps {
+  authors: readonly GlobalWordAuthor[];
+  showUniqueBadge?: boolean;
+}
+
+function getAnchorRef(
+  refs: Map<string, RefObject<RNView | null>>,
+  key: string,
+): RefObject<RNView | null> {
+  const existing = refs.get(key);
+  if (existing) {
+    return existing;
+  }
+  const created = createRef<RNView>();
+  refs.set(key, created);
+  return created;
+}
+
+function AuthorNameLine({
+  author,
+  showUniqueBadge,
+}: {
+  author: GlobalWordAuthor;
+  showUniqueBadge: boolean;
+}) {
+  const palette = playerAvatarColors(author.avatarColorIndex);
+
+  return (
+    <View style={styles.overflowRow}>
+      <PlayerAvatar name={author.playerName} avatarColorIndex={author.avatarColorIndex} size={18} />
+      <Text style={[styles.overflowName, { color: palette.color }]} numberOfLines={2}>
+        {author.playerName}
+      </Text>
+      {showUniqueBadge && author.kind === 'unique' ? (
+        <Text style={styles.overflowX2}>x2</Text>
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * Compact author row for results «Всі слова» — avatars, «+N», tap for names.
+ */
+export function ResultWordAuthorAvatars({
+  authors,
+  showUniqueBadge = false,
+}: ResultWordAuthorAvatarsProps) {
+  const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  const [reveal, setReveal] = useState<RevealState>(null);
+  const anchorRefs = useRef(new Map<string, RefObject<RNView | null>>());
+  const overflowAnchorRef = useRef<RNView | null>(null);
+
+  const { visible, overflow } = splitResultWordAuthors(authors);
+
+  const hideReveal = useCallback(() => {
+    setReveal(null);
+  }, []);
+
+  useEffect(() => {
+    return subscribeWordOverlapTooltipDismiss(hideReveal);
+  }, [hideReveal]);
+
+  const openAuthor = useCallback(
+    (playerId: string) => {
+      if (reveal?.kind === 'author' && reveal.playerId === playerId) {
+        hideReveal();
+        return;
+      }
+      dismissWordOverlapTooltips();
+      setReveal({ kind: 'author', playerId });
+    },
+    [hideReveal, reveal],
+  );
+
+  const openOverflow = useCallback(() => {
+    if (reveal?.kind === 'overflow') {
+      hideReveal();
+      return;
+    }
+    dismissWordOverlapTooltips();
+    setReveal({ kind: 'overflow' });
+  }, [hideReveal, reveal]);
+
+  if (authors.length === 0) {
+    return null;
+  }
+
+  return (
+    <View style={styles.row}>
+      {visible.map((author) => {
+        const anchorRef = getAnchorRef(anchorRefs.current, author.playerId);
+        const palette = playerAvatarColors(author.avatarColorIndex);
+        const borderColor = playerAvatarSwatch(author.avatarColorIndex);
+        const isVisible = reveal?.kind === 'author' && reveal.playerId === author.playerId;
+
+        return (
+          <View key={author.playerId} style={styles.avatarSlot}>
+            <View ref={anchorRef} collapsable={false} style={styles.avatarAnchor}>
+              <FeedbackPressable
+                accessibilityRole="button"
+                accessibilityLabel={author.playerName}
+                onPress={() => {
+                  openAuthor(author.playerId);
+                }}
+                style={styles.avatarButton}
+              >
+                <PlayerAvatar
+                  name={author.playerName}
+                  avatarColorIndex={author.avatarColorIndex}
+                  size={AVATAR_SIZE}
+                />
+              </FeedbackPressable>
+            </View>
+
+            <Popover
+              from={anchorRef as RefObject<Component>}
+              isVisible={isVisible}
+              onRequestClose={hideReveal}
+              placement={PopoverPlacement.AUTO}
+              offset={TOOLTIP_GAP}
+              arrowSize={{ width: 12, height: 6 }}
+              backgroundStyle={styles.popoverBackdrop}
+              popoverStyle={[
+                styles.popoverBubble,
+                {
+                  backgroundColor: palette.background,
+                  borderColor,
+                },
+              ]}
+              displayAreaInsets={{
+                top: insets.top + spacing.xs,
+                bottom: insets.bottom + spacing.xs,
+                left: TOOLTIP_EDGE_PADDING,
+                right: TOOLTIP_EDGE_PADDING,
+              }}
+              statusBarTranslucent
+            >
+              <Text style={[styles.tooltipText, { color: palette.color }]} numberOfLines={3}>
+                {author.playerName}
+                {showUniqueBadge && author.kind === 'unique' ? ' · x2' : ''}
+              </Text>
+            </Popover>
+          </View>
+        );
+      })}
+
+      {overflow.length > 0 ? (
+        <View style={styles.overflowSlot}>
+          <View
+            ref={overflowAnchorRef}
+            collapsable={false}
+            style={[styles.avatarAnchor, styles.overflowAnchor]}
+          >
+            <FeedbackPressable
+              accessibilityRole="button"
+              accessibilityLabel={t('game.resultsAuthorsOverflow', { count: overflow.length })}
+              onPress={openOverflow}
+              style={styles.overflowButton}
+            >
+              <Text style={styles.overflowLabel}>+{overflow.length}</Text>
+            </FeedbackPressable>
+          </View>
+
+          <Popover
+            from={overflowAnchorRef as RefObject<Component>}
+            isVisible={reveal?.kind === 'overflow'}
+            onRequestClose={hideReveal}
+            placement={PopoverPlacement.AUTO}
+            offset={TOOLTIP_GAP}
+            arrowSize={{ width: 12, height: 6 }}
+            backgroundStyle={styles.popoverBackdrop}
+            popoverStyle={styles.overflowPopover}
+            displayAreaInsets={{
+              top: insets.top + spacing.xs,
+              bottom: insets.bottom + spacing.xs,
+              left: TOOLTIP_EDGE_PADDING,
+              right: TOOLTIP_EDGE_PADDING,
+            }}
+            statusBarTranslucent
+          >
+            <ScrollView
+              style={styles.overflowScroll}
+              contentContainerStyle={styles.overflowScrollContent}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+            >
+              {overflow.map((author) => (
+                <AuthorNameLine
+                  key={author.playerId}
+                  author={author}
+                  showUniqueBadge={showUniqueBadge}
+                />
+              ))}
+            </ScrollView>
+          </Popover>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  avatarSlot: {
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+  },
+  avatarAnchor: {
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+  },
+  avatarButton: {
+    borderRadius: AVATAR_SIZE / 2,
+  },
+  overflowSlot: {
+    height: AVATAR_SIZE,
+    justifyContent: 'center',
+  },
+  overflowAnchor: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  overflowButton: {
+    minWidth: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    paddingHorizontal: 4,
+    borderRadius: AVATAR_SIZE / 2,
+    backgroundColor: colors.backgroundSecondary,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderTertiary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  overflowLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  popoverBackdrop: {
+    backgroundColor: 'rgba(0, 0, 0, 0.12)',
+  },
+  popoverBubble: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 5,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    maxWidth: 280,
+  },
+  tooltipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  overflowPopover: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radii.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderTertiary,
+    backgroundColor: colors.notebookPaper,
+    maxWidth: 280,
+  },
+  overflowScroll: {
+    maxHeight: OVERFLOW_LIST_MAX_HEIGHT,
+  },
+  overflowScrollContent: {
+    gap: spacing.xs,
+    paddingHorizontal: spacing.xs,
+  },
+  overflowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: 2,
+  },
+  overflowName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  overflowX2: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.accent,
+  },
+});

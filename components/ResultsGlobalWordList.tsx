@@ -1,9 +1,9 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { playerAvatarColors } from '@/constants/player-avatars';
+import { ResultWordAuthorAvatars } from '@/components/ResultWordAuthorAvatars';
 import { notebookRowLineStyle } from '@/components/notebook/NotebookLineFiller';
 import { colors, spacing } from '@/constants/theme';
-import type { GlobalResultWordRow, GlobalWordAuthor } from '@/lib/game/results-view';
+import type { GlobalResultWordRow } from '@/lib/game/results-view';
 
 interface ResultsGlobalWordListProps {
   rows: readonly GlobalResultWordRow[];
@@ -12,7 +12,7 @@ interface ResultsGlobalWordListProps {
 }
 
 /**
- * «Всі слова» tab — full alphabetical list with author chips (scroll via parent).
+ * «Всі слова» tab — full alphabetical list with compact author avatars (scroll via parent).
  */
 export function ResultsGlobalWordList({
   rows,
@@ -23,36 +23,18 @@ export function ResultsGlobalWordList({
     <View style={styles.list}>
       {rows.map((row) => (
         <View key={row.normalized} style={[notebookRowLineStyle.row, styles.row]}>
-          <Text style={styles.word}>{row.display}</Text>
-          <View style={styles.badges}>
-            {showAuthors
-              ? row.authors.map((author) => (
-                  <AuthorChip key={`${row.normalized}-${author.playerId}`} author={author} />
-                ))
-              : null}
+          <Text style={styles.word} numberOfLines={1}>
+            {row.display}
+          </Text>
+          <View style={styles.meta}>
+            {showAuthors ? (
+              <ResultWordAuthorAvatars authors={row.authors} showUniqueBadge={showScoreBadges} />
+            ) : null}
             {showScoreBadges && row.showX2 ? <Text style={styles.x2}>x2</Text> : null}
           </View>
         </View>
       ))}
     </View>
-  );
-}
-
-function AuthorChip({ author }: { author: GlobalWordAuthor }) {
-  const palette = playerAvatarColors(author.avatarColorIndex);
-
-  return (
-    <Text
-      style={[
-        styles.chip,
-        {
-          backgroundColor: palette.background,
-          color: palette.color,
-        },
-      ]}
-    >
-      {author.playerName}
-    </Text>
   );
 }
 
@@ -66,27 +48,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
     paddingHorizontal: spacing.sm,
+    overflow: 'visible',
   },
   word: {
     flex: 1,
+    flexShrink: 1,
     fontSize: 16,
     fontWeight: '500',
     color: colors.penBlue,
   },
-  badges: {
+  meta: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
     justifyContent: 'flex-end',
     gap: spacing.xs,
-    maxWidth: '55%',
-  },
-  chip: {
-    fontSize: 12,
-    fontWeight: '600',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: 999,
-    overflow: 'hidden',
+    flexShrink: 0,
+    overflow: 'visible',
   },
   x2: {
     fontSize: 12,

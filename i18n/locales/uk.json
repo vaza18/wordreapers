@@ -202,6 +202,7 @@
     "resultsAuthorFirst": "{{name}} 1й",
     "resultsAuthorLate": "+ {{name}} x0",
     "resultsYou": "← ти",
+    "resultsAuthorsOverflow": "Ще {{count}} гравців ввели це слово",
     "newGameSamePlayers": "Грати ще",
     "winnerLabel": "Переможець",
     "winner": "Переможець: {{name}}",
