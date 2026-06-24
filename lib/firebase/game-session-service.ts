@@ -29,6 +29,20 @@ import {
   clearWaitingLobbyPlayerWordsAsOrganizer,
 } from './player-words-service.js';
 import { getServerNow } from './server-clock.js';
+import { PUBLIC_LOBBY_MAX_PLAYERS } from '../online/public-lobby/constants.js';
+import {
+  applyPublicContentSafety,
+  validateSessionBaseWord,
+} from '../online/public-lobby/content-safety.js';
+import { collectPublicAliases, nextPublicAlias } from '../online/public-lobby/public-alias.js';
+import { sessionIdentityMasked } from '../online/public-lobby/session-identity.js';
+import {
+  activePublicLobbyPlayerCount,
+  reconcilePublicLobbyAfterRosterChange,
+  syncPublicLobbyPlayerCount,
+  syncPublicRosterAliases,
+  unpublishPublicLobby,
+} from './public-lobby-service.js';
 import { ensureAnonymousAuth, getFirebaseUid } from './auth.js';
 import { isFirebaseIgnorableRtdbError, isFirebasePermissionDenied } from './rtdb-errors.js';
 import { withFinishedPurgeFields } from './session-purge.js';
@@ -39,6 +53,26 @@ import { getFirebaseDatabase } from './init.js';
 import { gameSessionPath, GAME_SESSIONS_PATH } from './paths.js';
 import { isValidRoomCode, normalizeRoomCode } from './room-code.js';
 import type { GameSession, GameSessionPlayer, GameSessionSettings } from './types.js';
+import type { BaseWord } from '../dictionary/dictionary-index.js';
+
+let cachedBaseWordsForValidation: BaseWord[] | null = null;
+
+async function loadBaseWordsForValidation(): Promise<readonly string[]> {
+  if (cachedBaseWordsForValidation) {
+    return cachedBaseWordsForValidation;
+  }
+  const { loadBundledBaseWords } = await import('../../services/dictionary-service.js');
+  cachedBaseWordsForValidation = await loadBundledBaseWords();
+  return cachedBaseWordsForValidation;
+}
+
+async function assertSessionBaseWordAllowed(baseWord: string, session: GameSession): Promise<void> {
+  const baseWords = await loadBaseWordsForValidation();
+  const result = validateSessionBaseWord(baseWord, baseWords, session);
+  if (!result.ok) {
+    throw new Error(result.reason);
+  }
+}
 
 export { resolveGameSessionSettings } from './session-settings.js';
 
@@ -69,12 +103,17 @@ function playerRef(gameId: string, uid: string): DatabaseReference {
 
 export interface JoinGameSessionOptions {
   invitedByUid?: string;
+  /** How the player reached the room (browse enforces language match). */
+  joinSource?: 'code' | 'browse';
+  /** Player's game language when joining from browse. */
+  playerLanguage?: string;
 }
 
 function profileToPlayer(
   profile: PlayerProfile,
   online = true,
   invitedByUid?: string,
+  options?: { shareGender?: boolean },
 ): GameSessionPlayer {
   const player: GameSessionPlayer = {
     name: profile.name.trim(),
@@ -83,7 +122,7 @@ function profileToPlayer(
     score: 0,
     online,
   };
-  if (profile.gender === 'm' || profile.gender === 'f') {
+  if (options?.shareGender !== false && (profile.gender === 'm' || profile.gender === 'f')) {
     player.gender = profile.gender;
   }
   if (invitedByUid) {
@@ -265,7 +304,32 @@ export async function joinGameSession(
       ? options.invitedByUid
       : undefined;
 
-  const newPlayer = profileToPlayer(profile, true, inviterUid);
+  if (session.isPublic) {
+    const activeCount = activePublicLobbyPlayerCount(session.players);
+    const maxPlayers = session.maxPlayers ?? PUBLIC_LOBBY_MAX_PLAYERS;
+    if (activeCount >= maxPlayers) {
+      throw new Error('ROOM_FULL');
+    }
+    if (
+      options?.joinSource === 'browse' &&
+      options.playerLanguage &&
+      session.settings.language !== options.playerLanguage
+    ) {
+      throw new Error('LANGUAGE_MISMATCH');
+    }
+  }
+
+  const isBrowseJoin = options?.joinSource === 'browse';
+  const maskedAlready = sessionIdentityMasked(session);
+  const locale = session.settings.language;
+
+  const newPlayer = profileToPlayer(profile, true, inviterUid, {
+    shareGender: !maskedAlready && !isBrowseJoin,
+  });
+  newPlayer.joinedVia = isBrowseJoin ? 'browse' : 'invite';
+  if (maskedAlready || isBrowseJoin || session.isPublic) {
+    newPlayer.publicAlias = nextPublicAlias(collectPublicAliases(session.players), locale);
+  }
 
   await update(playersRef(normalized), {
     [user.uid]: newPlayer,
@@ -273,6 +337,7 @@ export async function joinGameSession(
 
   const wordMaps = await fetchSessionWordMaps(normalized);
 
+  let joinRejectedRoomFull = false;
   await runRtdbTransaction(sessionRef(normalized), (current) => {
     if (current == null) {
       return undefined;
@@ -285,6 +350,15 @@ export async function joinGameSession(
       changed = true;
     }
 
+    if (next.isPublic) {
+      const activeCount = activePublicLobbyPlayerCount(next.players);
+      const maxPlayers = next.maxPlayers ?? PUBLIC_LOBBY_MAX_PLAYERS;
+      if (activeCount > maxPlayers) {
+        joinRejectedRoomFull = true;
+        return undefined;
+      }
+    }
+
     const order = [...(next.baseWordPickerOrder ?? [next.organizerId])];
     if (!order.includes(user.uid)) {
       order.push(user.uid);
@@ -293,10 +367,20 @@ export async function joinGameSession(
     }
 
     const playerCount = Object.keys(next.players).length;
-    const resolvedSettings = resolveGameSessionSettings(next.settings, playerCount);
+    if (isBrowseJoin) {
+      next.identityMasked = true;
+      changed = true;
+    }
+
+    const resolvedSettings = applyPublicContentSafety(
+      resolveGameSessionSettings(next.settings, playerCount),
+      next,
+    );
     if (
       next.settings.uniqueBonusMode !== resolvedSettings.uniqueBonusMode ||
-      next.settings.uniqueBonusEnabled !== resolvedSettings.uniqueBonusEnabled
+      next.settings.uniqueBonusEnabled !== resolvedSettings.uniqueBonusEnabled ||
+      next.settings.allowProperNouns !== resolvedSettings.allowProperNouns ||
+      next.settings.allowSlang !== resolvedSettings.allowSlang
     ) {
       next.settings = resolvedSettings;
       changed = true;
@@ -314,8 +398,21 @@ export async function joinGameSession(
     return changed ? next : undefined;
   });
 
+  if (joinRejectedRoomFull) {
+    await remove(playerRef(normalized, user.uid));
+    throw new Error('ROOM_FULL');
+  }
+
   await setPlayerOnlinePresence(normalized, user.uid);
-  return readSessionSnapshot(normalized);
+  let joined = await readSessionSnapshot(normalized);
+  if (sessionIdentityMasked(joined)) {
+    await syncPublicRosterAliases(normalized, joined);
+    joined = await readSessionSnapshot(normalized);
+  }
+  if (joined.isPublic) {
+    await syncPublicLobbyPlayerCount(normalized, joined);
+  }
+  return joined;
 }
 
 /**
@@ -482,12 +579,13 @@ export async function updateGameSessionSetup(
   }
 
   const updates: { settings: GameSessionSettings; baseWord?: string } = {
-    settings: payload.settings,
+    settings: applyPublicContentSafety(payload.settings, session),
   };
   if (payload.baseWord !== undefined) {
     if (!payload.baseWord || payload.baseWord.length < 2) {
       throw new Error('BASE_WORD_MISSING');
     }
+    await assertSessionBaseWordAllowed(payload.baseWord, session);
     updates.baseWord = payload.baseWord;
   }
 
@@ -517,6 +615,7 @@ export async function updateGameSessionBaseWord(
   if (!baseWord || baseWord.length < 2) {
     throw new Error('BASE_WORD_MISSING');
   }
+  await assertSessionBaseWordAllowed(baseWord, session);
 
   await update(sessionRef(normalized), { baseWord });
 }
@@ -543,6 +642,7 @@ export async function startGameSession(gameId: string, actorUid: string): Promis
   if (!session.baseWord || session.baseWord.length < 2) {
     throw new Error('BASE_WORD_MISSING');
   }
+  await assertSessionBaseWordAllowed(session.baseWord, session);
 
   const settings = resolveGameSessionSettings(
     session.settings,
@@ -571,6 +671,10 @@ export async function startGameSession(gameId: string, actorUid: string): Promis
 
   await clearSessionWordMaps(normalized);
 
+  if (session.isPublic) {
+    await unpublishPublicLobby(normalized, actorUid, { force: true });
+  }
+
   await update(sessionRef(normalized), {
     status: 'playing',
     timerEndsAt: endsAt,
@@ -583,6 +687,8 @@ export async function startGameSession(gameId: string, actorUid: string): Promis
     pauseVote: null,
     resumeVote: null,
     pauseState: null,
+    isPublic: false,
+    publicPublishedAt: null,
   });
 }
 
@@ -600,6 +706,17 @@ export async function leaveGameSession(gameId: string, uid: string): Promise<voi
   } catch (error) {
     if (__DEV__) {
       console.warn('leaveGameSession vote cleanup', error);
+    }
+  }
+
+  try {
+    const sessionSnap = await get(sessionRef(normalized));
+    if (sessionSnap.exists()) {
+      await reconcilePublicLobbyAfterRosterChange(normalized, sessionSnap.val() as GameSession);
+    }
+  } catch (error) {
+    if (__DEV__) {
+      console.warn('leaveGameSession public lobby reconcile', error);
     }
   }
 }
@@ -778,6 +895,10 @@ export async function rematchFinishedSessionToWaiting(
   );
   await clearSessionWordMaps(normalized);
 
+  if (preSession.isPublic) {
+    await unpublishPublicLobby(normalized, actorUid, { force: true });
+  }
+
   const result = await runRtdbTransaction(sessionRef(normalized), (current) => {
     if (current == null) {
       return undefined;
@@ -810,6 +931,8 @@ export async function rematchFinishedSessionToWaiting(
       purgeAfterAt: null,
       finishedAt: null,
       resultsExitedBy: null,
+      isPublic: false,
+      publicPublishedAt: null,
     } satisfies GameSession;
   });
 
@@ -852,6 +975,9 @@ export async function abandonWaitingGameSession(
   const session = preSnapshot.val() as GameSession;
   if (session.organizerId !== organizerUid || session.status !== 'waiting') {
     return;
+  }
+  if (session.isPublic) {
+    await unpublishPublicLobby(normalized, organizerUid, { force: true });
   }
   const playerIds = Object.keys(session.players);
   await Promise.all(playerIds.map((playerUid) => cancelPlayerOnDisconnect(normalized, playerUid)));

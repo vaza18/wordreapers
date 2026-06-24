@@ -10,7 +10,13 @@ import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { modalCardChrome, modalOverlayBackground } from '@/lib/ui/modal-chrome';
 import { tGendered, type PlayerGender } from '@/lib/game/grammar';
 import type { GameSession, SessionVote } from '@/lib/firebase/types';
-import { buildEarlyFinishParticipantRows } from '@/lib/online/early-finish-vote';
+import {
+  buildEarlyFinishParticipantRows,
+  EARLY_FINISH_VOTE_TIMEOUT_MS,
+  viewerNeedsEarlyFinishVote,
+} from '@/lib/online/early-finish-vote';
+import { displayPlayerName } from '@/lib/online/public-lobby/display-player-name';
+import { playerGenderForDisplay } from '@/lib/online/public-lobby/session-identity';
 import { RESUME_VOTE_TIMEOUT_MS, viewerNeedsResumeVote } from '@/lib/online/resume-vote';
 import {
   assignDisplayRanks,
@@ -18,11 +24,7 @@ import {
   compareStandings,
   shouldShowPointUi,
 } from '@/lib/game/scoring';
-import {
-  formatPlayerLeftLabel,
-  formatVoteStatusLabel,
-  playerGenderFromSession,
-} from '@/lib/game/vote-status-label';
+import { formatPlayerLeftLabel, formatVoteStatusLabel } from '@/lib/game/vote-status-label';
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import { voteProposerName } from '@/lib/firebase/session-votes-service';
 
@@ -33,11 +35,16 @@ interface PauseRoundModalProps {
   viewerGender: PlayerGender;
   serverNow: number;
   resumeVote: SessionVote | null | undefined;
+  earlyFinishVote: SessionVote | null | undefined;
   hasOnlineOpponent: boolean;
   onProposeResume: () => void;
   onResumeYes: () => void;
   onResumeNo: () => void;
   onCancelResumeProposal?: () => void;
+  onEarlyFinishYes: () => void;
+  onEarlyFinishNo: () => void;
+  onCancelEarlyFinishProposal?: () => void;
+  onLeaveNowFromEarlyFinish?: () => void;
   onOpenMenu: () => void;
   onOpenSettings: () => void;
 }
@@ -55,11 +62,16 @@ function PauseBody({
   viewerGender,
   serverNow,
   resumeVote,
+  earlyFinishVote,
   hasOnlineOpponent,
   onProposeResume,
   onResumeYes,
   onResumeNo,
   onCancelResumeProposal,
+  onEarlyFinishYes,
+  onEarlyFinishNo,
+  onCancelEarlyFinishProposal,
+  onLeaveNowFromEarlyFinish,
   onOpenMenu,
   onOpenSettings,
 }: Omit<PauseRoundModalProps, 'visible'>) {
@@ -84,10 +96,9 @@ function PauseBody({
       return t('game.voteResumeSent');
     }
     const proposerId = resumeVote.proposedBy;
-    const rawGender = session.players[proposerId]?.gender;
-    const proposerGender: PlayerGender = rawGender === 'f' || rawGender === 'm' ? rawGender : null;
+    const proposerGender = playerGenderForDisplay(session, myUid, proposerId);
     return tGendered(t, 'game.voteResume', proposerGender, {
-      name: voteProposerName(session, proposerId),
+      name: voteProposerName(session, proposerId, myUid),
     });
   }, [myUid, resumeVote, session, t]);
 
@@ -100,9 +111,39 @@ function PauseBody({
     return Math.max(0, remaining);
   }, [resumeVote, serverNow]);
 
-  const resumeParticipants = resumeVote ? buildEarlyFinishParticipantRows(session, resumeVote) : [];
+  const resumeParticipants = resumeVote
+    ? buildEarlyFinishParticipantRows(session, resumeVote, myUid)
+    : [];
   const needsResumeVote = resumeVote != null && viewerNeedsResumeVote(session, resumeVote, myUid);
   const isResumeProposer = resumeVote?.proposedBy === myUid;
+
+  const earlyFinishHeadline = useMemo(() => {
+    if (!earlyFinishVote) {
+      return null;
+    }
+    if (earlyFinishVote.proposedBy === myUid) {
+      return t('game.voteEarlyFinishSent');
+    }
+    return t('game.voteEarlyFinish', {
+      name: voteProposerName(session, earlyFinishVote.proposedBy, myUid),
+    });
+  }, [earlyFinishVote, myUid, session, t]);
+
+  const earlyFinishSecondsLeft = useMemo(() => {
+    if (!earlyFinishVote) {
+      return 0;
+    }
+    const proposedAt = earlyFinishVote.proposedAt ?? serverNow;
+    const remaining = Math.ceil((proposedAt + EARLY_FINISH_VOTE_TIMEOUT_MS - serverNow) / 1000);
+    return Math.max(0, remaining);
+  }, [earlyFinishVote, serverNow]);
+
+  const earlyFinishParticipants = earlyFinishVote
+    ? buildEarlyFinishParticipantRows(session, earlyFinishVote, myUid)
+    : [];
+  const needsEarlyFinishVote =
+    earlyFinishVote != null && viewerNeedsEarlyFinishVote(session, earlyFinishVote, myUid);
+  const isEarlyFinishProposer = earlyFinishVote?.proposedBy === myUid;
 
   const resumeButtonLabel = hasOnlineOpponent
     ? tGendered(t, 'game.pauseReadyToResume', viewerGender)
@@ -132,16 +173,19 @@ function PauseBody({
             const player = session.players[row.playerId];
             const isMe = row.playerId === myUid;
             const presence = player?.hasLeft
-              ? formatPlayerLeftLabel(t, playerGenderFromSession(player.gender))
+              ? formatPlayerLeftLabel(t, playerGenderForDisplay(session, myUid, row.playerId))
               : player?.online
                 ? t('game.pauseStatusInRound')
                 : t('game.playerOffline');
+            const displayName = player
+              ? displayPlayerName(player, myUid, row.playerId, session)
+              : row.playerId;
             return (
               <View key={row.playerId} style={styles.standingRow}>
                 <Text style={styles.standingRank}>{displayRanks.get(row.playerId) ?? '—'}</Text>
                 <View style={styles.standingMain}>
                   <Text style={styles.standingName} numberOfLines={1}>
-                    {player?.name ?? row.playerId}
+                    {displayName}
                     {isMe ? ` ${t('game.resultsYou')}` : ''}
                   </Text>
                   <Text style={styles.standingMeta}>
@@ -160,7 +204,38 @@ function PauseBody({
             );
           })}
 
-          {resumeVote ? (
+          {earlyFinishVote ? (
+            <View style={styles.resumeVoteSection}>
+              <Text style={styles.resumeHeadline}>{earlyFinishHeadline}</Text>
+              {earlyFinishSecondsLeft > 0 ? (
+                <Text style={styles.resumeTimer}>
+                  {t('game.voteEarlyFinishTimer', { seconds: earlyFinishSecondsLeft })}
+                </Text>
+              ) : null}
+              <View style={styles.participantList}>
+                {earlyFinishParticipants.map((row) => (
+                  <View key={row.playerId} style={styles.participantRow}>
+                    <View style={styles.participantMain}>
+                      <Text style={styles.participantName} numberOfLines={1}>
+                        {row.name}
+                        {row.playerId === myUid ? ` ${t('game.resultsYou')}` : ''}
+                      </Text>
+                      <Text style={styles.participantPresence}>
+                        {row.hasLeft
+                          ? formatPlayerLeftLabel(t, row.gender)
+                          : row.online
+                            ? t('game.playerOnline')
+                            : t('game.playerOffline')}
+                      </Text>
+                    </View>
+                    <Text style={styles.participantVote}>
+                      {formatVoteStatusLabel(t, row.voteStatus, row.hasLeft, row.gender)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : resumeVote ? (
             <View style={styles.resumeVoteSection}>
               <Text style={styles.resumeHeadline}>{resumeHeadline}</Text>
               {resumeSecondsLeft > 0 ? (
@@ -195,7 +270,38 @@ function PauseBody({
         </ScrollView>
 
         <View style={styles.footer}>
-          {resumeVote ? (
+          {earlyFinishVote ? (
+            <>
+              {needsEarlyFinishVote ? (
+                <View style={styles.row}>
+                  <PrimaryButton
+                    label={t('game.voteYes')}
+                    style={styles.btn}
+                    onPress={onEarlyFinishYes}
+                  />
+                  <PrimaryButton
+                    label={t('game.voteNo')}
+                    variant="secondary"
+                    style={styles.btn}
+                    onPress={onEarlyFinishNo}
+                  />
+                </View>
+              ) : null}
+              {isEarlyFinishProposer && onCancelEarlyFinishProposal ? (
+                <PrimaryButton
+                  label={t('game.voteEarlyFinishCancel')}
+                  onPress={onCancelEarlyFinishProposal}
+                />
+              ) : null}
+              {isEarlyFinishProposer && onLeaveNowFromEarlyFinish ? (
+                <PrimaryButton
+                  label={t('game.voteEarlyFinishLeaveNow')}
+                  variant="secondary"
+                  onPress={onLeaveNowFromEarlyFinish}
+                />
+              ) : null}
+            </>
+          ) : resumeVote ? (
             <>
               {needsResumeVote ? (
                 <View style={styles.row}>
@@ -222,7 +328,9 @@ function PauseBody({
           ) : (
             <PrimaryButton label={resumeButtonLabel} onPress={onProposeResume} />
           )}
-          <PrimaryButton label={t('game.menu')} variant="secondary" onPress={onOpenMenu} />
+          {!earlyFinishVote ? (
+            <PrimaryButton label={t('game.menu')} variant="secondary" onPress={onOpenMenu} />
+          ) : null}
         </View>
       </View>
     </View>

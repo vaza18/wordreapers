@@ -42,7 +42,7 @@ export function usePlaySessionToasts(
     }
 
     const events = detectPlayToastEvents(prev, session, myUid);
-    const items = formatPlayToastEvents(t, events, viewerGender);
+    const items = formatPlayToastEvents(t, events, viewerGender, session, myUid);
     enqueueToasts(items);
   }, [enqueueToasts, myUid, session, t, viewerGender]);
 

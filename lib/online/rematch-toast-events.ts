@@ -4,6 +4,7 @@ import { baseWordPickerTurnNumber, currentBaseWordPickerUid } from './base-word-
 
 export type RematchToastEvent = {
   type: 'rematch_reopened';
+  pickerId: string;
   pickerName: string;
   pickerGender: PlayerGender;
   roundNumber: number;
@@ -30,6 +31,7 @@ export function detectRematchToastEvent(
 
   return {
     type: 'rematch_reopened',
+    pickerId: pickerUid,
     pickerName: picker?.name ?? pickerUid,
     pickerGender: playerGender(curr, pickerUid),
     roundNumber: baseWordPickerTurnNumber(curr),

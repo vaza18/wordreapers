@@ -6,7 +6,8 @@ import {
   parseBaseWords,
   type BaseWord,
 } from './dictionary-index.js';
-import { dictionaryPaths, type DictionaryPaths, ukDictionaryPaths, UK_LOCALE } from './paths.js';
+import { dictionaryPaths, type DictionaryPaths, ukDictionaryPaths } from './paths.js';
+import { UK_LOCALE } from './locale.js';
 
 /** Options for loading a locale dictionary from the project root. */
 export interface DictionaryLoadOptions {

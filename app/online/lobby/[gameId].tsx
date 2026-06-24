@@ -9,6 +9,7 @@ import { LobbyQrCode } from '@/components/LobbyQrCode';
 import { PlayerAvatar } from '@/components/PlayerAvatar';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { Screen } from '@/components/Screen';
+import { SettingSwitch } from '@/components/SettingSwitch';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
@@ -18,6 +19,7 @@ import {
   subscribeGameSession,
   type GameSessionSnapshot,
 } from '@/lib/firebase/game-session-service';
+import { syncPublicRosterAliases } from '@/lib/firebase/public-lobby-service';
 import { clearWaitingLobbyPlayerWordsAsOrganizer } from '@/lib/firebase/player-words-service';
 import { ensureAnonymousAuth } from '@/lib/firebase/auth';
 import {
@@ -28,11 +30,24 @@ import {
 import { formatLobbySettingsLabel } from '@/lib/online/lobby-settings-label';
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
+import { usePublicLobbyPublish } from '@/hooks/usePublicLobbyPublish';
+import { useServerNow } from '@/hooks/useServerNow';
 import {
   latestFinishedArchiveForGame,
   type FinishedRoundArchive,
 } from '@/lib/online/online-session-archive';
 import { restartRematchOnlineRound } from '@/lib/online/restart-rematch-online-round';
+import {
+  comparePlayersByJoinOrder,
+  playerGenderForDisplay,
+  rosterJoinOrder,
+} from '@/lib/online/public-lobby/session-identity';
+import {
+  displayPlayerName,
+  viewerPublicAlias,
+} from '@/lib/online/public-lobby/display-player-name';
+import { needsPublicAliasReconcile } from '@/lib/online/public-lobby/public-alias';
+import { PUBLIC_LOBBY_TTL_MS } from '@/lib/online/public-lobby/constants';
 import {
   shouldSkipWaitingAbandonOnBack,
   type BackNavigationState,
@@ -44,7 +59,6 @@ import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
 import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
 import { useFirebaseStore } from '@/store/firebase-store';
 import { tGendered } from '@/lib/game/grammar';
-import { playerGenderFromSession } from '@/lib/game/vote-status-label';
 
 /**
  * Waiting lobby — room code, players; base-word picker starts the round.
@@ -57,6 +71,7 @@ export default function LobbyScreen() {
   const { gameId: rawGameId } = useLocalSearchParams<{ gameId: string }>();
   const gameId = rawGameId ?? '';
   const firebaseUid = useFirebaseStore((state) => state.uid);
+  const serverNow = useServerNow(30_000);
 
   const [session, setSession] = useState<GameSessionSnapshot | null>(null);
   const [firebaseSessionLive, setFirebaseSessionLive] = useState(false);
@@ -83,6 +98,13 @@ export default function LobbyScreen() {
       unsubscribe();
     };
   }, [gameId]);
+
+  useEffect(() => {
+    if (!gameId || !session || !needsPublicAliasReconcile(session)) {
+      return;
+    }
+    void syncPublicRosterAliases(gameId, session);
+  }, [gameId, session]);
 
   useEffect(() => {
     if (loading || session) {
@@ -139,11 +161,14 @@ export default function LobbyScreen() {
   );
   const pickerUid = session ? currentBaseWordPickerUid(session) : null;
   const isPicker = session && myUid ? isCurrentBaseWordPicker(session, myUid) : false;
-  const pickerName = pickerUid ? (session?.players[pickerUid]?.name ?? pickerUid) : '';
+  const pickerPlayer = pickerUid && session ? session.players[pickerUid] : undefined;
+  const pickerName =
+    pickerUid && session ? displayPlayerName(pickerPlayer, myUid, pickerUid, session) : '';
   const turnNumber = session ? baseWordPickerTurnNumber(session) : 1;
   const hasBaseWord = Boolean(session?.baseWord && session.baseWord.length >= 2);
   const isFirstRound = (session?.baseWordRound ?? 0) === 0;
   const resolvedLobbySettings = session ? resolveGameSessionSettingsForSession(session) : null;
+  const publicPublish = usePublicLobbyPublish(gameId, session, myUid);
   const { lexicon: lobbyLexicon, loading: lobbyLexiconLoading } = useRoundPlayableLexicon({
     baseWord: session?.baseWord ?? '',
     allowProperNouns: resolvedLobbySettings?.allowProperNouns ?? false,
@@ -155,7 +180,10 @@ export default function LobbyScreen() {
     if (!session) {
       return [];
     }
-    return Object.entries(session.players).map(([uid, player]) => ({ uid, ...player }));
+    const joinOrder = rosterJoinOrder(session);
+    return Object.entries(session.players)
+      .map(([uid, player]) => ({ uid, ...player }))
+      .sort((a, b) => comparePlayersByJoinOrder(a, b, joinOrder));
   }, [session]);
 
   const isFinished = session?.status === 'finished';
@@ -243,7 +271,7 @@ export default function LobbyScreen() {
         router.back();
         return;
       }
-      router.push({
+      router.replace({
         pathname: '/online/setup',
         params: { gameId, from: 'lobby' },
       });
@@ -324,7 +352,7 @@ export default function LobbyScreen() {
           {tGendered(
             t,
             'online.baseWordChosenBy',
-            playerGenderFromSession(pickerUid ? session.players[pickerUid]?.gender : undefined),
+            myUid && pickerUid ? playerGenderForDisplay(session, myUid, pickerUid) : null,
             { name: pickerName },
           )}
         </Text>
@@ -376,23 +404,75 @@ export default function LobbyScreen() {
 
         <Text style={styles.settingsBanner}>{formatLobbySettingsLabel(t, session)}</Text>
 
+        {isOrganizer && session.status === 'waiting' && hasBaseWord ? (
+          <View style={styles.publicSection}>
+            <SettingSwitch
+              label={t('online.publicRoom')}
+              value={session.isPublic === true}
+              onChange={(value) => {
+                if (publicPublish.toggling) {
+                  return;
+                }
+                if (value && !publicPublish.canPublish) {
+                  return;
+                }
+                void publicPublish.togglePublic(value).catch(() => {
+                  setError(t('online.errorPublicRoomFailed'));
+                });
+              }}
+            />
+            {!publicPublish.canPublish &&
+            publicPublish.publishBlockReason &&
+            publicPublish.publishBlockReason !== 'BASE_WORDS_LOADING' ? (
+              <Text style={styles.publicHint}>{t('online.publicRoomNeedsSafeBaseWord')}</Text>
+            ) : publicPublish.canPublish ? (
+              <Text style={styles.publicHint}>{t('online.publicRoomHint')}</Text>
+            ) : null}
+            {session.isPublic && session.publicPublishedAt ? (
+              <Text style={styles.publicExpiry}>
+                {t('online.publicRoomExpiresIn', {
+                  minutes: Math.max(
+                    0,
+                    Math.ceil(
+                      (session.publicPublishedAt + PUBLIC_LOBBY_TTL_MS - serverNow) / 60_000,
+                    ),
+                  ),
+                })}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+
         <Text style={styles.sectionLabel}>
           {t('online.playersCount', { count: players.length })}
         </Text>
 
-        {players.map(({ uid, name, avatarColorIndex, online }) => (
-          <View key={uid} style={styles.playerRow}>
-            <PlayerAvatar name={name} avatarColorIndex={avatarColorIndex ?? 0} />
-            <Text style={styles.playerName}>{name}</Text>
-            {uid === session.organizerId ? (
-              <Text style={styles.organizerTag}>{t('online.organizer')}</Text>
-            ) : null}
-            {uid === pickerUid && session.status === 'waiting' ? (
-              <Text style={styles.pickerTag}>{t('online.pickerTag')}</Text>
-            ) : null}
-            {!online ? <Text style={styles.offlineTag}>📵</Text> : null}
-          </View>
-        ))}
+        {players.map(({ uid, name, avatarColorIndex, online, ...playerRest }) => {
+          const displayName = session
+            ? displayPlayerName({ name, ...playerRest }, myUid, uid, session)
+            : name;
+          const seenAs = uid === myUid && session ? viewerPublicAlias(playerRest, session) : null;
+          return (
+            <View key={uid} style={styles.playerRow}>
+              <PlayerAvatar name={displayName} avatarColorIndex={avatarColorIndex ?? 0} />
+              <View style={styles.playerNameBlock}>
+                <Text style={styles.playerName}>{displayName}</Text>
+                {seenAs ? (
+                  <Text style={styles.playerSeenAs}>
+                    {t('online.youAreSeenAs', { alias: seenAs })}
+                  </Text>
+                ) : null}
+              </View>
+              {uid === session.organizerId ? (
+                <Text style={styles.organizerTag}>{t('online.organizer')}</Text>
+              ) : null}
+              {uid === pickerUid && session.status === 'waiting' ? (
+                <Text style={styles.pickerTag}>{t('online.pickerTag')}</Text>
+              ) : null}
+              {!online ? <Text style={styles.offlineTag}>📵</Text> : null}
+            </View>
+          );
+        })}
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -425,7 +505,7 @@ export default function LobbyScreen() {
             label={t('online.configureGame')}
             variant="secondary"
             onPress={() => {
-              router.push({
+              router.replace({
                 pathname: '/online/setup',
                 params: { gameId, from: 'lobby' },
               });
@@ -536,6 +616,21 @@ function createStyles(colors: ThemeColors) {
       padding: spacing.sm,
       textAlign: 'center',
     },
+    publicSection: {
+      gap: spacing.xs,
+      marginVertical: spacing.xs,
+    },
+    publicHint: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    publicExpiry: {
+      fontSize: 11,
+      color: colors.accent,
+      textAlign: 'center',
+      fontWeight: '500',
+    },
     playableWordsHint: {
       fontSize: 13,
       color: colors.textSecondary,
@@ -553,10 +648,17 @@ function createStyles(colors: ThemeColors) {
       gap: spacing.sm,
       paddingVertical: spacing.xs,
     },
-    playerName: {
+    playerNameBlock: {
       flex: 1,
+      gap: 2,
+    },
+    playerName: {
       fontSize: 16,
       color: colors.textPrimary,
+    },
+    playerSeenAs: {
+      fontSize: 12,
+      color: colors.textSecondary,
     },
     organizerTag: {
       fontSize: 11,

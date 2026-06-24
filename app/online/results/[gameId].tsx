@@ -86,7 +86,7 @@ export default function OnlineResultsScreen() {
   const frozenRoundRef = useRef(frozenRound);
   frozenRoundRef.current = frozenRound;
   const skipRematchToastRef = useRef(false);
-  const rematchToasts = useResultsRematchToast(liveSession, skipRematchToastRef);
+  const rematchToasts = useResultsRematchToast(liveSession, myUid, skipRematchToastRef);
 
   const resetRoundPipeline = useCallback(() => {
     freezeAttemptedRef.current = false;
@@ -291,8 +291,8 @@ export default function OnlineResultsScreen() {
     if (!session || session.status !== 'finished') {
       return null;
     }
-    return buildOnlineResultsView(t, session, wordsSnapshot);
-  }, [session, t, wordsSnapshot]);
+    return buildOnlineResultsView(t, session, wordsSnapshot, { viewerUid: myUid });
+  }, [myUid, session, t, wordsSnapshot]);
 
   useEffect(() => {
     if (

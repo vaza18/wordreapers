@@ -45,7 +45,7 @@ export function buildOnlineResultsView(
   t: TranslateFn,
   session: GameSession,
   byPlayer: ReadonlyMap<string, ReadonlyMap<string, StoredPlayerWord>>,
-  options?: { finishedAtMs?: number },
+  options?: { finishedAtMs?: number; viewerUid?: string },
 ) {
   const uniqueBonusEnabled = resolveGameSessionSettingsForSession(session).uniqueBonusEnabled;
   const { wordsByPlayer, displaysByPlayer } = firebaseWordsToMaps(byPlayer);
@@ -59,7 +59,7 @@ export function buildOnlineResultsView(
     Object.keys(session.wordPlayers ?? {}).length > 0
       ? buildLiveStandingsFromSession(session)
       : buildStandingsFromSession(session);
-  const directory = createOnlineResultsDirectory(session);
+  const directory = createOnlineResultsDirectory(session, options?.viewerUid);
 
   const globalWords = buildGlobalResultWords({
     wordsByPlayer,

@@ -45,6 +45,7 @@ import { useResultsRoundLexicon } from '@/hooks/useResultsRoundLexicon';
 import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
 import type { PlayableLexiconSnapshot } from '@/lib/dictionary/round-playable-lexicon';
 import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
+import { tGendered } from '@/lib/game/grammar';
 import { useProfileStore } from '@/store/profile-store';
 
 const EMPTY_WORDS: AllPlayerWords = new Map();
@@ -59,6 +60,7 @@ export default function OnlineLeftRoundScreen() {
   const { gameId: rawGameId } = useLocalSearchParams<{ gameId: string }>();
   const gameId = rawGameId ?? '';
   const storeUid = useFirebaseStore((state) => state.uid);
+  const viewerGender = useProfileStore((state) => state.gender);
   const [resolvedUid, setResolvedUid] = useState(storeUid ?? '');
   const myUid = resolvedUid || storeUid || '';
 
@@ -243,7 +245,7 @@ export default function OnlineLeftRoundScreen() {
     if (!displaySession || !myUid) {
       return null;
     }
-    const raw = buildOnlineResultsView(t, displaySession, wordsSnapshot);
+    const raw = buildOnlineResultsView(t, displaySession, wordsSnapshot, { viewerUid: myUid });
     return maskResultsForEarlyExit(raw, myUid, t);
   }, [displaySession, myUid, t, wordsSnapshot]);
 
@@ -308,11 +310,17 @@ export default function OnlineLeftRoundScreen() {
 
   const onBack = useSyncedStackBack(handleHome);
 
+  const leftRoundTitle = useMemo(
+    () => tGendered(t, 'game.leftRoundTitle', viewerGender),
+    [t, viewerGender],
+  );
+
   const screenOptions = useMemo(
     () => ({
       ...stackHeaderBack(onBack),
+      title: leftRoundTitle,
     }),
-    [onBack],
+    [leftRoundTitle, onBack],
   );
 
   if (!gameId || !sessionLoaded || !myUid) {
@@ -341,7 +349,6 @@ export default function OnlineLeftRoundScreen() {
     <>
       <Stack.Screen options={screenOptions} />
       <RoundResultsView
-        headline={t('game.leftRoundTitle')}
         baseWordDisplay={viewData.baseWordDisplay}
         totalDistinctWords={viewData.totalDistinctWords}
         maxPlayableWords={roundLexicon?.maxCount ?? null}
@@ -354,6 +361,7 @@ export default function OnlineLeftRoundScreen() {
         showScores={viewData.uniqueBonusEnabled}
         showWordAuthors={!viewData.isSolo}
         roundDurationSeconds={viewData.roundDurationSeconds}
+        missingWordsToggleDisabled={roundStillActive}
         footer={
           <>
             {roundStillActive ? (

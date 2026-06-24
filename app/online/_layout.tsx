@@ -21,6 +21,7 @@ export default function OnlineLayout() {
       }}
     >
       <Stack.Screen name="join" options={{ title: t('online.joinTitle') }} />
+      <Stack.Screen name="browse" options={{ title: t('online.browseTitle') }} />
       <Stack.Screen name="setup" options={{ title: t('online.setupTitle') }} />
       <Stack.Screen name="pick-word/[gameId]" options={{ title: t('online.pickWordTitle') }} />
       <Stack.Screen name="lobby/[gameId]" options={{ title: t('online.lobbyTitle') }} />

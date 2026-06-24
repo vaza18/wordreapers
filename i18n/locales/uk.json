@@ -108,7 +108,25 @@
     "cloudConnecting": "Підключення до хмари…",
     "errorSaveSetup": "Не вдалося зберегти налаштування",
     "errorBaseWordMissing": "Спочатку налаштуйте базове слово",
-    "errorStartFailed": "Не вдалося почати гру"
+    "errorStartFailed": "Не вдалося почати гру",
+    "findPublicGame": "🔍 Знайти гру",
+    "publicRoom": "Публічна кімната",
+    "publicRoomHint": "Незнайомці зможуть знайти кімнату в списку «Знайти гру» (~5 хв, до 8 гравців). У публічній грі показуються псевдоніми.",
+    "publicRoomNeedsSafeBaseWord": "Публічні кімнати вимагають безпечного базового слова. Оберіть базове слово з підказок (8+ літер)",
+    "publicRoomExpiresIn": "Публічний список: ще ~{{minutes}} хв",
+    "youAreSeenAs": "Інші бачать тебе як «{{alias}}»",
+    "dictionaryOptionsLockedHint": "Недоступно після публічного приєднання гравця",
+    "errorPublicRoomFailed": "Не вдалося змінити режим кімнати",
+    "errorRoomFull": "Кімната заповнена",
+    "errorLanguageMismatch": "Мова цієї кімнати не збігається з вашою",
+    "browseTitle": "Публічні кімнати",
+    "browseSortNewest": "Найновіші",
+    "browseSortBaseWord": "Слово А–Я",
+    "browseRange": "Показано {{from}}–{{to}} з {{total}} публічних кімнат",
+    "browseEmpty": "Немає публічних кімнат цією мовою",
+    "browseLoadFailed": "Не вдалося завантажити список",
+    "browseRoomSlots": "{{count}}/{{max}} · ще ~{{minutes}} хв",
+    "browseRoomFull": "{{count}}/{{max}} · повна"
   },
   "history": {
     "title": "Історія раундів",
@@ -209,6 +227,7 @@
     "resultsBaseWordMetaWithMax": "Базове слово: {{word}} · {{count}} з {{max}} {{wordsLabel}}",
     "resultsWordsMetaWithMax": "{{count}} з {{max}} {{wordsLabel}}",
     "showMissingWords": "Показати невідомі слова",
+    "showMissingWordsAfterRound": "Ця опція зʼявиться після завершення раунду",
     "playableWordsLoading": "Рахуємо слова…",
     "resultsRoundDuration": "Тривалість: {{duration}}",
     "resultsWordsPerMinuteShort": "{{rate}} сл/хв",
@@ -371,6 +390,7 @@
     "cancel": "Скасувати",
     "save": "Зберегти",
     "loading": "Завантаження…",
-    "close": "Закрити"
+    "close": "Закрити",
+    "refresh": "Оновити"
   }
 }

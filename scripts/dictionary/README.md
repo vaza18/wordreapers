@@ -28,6 +28,8 @@ Each locale is one folder (BCP 47 tag). Example for Ukrainian:
 
 **Runtime lookup (Tier 1):** main dictionary always; supplements only when the matching round option is on (both default **off**).
 
+**Round Playable Lexicon (runtime, not in build output):** [`lib/dictionary/round-playable-lexicon.ts`](../../lib/dictionary/round-playable-lexicon.ts) filters the same dictionary files for all words playable from a base word’s letter multiset (`allowProperNouns` / `allowSlang` gates supplements). Used for lobby max hint, play-screen found/max counter, faster validation, results «show missing words», and local finished-archive snapshot (`playableLexicon`, archive v3). Cached in memory per `baseWord|proper|slang`.
+
 **Main dictionary filters** (see `lib/dictionary/vesum-tags.ts`):
 
 - nouns, nominative, singular (+ pluralia tantum `:ns`)

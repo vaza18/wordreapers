@@ -2,7 +2,11 @@ import { get, ref } from 'firebase/database';
 
 import { navigateHomeWithBackAnimation } from '@/lib/navigation/navigate-home';
 
-import { abandonWaitingGameSession, markPlayerOffline } from '../firebase/game-session-service.js';
+import {
+  abandonWaitingGameSession,
+  leaveGameSession,
+  markPlayerOffline,
+} from '../firebase/game-session-service.js';
 import { getFirebaseDatabase } from '../firebase/init.js';
 import { gameSessionPath } from '../firebase/paths.js';
 import type { GameSession } from '../firebase/types.js';
@@ -76,7 +80,7 @@ async function runExitCleanup(options: ExitOnlineFlowOptions): Promise<void> {
     await abandonTrackedOrganizerWaitingRoom(uid);
     setOrganizerWaitingRoom(null);
   } else if (liveStatus === 'waiting' && uid) {
-    await markPlayerOffline(gameId, uid);
+    await leaveGameSession(gameId, uid);
   }
 }
 
