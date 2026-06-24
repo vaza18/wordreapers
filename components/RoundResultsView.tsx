@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -9,10 +9,12 @@ import {
   notebookListCanScroll,
 } from '@/components/notebook/NotebookLineFiller';
 import { NotebookRuledFill } from '@/components/notebook/NotebookRuledFill';
+import { PlaySessionToastStack } from '@/components/PlaySessionToast';
 import {
   SCROLL_OVERFLOW_THRESHOLD,
   useScrollablePanelMetrics,
 } from '@/hooks/useScrollablePanelMetrics';
+import { useToastQueue } from '@/hooks/useToastQueue';
 import { ResultsByPlayer } from '@/components/ResultsByPlayer';
 import { ResultsGlobalWordList } from '@/components/ResultsGlobalWordList';
 import { Screen } from '@/components/Screen';
@@ -30,7 +32,8 @@ import { dismissWordOverlapTooltips } from '@/lib/ui/word-overlap-tooltip';
 type ResultsTab = 'all' | 'players';
 
 export interface RoundResultsViewProps {
-  headline: string;
+  /** Optional green headline below the stack header; omit when the title lives in the header only. */
+  headline?: string;
   baseWordDisplay: string;
   totalDistinctWords: number;
   maxPlayableWords?: number | null;
@@ -46,6 +49,8 @@ export interface RoundResultsViewProps {
   showScores?: boolean;
   showWordAuthors?: boolean;
   roundDurationSeconds?: number;
+  /** When true, «Показати невідомі слова» is visible but not interactive (e.g. early exit while round plays). */
+  missingWordsToggleDisabled?: boolean;
 }
 
 /**
@@ -67,12 +72,20 @@ export function RoundResultsView({
   showScores = false,
   showWordAuthors = true,
   roundDurationSeconds,
+  missingWordsToggleDisabled = false,
 }: RoundResultsViewProps) {
   const styles = useThemedStyles(createStyles);
   const { t } = useTranslation();
   const [tab, setTab] = useState<ResultsTab>('all');
   const [showMissingWords, setShowMissingWords] = useState(false);
   const [playerBodyHeight, setPlayerBodyHeight] = useState(0);
+  const [footerHeight, setFooterHeight] = useState(0);
+
+  useEffect(() => {
+    if (missingWordsToggleDisabled) {
+      setShowMissingWords(false);
+    }
+  }, [missingWordsToggleDisabled]);
   const panelScroll = useScrollablePanelMetrics();
   const roundDurationLabel =
     roundDurationSeconds != null ? formatRoundDuration(roundDurationSeconds) : null;
@@ -122,103 +135,126 @@ export function RoundResultsView({
     },
     [],
   );
+  const { toasts, enqueueToasts } = useToastQueue();
+  const onMissingWordsDisabledPress = useCallback(() => {
+    enqueueToasts([{ message: t('game.showMissingWordsAfterRound') }]);
+  }, [enqueueToasts, t]);
+  const onFooterLayout = useCallback((event: { nativeEvent: { layout: { height: number } } }) => {
+    const nextHeight = event.nativeEvent.layout.height;
+    setFooterHeight((prev) => (prev === nextHeight ? prev : nextHeight));
+  }, []);
 
   return (
-    <Screen scroll={false} style={styles.screen}>
-      <View style={styles.header}>
-        <Text style={styles.headline}>{headline}</Text>
+    <>
+      <Screen scroll={false} style={styles.screen}>
+        <View style={styles.header}>
+          {headline ? <Text style={styles.headline}>{headline}</Text> : null}
 
-        <View style={styles.tabs}>
-          <TabButton
-            label={t('game.resultsTabAll')}
-            active={tab === 'all'}
-            onPress={() => {
-              setTab('all');
-              setPlayerBodyHeight(0);
-            }}
-          />
-          <TabButton
-            label={t('game.resultsTabPlayers')}
-            active={tab === 'players'}
-            onPress={() => {
-              setTab('players');
-              setPlayerBodyHeight(0);
-            }}
-          />
-        </View>
-
-        <Text style={styles.stats}>
-          {wordsMetaLabel}
-          {roundDurationLabel
-            ? ` · ${t('game.resultsRoundDuration', { duration: roundDurationLabel })}`
-            : null}
-        </Text>
-        {tab === 'all' && canShowMissingToggle ? (
-          <SettingSwitch
-            variant="compact"
-            label={t('game.showMissingWords')}
-            value={showMissingWords}
-            onChange={setShowMissingWords}
-          />
-        ) : null}
-      </View>
-
-      <ScrollableWordPanel style={styles.wordPanel} scrollbar={panelScroll.scrollbar}>
-        <View style={styles.panelScrollViewport} onLayout={panelScroll.onViewportLayout}>
-          {tab === 'all' ? (
-            <ResultsGlobalWordList
-              rows={allWordRows}
-              showAuthors={showWordAuthors}
-              showScoreBadges={showScores}
-              fillerRowCount={fillerRowCount}
-              scrollEnabled={canScroll}
-              onScroll={panelScroll.onScroll}
-              onScrollBeginDrag={() => {
-                dismissWordOverlapTooltips();
+          <View style={styles.tabs}>
+            <TabButton
+              label={t('game.resultsTabAll')}
+              active={tab === 'all'}
+              onPress={() => {
+                setTab('all');
+                setPlayerBodyHeight(0);
               }}
-              onContentSizeChange={panelScroll.onContentSizeChange}
-              scrollEventThrottle={panelScroll.scrollEventThrottle}
             />
-          ) : (
-            <ScrollView
-              style={styles.panelScroll}
-              contentContainerStyle={styles.panelScrollContent}
-              showsVerticalScrollIndicator={false}
-              scrollEnabled={canScroll}
-              keyboardShouldPersistTaps="handled"
-              onScroll={panelScroll.onScroll}
-              onScrollBeginDrag={() => {
-                dismissWordOverlapTooltips();
+            <TabButton
+              label={t('game.resultsTabPlayers')}
+              active={tab === 'players'}
+              onPress={() => {
+                setTab('players');
+                setPlayerBodyHeight(0);
               }}
-              onContentSizeChange={panelScroll.onContentSizeChange}
-              scrollEventThrottle={panelScroll.scrollEventThrottle}
-            >
-              <View style={styles.scrollBody}>
-                {playersRuledHeight > 0 ? (
-                  <NotebookRuledFill height={playersRuledHeight} style={styles.ruledBackdrop} />
-                ) : null}
-                <View onLayout={onPlayerBodyLayout} style={styles.playerBody}>
-                  <ResultsByPlayer
-                    rankGroups={playerRankGroups}
-                    pointsShort={t('game.pointsShort')}
-                    wordsShort={t('game.wordsShort')}
-                    youLabel={t('game.resultsYou')}
-                    highlightPlayerId={highlightPlayerId}
-                    defaultExpandedPlayerId={defaultExpandedPlayerId}
-                    showScores={showScores}
-                    showScoreBadges={showScores}
-                    showOverlapPeers={showWordAuthors}
-                    showWordsPerMinute={roundDurationSeconds != null}
-                  />
-                </View>
-              </View>
-            </ScrollView>
-          )}
-        </View>
-      </ScrollableWordPanel>
+            />
+          </View>
 
-      {footer ? <View style={styles.actions}>{footer}</View> : null}
-    </Screen>
+          <Text style={styles.stats}>
+            {wordsMetaLabel}
+            {roundDurationLabel
+              ? ` · ${t('game.resultsRoundDuration', { duration: roundDurationLabel })}`
+              : null}
+          </Text>
+          {tab === 'all' && canShowMissingToggle ? (
+            <SettingSwitch
+              variant="compact"
+              label={t('game.showMissingWords')}
+              value={showMissingWords}
+              onChange={setShowMissingWords}
+              disabled={missingWordsToggleDisabled}
+              onDisabledPress={missingWordsToggleDisabled ? onMissingWordsDisabledPress : undefined}
+            />
+          ) : null}
+        </View>
+
+        <ScrollableWordPanel style={styles.wordPanel} scrollbar={panelScroll.scrollbar}>
+          <View style={styles.panelScrollViewport} onLayout={panelScroll.onViewportLayout}>
+            {tab === 'all' ? (
+              <ResultsGlobalWordList
+                rows={allWordRows}
+                showAuthors={showWordAuthors}
+                showScoreBadges={showScores}
+                fillerRowCount={fillerRowCount}
+                scrollEnabled={canScroll}
+                onScroll={panelScroll.onScroll}
+                onScrollBeginDrag={() => {
+                  dismissWordOverlapTooltips();
+                }}
+                onContentSizeChange={panelScroll.onContentSizeChange}
+                scrollEventThrottle={panelScroll.scrollEventThrottle}
+              />
+            ) : (
+              <ScrollView
+                style={styles.panelScroll}
+                contentContainerStyle={styles.panelScrollContent}
+                showsVerticalScrollIndicator={false}
+                scrollEnabled={canScroll}
+                keyboardShouldPersistTaps="handled"
+                onScroll={panelScroll.onScroll}
+                onScrollBeginDrag={() => {
+                  dismissWordOverlapTooltips();
+                }}
+                onContentSizeChange={panelScroll.onContentSizeChange}
+                scrollEventThrottle={panelScroll.scrollEventThrottle}
+              >
+                <View style={styles.scrollBody}>
+                  {playersRuledHeight > 0 ? (
+                    <NotebookRuledFill height={playersRuledHeight} style={styles.ruledBackdrop} />
+                  ) : null}
+                  <View onLayout={onPlayerBodyLayout} style={styles.playerBody}>
+                    <ResultsByPlayer
+                      rankGroups={playerRankGroups}
+                      pointsShort={t('game.pointsShort')}
+                      wordsShort={t('game.wordsShort')}
+                      youLabel={t('game.resultsYou')}
+                      highlightPlayerId={highlightPlayerId}
+                      defaultExpandedPlayerId={defaultExpandedPlayerId}
+                      showScores={showScores}
+                      showScoreBadges={showScores}
+                      showOverlapPeers={showWordAuthors}
+                      showWordsPerMinute={roundDurationSeconds != null}
+                    />
+                  </View>
+                </View>
+              </ScrollView>
+            )}
+          </View>
+        </ScrollableWordPanel>
+
+        {footer ? (
+          <View style={styles.actions} onLayout={onFooterLayout}>
+            {footer}
+          </View>
+        ) : null}
+      </Screen>
+      {missingWordsToggleDisabled ? (
+        <PlaySessionToastStack
+          toasts={toasts}
+          anchor="bottom"
+          bottomOffset={footerHeight + spacing.sm}
+        />
+      ) : null}
+    </>
   );
 }
 

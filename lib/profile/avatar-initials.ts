@@ -5,8 +5,8 @@ const LOCALE = 'uk-UA';
  * Single word → first character (uppercase). Two or more words → first character
  * of the first word (uppercase) plus the first character of the second word (as-is).
  */
-export function getAvatarInitials(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
+export function getAvatarInitials(name: string | null | undefined): string {
+  const words = (name ?? '').trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) {
     return '?';
   }

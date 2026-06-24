@@ -39,6 +39,9 @@ export interface SessionWordMaps {
   wordPlayers?: Record<string, Record<string, boolean>>;
 }
 
+/** Join path for roster players. */
+export type PlayerJoinedVia = 'browse' | 'invite';
+
 export interface GameSessionPlayer {
   name: string;
   gender?: 'm' | 'f' | null;
@@ -50,6 +53,10 @@ export interface GameSessionPlayer {
   hasLeft?: boolean;
   /** Uid of the player whose invite link brought this player into the room. */
   invitedBy?: string;
+  /** Session pseudonym when identity is masked or room is public. */
+  publicAlias?: string;
+  /** `browse` = public matchmaking list; `invite` = room code / QR. */
+  joinedVia?: PlayerJoinedVia;
 }
 
 /**
@@ -88,4 +95,12 @@ export interface GameSession {
   purgeAfterAt?: number | null;
   /** Uids that left the results screen for home (metadata only). */
   resultsExitedBy?: Record<string, boolean> | null;
+  /** Public matchmaking lobby (v2). */
+  isPublic?: boolean;
+  /** Server ms when room was listed publicly. */
+  publicPublishedAt?: number | null;
+  /** Cap for public rooms (default 8). */
+  maxPlayers?: number | null;
+  /** Permanent pseudonyms after any browse join; survives making room private. */
+  identityMasked?: boolean;
 }

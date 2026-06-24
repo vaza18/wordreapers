@@ -3,6 +3,11 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+if [ ! -d functions/node_modules/firebase-admin ]; then
+  echo "→ Install Cloud Functions dependencies"
+  npm ci --prefix functions
+fi
+
 echo "→ Prepare dictionary stubs for typecheck"
 npm run dict:stub
 

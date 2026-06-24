@@ -15,6 +15,7 @@ import { voteProposerName } from '@/lib/firebase/session-votes-service';
 
 interface AddTimeVoteModalProps {
   visible: boolean;
+  layout?: 'modal' | 'banner';
   session: GameSession;
   vote: AddTimeVote;
   myUid: string;
@@ -25,6 +26,7 @@ interface AddTimeVoteModalProps {
 }
 
 function VoteCard({
+  layout = 'modal',
   session,
   vote,
   myUid,
@@ -36,14 +38,15 @@ function VoteCard({
   const styles = useThemedStyles(createStyles);
   const { t } = useTranslation();
   const { bottom } = useSafeAreaInsets();
+  const isBanner = layout === 'banner';
   const isProposer = vote.proposedBy === myUid;
   const needsVote = viewerNeedsAddTimeVote(session, vote, myUid);
-  const participants = buildEarlyFinishParticipantRows(session, vote);
+  const participants = buildEarlyFinishParticipantRows(session, vote, myUid);
 
   const headline = isProposer
     ? t('game.voteAddTimeSent', { count: vote.addMinutes })
     : t('game.voteAddTime', {
-        name: voteProposerName(session, vote.proposedBy),
+        name: voteProposerName(session, vote.proposedBy, myUid),
         count: vote.addMinutes,
       });
 
@@ -58,8 +61,12 @@ function VoteCard({
       : null;
 
   return (
-    <View style={[styles.overlay, { paddingBottom: spacing.lg + bottom }]}>
-      <View style={styles.card}>
+    <View
+      style={
+        isBanner ? styles.bannerWrap : [styles.overlay, { paddingBottom: spacing.lg + bottom }]
+      }
+    >
+      <View style={isBanner ? styles.bannerCard : styles.card}>
         <Text style={styles.message}>{headline}</Text>
         {timerPreview ? <Text style={styles.timerPreview}>{timerPreview}</Text> : null}
 
@@ -108,6 +115,7 @@ function VoteCard({
 
 export function AddTimeVoteModal({
   visible,
+  layout = 'modal',
   session,
   vote,
   myUid,
@@ -116,19 +124,30 @@ export function AddTimeVoteModal({
   onNo,
   onCancelProposal,
 }: AddTimeVoteModalProps) {
+  if (!visible) {
+    return null;
+  }
+
+  const body = (
+    <VoteCard
+      layout={layout}
+      session={session}
+      vote={vote}
+      myUid={myUid}
+      serverNow={serverNow}
+      onYes={onYes}
+      onNo={onNo}
+      onCancelProposal={onCancelProposal}
+    />
+  );
+
+  if (layout === 'banner') {
+    return body;
+  }
+
   return (
-    <Modal transparent visible={visible} animationType="fade">
-      <SafeAreaProvider>
-        <VoteCard
-          session={session}
-          vote={vote}
-          myUid={myUid}
-          serverNow={serverNow}
-          onYes={onYes}
-          onNo={onNo}
-          onCancelProposal={onCancelProposal}
-        />
-      </SafeAreaProvider>
+    <Modal transparent visible animationType="fade">
+      <SafeAreaProvider>{body}</SafeAreaProvider>
     </Modal>
   );
 }
@@ -141,6 +160,17 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: spacing.lg,
       paddingTop: spacing.lg,
       backgroundColor: modalOverlayBackground(colors),
+    },
+    bannerWrap: {
+      width: '100%',
+    },
+    bannerCard: {
+      ...modalCardChrome(colors),
+      borderRadius: radii.md,
+      padding: spacing.md,
+      gap: spacing.sm,
+      alignItems: 'stretch',
+      maxHeight: 240,
     },
     card: {
       ...modalCardChrome(colors),

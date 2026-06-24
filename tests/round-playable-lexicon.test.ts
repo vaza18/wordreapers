@@ -34,6 +34,16 @@ describe('buildRoundPlayableLexicon', () => {
     expect(lexicon.words.has('няшка')).toBe(true);
   });
 
+  it('excludes supplements for public-safe settings', () => {
+    const lexicon = buildRoundPlayableLexicon(
+      'шнягасткість',
+      { main: MAIN, proper: PROPER, slang: SLANG },
+      { allowProperNouns: false, allowSlang: false },
+    );
+    expect(lexicon.words.has('няшка')).toBe(false);
+    expect(lexicon.words.has('київ')).toBe(false);
+  });
+
   it('round-trips snapshot', () => {
     const lexicon = buildRoundPlayableLexicon(
       'компютер',

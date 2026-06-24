@@ -19,6 +19,10 @@ describe('joinErrorMessage', () => {
   it('maps known room errors', () => {
     expect(joinErrorMessage(new Error('ROOM_NOT_FOUND'), t)).toBe('online.errorRoomNotFound');
     expect(joinErrorMessage(new Error('ROOM_NOT_JOINABLE'), t)).toBe('online.errorRoomStarted');
+    expect(joinErrorMessage(new Error('ROOM_FULL'), t)).toBe('online.errorRoomFull');
+    expect(joinErrorMessage(new Error('LANGUAGE_MISMATCH'), t)).toBe(
+      'online.errorLanguageMismatch',
+    );
   });
 
   it('maps firebase permission and network failures', () => {

@@ -5,6 +5,8 @@ import {
   parseGameSetupPreferences,
 } from '../settings/game-setup-preferences.js';
 
+import { applyPublicContentSafety } from '../online/public-lobby/content-safety.js';
+
 import type { GameSession, GameSessionSettings } from './types.js';
 
 export function defaultGameSessionSettings(
@@ -36,9 +38,10 @@ export function playerCountForSession(session: Pick<GameSession, 'players'>): nu
 
 /** Apply roster-dependent fields (e.g. auto x2 for 3+ players) to stored settings. */
 export function resolveGameSessionSettingsForSession(
-  session: Pick<GameSession, 'settings' | 'players'>,
+  session: Pick<GameSession, 'settings' | 'players' | 'identityMasked' | 'isPublic'>,
 ): GameSessionSettings {
-  return resolveGameSessionSettings(session.settings, playerCountForSession(session));
+  const resolved = resolveGameSessionSettings(session.settings, playerCountForSession(session));
+  return applyPublicContentSafety(resolved, session);
 }
 
 /** Fallback for partial RTDB snapshots missing `settings`. */

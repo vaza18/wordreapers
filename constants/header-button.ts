@@ -17,6 +17,9 @@ export function createHeaderIconButtonStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
     },
+    disabled: {
+      opacity: 0.5,
+    },
     slot: {
       width: headerIconButtonSize,
       height: headerIconButtonSize,

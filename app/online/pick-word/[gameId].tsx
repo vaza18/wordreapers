@@ -16,6 +16,7 @@ import { headerIconButtonSize } from '@/constants/header-button';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
+import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
 import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
 import { DictionaryIndex } from '@/lib/dictionary/dictionary-index';
 import { letterCount, normalizeUk, toDisplayUpper } from '@/lib/dictionary/normalize';
@@ -28,8 +29,10 @@ import {
 } from '@/lib/firebase/game-session-service';
 import {
   gameSessionSettingsFromSetup,
-  resolveGameSessionSettings,
+  resolveGameSessionSettingsForSession,
 } from '@/lib/firebase/session-settings';
+import { sessionContentSafetyLocked } from '@/lib/online/public-lobby/content-safety';
+import { isPublicBaseWordSafeFromDisplay } from '@/lib/online/public-lobby/validate-public-base-word';
 import { baseWordPickerTurnNumber, isCurrentBaseWordPicker } from '@/lib/online/base-word-picker';
 import { usePlayerOnlinePresence } from '@/lib/online/use-player-online-presence';
 import type { UniqueBonusMode } from '@/lib/game/scoring';
@@ -105,10 +108,7 @@ export default function OnlinePickWordScreen() {
       return;
     }
     sessionPrefilledRef.current = true;
-    const resolved = resolveGameSessionSettings(
-      session.settings,
-      Object.keys(session.players).length,
-    );
+    const resolved = resolveGameSessionSettingsForSession(session);
     setDurationMinutes(Math.round(resolved.durationSeconds / 60));
     setUniqueBonusMode(resolved.uniqueBonusMode ?? 'auto');
     setAllowProperNouns(resolved.allowProperNouns);
@@ -148,18 +148,26 @@ export default function OnlinePickWordScreen() {
   const suggestMoreLabel = t('game.baseWordSuggestMore', {
     count: Math.max(0, suggestionResult.total - suggestionResult.items.length),
   });
-  const canSave = letterCount(baseWordInput) >= MIN_BASE_WORD_LENGTH && Boolean(myUid);
+  const dictionaryOptionsLocked = session ? sessionContentSafetyLocked(session) : false;
+  const baseWordDictionaryRequired = dictionaryOptionsLocked;
+  const baseWordAllowed = baseWordDictionaryRequired
+    ? isPublicBaseWordSafeFromDisplay(baseWordInput, baseWords)
+    : true;
+  const canSave =
+    letterCount(baseWordInput) >= MIN_BASE_WORD_LENGTH && Boolean(myUid) && baseWordAllowed;
   const playerCount = session ? Object.keys(session.players).length : 1;
 
   const handleBack = useCallback(() => {
-    router.back();
-  }, []);
+    router.replace({ pathname: '/online/lobby/[gameId]', params: { gameId } });
+  }, [gameId]);
+
+  const onBack = useSyncedStackBack(handleBack);
 
   const screenOptions = useMemo(
     () => ({
-      ...stackHeaderBack(handleBack),
+      ...stackHeaderBack(onBack),
     }),
-    [handleBack],
+    [onBack],
   );
 
   const handleSave = async () => {
@@ -180,8 +188,13 @@ export default function OnlinePickWordScreen() {
         ),
       });
       router.replace({ pathname: '/online/lobby/[gameId]', params: { gameId } });
-    } catch {
-      setError(t('online.errorSaveSetup'));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '';
+      if (message === 'BASE_WORD_NOT_ALLOWED') {
+        setError(t('online.publicRoomNeedsSafeBaseWord'));
+      } else {
+        setError(t('online.errorSaveSetup'));
+      }
     } finally {
       setSaving(false);
     }
@@ -245,6 +258,9 @@ export default function OnlinePickWordScreen() {
         </View>
 
         <Text style={styles.hint}>{t('game.baseWordHint')}</Text>
+        {baseWordDictionaryRequired ? (
+          <Text style={styles.hint}>{t('online.publicRoomNeedsSafeBaseWord')}</Text>
+        ) : null}
 
         <RoundSettingsFields
           durationMinutes={durationMinutes}
@@ -255,6 +271,8 @@ export default function OnlinePickWordScreen() {
           onAllowProperNounsChange={setAllowProperNouns}
           allowSlang={allowSlang}
           onAllowSlangChange={setAllowSlang}
+          dictionaryOptionsLocked={dictionaryOptionsLocked}
+          dictionaryOptionsLockedHint={t('online.dictionaryOptionsLockedHint')}
         />
 
         <PrimaryButton

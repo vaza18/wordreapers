@@ -134,7 +134,7 @@ export default function RoundHistoryScreen() {
               {archives.map((archive) => {
                 const playerCount = Object.keys(archive.session.players).length;
                 const standings = buildStandingsFromSession(archive.session);
-                const directory = createOnlineResultsDirectory(archive.session);
+                const directory = createOnlineResultsDirectory(archive.session, myUid || undefined);
                 const uniqueBonusEnabled = resolveGameSessionSettingsForSession(
                   archive.session,
                 ).uniqueBonusEnabled;

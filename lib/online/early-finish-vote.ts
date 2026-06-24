@@ -1,5 +1,7 @@
 import type { GameSession, SessionVote } from '../firebase/types.js';
 import { isPlayerConnectedInSession } from './session-presence.js';
+import { displayPlayerName } from '../online/public-lobby/display-player-name.js';
+import { playerGenderForDisplay } from '../online/public-lobby/session-identity.js';
 import { playerGenderFromSession } from '../game/vote-status-label.js';
 
 export const EARLY_FINISH_VOTE_TIMEOUT_MS = 30_000;
@@ -90,6 +92,7 @@ export function viewerNeedsEarlyFinishVote(
 export function buildEarlyFinishParticipantRows(
   session: GameSession,
   vote: SessionVote,
+  viewerUid?: string,
 ): EarlyFinishParticipantRow[] {
   const required = new Set(earlyFinishRequiredVoterIds(session, vote.proposedBy));
 
@@ -112,8 +115,10 @@ export function buildEarlyFinishParticipantRows(
 
       return {
         playerId,
-        name: player.name,
-        gender: playerGenderFromSession(player.gender),
+        name: viewerUid ? displayPlayerName(player, viewerUid, playerId, session) : player.name,
+        gender: viewerUid
+          ? playerGenderForDisplay(session, viewerUid, playerId)
+          : playerGenderFromSession(player.gender),
         online,
         hasLeft,
         voteStatus,

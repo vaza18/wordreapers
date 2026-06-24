@@ -37,3 +37,21 @@ export function playerWordLeafPath(gameId: string, playerId: string, normalized:
 export function playerWordsPath(gameId: string, playerId: string): string {
   return `player_words/${normalizeRoomCode(gameId)}/${playerId}`;
 }
+
+/** Public lobby index shard per game language (v2). */
+export const PUBLIC_LOBBIES_PATH = 'public_lobbies';
+
+/** Active public lobby counts per language (v2). */
+export const PUBLIC_LOBBY_COUNTS_PATH = 'public_lobby_counts';
+
+export function publicLobbyLanguagePath(language: string): string {
+  return `${PUBLIC_LOBBIES_PATH}/${language}`;
+}
+
+export function publicLobbyEntryPath(language: string, gameId: string): string {
+  return `${publicLobbyLanguagePath(language)}/${normalizeRoomCode(gameId)}`;
+}
+
+export function publicLobbyCountPath(language: string): string {
+  return `${PUBLIC_LOBBY_COUNTS_PATH}/${language}`;
+}

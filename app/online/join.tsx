@@ -192,6 +192,15 @@ export default function JoinRoomScreen() {
             />
           </>
         ) : null}
+
+        <PrimaryButton
+          label={t('online.findPublicGame')}
+          variant="secondary"
+          disabled={loading}
+          onPress={() => {
+            router.push('/online/browse');
+          }}
+        />
       </Screen>
     </>
   );
