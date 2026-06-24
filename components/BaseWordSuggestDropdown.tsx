@@ -44,9 +44,12 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: spacing.sm,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.borderTertiary,
+      borderLeftWidth: 3,
+      borderLeftColor: 'transparent',
     },
     itemActive: {
       backgroundColor: colors.accentMuted,
+      borderLeftColor: colors.accent,
     },
     itemWord: {
       flex: 1,
@@ -55,7 +58,8 @@ function createStyles(colors: ThemeColors) {
       color: colors.textPrimary,
     },
     itemWordActive: {
-      color: '#085041',
+      color: colors.textPrimary,
+      fontWeight: '700',
     },
     itemMeta: {
       fontSize: 12,
@@ -63,7 +67,8 @@ function createStyles(colors: ThemeColors) {
       marginLeft: spacing.sm,
     },
     itemMetaActive: {
-      color: '#0F6E56',
+      color: colors.accent,
+      fontWeight: '600',
     },
     moreRow: {
       backgroundColor: colors.backgroundSecondary,
