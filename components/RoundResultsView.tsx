@@ -5,7 +5,6 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import {
-  NotebookLineFiller,
   notebookFillerRowCount,
   notebookListCanScroll,
 } from '@/components/notebook/NotebookLineFiller';
@@ -78,6 +77,29 @@ export function RoundResultsView({
   const roundDurationLabel =
     roundDurationSeconds != null ? formatRoundDuration(roundDurationSeconds) : null;
   const canShowMissingToggle = Boolean(roundLexicon) && !lexiconLoading;
+  const wordsMetaLabel = useMemo(() => {
+    if (showBaseWordInMeta) {
+      return maxPlayableWords != null && maxPlayableWords > 0
+        ? t('game.resultsBaseWordMetaWithMax', {
+            word: baseWordDisplay,
+            count: totalDistinctWords,
+            max: maxPlayableWords,
+            wordsLabel: ukWordForm(totalDistinctWords),
+          })
+        : t('game.resultsBaseWordMeta', {
+            word: baseWordDisplay,
+            count: totalDistinctWords,
+            wordsLabel: formatUkWords(totalDistinctWords),
+          });
+    }
+    return maxPlayableWords != null && maxPlayableWords > 0
+      ? t('game.resultsWordsMetaWithMax', {
+          count: totalDistinctWords,
+          max: maxPlayableWords,
+          wordsLabel: ukWordForm(totalDistinctWords),
+        })
+      : formatUkWords(totalDistinctWords);
+  }, [baseWordDisplay, maxPlayableWords, showBaseWordInMeta, t, totalDistinctWords]);
   const allWordRows = useMemo(
     () => buildResultsWordList(globalWords, roundLexicon, showMissingWords),
     [globalWords, roundLexicon, showMissingWords],
@@ -125,68 +147,56 @@ export function RoundResultsView({
           />
         </View>
 
-        <Text style={styles.meta}>
-          {showBaseWordInMeta
-            ? maxPlayableWords != null && maxPlayableWords > 0
-              ? t('game.resultsBaseWordMetaWithMax', {
-                  word: baseWordDisplay,
-                  count: totalDistinctWords,
-                  max: maxPlayableWords,
-                  wordsLabel: ukWordForm(totalDistinctWords),
-                })
-              : t('game.resultsBaseWordMeta', {
-                  word: baseWordDisplay,
-                  count: totalDistinctWords,
-                  wordsLabel: formatUkWords(totalDistinctWords),
-                })
-            : maxPlayableWords != null && maxPlayableWords > 0
-              ? t('game.resultsWordsMetaWithMax', {
-                  count: totalDistinctWords,
-                  max: maxPlayableWords,
-                  wordsLabel: ukWordForm(totalDistinctWords),
-                })
-              : formatUkWords(totalDistinctWords)}
+        <Text style={styles.stats}>
+          {wordsMetaLabel}
+          {roundDurationLabel
+            ? ` · ${t('game.resultsRoundDuration', { duration: roundDurationLabel })}`
+            : null}
         </Text>
         {tab === 'all' && canShowMissingToggle ? (
           <SettingSwitch
+            variant="compact"
             label={t('game.showMissingWords')}
             value={showMissingWords}
             onChange={setShowMissingWords}
           />
         ) : null}
-        {roundDurationLabel ? (
-          <Text style={styles.meta}>
-            {t('game.resultsRoundDuration', { duration: roundDurationLabel })}
-          </Text>
-        ) : null}
       </View>
 
       <ScrollableWordPanel style={styles.wordPanel} scrollbar={panelScroll.scrollbar}>
         <View style={styles.panelScrollViewport} onLayout={panelScroll.onViewportLayout}>
-          <ScrollView
-            style={styles.panelScroll}
-            contentContainerStyle={styles.panelScrollContent}
-            showsVerticalScrollIndicator={false}
-            scrollEnabled={canScroll}
-            keyboardShouldPersistTaps="handled"
-            onScroll={panelScroll.onScroll}
-            onScrollBeginDrag={() => {
-              dismissWordOverlapTooltips();
-            }}
-            onContentSizeChange={panelScroll.onContentSizeChange}
-            scrollEventThrottle={panelScroll.scrollEventThrottle}
-          >
-            <View style={styles.scrollBody}>
-              {tab === 'players' && playersRuledHeight > 0 ? (
-                <NotebookRuledFill height={playersRuledHeight} style={styles.ruledBackdrop} />
-              ) : null}
-              {tab === 'all' ? (
-                <ResultsGlobalWordList
-                  rows={allWordRows}
-                  showAuthors={showWordAuthors}
-                  showScoreBadges={showScores}
-                />
-              ) : (
+          {tab === 'all' ? (
+            <ResultsGlobalWordList
+              rows={allWordRows}
+              showAuthors={showWordAuthors}
+              showScoreBadges={showScores}
+              fillerRowCount={fillerRowCount}
+              scrollEnabled={canScroll}
+              onScroll={panelScroll.onScroll}
+              onScrollBeginDrag={() => {
+                dismissWordOverlapTooltips();
+              }}
+              onContentSizeChange={panelScroll.onContentSizeChange}
+              scrollEventThrottle={panelScroll.scrollEventThrottle}
+            />
+          ) : (
+            <ScrollView
+              style={styles.panelScroll}
+              contentContainerStyle={styles.panelScrollContent}
+              showsVerticalScrollIndicator={false}
+              scrollEnabled={canScroll}
+              keyboardShouldPersistTaps="handled"
+              onScroll={panelScroll.onScroll}
+              onScrollBeginDrag={() => {
+                dismissWordOverlapTooltips();
+              }}
+              onContentSizeChange={panelScroll.onContentSizeChange}
+              scrollEventThrottle={panelScroll.scrollEventThrottle}
+            >
+              <View style={styles.scrollBody}>
+                {playersRuledHeight > 0 ? (
+                  <NotebookRuledFill height={playersRuledHeight} style={styles.ruledBackdrop} />
+                ) : null}
                 <View onLayout={onPlayerBodyLayout} style={styles.playerBody}>
                   <ResultsByPlayer
                     rankGroups={playerRankGroups}
@@ -201,10 +211,9 @@ export function RoundResultsView({
                     showWordsPerMinute={roundDurationSeconds != null}
                   />
                 </View>
-              )}
-              {tab === 'all' ? <NotebookLineFiller rowCount={fillerRowCount} /> : null}
-            </View>
-          </ScrollView>
+              </View>
+            </ScrollView>
+          )}
         </View>
       </ScrollableWordPanel>
 
@@ -282,9 +291,10 @@ function createStyles(colors: ThemeColors) {
     tabLabelIdle: {
       color: colors.textSecondary,
     },
-    meta: {
-      fontSize: 13,
-      color: colors.textSecondary,
+    stats: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.textPrimary,
     },
     wordPanel: {
       marginHorizontal: spacing.md,

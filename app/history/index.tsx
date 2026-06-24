@@ -12,12 +12,16 @@ import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { toDisplayUpper } from '@/lib/dictionary/normalize';
 import { formatResultsHeadline } from '@/lib/game/results-headline';
 import { createOnlineResultsDirectory } from '@/lib/game/results-directory';
+import { ensureAnonymousAuth } from '@/lib/firebase/auth';
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import { buildStandingsFromSession } from '@/lib/game/scoring';
+import { isSoloStandings } from '@/lib/game/solo-round';
 import { formatUkPlayers } from '@/lib/i18n/uk-plural';
+import { didPlayerWinOnlineRound } from '@/lib/profile/player-stats';
 import { formatProfileStatsSummary } from '@/lib/profile/format-profile-stats';
 import { stackHeaderWithBackAndSettings } from '@/lib/navigation/stack-header-options';
 import { formatArchiveSavedAt } from '@/lib/online/format-archive-date';
+import { computeArchivedPlayerStats } from '@/lib/online/compute-archived-player-stats';
 import {
   archiveRouteKey,
   listFinishedRoundArchives,
@@ -25,6 +29,7 @@ import {
 } from '@/lib/online/online-session-archive';
 import { usePlayerStatsStore } from '@/store/player-stats-store';
 import { useProfileStore } from '@/store/profile-store';
+import { useFirebaseStore } from '@/store/firebase-store';
 
 /**
  * Browse locally archived finished online rounds.
@@ -40,7 +45,11 @@ export default function RoundHistoryScreen() {
   const statsHydrated = usePlayerStatsStore((state) => state.hydrated);
   const hydratePlayerStats = usePlayerStatsStore((state) => state.hydratePlayerStats);
   const profileHydrated = useProfileStore((state) => state.hydrated);
+  const profileName = useProfileStore((state) => state.name);
   const isProfileComplete = useProfileStore((state) => state.isComplete());
+  const storeUid = useFirebaseStore((state) => state.uid);
+  const [resolvedUid, setResolvedUid] = useState(storeUid ?? '');
+  const myUid = resolvedUid || storeUid || '';
 
   const loadArchives = useCallback(async () => {
     setArchives(await listFinishedRoundArchives());
@@ -49,6 +58,12 @@ export default function RoundHistoryScreen() {
   useEffect(() => {
     void loadArchives();
   }, [loadArchives]);
+
+  useEffect(() => {
+    void ensureAnonymousAuth().then((user) => {
+      setResolvedUid(user.uid);
+    });
+  }, []);
 
   useEffect(() => {
     if (!statsHydrated) {
@@ -67,11 +82,21 @@ export default function RoundHistoryScreen() {
   );
 
   const showStats = profileHydrated && isProfileComplete && statsHydrated;
+  const archiveStats = useMemo(() => {
+    if (!archives || !myUid) {
+      return null;
+    }
+    return computeArchivedPlayerStats(archives, myUid, profileName);
+  }, [archives, myUid, profileName]);
 
   const statsBand = showStats ? (
     <View style={styles.statsBand}>
       <Text style={styles.statsSummary}>
-        {formatProfileStatsSummary(gamesPlayed, gamesWon, wordsCollected)}
+        {formatProfileStatsSummary(
+          archiveStats?.gamesPlayed ?? gamesPlayed,
+          archiveStats?.gamesWon ?? gamesWon,
+          archiveStats?.wordsCollected ?? wordsCollected,
+        )}
       </Text>
     </View>
   ) : null;
@@ -114,13 +139,22 @@ export default function RoundHistoryScreen() {
                   archive.session,
                 ).uniqueBonusEnabled;
                 const headline = formatResultsHeadline(t, directory, standings, uniqueBonusEnabled);
+                const isSolo = isSoloStandings(standings);
+                const isViewerWinner =
+                  !isSolo &&
+                  Boolean(myUid && archive.session.players[myUid]) &&
+                  didPlayerWinOnlineRound(myUid, standings);
 
                 return (
                   <FeedbackPressable
                     key={archiveRouteKey(archive.gameId, archive.baseWordRound)}
                     accessibilityRole="button"
                     feedback={false}
-                    style={styles.card}
+                    style={[
+                      styles.card,
+                      isSolo ? styles.cardSolo : null,
+                      isViewerWinner ? styles.cardWinner : null,
+                    ]}
                     onPress={() => {
                       router.push({
                         pathname: '/history/[archiveKey]',
@@ -131,20 +165,25 @@ export default function RoundHistoryScreen() {
                     }}
                   >
                     <Text style={styles.cardDate}>{formatArchiveSavedAt(archive.savedAt)}</Text>
-                    <Text style={styles.cardBaseWord}>
+                    <Text style={[styles.cardBaseWord, isSolo ? styles.cardBaseWordSolo : null]}>
                       {toDisplayUpper(archive.session.baseWord)}
                     </Text>
-                    <Text style={styles.cardHeadline} numberOfLines={2}>
+                    <Text
+                      style={[styles.cardHeadline, isSolo ? styles.cardHeadlineSolo : null]}
+                      numberOfLines={2}
+                    >
                       {headline}
                     </Text>
-                    <Text style={styles.cardMeta}>
-                      {t('history.roomCode', { code: archive.gameId })}
-                      {' · '}
-                      {formatUkPlayers(playerCount)}
-                      {archive.baseWordRound > 0
-                        ? ` · ${t('history.roundLabel', { round: archive.baseWordRound + 1 })}`
-                        : null}
-                    </Text>
+                    {!isSolo ? (
+                      <Text style={styles.cardMeta}>
+                        {t('history.roomCode', { code: archive.gameId })}
+                        {' · '}
+                        {formatUkPlayers(playerCount)}
+                        {archive.baseWordRound > 0
+                          ? ` · ${t('history.roundLabel', { round: archive.baseWordRound + 1 })}`
+                          : null}
+                      </Text>
+                    ) : null}
                   </FeedbackPressable>
                 );
               })}
@@ -209,6 +248,15 @@ function createStyles(colors: ThemeColors) {
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.borderSecondary,
     },
+    cardSolo: {
+      backgroundColor: 'transparent',
+      borderColor: colors.borderTertiary,
+    },
+    cardWinner: {
+      backgroundColor: colors.accentMuted,
+      borderColor: colors.accent,
+      borderWidth: 1,
+    },
     cardDate: {
       fontSize: 13,
       color: colors.textTertiary,
@@ -218,10 +266,19 @@ function createStyles(colors: ThemeColors) {
       fontWeight: '600',
       color: colors.accent,
     },
+    cardBaseWordSolo: {
+      fontSize: 17,
+      fontWeight: '500',
+      color: colors.textSecondary,
+    },
     cardHeadline: {
       fontSize: 15,
       color: colors.textPrimary,
       lineHeight: 20,
+    },
+    cardHeadlineSolo: {
+      fontSize: 14,
+      color: colors.textSecondary,
     },
     cardMeta: {
       fontSize: 13,

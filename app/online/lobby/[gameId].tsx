@@ -43,6 +43,8 @@ import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
 import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
 import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
 import { useFirebaseStore } from '@/store/firebase-store';
+import { tGendered } from '@/lib/game/grammar';
+import { playerGenderFromSession } from '@/lib/game/vote-status-label';
 
 /**
  * Waiting lobby — room code, players; base-word picker starts the round.
@@ -313,6 +315,25 @@ export default function LobbyScreen() {
     );
   }
 
+  const baseWordBlock =
+    hasBaseWord && session.baseWord ? (
+      <View style={styles.baseWordSection}>
+        <Text style={styles.baseWordLabel}>{t('game.baseWord')}</Text>
+        <Text style={styles.baseWordTitle}>{session.baseWord.toUpperCase()}</Text>
+        <Text style={styles.baseWordMeta}>
+          {tGendered(
+            t,
+            'online.baseWordChosenBy',
+            playerGenderFromSession(pickerUid ? session.players[pickerUid]?.gender : undefined),
+            { name: pickerName },
+          )}
+        </Text>
+        {isPicker && session.status === 'waiting' ? (
+          <Text style={styles.baseWordChangeHint}>{t('online.baseWordChangeHint')}</Text>
+        ) : null}
+      </View>
+    ) : null;
+
   return (
     <>
       <Stack.Screen options={screenOptions} />
@@ -331,32 +352,19 @@ export default function LobbyScreen() {
           </Text>
         ) : null}
 
-        {hasBaseWord && session.baseWord ? (
-          isPicker && session.status === 'waiting' ? (
-            <FeedbackPressable
-              accessibilityRole="button"
-              onPress={() => {
-                router.push({ pathname: '/online/pick-word/[gameId]', params: { gameId } });
-              }}
-              style={styles.baseWordBannerPressable}
-            >
-              <Text style={styles.baseWordBanner}>
-                {t('online.baseWordChosen', {
-                  word: session.baseWord.toUpperCase(),
-                  name: pickerName,
-                })}
-              </Text>
-              <Text style={styles.baseWordChangeHint}>{t('online.baseWordChangeHint')}</Text>
-            </FeedbackPressable>
-          ) : (
-            <Text style={styles.baseWordBanner}>
-              {t('online.baseWordChosen', {
-                word: session.baseWord.toUpperCase(),
-                name: pickerName,
-              })}
-            </Text>
-          )
-        ) : null}
+        {baseWordBlock && isPicker && session.status === 'waiting' ? (
+          <FeedbackPressable
+            accessibilityRole="button"
+            onPress={() => {
+              router.push({ pathname: '/online/pick-word/[gameId]', params: { gameId } });
+            }}
+            style={styles.baseWordBannerPressable}
+          >
+            {baseWordBlock}
+          </FeedbackPressable>
+        ) : (
+          baseWordBlock
+        )}
 
         {hasBaseWord && lobbyLexicon ? (
           <Text style={styles.playableWordsHint}>
@@ -487,21 +495,38 @@ function createStyles(colors: ThemeColors) {
       padding: spacing.sm,
       textAlign: 'center',
     },
-    baseWordBanner: {
+    baseWordSection: {
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingVertical: spacing.sm,
+    },
+    baseWordLabel: {
       fontSize: 13,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    baseWordTitle: {
+      fontSize: 24,
+      fontWeight: '700',
       color: colors.accent,
+      textAlign: 'center',
+    },
+    baseWordMeta: {
+      fontSize: 13,
+      color: colors.textSecondary,
       textAlign: 'center',
     },
     baseWordBannerPressable: {
       backgroundColor: colors.accentMuted,
       borderRadius: radii.sm,
-      padding: spacing.sm,
-      gap: spacing.xs,
+      paddingHorizontal: spacing.md,
+      marginVertical: spacing.xs,
     },
     baseWordChangeHint: {
       fontSize: 11,
       color: colors.textSecondary,
       textAlign: 'center',
+      marginTop: spacing.xs,
     },
     settingsBanner: {
       fontSize: 12,

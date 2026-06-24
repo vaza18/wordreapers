@@ -1,50 +1,137 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { memo, useCallback, useMemo } from 'react';
+import {
+  FlatList,
+  StyleSheet,
+  Text,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
 
 import { ResultWordAuthorAvatars } from '@/components/ResultWordAuthorAvatars';
-import { createNotebookRowLineStyle } from '@/components/notebook/NotebookLineFiller';
+import {
+  NotebookLineFiller,
+  createNotebookRowLineStyle,
+} from '@/components/notebook/NotebookLineFiller';
+import { WORD_LIST_ROW_HEIGHT } from '@/constants/notebook';
 import { spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import type { ResultsWordListRow } from '@/lib/game/results-missing-words';
+
+const ROW_HEIGHT = WORD_LIST_ROW_HEIGHT;
 
 interface ResultsGlobalWordListProps {
   rows: readonly ResultsWordListRow[];
   showAuthors?: boolean;
   showScoreBadges?: boolean;
+  fillerRowCount: number;
+  scrollEnabled: boolean;
+  onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  onScrollBeginDrag?: () => void;
+  onContentSizeChange: (width: number, height: number) => void;
+  scrollEventThrottle: number;
 }
 
+function ResultsWordRow({
+  row,
+  showAuthors,
+  showScoreBadges,
+  styles,
+  notebookRow,
+}: {
+  row: ResultsWordListRow;
+  showAuthors: boolean;
+  showScoreBadges: boolean;
+  styles: ReturnType<typeof createStyles>;
+  notebookRow: ReturnType<typeof createNotebookRowLineStyle>;
+}) {
+  return (
+    <View style={[notebookRow.row, styles.row]}>
+      <Text style={[styles.word, !row.found ? styles.wordMissing : null]} numberOfLines={1}>
+        {row.display}
+      </Text>
+      <View style={styles.meta}>
+        {showAuthors && row.found && row.authors ? (
+          <ResultWordAuthorAvatars authors={row.authors} showUniqueBadge={showScoreBadges} />
+        ) : null}
+        {showScoreBadges && row.showX2 ? <Text style={styles.x2}>x2</Text> : null}
+      </View>
+    </View>
+  );
+}
+
+const MemoResultsWordRow = memo(ResultsWordRow);
+
 /**
- * «Всі слова» tab — full alphabetical list with compact author avatars (scroll via parent).
+ * «Всі слова» tab — virtualized alphabetical list with compact author avatars.
  */
 export function ResultsGlobalWordList({
   rows,
   showAuthors = true,
   showScoreBadges = false,
+  fillerRowCount,
+  scrollEnabled,
+  onScroll,
+  onScrollBeginDrag,
+  onContentSizeChange,
+  scrollEventThrottle,
 }: ResultsGlobalWordListProps) {
   const styles = useThemedStyles(createStyles);
   const notebookRow = useThemedStyles(createNotebookRowLineStyle);
+
+  const ruledPaperFooter = useMemo(
+    () => <NotebookLineFiller rowCount={fillerRowCount} />,
+    [fillerRowCount],
+  );
+
+  const renderItem = useCallback(
+    ({ item: row }: { item: ResultsWordListRow }) => (
+      <MemoResultsWordRow
+        row={row}
+        showAuthors={showAuthors}
+        showScoreBadges={showScoreBadges}
+        styles={styles}
+        notebookRow={notebookRow}
+      />
+    ),
+    [notebookRow, showAuthors, showScoreBadges, styles],
+  );
+
   return (
-    <View style={styles.list}>
-      {rows.map((row) => (
-        <View key={row.normalized} style={[notebookRow.row, styles.row]}>
-          <Text style={[styles.word, !row.found ? styles.wordMissing : null]} numberOfLines={1}>
-            {row.display}
-          </Text>
-          <View style={styles.meta}>
-            {showAuthors && row.found && row.authors ? (
-              <ResultWordAuthorAvatars authors={row.authors} showUniqueBadge={showScoreBadges} />
-            ) : null}
-            {showScoreBadges && row.showX2 ? <Text style={styles.x2}>x2</Text> : null}
-          </View>
-        </View>
-      ))}
-    </View>
+    <FlatList
+      data={rows}
+      keyExtractor={(row) => row.normalized}
+      style={styles.list}
+      contentContainerStyle={styles.listContent}
+      ListFooterComponent={ruledPaperFooter}
+      showsVerticalScrollIndicator={false}
+      scrollEnabled={scrollEnabled}
+      removeClippedSubviews={false}
+      keyboardShouldPersistTaps="handled"
+      onScroll={onScroll}
+      onScrollBeginDrag={onScrollBeginDrag}
+      onContentSizeChange={onContentSizeChange}
+      scrollEventThrottle={scrollEventThrottle}
+      getItemLayout={(_, index) => ({
+        length: ROW_HEIGHT,
+        offset: ROW_HEIGHT * index,
+        index,
+      })}
+      renderItem={renderItem}
+    />
   );
 }
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     list: {
-      gap: 0,
+      flex: 1,
+      backgroundColor: 'transparent',
+    },
+    listContent: {
+      paddingHorizontal: spacing.sm,
+      paddingBottom: spacing.md,
+      backgroundColor: colors.notebookPaper,
     },
     row: {
       flexDirection: 'row',

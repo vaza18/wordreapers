@@ -435,6 +435,17 @@ export default function OnlinePlayScreen() {
   const isPaused = session?.pauseState?.active === true;
 
   useEffect(() => {
+    if (
+      session?.pauseVote ||
+      session?.earlyFinishVote ||
+      session?.addTimeVote ||
+      session?.resumeVote
+    ) {
+      setShowGameMenu(false);
+    }
+  }, [session?.pauseVote, session?.earlyFinishVote, session?.addTimeVote, session?.resumeVote]);
+
+  useEffect(() => {
     if (session?.addTimeVote) {
       finishAttemptedRef.current = false;
     }
@@ -980,6 +991,15 @@ export default function OnlinePlayScreen() {
   const pauseVote = session.pauseVote;
   const addTimeVote = session.addTimeVote;
   const resumeVote = session.resumeVote;
+  const gameMenuBlockedByVote = Boolean(
+    pauseVote || earlyVote || addTimeVote || (isPaused && resumeVote),
+  );
+  const pauseUiObscured =
+    showGameMenu ||
+    showInviteModal ||
+    showExitConfirm ||
+    (showEndEarlyConfirm && !hasOnlineOpponentInRound) ||
+    Boolean(earlyVote || pauseVote || addTimeVote);
   const canProposeAddTime = !isPaused && !earlyVote && !pauseVote && !addTimeVote;
 
   return (
@@ -1124,7 +1144,7 @@ export default function OnlinePlayScreen() {
       </BottomSheetModal>
 
       <GameMenuModal
-        visible={showGameMenu}
+        visible={showGameMenu && !gameMenuBlockedByVote}
         endGameLabel={hasOnlineOpponentInRound ? t('game.menuProposeEnd') : t('game.menuEndEarly')}
         showEndGame={hasOnlineOpponentInRound}
         onClose={() => {
@@ -1174,7 +1194,7 @@ export default function OnlinePlayScreen() {
       />
 
       <PauseRoundModal
-        visible={isPaused}
+        visible={isPaused && !pauseUiObscured}
         session={session}
         myUid={myUid}
         viewerGender={viewerGender}

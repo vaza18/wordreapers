@@ -108,39 +108,41 @@ export function ResultsByPlayer({
                       }}
                       style={styles.header}
                     >
-                      <View style={styles.headerLeft}>
+                      <View style={styles.headerMain}>
                         <PlayerAvatar
                           avatarColorIndex={section.avatarColorIndex}
                           name={section.playerName}
                           size={22}
                         />
-                        <Text
-                          style={[styles.name, isYou ? styles.nameYou : null]}
-                          numberOfLines={1}
-                        >
-                          {multi ? section.playerName : `${section.rank}. ${section.playerName}`}
-                          {isYou ? ` ${youLabel}` : ''}
-                        </Text>
+                        <View style={styles.headerText}>
+                          <Text
+                            style={[styles.name, isYou ? styles.nameYou : null]}
+                            numberOfLines={1}
+                          >
+                            {multi ? section.playerName : `${section.rank}. ${section.playerName}`}
+                            {isYou ? ` ${youLabel}` : ''}
+                          </Text>
+                          <Text style={styles.meta}>
+                            {showScores ? (
+                              <>
+                                {section.score}
+                                {pointsShort} ·{' '}
+                              </>
+                            ) : null}
+                            {section.wordCount}
+                            {wordsShort}
+                            {showWordsPerMinute && section.wordsPerMinute != null ? (
+                              <>
+                                {' · '}
+                                {t('game.resultsWordsPerMinuteShort', {
+                                  rate: section.wordsPerMinute,
+                                })}
+                              </>
+                            ) : null}
+                          </Text>
+                        </View>
                       </View>
-                      <Text style={styles.meta}>
-                        {showScores ? (
-                          <>
-                            {section.score}
-                            {pointsShort} ·{' '}
-                          </>
-                        ) : null}
-                        {section.wordCount}
-                        {wordsShort}
-                        {showWordsPerMinute && section.wordsPerMinute != null ? (
-                          <>
-                            {' · '}
-                            {t('game.resultsWordsPerMinuteShort', {
-                              rate: section.wordsPerMinute,
-                            })}
-                          </>
-                        ) : null}{' '}
-                        {expanded ? '▲' : '▼'}
-                      </Text>
+                      <Text style={styles.chevron}>{expanded ? '▲' : '▼'}</Text>
                     </FeedbackPressable>
                     {expanded ? (
                       <View style={styles.wordsRow}>
@@ -231,22 +233,25 @@ function createStyles(colors: ThemeColors) {
     },
     header: {
       flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
+      alignItems: 'flex-start',
       gap: spacing.sm,
     },
-    headerLeft: {
+    headerMain: {
       flexDirection: 'row',
-      alignItems: 'center',
+      alignItems: 'flex-start',
       gap: spacing.xs,
       flex: 1,
       minWidth: 0,
+    },
+    headerText: {
+      flex: 1,
+      minWidth: 0,
+      gap: 2,
     },
     name: {
       fontSize: 14,
       fontWeight: '500',
       color: colors.textPrimary,
-      flexShrink: 1,
     },
     nameYou: {
       color: colors.accent,
@@ -254,6 +259,11 @@ function createStyles(colors: ThemeColors) {
     meta: {
       fontSize: 12,
       color: colors.textSecondary,
+    },
+    chevron: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      lineHeight: 22,
     },
     wordsRow: {
       flexDirection: 'row',

@@ -1,5 +1,25 @@
 import { ukPluralForm } from '@/lib/i18n/uk-plural';
 
+const GAME_FORMS = {
+  one: 'гра',
+  few: 'гри',
+  many: 'ігор',
+} as const;
+
+const WIN_FORMS = {
+  one: 'перемога',
+  few: 'перемоги',
+  many: 'перемог',
+} as const;
+
+function formatUkGames(count: number): string {
+  return `${count} ${GAME_FORMS[ukPluralForm(count)]}`;
+}
+
+function formatUkWins(count: number): string {
+  return `${count} ${WIN_FORMS[ukPluralForm(count)]}`;
+}
+
 function formatUkCollectedWords(count: number): string {
   const form = ukPluralForm(count);
   if (form === 'one') {
@@ -11,9 +31,9 @@ function formatUkCollectedWords(count: number): string {
   return `${count} зібраних слів`;
 }
 
-/** «8 ігор · 8 перемог» */
+/** «8 ігор · 3 перемоги» */
 export function formatProfileStatsGamesLine(gamesPlayed: number, gamesWon: number): string {
-  return `${gamesPlayed} ігор · ${gamesWon} перемог`;
+  return `${formatUkGames(gamesPlayed)} · ${formatUkWins(gamesWon)}`;
 }
 
 /** «185 зібраних слів» */

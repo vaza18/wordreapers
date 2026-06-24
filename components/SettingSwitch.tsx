@@ -13,6 +13,8 @@ interface SettingSwitchProps {
   hint?: string;
   value: boolean;
   onChange: (value: boolean) => void;
+  /** Smaller secondary styling for inline toggles (e.g. round results). */
+  variant?: 'default' | 'compact';
 }
 
 function createStyles(colors: ThemeColors) {
@@ -31,6 +33,11 @@ function createStyles(colors: ThemeColors) {
       fontSize: 15,
       color: colors.textPrimary,
       fontWeight: '500',
+    },
+    labelCompact: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      fontWeight: '400',
     },
     hint: {
       fontSize: 12,
@@ -72,7 +79,13 @@ function createStyles(colors: ThemeColors) {
 /**
  * Label + switch row from setup mockups.
  */
-export function SettingSwitch({ label, hint, value, onChange }: SettingSwitchProps) {
+export function SettingSwitch({
+  label,
+  hint,
+  value,
+  onChange,
+  variant = 'default',
+}: SettingSwitchProps) {
   const buttonFeedback = useSettingsStore((state) => state.buttonFeedback);
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -80,7 +93,9 @@ export function SettingSwitch({ label, hint, value, onChange }: SettingSwitchPro
   return (
     <View style={styles.row}>
       <View style={styles.textBlock}>
-        <Text style={styles.label}>{label}</Text>
+        <Text style={[styles.label, variant === 'compact' ? styles.labelCompact : null]}>
+          {label}
+        </Text>
         {hint ? <Text style={styles.hint}>{hint}</Text> : null}
       </View>
       <Switch
