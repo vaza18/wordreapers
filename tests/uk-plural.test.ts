@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatUkPlayers, formatUkWords, ukPluralForm } from '@/lib/i18n/uk-plural';
+import { formatUkPlayers, formatUkWords, ukPluralForm, ukWordForm } from '@/lib/i18n/uk-plural';
 
 describe('ukPluralForm', () => {
   it('uses one for …1 except teens and penultimate 1', () => {
@@ -45,5 +45,13 @@ describe('formatUkWords', () => {
     expect(formatUkWords(1)).toBe('1 слово');
     expect(formatUkWords(2)).toBe('2 слова');
     expect(formatUkWords(5)).toBe('5 слів');
+  });
+});
+
+describe('ukWordForm', () => {
+  it('returns noun form without count', () => {
+    expect(ukWordForm(1)).toBe('слово');
+    expect(ukWordForm(8)).toBe('слів');
+    expect(ukWordForm(141)).toBe('слово');
   });
 });

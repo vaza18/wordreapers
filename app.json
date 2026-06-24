@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "wordreapers",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "icon": "./assets/icons/app-icon.png",
     "splash": {
       "image": "./assets/icons/app-icon.png",
@@ -18,7 +18,8 @@
       "infoPlist": {
         "UIDesignRequiresCompatibility": true,
         "UIStatusBarHidden": true,
-        "UIViewControllerBasedStatusBarAppearance": false
+        "UIViewControllerBasedStatusBarAppearance": false,
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {

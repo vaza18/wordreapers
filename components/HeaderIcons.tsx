@@ -1,6 +1,6 @@
 import Svg, { Circle, Path } from 'react-native-svg';
 
-interface HeaderIconProps {
+export interface HeaderIconProps {
   size?: number;
   color: string;
 }
@@ -27,6 +27,46 @@ export function InfoIcon({ size = 20, color }: HeaderIconProps) {
       <Path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" stroke={color} strokeWidth={1.75} />
       <Path d="M12 11v5" stroke={color} strokeWidth={1.75} strokeLinecap="round" />
       <Path d="M12 8h.01" stroke={color} strokeWidth={2} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+/** Sun — light appearance. */
+export function SunIcon({ size = 20, color }: HeaderIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx={12} cy={12} r={4} stroke={color} strokeWidth={1.75} />
+      <Path
+        d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
+/** Moon — dark appearance. */
+export function MoonIcon({ size = 20, color }: HeaderIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5 8.5 8.5 0 1 0 20.5 14.5Z"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+/** Half-filled circle — system / auto appearance. */
+export function AppearanceAutoIcon({ size = 20, color }: HeaderIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" stroke={color} strokeWidth={1.75} />
+      <Path d="M12 3a9 9 0 0 1 0 18V3Z" fill={color} />
     </Svg>
   );
 }

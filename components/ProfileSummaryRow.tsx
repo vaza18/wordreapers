@@ -5,7 +5,8 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { PlayerAvatar } from '@/components/PlayerAvatar';
-import { colors, spacing } from '@/constants/theme';
+import { spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import {
   formatProfileStatsGamesLine,
   formatProfileStatsWordsLine,
@@ -13,11 +14,62 @@ import {
 import { usePlayerStatsStore } from '@/store/player-stats-store';
 import { useProfileStore } from '@/store/profile-store';
 
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      alignItems: 'stretch',
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+      gap: spacing.sm,
+    },
+    profileTap: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      minWidth: 0,
+    },
+    centerCol: {
+      flex: 1,
+      minWidth: 0,
+      gap: 2,
+      justifyContent: 'center',
+    },
+    statsCol: {
+      gap: 2,
+    },
+    historySlot: {
+      justifyContent: 'center',
+    },
+    name: {
+      fontSize: 15,
+      fontWeight: '500',
+      color: colors.textPrimary,
+    },
+    stats: {
+      fontSize: 13,
+      color: colors.textSecondary,
+    },
+    edit: {
+      flexShrink: 0,
+      fontSize: 14,
+      color: colors.textTertiary,
+    },
+    historyLink: {
+      flexShrink: 0,
+      fontSize: 14,
+      color: colors.accent,
+    },
+  });
+}
+
 /**
  * Home footer profile row (mockup screen 1): avatar, name, stats, edit on the right.
  */
 export function ProfileSummaryRow() {
   const { t } = useTranslation();
+  const styles = useThemedStyles(createStyles);
   const name = useProfileStore((state) => state.name);
   const avatarColorIndex = useProfileStore((state) => state.avatarColorIndex);
   const hydrated = useProfileStore((state) => state.hydrated);
@@ -89,51 +141,3 @@ export function ProfileSummaryRow() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    gap: spacing.sm,
-  },
-  profileTap: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    minWidth: 0,
-  },
-  centerCol: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-    justifyContent: 'center',
-  },
-  statsCol: {
-    gap: 2,
-  },
-  historySlot: {
-    justifyContent: 'center',
-  },
-  name: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: colors.textPrimary,
-  },
-  stats: {
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
-  edit: {
-    flexShrink: 0,
-    fontSize: 14,
-    color: colors.textTertiary,
-  },
-  historyLink: {
-    flexShrink: 0,
-    fontSize: 14,
-    color: colors.accent,
-  },
-});

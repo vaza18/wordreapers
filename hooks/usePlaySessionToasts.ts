@@ -12,7 +12,9 @@ export {
   PLAY_TOAST_FADE_OUT_MS,
   PLAY_TOAST_FADE_START_MS,
   PLAY_TOAST_VISIBLE_MS,
+  type PlayToastEnqueueInput,
   type PlayToastItem,
+  type PlayToastVariant,
 } from './useToastQueue';
 
 /**
@@ -40,8 +42,8 @@ export function usePlaySessionToasts(
     }
 
     const events = detectPlayToastEvents(prev, session, myUid);
-    const messages = formatPlayToastEvents(t, events, viewerGender);
-    enqueueToasts(messages);
+    const items = formatPlayToastEvents(t, events, viewerGender);
+    enqueueToasts(items);
   }, [enqueueToasts, myUid, session, t, viewerGender]);
 
   return toasts;

@@ -4,7 +4,9 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { LobbyQrCode } from '@/components/LobbyQrCode';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
+import { modalOverlayBackground, modalSheetChrome } from '@/lib/ui/modal-chrome';
 import { formatRoomCodeDisplay } from '@/lib/firebase/format-room-code';
 
 interface RoomInviteModalProps {
@@ -28,6 +30,7 @@ function InviteBody({
   roundInProgress: boolean;
   invitedByUid?: string;
 }) {
+  const styles = useThemedStyles(createStyles);
   const { t } = useTranslation();
   const { bottom } = useSafeAreaInsets();
 
@@ -78,54 +81,56 @@ export function RoomInviteModal({
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.lg,
-  },
-  card: {
-    backgroundColor: colors.backgroundPrimary,
-    borderTopLeftRadius: radii.lg,
-    borderTopRightRadius: radii.lg,
-    padding: spacing.lg,
-    gap: spacing.sm,
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    textAlign: 'center',
-  },
-  hint: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  code: {
-    fontSize: 28,
-    fontWeight: '600',
-    color: colors.accent,
-    letterSpacing: 6,
-    marginTop: spacing.xs,
-  },
-  codeLabel: {
-    fontSize: 12,
-    color: colors.textTertiary,
-  },
-  closeRow: {
-    marginTop: spacing.sm,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-  },
-  closeLabel: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: colors.accent,
-    textAlign: 'center',
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    overlay: {
+      flex: 1,
+      justifyContent: 'flex-end',
+      backgroundColor: modalOverlayBackground(colors),
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.lg,
+    },
+    card: {
+      ...modalSheetChrome(colors),
+      borderTopLeftRadius: radii.lg,
+      borderTopRightRadius: radii.lg,
+      padding: spacing.lg,
+      gap: spacing.sm,
+      alignItems: 'center',
+    },
+    title: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.textPrimary,
+      textAlign: 'center',
+    },
+    hint: {
+      fontSize: 13,
+      lineHeight: 18,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    code: {
+      fontSize: 28,
+      fontWeight: '600',
+      color: colors.accent,
+      letterSpacing: 6,
+      marginTop: spacing.xs,
+    },
+    codeLabel: {
+      fontSize: 12,
+      color: colors.textTertiary,
+    },
+    closeRow: {
+      marginTop: spacing.sm,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.lg,
+    },
+    closeLabel: {
+      fontSize: 15,
+      fontWeight: '500',
+      color: colors.accent,
+      textAlign: 'center',
+    },
+  });
+}

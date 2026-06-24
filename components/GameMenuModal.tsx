@@ -3,7 +3,9 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
+import { modalCardChrome, modalOverlayBackground } from '@/lib/ui/modal-chrome';
 
 interface GameMenuModalProps {
   visible: boolean;
@@ -39,6 +41,7 @@ export function GameMenuModal({
   showInvite = false,
   exitLabel,
 }: GameMenuModalProps) {
+  const styles = useThemedStyles(createStyles);
   const { t } = useTranslation();
 
   return (
@@ -88,43 +91,45 @@ export function GameMenuModal({
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: spacing.lg,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  card: {
-    backgroundColor: colors.backgroundPrimary,
-    borderRadius: radii.lg,
-    padding: spacing.lg,
-    gap: spacing.sm,
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    textAlign: 'center',
-    marginBottom: spacing.xs,
-  },
-  continueRow: {
-    backgroundColor: '#E1F5EE',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#9FE1CB',
-    borderRadius: radii.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-  },
-  continueLabel: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#085041',
-    textAlign: 'center',
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderTertiary,
-    marginVertical: spacing.xs,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    overlay: {
+      flex: 1,
+      justifyContent: 'center',
+      padding: spacing.lg,
+      backgroundColor: modalOverlayBackground(colors),
+    },
+    card: {
+      ...modalCardChrome(colors),
+      borderRadius: radii.lg,
+      padding: spacing.lg,
+      gap: spacing.sm,
+    },
+    title: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.textPrimary,
+      textAlign: 'center',
+      marginBottom: spacing.xs,
+    },
+    continueRow: {
+      backgroundColor: '#E1F5EE',
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: '#9FE1CB',
+      borderRadius: radii.sm,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md,
+    },
+    continueLabel: {
+      fontSize: 15,
+      fontWeight: '500',
+      color: '#085041',
+      textAlign: 'center',
+    },
+    divider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.borderTertiary,
+      marginVertical: spacing.xs,
+    },
+  });
+}

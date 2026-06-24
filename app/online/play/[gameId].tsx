@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
 import {
   hasWordInSortedList,
   loadBundledDictionary,
@@ -32,7 +33,9 @@ import { RoomInviteModal } from '@/components/RoomInviteModal';
 import { OnlinePlayComposePanel } from '@/components/online/OnlinePlayComposePanel';
 import { OnlinePlayWordListSection } from '@/components/online/OnlinePlayWordListSection';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { colors, radii, spacing } from '@/constants/theme';
+import { spacing, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useAutoPauseOnAppBackground } from '@/hooks/useAutoPauseOnAppBackground';
 import { usePlaySessionToasts } from '@/hooks/usePlaySessionToasts';
 import { useResultsRematchToast } from '@/hooks/useResultsRematchToast';
@@ -119,6 +122,8 @@ const FEEDBACK_DISMISS_MS = 2200;
  * Online multiplayer play — per-device keyboard, Firebase sync (M2.3).
  */
 export default function OnlinePlayScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const { gameId: rawGameId, openInvite: rawOpenInvite } = useLocalSearchParams<{
     gameId: string;
@@ -156,6 +161,9 @@ export default function OnlinePlayScreen() {
   const [showAddTimeModal, setShowAddTimeModal] = useState(false);
   const [backgroundSyncing, setBackgroundSyncing] = useState(false);
   const [optimisticWords, setOptimisticWords] = useState<Map<string, StoredPlayerWord>>(new Map());
+  const [scrollRequest, setScrollRequest] = useState<{ normalized: string; id: number } | null>(
+    null,
+  );
   const serverNow = useServerNow(250);
   const [roundOverPendingResults, setRoundOverPendingResults] = useState(false);
   const roundEnded = session?.status === 'finished' || roundOverPendingResults;
@@ -181,6 +189,7 @@ export default function OnlinePlayScreen() {
   const playRoundKeyRef = useRef<number | null>(null);
   const staleWordsReconcileKeyRef = useRef<string | null>(null);
   const scoresSyncInFlightRef = useRef(false);
+  const scoresSyncDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const finishedArchiveRoundRef = useRef<number | null>(null);
   const wordMapsRef = useRef(wordMaps);
   wordMapsRef.current = wordMaps;
@@ -406,15 +415,35 @@ export default function OnlinePlayScreen() {
         setSupplementsReady(true);
       },
     );
+    return () => {
+      void Promise.all([loadBundledDictionary(), loadBundledSupplements()]);
+    };
   }, []);
 
   const endsAt = session?.timerEndsAt ?? null;
-  const uniqueBonusEnabled = session
-    ? resolveGameSessionSettingsForSession(session).uniqueBonusEnabled
-    : false;
+  const resolvedSessionSettings = session ? resolveGameSessionSettingsForSession(session) : null;
+  const uniqueBonusEnabled = resolvedSessionSettings?.uniqueBonusEnabled ?? false;
+  const { lexicon: roundLexicon } = useRoundPlayableLexicon({
+    baseWord: session?.baseWord ?? '',
+    allowProperNouns: resolvedSessionSettings?.allowProperNouns ?? false,
+    allowSlang: resolvedSessionSettings?.allowSlang ?? false,
+    releaseDictionaryAfterBuild: true,
+    enabled: Boolean(session?.baseWord && session.status === 'playing'),
+  });
   const showPointUi = shouldShowPointUi(uniqueBonusEnabled);
 
   const isPaused = session?.pauseState?.active === true;
+
+  useEffect(() => {
+    if (
+      session?.pauseVote ||
+      session?.earlyFinishVote ||
+      session?.addTimeVote ||
+      session?.resumeVote
+    ) {
+      setShowGameMenu(false);
+    }
+  }, [session?.pauseVote, session?.earlyFinishVote, session?.addTimeVote, session?.resumeVote]);
 
   useEffect(() => {
     if (session?.addTimeVote) {
@@ -476,7 +505,9 @@ export default function OnlinePlayScreen() {
   }, [session]);
 
   const playerScore = standings.find((row) => row.playerId === myUid)?.score ?? 0;
-  const playerWordCount = myPlayer?.wordCount ?? scoredWords.length;
+  // Local word list is authoritative for the viewer — avoids flicker when session totals lag maps.
+  const playerWordCount =
+    wordsForDisplay.size > 0 ? wordsForDisplay.size : (myPlayer?.wordCount ?? 0);
   const myName = myPlayer?.name ?? t('profile.namePlaceholder');
 
   const remainingMs = isPaused
@@ -496,10 +527,29 @@ export default function OnlinePlayScreen() {
     if (sessionPlayerScoresMatchWordMaps(session) || scoresSyncInFlightRef.current) {
       return;
     }
-    scoresSyncInFlightRef.current = true;
-    void syncSessionPlayerScores(gameId, wordMaps).finally(() => {
-      scoresSyncInFlightRef.current = false;
-    });
+    if (scoresSyncDebounceRef.current) {
+      clearTimeout(scoresSyncDebounceRef.current);
+    }
+    scoresSyncDebounceRef.current = setTimeout(() => {
+      scoresSyncDebounceRef.current = null;
+      if (scoresSyncInFlightRef.current) {
+        return;
+      }
+      const maps = wordMapsRef.current;
+      if (!maps) {
+        return;
+      }
+      scoresSyncInFlightRef.current = true;
+      void syncSessionPlayerScores(gameId, maps).finally(() => {
+        scoresSyncInFlightRef.current = false;
+      });
+    }, 400);
+    return () => {
+      if (scoresSyncDebounceRef.current) {
+        clearTimeout(scoresSyncDebounceRef.current);
+        scoresSyncDebounceRef.current = null;
+      }
+    };
   }, [gameId, myUid, session, wordMaps]);
 
   const displayRanks = useMemo(() => assignDisplayRanks(standings), [standings]);
@@ -579,22 +629,29 @@ export default function OnlinePlayScreen() {
       profile?.mark('debounce');
       activeSubmitProfileRef.current = profile;
 
-      const ownNormals = Array.from(wordsForDisplay.keys());
-      const playerWordsMap = new Map<string, readonly string[]>([[myUid, ownNormals]]);
+      const playerWordsMap = new Map<string, readonly string[]>([
+        [myUid, [...wordsForDisplay.keys()]],
+      ]);
       const result = acceptWord({
         input: draftValue,
         baseWord: session.baseWord,
         playerId: myUid,
         uniqueBonusEnabled,
         playerWords: playerWordsMap,
-        options: { minWordLength: 2 },
+        options: {
+          minWordLength: 2,
+          roundLexicon: roundLexicon?.words,
+        },
         deps: {
           hasInDictionary: (word) =>
             dictionary.hasWord(word) ||
             (session.settings.allowProperNouns && hasWordInSortedList(properNouns, word)) ||
             (session.settings.allowSlang && hasWordInSortedList(slang, word)),
         },
-        lookupDisplayUpper: (word) => dictionary.lookupDisplayUpper(word) ?? toDisplayUpper(word),
+        lookupDisplayUpper: (word) =>
+          roundLexicon?.displays.get(word) ??
+          dictionary.lookupDisplayUpper(word) ??
+          toDisplayUpper(word),
       });
       profile?.mark('acceptWord');
 
@@ -624,6 +681,7 @@ export default function OnlinePlayScreen() {
         next.set(result.normalized, optimisticWord);
         return next;
       });
+      setScrollRequest({ normalized: result.normalized, id: Date.now() });
       setDraft('');
       setDraftKeyIndices([]);
       setFeedback(t('game.wordAccepted'));
@@ -681,6 +739,7 @@ export default function OnlinePlayScreen() {
       gameId,
       myUid,
       properNouns,
+      roundLexicon,
       runPendingSubmit,
       session,
       slang,
@@ -932,6 +991,15 @@ export default function OnlinePlayScreen() {
   const pauseVote = session.pauseVote;
   const addTimeVote = session.addTimeVote;
   const resumeVote = session.resumeVote;
+  const gameMenuBlockedByVote = Boolean(
+    pauseVote || earlyVote || addTimeVote || (isPaused && resumeVote),
+  );
+  const pauseUiObscured =
+    showGameMenu ||
+    showInviteModal ||
+    showExitConfirm ||
+    (showEndEarlyConfirm && !hasOnlineOpponentInRound) ||
+    Boolean(earlyVote || pauseVote || addTimeVote);
   const canProposeAddTime = !isPaused && !earlyVote && !pauseVote && !addTimeVote;
 
   return (
@@ -951,6 +1019,7 @@ export default function OnlinePlayScreen() {
                 timerUrgent={timerUrgent && !isPaused}
                 rank={playerRank}
                 wordCount={playerWordCount}
+                maxWordCount={roundLexicon?.maxCount ?? null}
                 score={playerScore}
                 wordsShort={t('game.wordsShort')}
                 pointsShort={t('game.pointsShort')}
@@ -965,6 +1034,7 @@ export default function OnlinePlayScreen() {
               timerUrgent={timerUrgent && !isPaused}
               rank={playerRank}
               wordCount={playerWordCount}
+              maxWordCount={roundLexicon?.maxCount ?? null}
               score={playerScore}
               wordsShort={t('game.wordsShort')}
               pointsShort={t('game.pointsShort')}
@@ -1012,6 +1082,8 @@ export default function OnlinePlayScreen() {
             entries={scoredWords}
             displays={displays}
             draftPrefix={draft}
+            scrollToNormalized={scrollRequest?.normalized ?? null}
+            scrollToRequestId={scrollRequest?.id}
             feedback={feedback}
             backgroundSyncing={backgroundSyncing}
             showScoreBadges={showPointUi && hasOpponent}
@@ -1072,7 +1144,7 @@ export default function OnlinePlayScreen() {
       </BottomSheetModal>
 
       <GameMenuModal
-        visible={showGameMenu}
+        visible={showGameMenu && !gameMenuBlockedByVote}
         endGameLabel={hasOnlineOpponentInRound ? t('game.menuProposeEnd') : t('game.menuEndEarly')}
         showEndGame={hasOnlineOpponentInRound}
         onClose={() => {
@@ -1122,7 +1194,7 @@ export default function OnlinePlayScreen() {
       />
 
       <PauseRoundModal
-        visible={isPaused}
+        visible={isPaused && !pauseUiObscured}
         session={session}
         myUid={myUid}
         viewerGender={viewerGender}
@@ -1278,91 +1350,78 @@ function errorMessage(
   }
 }
 
-const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.backgroundSecondary,
-  },
-  container: {
-    flex: 1,
-    position: 'relative',
-    backgroundColor: colors.backgroundSecondary,
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
-    paddingTop: spacing.xs,
-    gap: spacing.sm,
-  },
-  playerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  playerName: {
-    flexShrink: 1,
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  playRules: {
-    flex: 1,
-    fontSize: 12,
-    color: colors.textSecondary,
-    textAlign: 'right',
-  },
-  feedbackSlot: {
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  feedbackToast: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.sm,
-    overflow: 'hidden',
-  },
-  footer: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    width: '100%',
-  },
-  footerButton: {
-    flex: 1,
-  },
-  footerButtonSolo: {
-    flex: 1,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  standingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderTertiary,
-  },
-  standingRank: {
-    width: 20,
-    fontWeight: '700',
-    color: colors.accent,
-  },
-  standingName: {
-    flex: 1,
-    fontSize: 15,
-    color: colors.textPrimary,
-  },
-  standingMeta: {
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    center: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.backgroundSecondary,
+    },
+    container: {
+      flex: 1,
+      position: 'relative',
+      backgroundColor: colors.backgroundSecondary,
+      paddingHorizontal: spacing.md,
+      paddingBottom: spacing.md,
+      paddingTop: spacing.xs,
+      gap: spacing.sm,
+    },
+    playerHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.sm,
+    },
+    playerName: {
+      flexShrink: 1,
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.textPrimary,
+    },
+    playRules: {
+      flex: 1,
+      fontSize: 12,
+      color: colors.textSecondary,
+      textAlign: 'right',
+    },
+    footer: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      width: '100%',
+    },
+    footerButton: {
+      flex: 1,
+    },
+    footerButtonSolo: {
+      flex: 1,
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: colors.textPrimary,
+    },
+    standingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.xs,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.borderTertiary,
+    },
+    standingRank: {
+      width: 20,
+      fontWeight: '700',
+      color: colors.accent,
+    },
+    standingName: {
+      flex: 1,
+      fontSize: 15,
+      color: colors.textPrimary,
+    },
+    standingMeta: {
+      fontSize: 13,
+      color: colors.textSecondary,
+    },
+  });
+}

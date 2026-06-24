@@ -13,7 +13,9 @@ import { RoundSettingsFields } from '@/components/RoundSettingsFields';
 import { Screen } from '@/components/Screen';
 import { ShuffleBaseWordButton } from '@/components/ShuffleBaseWordButton';
 import { headerIconButtonSize } from '@/constants/header-button';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
 import { DictionaryIndex } from '@/lib/dictionary/dictionary-index';
 import { letterCount, normalizeUk, toDisplayUpper } from '@/lib/dictionary/normalize';
@@ -39,6 +41,8 @@ const SUGGEST_DROPDOWN_LIMIT = 50;
  * Rotating base-word picker (one player per round, join order).
  */
 export default function OnlinePickWordScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const { gameId: rawGameId } = useLocalSearchParams<{ gameId: string }>();
   const gameId = rawGameId ?? '';
@@ -265,53 +269,55 @@ export default function OnlinePickWordScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  intro: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  sectionLabel: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: colors.textSecondary,
-  },
-  baseWordField: {
-    zIndex: 10,
-  },
-  baseWordRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: spacing.sm,
-  },
-  input: {
-    flex: 1,
-    height: headerIconButtonSize,
-    backgroundColor: colors.backgroundPrimary,
-    borderWidth: 1,
-    borderColor: colors.borderSecondary,
-    borderRadius: radii.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 0,
-    fontSize: 16,
-    color: colors.textPrimary,
-  },
-  inputActive: {
-    borderColor: colors.accent,
-  },
-  hint: {
-    fontSize: 12,
-    color: colors.textTertiary,
-    textAlign: 'center',
-  },
-  error: {
-    color: '#E24B4A',
-    fontSize: 14,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    center: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    intro: {
+      fontSize: 14,
+      lineHeight: 20,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    sectionLabel: {
+      fontSize: 15,
+      fontWeight: '500',
+      color: colors.textSecondary,
+    },
+    baseWordField: {
+      zIndex: 10,
+    },
+    baseWordRow: {
+      flexDirection: 'row',
+      alignItems: 'stretch',
+      gap: spacing.sm,
+    },
+    input: {
+      flex: 1,
+      height: headerIconButtonSize,
+      backgroundColor: colors.backgroundPrimary,
+      borderWidth: 1,
+      borderColor: colors.borderSecondary,
+      borderRadius: radii.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: 0,
+      fontSize: 16,
+      color: colors.textPrimary,
+    },
+    inputActive: {
+      borderColor: colors.accent,
+    },
+    hint: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      textAlign: 'center',
+    },
+    error: {
+      color: '#E24B4A',
+      fontSize: 14,
+    },
+  });
+}

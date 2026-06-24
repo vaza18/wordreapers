@@ -191,9 +191,25 @@ strip_ios_push_entitlement_if_needed() {
   fi
 }
 
+patch_ios_automatic_ui_style() {
+  local root="$1"
+  local info_plist="$root/ios/Slovozbirachi/Info.plist"
+
+  if [ ! -f "$info_plist" ]; then
+    return 0
+  fi
+
+  if /usr/libexec/PlistBuddy -c "Print :UIUserInterfaceStyle" "$info_plist" >/dev/null 2>&1; then
+    /usr/libexec/PlistBuddy -c "Set :UIUserInterfaceStyle Automatic" "$info_plist"
+  else
+    /usr/libexec/PlistBuddy -c "Add :UIUserInterfaceStyle string Automatic" "$info_plist"
+  fi
+}
+
 apply_ios_native_patches() {
   local root="$1"
   strip_ios_push_entitlement_if_needed "$root"
+  patch_ios_automatic_ui_style "$root"
   patch_ios_embed_bundle_on_device "$root"
   local ip=""
   if ip="$(detect_lan_ip)"; then
@@ -207,6 +223,7 @@ apply_ios_simulator_patches() {
   local local_file="$root/ios/.xcode.env.local"
 
   strip_ios_push_entitlement_if_needed "$root"
+  patch_ios_automatic_ui_style "$root"
   patch_ios_embed_bundle_on_device "$root"
 
   if [ -f "$local_file" ]; then

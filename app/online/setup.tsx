@@ -15,7 +15,9 @@ import { Screen } from '@/components/Screen';
 import { GroupPlayersIcon, SoloPlayerIcon } from '@/components/PlayerModeIcons';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { headerIconButtonSize } from '@/constants/header-button';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
 import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
 import { navigateHomeWithBackAnimation } from '@/lib/navigation/navigate-home';
@@ -47,6 +49,8 @@ const SUGGEST_DROPDOWN_LIMIT = 50;
  * Organizer round setup — local until invite or solo start.
  */
 export default function OnlineSetupScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const { gameId: rawGameId, from: rawFrom } = useLocalSearchParams<{
     gameId: string;
@@ -348,7 +352,7 @@ export default function OnlineSetupScreen() {
           ) : (
             <View style={styles.modeRow}>
               <SetupModeButton
-                icon={<GroupPlayersIcon color="#FFFFFF" size={32} />}
+                icon={<GroupPlayersIcon color={colors.textOnAccent} size={32} />}
                 label={t('online.inviteOthers')}
                 hint={t('online.inviteOthersHint')}
                 disabled={!canContinue || saving}
@@ -357,9 +361,10 @@ export default function OnlineSetupScreen() {
                 }}
               />
               <SetupModeButton
-                icon={<SoloPlayerIcon color="#FFFFFF" size={32} />}
+                icon={<SoloPlayerIcon color={colors.textPrimary} size={28} />}
                 label={t('online.soloPlay')}
                 hint={t('online.soloPlayHint')}
+                variant="secondary"
                 disabled={!canContinue || saving}
                 onPress={handleSoloPlay}
               />
@@ -371,60 +376,63 @@ export default function OnlineSetupScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  muted: {
-    color: colors.textSecondary,
-  },
-  rotationHint: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  sectionLabel: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: colors.textSecondary,
-  },
-  baseWordField: {
-    zIndex: 10,
-  },
-  baseWordRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: spacing.sm,
-  },
-  input: {
-    flex: 1,
-    height: headerIconButtonSize,
-    borderWidth: 1,
-    borderColor: colors.borderSecondary,
-    borderRadius: radii.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 0,
-    fontSize: 16,
-    color: colors.textPrimary,
-    backgroundColor: colors.backgroundPrimary,
-  },
-  inputActive: {
-    borderColor: colors.accent,
-  },
-  actions: {
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  modeRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  error: {
-    color: '#E24B4A',
-    fontSize: 14,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    center: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+    },
+    muted: {
+      color: colors.textSecondary,
+    },
+    rotationHint: {
+      fontSize: 13,
+      lineHeight: 18,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    sectionLabel: {
+      fontSize: 15,
+      fontWeight: '500',
+      color: colors.textSecondary,
+    },
+    baseWordField: {
+      zIndex: 10,
+    },
+    baseWordRow: {
+      flexDirection: 'row',
+      alignItems: 'stretch',
+      gap: spacing.sm,
+    },
+    input: {
+      flex: 1,
+      height: headerIconButtonSize,
+      borderWidth: 1,
+      borderColor: colors.borderSecondary,
+      borderRadius: radii.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: 0,
+      fontSize: 16,
+      color: colors.textPrimary,
+      backgroundColor: colors.backgroundPrimary,
+    },
+    inputActive: {
+      borderColor: colors.accent,
+    },
+    actions: {
+      gap: spacing.sm,
+      marginTop: spacing.sm,
+    },
+    modeRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    error: {
+      color: '#E24B4A',
+      fontSize: 14,
+    },
+  });
+}

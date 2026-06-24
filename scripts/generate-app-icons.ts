@@ -10,7 +10,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 
-import { colors } from '../constants/theme.js';
+import { lightColors } from '../constants/theme.js';
 import {
   letterKeyProportions,
   LETTER_KEY_FONT_WEIGHT,
@@ -22,13 +22,13 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const mockupsDir = join(root, 'docs', 'store', 'icon-mockups');
 
 /** Warm paper + typical Ukrainian school notebook grid (light blue lines). */
-const PAPER = colors.backgroundSecondary;
+const PAPER = lightColors.backgroundSecondary;
 const GRID_LINE = '#A8C4E0';
 
-const PEN_BLUE = colors.penBlue;
-const ACCENT = colors.accent;
+const PEN_BLUE = lightColors.penBlue;
+const ACCENT = lightColors.accent;
 /** Available key label on penBlue (`LetterKeyboard.keyLabelAvailable`). */
-const TEXT_ON_HIGH = colors.penBlueMuted;
+const TEXT_ON_HIGH = lightColors.penBlueMuted;
 const TEXT_ON_LOW = PEN_BLUE;
 
 /** Gameplay ratios at reference phone width (see `letter-key-style.ts`). */
@@ -139,7 +139,7 @@ function buildTile(
   const side = cellSize - inset * 2;
   const cx = x + side / 2;
   const cy = y + side / 2;
-  const fill = highlighted ? PEN_BLUE : colors.backgroundPrimary;
+  const fill = highlighted ? PEN_BLUE : lightColors.backgroundPrimary;
   const textFill = highlighted ? TEXT_ON_HIGH : TEXT_ON_LOW;
   const stroke = highlighted ? '' : ` stroke="${PEN_BLUE}" stroke-width="${strokeWidth}"`;
 

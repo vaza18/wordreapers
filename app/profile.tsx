@@ -8,7 +8,8 @@ import { GenderPicker } from '@/components/GenderPicker';
 import { PlayerAvatar } from '@/components/PlayerAvatar';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { Screen } from '@/components/Screen';
-import { colors, spacing } from '@/constants/theme';
+import { spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { joinErrorMessage } from '@/lib/firebase/join-error-message';
 import { navigateToNewOnlineRoom } from '@/lib/online/create-room';
 import { useProfileStore } from '@/store/profile-store';
@@ -17,6 +18,7 @@ import { useProfileStore } from '@/store/profile-store';
  * Guest player profile — name, gender, avatar color (M2).
  */
 export default function ProfileScreen() {
+  const styles = useThemedStyles(createStyles);
   const { t } = useTranslation();
   const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
   const name = useProfileStore((state) => state.name);
@@ -108,35 +110,37 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  avatarBlock: {
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  previewHint: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    paddingHorizontal: spacing.md,
-  },
-  label: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: colors.textSecondary,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.borderSecondary,
-    borderRadius: 8,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: 16,
-    color: colors.textPrimary,
-    backgroundColor: colors.backgroundPrimary,
-  },
-  error: {
-    color: '#E24B4A',
-    fontSize: 14,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    avatarBlock: {
+      alignItems: 'center',
+      gap: spacing.sm,
+      marginBottom: spacing.sm,
+    },
+    previewHint: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      paddingHorizontal: spacing.md,
+    },
+    label: {
+      fontSize: 15,
+      fontWeight: '500',
+      color: colors.textSecondary,
+    },
+    input: {
+      borderWidth: 1,
+      borderColor: colors.borderSecondary,
+      borderRadius: 8,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      fontSize: 16,
+      color: colors.textPrimary,
+      backgroundColor: colors.backgroundPrimary,
+    },
+    error: {
+      color: '#E24B4A',
+      fontSize: 14,
+    },
+  });
+}

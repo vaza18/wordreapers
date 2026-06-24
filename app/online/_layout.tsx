@@ -3,13 +3,14 @@ import { useTranslation } from 'react-i18next';
 
 import { stackScreenOptions } from '@/constants/stack-screen-options';
 import { stackHeaderSettings } from '@/lib/navigation/stack-header-options';
-import { colors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 
 /**
  * Online multiplayer flow (lobby, setup, play).
  */
 export default function OnlineLayout() {
   const { t } = useTranslation();
+  const { colors } = useTheme();
 
   return (
     <Stack

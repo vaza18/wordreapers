@@ -2,6 +2,27 @@ import { toScoredWordEntry, type ScoredWordEntry, type WordScoreKind } from '@/l
 import { globalWordCount } from '@/lib/firebase/session-word-maps';
 import type { GameSession, GameSessionPlayer, SessionWordMaps } from '@/lib/firebase/types';
 
+/** Authoritative per-player totals from committed word maps (after shard write). */
+export function playerTotalsFromMaps(
+  maps: SessionWordMaps,
+  uid: string,
+  uniqueBonusEnabled: boolean,
+): { score: number; wordCount: number } {
+  let score = 0;
+  let wordCount = 0;
+  const wordPlayers = maps.wordPlayers ?? {};
+  for (const [normalized, playersOnWord] of Object.entries(wordPlayers)) {
+    if (!playersOnWord[uid]) {
+      continue;
+    }
+    const globalCount = globalWordCount(wordPlayers, normalized);
+    const kind: WordScoreKind = globalCount > 1 ? 'normal' : 'unique';
+    score += toScoredWordEntry(normalized, kind, uniqueBonusEnabled, globalCount).points;
+    wordCount += 1;
+  }
+  return { score, wordCount };
+}
+
 export type ApplyWordSubmitError = 'NOT_PLAYING' | 'DUPLICATE';
 
 export type ApplyWordMapsResult =
@@ -131,24 +152,23 @@ export function planPlayerScoreUpdate(
     return { ok: false, error: 'NOT_PLAYING' };
   }
 
+  const submitterTotals = playerTotalsFromMaps(maps, uid, uniqueBonusEnabled);
   const globalCount = globalWordCount(maps.wordPlayers, normalized);
   if (globalCount > 1 && uniqueBonusEnabled) {
     const firstUid = maps.wordFirst?.[normalized];
-    if (firstUid && firstUid !== uid) {
-      const firstPlayer = session.players[firstUid];
-      if (firstPlayer) {
-        return {
-          ok: true,
-          plan: {
-            mode: 'dual',
-            firstUid,
-            firstNextScore: Math.max(0, (firstPlayer.score ?? 0) - 1),
-            uid,
-            nextScore: (player.score ?? 0) + entry.points,
-            nextWordCount: (player.wordCount ?? 0) + 1,
-          },
-        };
-      }
+    if (firstUid && firstUid !== uid && session.players[firstUid]) {
+      const firstTotals = playerTotalsFromMaps(maps, firstUid, uniqueBonusEnabled);
+      return {
+        ok: true,
+        plan: {
+          mode: 'dual',
+          firstUid,
+          firstNextScore: firstTotals.score,
+          uid,
+          nextScore: submitterTotals.score,
+          nextWordCount: submitterTotals.wordCount,
+        },
+      };
     }
   }
 
@@ -157,8 +177,8 @@ export function planPlayerScoreUpdate(
     plan: {
       mode: 'single',
       uid,
-      nextScore: (player.score ?? 0) + entry.points,
-      nextWordCount: (player.wordCount ?? 0) + 1,
+      nextScore: submitterTotals.score,
+      nextWordCount: submitterTotals.wordCount,
     },
   };
 }

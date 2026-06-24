@@ -4,14 +4,45 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { PlayerAvatar } from '@/components/PlayerAvatar';
-import { colors, spacing } from '@/constants/theme';
+import { spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useProfileStore } from '@/store/profile-store';
+
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.sm,
+    },
+    textCol: {
+      flex: 1,
+      minWidth: 0,
+      gap: 2,
+    },
+    name: {
+      fontSize: 16,
+      fontWeight: '500',
+      color: colors.textPrimary,
+    },
+    hint: {
+      fontSize: 13,
+      color: colors.textSecondary,
+    },
+    chevron: {
+      fontSize: 20,
+      color: colors.textTertiary,
+    },
+  });
+}
 
 /**
  * Settings profile entry with avatar + name (mockup screens 1–2 style).
  */
 export function SettingsProfileRow() {
   const { t } = useTranslation();
+  const styles = useThemedStyles(createStyles);
   const name = useProfileStore((state) => state.name);
   const avatarColorIndex = useProfileStore((state) => state.avatarColorIndex);
   const displayName = name.trim() || t('profile.namePlaceholder');
@@ -35,30 +66,3 @@ export function SettingsProfileRow() {
     </FeedbackPressable>
   );
 }
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
-  },
-  textCol: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  name: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.textPrimary,
-  },
-  hint: {
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
-  chevron: {
-    fontSize: 20,
-    color: colors.textTertiary,
-  },
-});

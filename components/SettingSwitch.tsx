@@ -4,25 +4,98 @@ import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { playButtonFeedback } from '@/lib/feedback/game-feedback';
 import { useSettingsStore } from '@/store/settings-store';
 
-import { colors, spacing } from '@/constants/theme';
+import { spacing, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 interface SettingSwitchProps {
   label: string;
   hint?: string;
   value: boolean;
   onChange: (value: boolean) => void;
+  /** Smaller secondary styling for inline toggles (e.g. round results). */
+  variant?: 'default' | 'compact';
+}
+
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+    },
+    textBlock: {
+      flex: 1,
+      gap: 2,
+    },
+    label: {
+      fontSize: 15,
+      color: colors.textPrimary,
+      fontWeight: '500',
+    },
+    labelCompact: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      fontWeight: '400',
+    },
+    hint: {
+      fontSize: 12,
+      color: colors.textSecondary,
+    },
+    stepperBlock: {
+      gap: spacing.sm,
+    },
+    stepperRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.xs,
+    },
+    step: {
+      borderRadius: 8,
+      borderWidth: 1,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md,
+    },
+    stepActive: {
+      backgroundColor: colors.accent,
+      borderColor: colors.accent,
+    },
+    stepIdle: {
+      backgroundColor: colors.backgroundPrimary,
+      borderColor: colors.borderSecondary,
+    },
+    stepLabel: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: colors.textPrimary,
+    },
+    stepLabelActive: {
+      color: colors.textOnAccent,
+    },
+  });
 }
 
 /**
  * Label + switch row from setup mockups.
  */
-export function SettingSwitch({ label, hint, value, onChange }: SettingSwitchProps) {
+export function SettingSwitch({
+  label,
+  hint,
+  value,
+  onChange,
+  variant = 'default',
+}: SettingSwitchProps) {
   const buttonFeedback = useSettingsStore((state) => state.buttonFeedback);
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
 
   return (
     <View style={styles.row}>
       <View style={styles.textBlock}>
-        <Text style={styles.label}>{label}</Text>
+        <Text style={[styles.label, variant === 'compact' ? styles.labelCompact : null]}>
+          {label}
+        </Text>
         {hint ? <Text style={styles.hint}>{hint}</Text> : null}
       </View>
       <Switch
@@ -54,6 +127,8 @@ interface StepperProps {
  * Discrete stepper for duration and similar numeric settings.
  */
 export function Stepper({ label, value, options, suffix, onChange }: StepperProps) {
+  const styles = useThemedStyles(createStyles);
+
   return (
     <View style={styles.stepperBlock}>
       <Text style={styles.label}>{label}</Text>
@@ -80,55 +155,3 @@ export function Stepper({ label, value, options, suffix, onChange }: StepperProp
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-  },
-  textBlock: {
-    flex: 1,
-    gap: 2,
-  },
-  label: {
-    fontSize: 15,
-    color: colors.textPrimary,
-    fontWeight: '500',
-  },
-  hint: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  stepperBlock: {
-    gap: spacing.sm,
-  },
-  stepperRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-  },
-  step: {
-    borderRadius: 8,
-    borderWidth: 1,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
-  stepActive: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
-  stepIdle: {
-    backgroundColor: colors.backgroundPrimary,
-    borderColor: colors.borderSecondary,
-  },
-  stepLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.textPrimary,
-  },
-  stepLabelActive: {
-    color: '#FFFFFF',
-  },
-});

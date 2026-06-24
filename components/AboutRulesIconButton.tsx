@@ -3,13 +3,14 @@ import { useTranslation } from 'react-i18next';
 
 import { HeaderBarButton } from '@/components/HeaderBarButton';
 import { InfoIcon } from '@/components/HeaderIcons';
-import { colors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 
 /**
  * Home screen top-left: open about / rules.
  */
 export function AboutRulesIconButton() {
   const { t } = useTranslation();
+  const { colors } = useTheme();
 
   return (
     <HeaderBarButton

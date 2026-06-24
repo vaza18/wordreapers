@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { PlayerAvatar } from '@/components/PlayerAvatar';
-import { playerAvatarColors, playerAvatarSwatch } from '@/constants/player-avatars';
+import { playerAvatarColors } from '@/constants/player-avatars';
 import { radii, spacing } from '@/constants/theme';
 import type { WordOverlapPeer } from '@/lib/game/word-overlap-peers';
 import {
@@ -79,7 +79,6 @@ export function WordOverlapAvatars({ peers }: WordOverlapAvatarsProps) {
       {peers.map((peer) => {
         const anchorRef = getAnchorRef(anchorRefs.current, peer.playerId);
         const palette = playerAvatarColors(peer.avatarColorIndex);
-        const borderColor = playerAvatarSwatch(peer.avatarColorIndex);
         const isVisible = revealedPlayerId === peer.playerId;
 
         return (
@@ -113,7 +112,7 @@ export function WordOverlapAvatars({ peers }: WordOverlapAvatarsProps) {
                 styles.popoverBubble,
                 {
                   backgroundColor: palette.background,
-                  borderColor,
+                  borderColor: 'rgba(0, 0, 0, 0.18)',
                 },
               ]}
               displayAreaInsets={{

@@ -9,7 +9,9 @@ import { LobbyQrCode } from '@/components/LobbyQrCode';
 import { PlayerAvatar } from '@/components/PlayerAvatar';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { Screen } from '@/components/Screen';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { formatRoomCodeDisplay } from '@/lib/firebase/format-room-code';
 import {
   startGameSession,
@@ -24,6 +26,8 @@ import {
   isCurrentBaseWordPicker,
 } from '@/lib/online/base-word-picker';
 import { formatLobbySettingsLabel } from '@/lib/online/lobby-settings-label';
+import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
+import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
 import {
   latestFinishedArchiveForGame,
   type FinishedRoundArchive,
@@ -39,11 +43,15 @@ import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
 import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
 import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
 import { useFirebaseStore } from '@/store/firebase-store';
+import { tGendered } from '@/lib/game/grammar';
+import { playerGenderFromSession } from '@/lib/game/vote-status-label';
 
 /**
  * Waiting lobby — room code, players; base-word picker starts the round.
  */
 export default function LobbyScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const navigation = useNavigation();
   const { gameId: rawGameId } = useLocalSearchParams<{ gameId: string }>();
@@ -135,6 +143,13 @@ export default function LobbyScreen() {
   const turnNumber = session ? baseWordPickerTurnNumber(session) : 1;
   const hasBaseWord = Boolean(session?.baseWord && session.baseWord.length >= 2);
   const isFirstRound = (session?.baseWordRound ?? 0) === 0;
+  const resolvedLobbySettings = session ? resolveGameSessionSettingsForSession(session) : null;
+  const { lexicon: lobbyLexicon, loading: lobbyLexiconLoading } = useRoundPlayableLexicon({
+    baseWord: session?.baseWord ?? '',
+    allowProperNouns: resolvedLobbySettings?.allowProperNouns ?? false,
+    allowSlang: resolvedLobbySettings?.allowSlang ?? false,
+    enabled: hasBaseWord,
+  });
 
   const players = useMemo(() => {
     if (!session) {
@@ -300,6 +315,25 @@ export default function LobbyScreen() {
     );
   }
 
+  const baseWordBlock =
+    hasBaseWord && session.baseWord ? (
+      <View style={styles.baseWordSection}>
+        <Text style={styles.baseWordLabel}>{t('game.baseWord')}</Text>
+        <Text style={styles.baseWordTitle}>{session.baseWord.toUpperCase()}</Text>
+        <Text style={styles.baseWordMeta}>
+          {tGendered(
+            t,
+            'online.baseWordChosenBy',
+            playerGenderFromSession(pickerUid ? session.players[pickerUid]?.gender : undefined),
+            { name: pickerName },
+          )}
+        </Text>
+        {isPicker && session.status === 'waiting' ? (
+          <Text style={styles.baseWordChangeHint}>{t('online.baseWordChangeHint')}</Text>
+        ) : null}
+      </View>
+    ) : null;
+
   return (
     <>
       <Stack.Screen options={screenOptions} />
@@ -318,31 +352,26 @@ export default function LobbyScreen() {
           </Text>
         ) : null}
 
-        {hasBaseWord && session.baseWord ? (
-          isPicker && session.status === 'waiting' ? (
-            <FeedbackPressable
-              accessibilityRole="button"
-              onPress={() => {
-                router.push({ pathname: '/online/pick-word/[gameId]', params: { gameId } });
-              }}
-              style={styles.baseWordBannerPressable}
-            >
-              <Text style={styles.baseWordBanner}>
-                {t('online.baseWordChosen', {
-                  word: session.baseWord.toUpperCase(),
-                  name: pickerName,
-                })}
-              </Text>
-              <Text style={styles.baseWordChangeHint}>{t('online.baseWordChangeHint')}</Text>
-            </FeedbackPressable>
-          ) : (
-            <Text style={styles.baseWordBanner}>
-              {t('online.baseWordChosen', {
-                word: session.baseWord.toUpperCase(),
-                name: pickerName,
-              })}
-            </Text>
-          )
+        {baseWordBlock && isPicker && session.status === 'waiting' ? (
+          <FeedbackPressable
+            accessibilityRole="button"
+            onPress={() => {
+              router.push({ pathname: '/online/pick-word/[gameId]', params: { gameId } });
+            }}
+            style={styles.baseWordBannerPressable}
+          >
+            {baseWordBlock}
+          </FeedbackPressable>
+        ) : (
+          baseWordBlock
+        )}
+
+        {hasBaseWord && lobbyLexicon ? (
+          <Text style={styles.playableWordsHint}>
+            {t('online.playableWordsMax', { count: lobbyLexicon.maxCount })}
+          </Text>
+        ) : hasBaseWord && lobbyLexiconLoading ? (
+          <Text style={styles.playableWordsHint}>{t('game.playableWordsLoading')}</Text>
         ) : null}
 
         <Text style={styles.settingsBanner}>{formatLobbySettingsLabel(t, session)}</Text>
@@ -433,111 +462,136 @@ export default function LobbyScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  codeCard: {
-    backgroundColor: colors.backgroundPrimary,
-    borderRadius: radii.md,
-    padding: spacing.md,
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  code: {
-    fontSize: 28,
-    fontWeight: '600',
-    color: colors.accent,
-    letterSpacing: 6,
-  },
-  codeLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  pickerBanner: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#633806',
-    backgroundColor: '#FAEEDA',
-    borderRadius: radii.sm,
-    padding: spacing.sm,
-    textAlign: 'center',
-  },
-  baseWordBanner: {
-    fontSize: 13,
-    color: colors.accent,
-    textAlign: 'center',
-  },
-  baseWordBannerPressable: {
-    backgroundColor: colors.accentMuted,
-    borderRadius: radii.sm,
-    padding: spacing.sm,
-    gap: spacing.xs,
-  },
-  baseWordChangeHint: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  settingsBanner: {
-    fontSize: 12,
-    color: '#633806',
-    backgroundColor: '#FAEEDA',
-    borderRadius: radii.sm,
-    padding: spacing.sm,
-    textAlign: 'center',
-  },
-  sectionLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.textSecondary,
-  },
-  playerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  playerName: {
-    flex: 1,
-    fontSize: 16,
-    color: colors.textPrimary,
-  },
-  organizerTag: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.accent,
-    backgroundColor: colors.accentMuted,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radii.sm,
-  },
-  pickerTag: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#633806',
-    backgroundColor: '#FAEEDA',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radii.sm,
-  },
-  offlineTag: {
-    fontSize: 14,
-  },
-  startHint: {
-    fontSize: 12,
-    color: colors.textTertiary,
-    textAlign: 'center',
-  },
-  waitingHint: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  error: {
-    color: '#E24B4A',
-    fontSize: 14,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    center: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    codeCard: {
+      backgroundColor: colors.backgroundPrimary,
+      borderRadius: radii.md,
+      padding: spacing.md,
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    code: {
+      fontSize: 28,
+      fontWeight: '600',
+      color: colors.accent,
+      letterSpacing: 6,
+    },
+    codeLabel: {
+      fontSize: 12,
+      color: colors.textSecondary,
+    },
+    pickerBanner: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: '#633806',
+      backgroundColor: '#FAEEDA',
+      borderRadius: radii.sm,
+      padding: spacing.sm,
+      textAlign: 'center',
+    },
+    baseWordSection: {
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingVertical: spacing.sm,
+    },
+    baseWordLabel: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    baseWordTitle: {
+      fontSize: 24,
+      fontWeight: '700',
+      color: colors.accent,
+      textAlign: 'center',
+    },
+    baseWordMeta: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    baseWordBannerPressable: {
+      backgroundColor: colors.accentMuted,
+      borderRadius: radii.sm,
+      paddingHorizontal: spacing.md,
+      marginVertical: spacing.xs,
+    },
+    baseWordChangeHint: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      marginTop: spacing.xs,
+    },
+    settingsBanner: {
+      fontSize: 12,
+      color: '#633806',
+      backgroundColor: '#FAEEDA',
+      borderRadius: radii.sm,
+      padding: spacing.sm,
+      textAlign: 'center',
+    },
+    playableWordsHint: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      marginTop: spacing.xs,
+    },
+    sectionLabel: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: colors.textSecondary,
+    },
+    playerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.xs,
+    },
+    playerName: {
+      flex: 1,
+      fontSize: 16,
+      color: colors.textPrimary,
+    },
+    organizerTag: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.accent,
+      backgroundColor: colors.accentMuted,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+      borderRadius: radii.sm,
+    },
+    pickerTag: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: '#633806',
+      backgroundColor: '#FAEEDA',
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+      borderRadius: radii.sm,
+    },
+    offlineTag: {
+      fontSize: 14,
+    },
+    startHint: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      textAlign: 'center',
+    },
+    waitingHint: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    error: {
+      color: '#E24B4A',
+      fontSize: 14,
+    },
+  });
+}

@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useRef } from 'react';
 import { PanResponder, StyleSheet, Text, View } from 'react-native';
 
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { playButtonFeedback } from '@/lib/feedback/game-feedback';
 import { useSettingsStore } from '@/store/settings-store';
 
@@ -21,6 +22,48 @@ function clampMinutes(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.round(value)));
 }
 
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    block: {
+      gap: spacing.sm,
+    },
+    label: {
+      fontSize: 15,
+      fontWeight: '500',
+      color: colors.textSecondary,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    trackHit: {
+      flex: 1,
+      justifyContent: 'center',
+      minHeight: 36,
+      paddingVertical: spacing.sm,
+    },
+    track: {
+      height: 6,
+      borderRadius: radii.sm,
+      backgroundColor: colors.controlTrack,
+      overflow: 'hidden',
+    },
+    trackFill: {
+      height: '100%',
+      backgroundColor: colors.accent,
+      borderRadius: radii.sm,
+    },
+    value: {
+      minWidth: 52,
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.textPrimary,
+      textAlign: 'right',
+    },
+  });
+}
+
 /**
  * Draggable duration picker (1-minute steps), matching setup mockup screen 3.
  */
@@ -32,6 +75,7 @@ export function DurationSlider({
   max = DURATION_MAX_MINUTES,
   valueSuffix = '',
 }: DurationSliderProps) {
+  const styles = useThemedStyles(createStyles);
   const buttonFeedback = useSettingsStore((state) => state.buttonFeedback);
   const trackWidthRef = useRef(0);
   const valueRef = useRef(value);
@@ -102,43 +146,3 @@ export function DurationSlider({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  block: {
-    gap: spacing.sm,
-  },
-  label: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: colors.textSecondary,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  trackHit: {
-    flex: 1,
-    justifyContent: 'center',
-    minHeight: 36,
-    paddingVertical: spacing.sm,
-  },
-  track: {
-    height: 6,
-    borderRadius: radii.sm,
-    backgroundColor: colors.controlTrack,
-    overflow: 'hidden',
-  },
-  trackFill: {
-    height: '100%',
-    backgroundColor: colors.accent,
-    borderRadius: radii.sm,
-  },
-  value: {
-    minWidth: 52,
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    textAlign: 'right',
-  },
-});

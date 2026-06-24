@@ -7,7 +7,9 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { RoomCodeInput } from '@/components/RoomCodeInput';
 import { RoomQrScanner } from '@/components/RoomQrScanner';
 import { Screen } from '@/components/Screen';
-import { colors, spacing } from '@/constants/theme';
+import { spacing, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { resetFirebaseBootstrap } from '@/lib/firebase/bootstrap';
 import { ensureFirebaseReady } from '@/lib/firebase/ensure-firebase-ready';
 import {
@@ -27,6 +29,8 @@ import { useProfileStore } from '@/store/profile-store';
  * Join multiplayer room by code or QR (mockup screen 8).
  */
 export default function JoinRoomScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const { code: codeFromLink, invitedBy: invitedByFromLink } = useLocalSearchParams<{
     code?: string | string[];
@@ -193,30 +197,32 @@ export default function JoinRoomScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  hint: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  error: {
-    color: '#E24B4A',
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginVertical: spacing.xs,
-  },
-  dividerLine: {
-    flex: 1,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSecondary,
-  },
-  dividerText: {
-    fontSize: 13,
-    color: colors.textTertiary,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    hint: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    error: {
+      color: '#E24B4A',
+      fontSize: 14,
+      textAlign: 'center',
+    },
+    dividerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      marginVertical: spacing.xs,
+    },
+    dividerLine: {
+      flex: 1,
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.borderSecondary,
+    },
+    dividerText: {
+      fontSize: 13,
+      color: colors.textTertiary,
+    },
+  });
+}

@@ -4,10 +4,14 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { DurationSlider } from '@/components/DurationSlider';
 import { FeedbackPressable } from '@/components/FeedbackPressable';
+import { InfoIcon } from '@/components/HeaderIcons';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { SegmentedControl } from '@/components/SegmentedControl';
 import { SettingSwitch } from '@/components/SettingSwitch';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
+import { modalCardChrome, modalOverlayBackground } from '@/lib/ui/modal-chrome';
 import type { UniqueBonusMode } from '@/lib/game/scoring';
 
 export interface RoundSettingsFieldsProps {
@@ -34,6 +38,8 @@ export function RoundSettingsFields({
   allowSlang,
   onAllowSlangChange,
 }: RoundSettingsFieldsProps) {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const [showUniqueBonusHint, setShowUniqueBonusHint] = useState(false);
 
@@ -54,7 +60,7 @@ export function RoundSettingsFields({
           onPress={() => setShowUniqueBonusHint(true)}
           style={styles.infoButton}
         >
-          <Text style={styles.infoLabel}>ℹ</Text>
+          <InfoIcon size={16} color={colors.accent} />
         </FeedbackPressable>
       </View>
       <SegmentedControl
@@ -95,44 +101,42 @@ export function RoundSettingsFields({
   );
 }
 
-const styles = StyleSheet.create({
-  sectionLabel: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: colors.textSecondary,
-  },
-  uniqueBonusHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  infoButton: {
-    padding: spacing.xs,
-  },
-  infoLabel: {
-    fontSize: 16,
-    color: colors.accent,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: spacing.lg,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  modalCard: {
-    backgroundColor: colors.backgroundPrimary,
-    borderRadius: radii.md,
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  modalBody: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: colors.textSecondary,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    sectionLabel: {
+      fontSize: 15,
+      fontWeight: '500',
+      color: colors.textSecondary,
+    },
+    uniqueBonusHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    infoButton: {
+      padding: spacing.xs,
+    },
+    modalOverlay: {
+      flex: 1,
+      justifyContent: 'center',
+      padding: spacing.lg,
+      backgroundColor: modalOverlayBackground(colors),
+    },
+    modalCard: {
+      ...modalCardChrome(colors),
+      borderRadius: radii.md,
+      padding: spacing.lg,
+      gap: spacing.md,
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: colors.textPrimary,
+    },
+    modalBody: {
+      fontSize: 14,
+      lineHeight: 20,
+      color: colors.textSecondary,
+    },
+  });
+}

@@ -20,6 +20,7 @@ module.exports = ({ config }) => {
 
   const plugins = [
     ...(config.plugins ?? []),
+    './plugins/with-automatic-ui-style.cjs',
     './plugins/with-firebase-extra.cjs',
     './plugins/without-ios-push-entitlement.cjs',
   ];
@@ -45,7 +46,12 @@ module.exports = ({ config }) => {
     name: isProductionBuild ? 'Wordreapers' : config.name,
     ios: {
       ...config.ios,
+      userInterfaceStyle: 'automatic',
       infoPlist: baseIosInfoPlist,
+    },
+    android: {
+      ...config.android,
+      userInterfaceStyle: 'automatic',
     },
     plugins,
   };

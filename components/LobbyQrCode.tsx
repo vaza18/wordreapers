@@ -3,7 +3,9 @@ import { StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
 import { buildRoomJoinUrl } from '@/lib/online/join-link';
-import { colors, spacing } from '@/constants/theme';
+import { spacing, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 interface LobbyQrCodeProps {
   roomCode: string;
@@ -12,11 +14,27 @@ interface LobbyQrCodeProps {
   invitedByUid?: string;
 }
 
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    wrap: {
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    caption: {
+      fontSize: 11,
+      color: colors.textTertiary,
+      textAlign: 'center',
+    },
+  });
+}
+
 /**
  * QR encodes join deep link for the room (mockup lobby screen 4).
  */
 export function LobbyQrCode({ roomCode, size = 112, invitedByUid }: LobbyQrCodeProps) {
   const { t } = useTranslation();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
   const value = buildRoomJoinUrl(roomCode, invitedByUid);
 
   return (
@@ -31,15 +49,3 @@ export function LobbyQrCode({ roomCode, size = 112, invitedByUid }: LobbyQrCodeP
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: {
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  caption: {
-    fontSize: 11,
-    color: colors.textTertiary,
-    textAlign: 'center',
-  },
-});

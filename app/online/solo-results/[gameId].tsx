@@ -4,8 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, View } from 'react-native';
 
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
 import { RoundResultsView } from '@/components/RoundResultsView';
-import { colors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 import { formatResultsHeadline } from '@/lib/game/results-headline';
 import { createSoloResultsDirectory } from '@/lib/game/results-directory';
 import { buildGlobalResultWords, buildPlayerResultRankGroups } from '@/lib/game/results-view';
@@ -24,6 +25,7 @@ import { useProfileStore } from '@/store/profile-store';
  * Local results after an organizer solo round (no Firebase).
  */
 export default function OrganizerSoloResultsScreen() {
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const { gameId: rawGameId } = useLocalSearchParams<{ gameId: string }>();
   const gameId = rawGameId ?? '';
@@ -62,7 +64,7 @@ export default function OrganizerSoloResultsScreen() {
       statsRecordedRef.current = true;
       const standings = organizerSoloStandings(state);
       const wordsCollected = standings[0]?.wordCount ?? 0;
-      void usePlayerStatsStore.getState().recordOnlineRound(true, wordsCollected);
+      void usePlayerStatsStore.getState().recordOnlineRound(false, wordsCollected);
     }
 
     if (!archiveRecordedRef.current) {
@@ -149,6 +151,13 @@ export default function OrganizerSoloResultsScreen() {
     words,
   ]);
 
+  const { lexicon: roundLexicon, loading: lexiconLoading } = useRoundPlayableLexicon({
+    baseWord: setup?.baseWord ?? '',
+    allowProperNouns: setup?.allowProperNouns ?? false,
+    allowSlang: setup?.allowSlang ?? false,
+    enabled: Boolean(setup?.baseWord),
+  });
+
   if (!setup || !viewData) {
     return (
       <View
@@ -171,6 +180,9 @@ export default function OrganizerSoloResultsScreen() {
         headline={viewData.headline}
         baseWordDisplay={setup.baseWordDisplay}
         totalDistinctWords={viewData.totalDistinctWords}
+        maxPlayableWords={roundLexicon?.maxCount ?? null}
+        roundLexicon={roundLexicon}
+        lexiconLoading={lexiconLoading}
         globalWords={viewData.globalWords}
         playerRankGroups={viewData.playerRankGroups}
         highlightPlayerId="solo"

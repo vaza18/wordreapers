@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 
+import { computeArchivedPlayerStats } from '@/lib/online/compute-archived-player-stats';
 import { listFinishedRoundArchives } from '@/lib/online/online-session-archive';
-import { sumArchivedWordCountForPlayer } from '@/lib/online/sum-archived-word-count';
 import {
   DEFAULT_PLAYER_STATS,
   parsePlayerStats,
@@ -10,6 +10,7 @@ import {
   type PlayerStats,
 } from '@/lib/profile/player-stats';
 import { useFirebaseStore } from '@/store/firebase-store';
+import { useProfileStore } from '@/store/profile-store';
 
 export interface PlayerStatsState extends PlayerStats {
   hydrated: boolean;
@@ -29,15 +30,19 @@ export const usePlayerStatsStore = create<PlayerStatsState>((set, get) => ({
   hydratePlayerStats: async () => {
     const raw = await AsyncStorage.getItem(PLAYER_STATS_STORAGE_KEY);
     let stats = parsePlayerStats(raw);
-    if (stats.gamesPlayed > 0 && stats.wordsCollected === 0) {
-      const uid = useFirebaseStore.getState().uid;
-      if (uid) {
-        const archives = await listFinishedRoundArchives();
-        const archivedWords = sumArchivedWordCountForPlayer(archives, uid);
-        if (archivedWords > 0) {
-          stats = { ...stats, wordsCollected: archivedWords };
-          await persistPlayerStats(stats);
-        }
+    const uid = useFirebaseStore.getState().uid;
+    if (uid) {
+      const archives = await listFinishedRoundArchives();
+      const profileName = useProfileStore.getState().name;
+      const archived = computeArchivedPlayerStats(archives, uid, profileName);
+      if (
+        archives.length > 0 &&
+        (stats.gamesPlayed !== archived.gamesPlayed ||
+          stats.gamesWon !== archived.gamesWon ||
+          stats.wordsCollected !== archived.wordsCollected)
+      ) {
+        stats = archived;
+        await persistPlayerStats(stats);
       }
     }
     set({ ...stats, hydrated: true });

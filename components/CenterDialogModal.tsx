@@ -2,8 +2,10 @@ import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { ConditionalModal } from '@/lib/ui/conditional-modal';
+import { modalCardChrome, modalOverlayBackground } from '@/lib/ui/modal-chrome';
 
 interface CenterDialogModalProps {
   visible: boolean;
@@ -17,6 +19,39 @@ interface CenterDialogModalProps {
   onRequestClose?: () => void;
   /** When false, backdrop tap and Android back do not close the dialog. */
   dismissOnBackdrop?: boolean;
+}
+
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    overlay: {
+      flex: 1,
+      justifyContent: 'center',
+      padding: spacing.lg,
+      backgroundColor: modalOverlayBackground(colors),
+    },
+    card: {
+      ...modalCardChrome(colors),
+      borderRadius: radii.md,
+      padding: spacing.lg,
+      gap: spacing.md,
+      alignItems: 'stretch',
+    },
+    title: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: colors.textPrimary,
+      textAlign: 'center',
+    },
+    body: {
+      fontSize: 15,
+      lineHeight: 22,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    actions: {
+      gap: spacing.sm,
+    },
+  });
 }
 
 /**
@@ -34,6 +69,7 @@ export function CenterDialogModal({
   onRequestClose,
   dismissOnBackdrop = true,
 }: CenterDialogModalProps) {
+  const styles = useThemedStyles(createStyles);
   const close = onRequestClose ?? onSecondary ?? onPrimary;
   const canDismissOnBackdrop = dismissOnBackdrop;
 
@@ -67,34 +103,3 @@ export function CenterDialogModal({
     </ConditionalModal>
   );
 }
-
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: spacing.lg,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  card: {
-    backgroundColor: colors.backgroundPrimary,
-    borderRadius: radii.md,
-    padding: spacing.lg,
-    gap: spacing.md,
-    alignItems: 'stretch',
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    textAlign: 'center',
-  },
-  body: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: colors.textSecondary,
-    textAlign: 'center',
-  },
-  actions: {
-    gap: spacing.sm,
-  },
-});

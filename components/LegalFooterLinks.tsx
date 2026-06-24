@@ -3,13 +3,48 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
-import { colors, spacing } from '@/constants/theme';
+import { spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
+
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    wrap: {
+      alignItems: 'center',
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md,
+    },
+    legalRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    linkSlot: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    legalLink: {
+      fontSize: 15,
+      lineHeight: 22,
+      color: colors.textSecondary,
+      paddingVertical: spacing.xs,
+      paddingHorizontal: spacing.xs,
+    },
+    sep: {
+      fontSize: 15,
+      color: colors.textTertiary,
+    },
+  });
+}
 
 /**
  * Welcome screen footer: privacy, terms, open source.
  */
 export function LegalFooterLinks() {
   const { t } = useTranslation();
+  const styles = useThemedStyles(createStyles);
 
   const links = [
     { key: 'privacy', label: t('home.privacy'), href: '/privacy' as const },
@@ -38,34 +73,3 @@ export function LegalFooterLinks() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: {
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-  },
-  legalRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  linkSlot: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  legalLink: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: colors.textSecondary,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.xs,
-  },
-  sep: {
-    fontSize: 15,
-    color: colors.textTertiary,
-  },
-});

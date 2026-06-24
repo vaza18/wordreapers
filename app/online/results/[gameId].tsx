@@ -7,8 +7,12 @@ import { PlaySessionToastStack } from '@/components/PlaySessionToast';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { RoundResultsView } from '@/components/RoundResultsView';
 import { useResultsRematchToast } from '@/hooks/useResultsRematchToast';
+import { useResultsRoundLexicon } from '@/hooks/useResultsRoundLexicon';
+import type { PlayableLexiconSnapshot } from '@/lib/dictionary/round-playable-lexicon';
 import { StackHeaderTitle } from '@/components/StackHeaderTitle';
-import { colors, spacing } from '@/constants/theme';
+import { spacing, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { ensureAnonymousAuth } from '@/lib/firebase/auth';
 import { markResultsExited } from '@/lib/firebase/results-coordination-service';
 import {
@@ -51,6 +55,8 @@ const EMPTY_WORDS: AllPlayerWords = new Map();
  * Online round results — local archive first, Firebase only for rematch routing and cleanup.
  */
 export default function OnlineResultsScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const { gameId: rawGameId } = useLocalSearchParams<{ gameId: string }>();
   const gameId = rawGameId ?? '';
@@ -72,6 +78,7 @@ export default function OnlineResultsScreen() {
   const [rematchLoading, setRematchLoading] = useState(false);
   const [rematchError, setRematchError] = useState<string | null>(null);
   const [archiveRecoveryPending, setArchiveRecoveryPending] = useState(false);
+  const [archiveLexicon, setArchiveLexicon] = useState<PlayableLexiconSnapshot | null>(null);
   const statsRecordedRef = useRef(false);
   const archivedRef = useRef(false);
   const archivePromiseRef = useRef<Promise<void> | null>(null);
@@ -92,6 +99,19 @@ export default function OnlineResultsScreen() {
   const session = frozenRound?.session ?? liveSession;
   const wordsSnapshot = frozenRound?.words ?? liveWords;
   const liveSessionStatus = liveSession?.status;
+  const { lexicon: roundLexicon, loading: lexiconLoading } = useResultsRoundLexicon(
+    session,
+    archiveLexicon,
+  );
+
+  useEffect(() => {
+    if (!gameId || session?.baseWordRound == null) {
+      return;
+    }
+    void getFinishedRoundArchive(gameId, session.baseWordRound).then((archive) => {
+      setArchiveLexicon(archive?.playableLexicon ?? null);
+    });
+  }, [gameId, session?.baseWordRound]);
 
   const ensureArchived = useCallback(async (): Promise<void> => {
     if (archivedRef.current) {
@@ -426,6 +446,9 @@ export default function OnlineResultsScreen() {
         headline={viewData.headline}
         baseWordDisplay={viewData.baseWordDisplay}
         totalDistinctWords={viewData.totalDistinctWords}
+        maxPlayableWords={roundLexicon?.maxCount ?? null}
+        roundLexicon={roundLexicon}
+        lexiconLoading={lexiconLoading}
         globalWords={viewData.globalWords}
         playerRankGroups={viewData.playerRankGroups}
         highlightPlayerId={myUid}
@@ -459,18 +482,20 @@ export default function OnlineResultsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.backgroundSecondary,
-    padding: 24,
-    gap: 16,
-  },
-  error: {
-    color: '#E24B4A',
-    fontSize: 14,
-    textAlign: 'center',
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    center: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.backgroundSecondary,
+      padding: 24,
+      gap: 16,
+    },
+    error: {
+      color: '#E24B4A',
+      fontSize: 14,
+      textAlign: 'center',
+    },
+  });
+}

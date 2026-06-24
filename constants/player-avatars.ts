@@ -1,25 +1,38 @@
-/** Avatar colors cycled by player index (mockup palette). */
+/**
+ * Avatar hues — Ukrainian flag blue/yellow pair after green, then distinct warm/cool slots.
+ */
 export const PLAYER_AVATAR_PALETTE = [
-  { background: '#E1F5EE', color: '#0F6E56', swatch: '#1D9E75' },
-  { background: '#E6F1FB', color: '#185FA5', swatch: '#378ADD' },
-  { background: '#FAEEDA', color: '#633806', swatch: '#D85A30' },
-  { background: '#EEEDFE', color: '#534AB7', swatch: '#7F77DD' },
-  { background: '#FAEEDA', color: '#854F0B', swatch: '#EF9F27' },
-  { background: '#FAECE7', color: '#993C1D', swatch: '#E24B4A' },
+  { swatch: '#16A34A', initials: '#FFFFFF' },
+  { swatch: '#005BBB', initials: '#FFD500' },
+  { swatch: '#FFD500', initials: '#005BBB' },
+  { swatch: '#C026D3', initials: '#FFFFFF' },
+  { swatch: '#EA580C', initials: '#FFFFFF' },
+  { swatch: '#DC2626', initials: '#FFFFFF' },
 ] as const;
 
+export const PLAYER_AVATAR_COLOR_COUNT = PLAYER_AVATAR_PALETTE.length;
+
 /**
- * Return avatar colors for a player slot.
+ * Clamp a persisted palette index to the valid range.
  */
-export function playerAvatarColors(index: number): { background: string; color: string } {
-  const palette = PLAYER_AVATAR_PALETTE[index % PLAYER_AVATAR_PALETTE.length];
-  return palette ?? PLAYER_AVATAR_PALETTE[0];
+export function clampAvatarColorIndex(index: number): number {
+  return Math.max(0, Math.min(PLAYER_AVATAR_COLOR_COUNT - 1, Math.round(index)));
 }
 
 /**
- * Saturated swatch color for the profile color picker.
+ * Return avatar fill and initials colors for a player slot.
+ */
+export function playerAvatarColors(index: number): { background: string; color: string } {
+  const entry =
+    PLAYER_AVATAR_PALETTE[index % PLAYER_AVATAR_COLOR_COUNT] ?? PLAYER_AVATAR_PALETTE[0];
+  return { background: entry.swatch, color: entry.initials };
+}
+
+/**
+ * Saturated swatch color for the profile color picker and avatar fill.
  */
 export function playerAvatarSwatch(index: number): string {
-  const palette = PLAYER_AVATAR_PALETTE[index % PLAYER_AVATAR_PALETTE.length];
-  return (palette ?? PLAYER_AVATAR_PALETTE[0]).swatch;
+  const entry =
+    PLAYER_AVATAR_PALETTE[index % PLAYER_AVATAR_COLOR_COUNT] ?? PLAYER_AVATAR_PALETTE[0];
+  return entry.swatch;
 }

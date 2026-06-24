@@ -2,8 +2,14 @@ import { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { spacing } from '@/constants/theme';
-import { PLAY_TOAST_FADE_OUT_MS, type PlayToastItem } from '@/hooks/useToastQueue';
+import { spacing, type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
+import {
+  PLAY_TOAST_FADE_OUT_MS,
+  type PlayToastItem,
+  type PlayToastVariant,
+} from '@/hooks/useToastQueue';
 
 /** Space below status bar / header strip. */
 const HEADER_CLEARANCE = 52;
@@ -21,15 +27,82 @@ interface PlaySessionToastStackProps {
   topOffset?: number;
 }
 
+function getToastVariantStyles(
+  colors: ThemeColors,
+): Record<
+  PlayToastVariant,
+  { backgroundColor: string; textColor: string; borderColor?: string; borderWidth?: number }
+> {
+  return {
+    default: {
+      backgroundColor: colors.sessionToastBg,
+      textColor: colors.sessionToastText,
+      borderColor: colors.borderSecondary,
+      borderWidth: 1,
+    },
+    success: {
+      backgroundColor: colors.accent,
+      textColor: colors.textOnAccent,
+    },
+    warning: {
+      backgroundColor: colors.alert,
+      textColor: colors.textOnAccent,
+    },
+  };
+}
+
+function createPlayToastStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    stack: {
+      position: 'absolute',
+      left: spacing.md,
+      right: spacing.md,
+      zIndex: 10000,
+      elevation: 10000,
+      alignItems: 'center',
+    },
+    toastSlot: {
+      position: 'absolute',
+      top: 0,
+      height: PLAY_TOAST_SLOT_HEIGHT,
+      justifyContent: 'center',
+    },
+    toastWrap: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: 8,
+      maxWidth: '100%',
+      minHeight: PLAY_TOAST_SLOT_HEIGHT,
+      justifyContent: 'center',
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 8,
+      elevation: 12,
+    },
+    toastText: {
+      fontSize: 14,
+      lineHeight: PLAY_TOAST_LINE_HEIGHT,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
+  });
+}
+
 function ToastBubble({
   message,
+  variant,
   fading,
   stackSlot,
 }: {
   message: string;
+  variant: PlayToastVariant;
   fading: boolean;
   stackSlot: number;
 }) {
+  const { colors } = useTheme();
+  const playToastStyles = useThemedStyles(createPlayToastStyles);
+  const variantStyle = getToastVariantStyles(colors)[variant];
   const opacity = useRef(new Animated.Value(0)).current;
   const stackOffset = stackSlot * PLAY_TOAST_SLOT_HEIGHT;
   const translateY = useRef(new Animated.Value(stackOffset - ENTRANCE_OFFSET)).current;
@@ -68,10 +141,13 @@ function ToastBubble({
       style={[
         playToastStyles.toastWrap,
         playToastStyles.toastSlot,
-        { opacity, transform: [{ translateY }] },
+        { backgroundColor: variantStyle.backgroundColor, opacity, transform: [{ translateY }] },
+        variantStyle.borderWidth != null
+          ? { borderColor: variantStyle.borderColor, borderWidth: variantStyle.borderWidth }
+          : null,
       ]}
     >
-      <Text style={playToastStyles.toastText}>{message}</Text>
+      <Text style={[playToastStyles.toastText, { color: variantStyle.textColor }]}>{message}</Text>
     </Animated.View>
   );
 }
@@ -81,6 +157,7 @@ function ToastBubble({
  */
 export function PlaySessionToastStack({ toasts, topOffset }: PlaySessionToastStackProps) {
   const insets = useSafeAreaInsets();
+  const playToastStyles = useThemedStyles(createPlayToastStyles);
 
   if (toasts.length === 0) {
     return null;
@@ -104,6 +181,7 @@ export function PlaySessionToastStack({ toasts, topOffset }: PlaySessionToastSta
         <ToastBubble
           key={toast.id}
           message={toast.message}
+          variant={toast.variant}
           fading={toast.fading}
           stackSlot={toasts.length - 1 - index}
         />
@@ -111,41 +189,3 @@ export function PlaySessionToastStack({ toasts, topOffset }: PlaySessionToastSta
     </View>
   );
 }
-
-export const playToastStyles = StyleSheet.create({
-  stack: {
-    position: 'absolute',
-    left: spacing.md,
-    right: spacing.md,
-    zIndex: 10000,
-    elevation: 10000,
-    alignItems: 'center',
-  },
-  toastSlot: {
-    position: 'absolute',
-    top: 0,
-    height: PLAY_TOAST_SLOT_HEIGHT,
-    justifyContent: 'center',
-  },
-  toastWrap: {
-    backgroundColor: 'rgba(26,26,26,0.92)',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 8,
-    maxWidth: '100%',
-    minHeight: PLAY_TOAST_SLOT_HEIGHT,
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 12,
-  },
-  toastText: {
-    fontSize: 14,
-    lineHeight: PLAY_TOAST_LINE_HEIGHT,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    textAlign: 'center',
-  },
-});

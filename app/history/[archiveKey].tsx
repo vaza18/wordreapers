@@ -6,18 +6,25 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { RoundResultsView } from '@/components/RoundResultsView';
 import { StackHeaderTitle } from '@/components/StackHeaderTitle';
-import { colors } from '@/constants/theme';
+import { type ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { ensureAnonymousAuth } from '@/lib/firebase/auth';
+import type { GameSession } from '@/lib/firebase/types';
 import { stackHeaderWithBackAndSettings } from '@/lib/navigation/stack-header-options';
 import { loadFrozenFinishedRoundFromArchive } from '@/lib/online/frozen-finished-round';
 import { buildOnlineResultsView } from '@/lib/online/online-results-data';
-import { parseArchiveRouteKey } from '@/lib/online/online-session-archive';
+import { getFinishedRoundArchive, parseArchiveRouteKey } from '@/lib/online/online-session-archive';
+import { useResultsRoundLexicon } from '@/hooks/useResultsRoundLexicon';
+import type { PlayableLexiconSnapshot } from '@/lib/dictionary/round-playable-lexicon';
 import { useFirebaseStore } from '@/store/firebase-store';
 
 /**
  * Archived online round results (offline snapshot).
  */
 export default function ArchivedRoundResultsScreen() {
+  const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const { archiveKey: rawArchiveKey } = useLocalSearchParams<{ archiveKey: string }>();
   const archiveKey = rawArchiveKey ?? '';
@@ -30,6 +37,12 @@ export default function ArchivedRoundResultsScreen() {
   const [missing, setMissing] = useState(false);
   const [viewData, setViewData] = useState<ReturnType<typeof buildOnlineResultsView> | null>(null);
   const [highlightPlayerId, setHighlightPlayerId] = useState('');
+  const [archiveSession, setArchiveSession] = useState<GameSession | null>(null);
+  const [archiveLexicon, setArchiveLexicon] = useState<PlayableLexiconSnapshot | null>(null);
+  const { lexicon: roundLexicon, loading: lexiconLoading } = useResultsRoundLexicon(
+    archiveSession,
+    archiveLexicon,
+  );
 
   useEffect(() => {
     void ensureAnonymousAuth().then((user) => {
@@ -48,6 +61,7 @@ export default function ArchivedRoundResultsScreen() {
     void (async () => {
       setLoading(true);
       const frozen = await loadFrozenFinishedRoundFromArchive(parsed.gameId, parsed.baseWordRound);
+      const archive = await getFinishedRoundArchive(parsed.gameId, parsed.baseWordRound);
       if (cancelled) {
         return;
       }
@@ -64,6 +78,8 @@ export default function ArchivedRoundResultsScreen() {
       const playerIds = Object.keys(frozen.session.players);
       const highlight = myUid && frozen.session.players[myUid] ? myUid : (playerIds[0] ?? '');
       setHighlightPlayerId(highlight);
+      setArchiveSession(frozen.session);
+      setArchiveLexicon(archive?.playableLexicon ?? null);
       setViewData(data);
       setMissing(false);
       setLoading(false);
@@ -130,6 +146,9 @@ export default function ArchivedRoundResultsScreen() {
         headline={viewData.headline}
         baseWordDisplay={viewData.baseWordDisplay}
         totalDistinctWords={viewData.totalDistinctWords}
+        maxPlayableWords={roundLexicon?.maxCount ?? null}
+        roundLexicon={roundLexicon}
+        lexiconLoading={lexiconLoading}
         globalWords={viewData.globalWords}
         playerRankGroups={viewData.playerRankGroups}
         highlightPlayerId={highlightPlayerId}
@@ -143,13 +162,15 @@ export default function ArchivedRoundResultsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.backgroundSecondary,
-    padding: 24,
-    gap: 16,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    center: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.backgroundSecondary,
+      padding: 24,
+      gap: 16,
+    },
+  });
+}

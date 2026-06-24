@@ -1,13 +1,25 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { FlatList, InteractionManager, StyleSheet, Text, View } from 'react-native';
 
 import { ScrollableWordPanel } from '@/components/ScrollableWordPanel';
+import {
+  NotebookLineFiller,
+  createNotebookRowLineStyle,
+  notebookFillerRowCount,
+  notebookListCanScroll,
+} from '@/components/notebook/NotebookLineFiller';
 import { WordOverlapAvatars } from '@/components/WordOverlapAvatars';
 import { useScrollablePanelMetrics } from '@/hooks/useScrollablePanelMetrics';
 import { WORD_LIST_ROW_HEIGHT } from '@/constants/notebook';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { normalizeUk, toDisplayUpper } from '@/lib/dictionary/normalize';
 import { dismissWordOverlapTooltips } from '@/lib/ui/word-overlap-tooltip';
+import {
+  findLastAddedNormalized,
+  findRowIndexByNormalized,
+  rowScrollOffset,
+} from '@/lib/ui/word-list-scroll';
 import type { ScoredWordEntry } from '@/lib/game/scoring';
 import type { WordOverlapPeer } from '@/lib/game/word-overlap-peers';
 
@@ -24,6 +36,10 @@ interface WordListProps {
    * Default true — self-scrolling FlatList for the play screen.
    */
   scrollable?: boolean;
+  /** Scroll to an accepted word once it appears in the sorted list. */
+  scrollToNormalized?: string | null;
+  /** Bumps on each accept so repeated scroll requests are not ignored. */
+  scrollToRequestId?: number;
 }
 
 interface WordRow {
@@ -58,6 +74,29 @@ function findPrefixScrollIndex(rows: readonly WordRow[], prefix: string): number
   }
   const row = rows[lo];
   return row && row.entry.normalized.startsWith(prefix) ? lo : -1;
+}
+
+function scrollFlatListToRow(
+  listRef: RefObject<FlatList<WordRow> | null>,
+  index: number,
+  shouldContinue: () => boolean,
+): void {
+  const offset = rowScrollOffset(index, ROW_HEIGHT);
+
+  const run = () => {
+    if (!shouldContinue() || !listRef.current) {
+      return;
+    }
+    listRef.current.scrollToOffset({ offset, animated: true });
+  };
+
+  InteractionManager.runAfterInteractions(() => {
+    requestAnimationFrame(() => {
+      run();
+      setTimeout(run, 50);
+      setTimeout(run, 150);
+    });
+  });
 }
 
 const ROW_HEIGHT = WORD_LIST_ROW_HEIGHT;
@@ -95,16 +134,20 @@ function WordListRow({
   prefix,
   showScoreBadges,
   showOverlapPeers,
+  styles,
+  notebookRow,
 }: {
   row: WordRow;
   prefix: string;
   showScoreBadges: boolean;
   showOverlapPeers: boolean;
+  styles: ReturnType<typeof createStyles>;
+  notebookRow: ReturnType<typeof createNotebookRowLineStyle>;
 }) {
   const split = splitDisplayByNormalizedPrefix(row.display, prefix);
 
   return (
-    <View style={[styles.row, split ? styles.rowPrefixMatch : null]}>
+    <View style={[notebookRow.row, styles.row, split ? styles.rowPrefixMatch : null]}>
       {split ? (
         <Text style={styles.word}>
           <Text style={styles.wordPrefixStrong}>{split.prefix}</Text>
@@ -123,6 +166,8 @@ function WordListRow({
   );
 }
 
+const MemoWordListRow = memo(WordListRow);
+
 /**
  * Alphabetically sorted accepted words with x2/x0 badges, draft prefix highlight, auto-scroll.
  */
@@ -133,10 +178,20 @@ export function WordList({
   showScoreBadges = false,
   showOverlapPeers = true,
   scrollable = true,
+  scrollToNormalized = null,
+  scrollToRequestId,
 }: WordListProps) {
+  const styles = useThemedStyles(createStyles);
+  const notebookRow = useThemedStyles(createNotebookRowLineStyle);
   const prefix = normalizeUk(draftPrefix);
   const listRef = useRef<FlatList<WordRow>>(null);
+  const rowsRef = useRef<readonly WordRow[]>([]);
   const panelScroll = useScrollablePanelMetrics();
+  const acceptedSnapshotRef = useRef<readonly string[] | null>(null);
+  const scrollTargetRef = useRef<string | null>(null);
+  const scrollGenerationRef = useRef(0);
+  const lastScrollRequestIdRef = useRef(0);
+  const [pendingAcceptedScroll, setPendingAcceptedScroll] = useState(false);
 
   const rows = useMemo(
     () =>
@@ -149,6 +204,51 @@ export function WordList({
         .sort((a, b) => a.entry.normalized.localeCompare(b.entry.normalized, 'uk')),
     [displays, entries],
   );
+  rowsRef.current = rows;
+
+  const viewportHeight = panelScroll.scrollMetrics.viewportHeight;
+  const fillerRowCount = notebookFillerRowCount(rows.length, viewportHeight, spacing.sm);
+  const canScroll = notebookListCanScroll(rows.length, viewportHeight, spacing.sm);
+
+  const queueScrollToNormalized = useCallback((normalized: string) => {
+    scrollGenerationRef.current += 1;
+    scrollTargetRef.current = normalized;
+    setPendingAcceptedScroll(true);
+  }, []);
+
+  const flushPendingScroll = useCallback(() => {
+    const target = scrollTargetRef.current;
+    if (!scrollable || !target) {
+      return;
+    }
+
+    const index = findRowIndexByNormalized(rowsRef.current, target);
+    if (index < 0) {
+      return;
+    }
+
+    const generation = scrollGenerationRef.current;
+    scrollTargetRef.current = null;
+    setPendingAcceptedScroll(false);
+    scrollFlatListToRow(listRef, index, () => scrollGenerationRef.current === generation);
+  }, [scrollable]);
+
+  const handleContentSizeChange = useCallback(
+    (width: number, height: number) => {
+      panelScroll.onContentSizeChange(width, height);
+      if (scrollTargetRef.current) {
+        flushPendingScroll();
+      }
+    },
+    [flushPendingScroll, panelScroll],
+  );
+
+  const rowSignature = useMemo(() => rows.map((row) => row.entry.normalized).join('\0'), [rows]);
+
+  const ruledPaperFooter = useMemo(
+    () => <NotebookLineFiller rowCount={fillerRowCount} />,
+    [fillerRowCount],
+  );
 
   useEffect(() => {
     if (!scrollable || prefix.length === 0 || rows.length === 0) {
@@ -160,14 +260,47 @@ export function WordList({
       return;
     }
 
-    const timer = setTimeout(() => {
-      listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0 });
-    }, 0);
+    scrollFlatListToRow(listRef, index, () => true);
+  }, [prefix, rowSignature, rows, scrollable]);
 
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [prefix, rows, scrollable]);
+  useEffect(() => {
+    if (!scrollToNormalized || scrollToRequestId == null) {
+      return;
+    }
+    if (lastScrollRequestIdRef.current === scrollToRequestId) {
+      return;
+    }
+    lastScrollRequestIdRef.current = scrollToRequestId;
+    queueScrollToNormalized(normalizeUk(scrollToNormalized));
+  }, [queueScrollToNormalized, scrollToNormalized, scrollToRequestId]);
+
+  useEffect(() => {
+    const currentSnapshot = entries.map((entry) => entry.normalized);
+    const previousSnapshot = acceptedSnapshotRef.current;
+
+    if (previousSnapshot === null) {
+      acceptedSnapshotRef.current = currentSnapshot;
+      return;
+    }
+
+    acceptedSnapshotRef.current = currentSnapshot;
+
+    if (scrollToRequestId != null) {
+      return;
+    }
+
+    const lastAdded = findLastAddedNormalized(previousSnapshot, currentSnapshot);
+    if (lastAdded) {
+      queueScrollToNormalized(lastAdded);
+    }
+  }, [entries, queueScrollToNormalized, scrollToRequestId]);
+
+  useEffect(() => {
+    if (!scrollTargetRef.current) {
+      return;
+    }
+    flushPendingScroll();
+  }, [flushPendingScroll, rowSignature]);
 
   if (!scrollable) {
     return (
@@ -179,6 +312,8 @@ export function WordList({
             prefix={prefix}
             showScoreBadges={showScoreBadges}
             showOverlapPeers={showOverlapPeers}
+            styles={styles}
+            notebookRow={notebookRow}
           />
         ))}
       </View>
@@ -186,32 +321,23 @@ export function WordList({
   }
 
   return (
-    <ScrollableWordPanel
-      scrollbar={panelScroll.scrollbar}
-      scrollMetrics={panelScroll.scrollMetrics}
-    >
+    <ScrollableWordPanel scrollbar={panelScroll.scrollbar}>
       <View style={styles.listViewport} onLayout={panelScroll.onViewportLayout}>
         <FlatList
           ref={listRef}
           data={rows}
           keyExtractor={(row) => row.key}
           style={styles.list}
-          contentContainerStyle={[
-            styles.listContent,
-            panelScroll.scrollMetrics.viewportHeight > 0
-              ? {
-                  flexGrow: 1,
-                  minHeight: panelScroll.scrollMetrics.viewportHeight,
-                }
-              : null,
-          ]}
+          ListFooterComponent={ruledPaperFooter}
+          contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          scrollEnabled={canScroll || pendingAcceptedScroll}
           removeClippedSubviews={false}
           onScroll={panelScroll.onScroll}
           onScrollBeginDrag={() => {
             dismissWordOverlapTooltips();
           }}
-          onContentSizeChange={panelScroll.onContentSizeChange}
+          onContentSizeChange={handleContentSizeChange}
           scrollEventThrottle={panelScroll.scrollEventThrottle}
           getItemLayout={(_, index) => ({
             length: ROW_HEIGHT,
@@ -220,16 +346,18 @@ export function WordList({
           })}
           onScrollToIndexFailed={(info) => {
             listRef.current?.scrollToOffset({
-              offset: ROW_HEIGHT * info.index,
+              offset: rowScrollOffset(info.index, ROW_HEIGHT),
               animated: true,
             });
           }}
           renderItem={({ item: row }) => (
-            <WordListRow
+            <MemoWordListRow
               row={row}
               prefix={prefix}
               showScoreBadges={showScoreBadges}
               showOverlapPeers={showOverlapPeers}
+              styles={styles}
+              notebookRow={notebookRow}
             />
           )}
         />
@@ -238,53 +366,55 @@ export function WordList({
   );
 }
 
-const styles = StyleSheet.create({
-  listViewport: {
-    flex: 1,
-    minHeight: 0,
-  },
-  list: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
-  staticList: {
-    gap: 0,
-  },
-  listContent: {
-    paddingBottom: spacing.sm,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    height: ROW_HEIGHT,
-    paddingHorizontal: spacing.sm,
-    overflow: 'visible',
-    zIndex: 1,
-  },
-  rowPrefixMatch: {
-    backgroundColor: colors.prefixHighlightBg,
-    borderRadius: radii.sm,
-    marginHorizontal: -spacing.xs,
-    paddingHorizontal: spacing.sm,
-  },
-  word: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: '500',
-    color: colors.penBlue,
-  },
-  wordPrefixStrong: {
-    fontWeight: '800',
-    color: colors.textPrimary,
-  },
-  wordRest: {
-    fontWeight: '500',
-    color: colors.penBlue,
-  },
-  badgeX2: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.accent,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    listViewport: {
+      flex: 1,
+      minHeight: 0,
+    },
+    list: {
+      flex: 1,
+      backgroundColor: 'transparent',
+    },
+    staticList: {
+      gap: 0,
+    },
+    listContent: {
+      paddingBottom: spacing.sm,
+      backgroundColor: colors.notebookPaper,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.sm,
+      overflow: 'visible',
+      zIndex: 1,
+    },
+    rowPrefixMatch: {
+      backgroundColor: colors.prefixHighlightBg,
+      borderRadius: radii.sm,
+      marginHorizontal: -spacing.xs,
+      paddingHorizontal: spacing.sm,
+    },
+    word: {
+      flex: 1,
+      fontSize: 18,
+      fontWeight: '500',
+      color: colors.penBlue,
+    },
+    wordPrefixStrong: {
+      fontWeight: '800',
+      color: colors.textPrimary,
+    },
+    wordRest: {
+      fontWeight: '500',
+      color: colors.penBlue,
+    },
+    badgeX2: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.accent,
+    },
+  });
+}

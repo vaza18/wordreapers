@@ -41,10 +41,12 @@ export function useResultsRematchToast(
     }
 
     enqueueToasts([
-      tGendered(t, 'game.toastRematchRound', viewerGender, {
-        name: event.pickerName,
-        n: event.roundNumber,
-      }),
+      {
+        message: tGendered(t, 'game.toastRematchRound', viewerGender, {
+          name: event.pickerName,
+          n: event.roundNumber,
+        }),
+      },
     ]);
   }, [enqueueToasts, liveSession, skipNextRef, t, viewerGender]);
 

@@ -6,7 +6,8 @@ import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import type { JoinQrPayload } from '@/lib/online/parse-join-qr';
 import { isExpoCameraAvailable } from '@/lib/native/is-expo-camera-available';
-import { colors, spacing } from '@/constants/theme';
+import { spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 interface RoomQrScannerProps {
   visible: boolean;
@@ -18,6 +19,7 @@ interface RoomQrScannerProps {
  * QR scanner modal — never imports expo-camera unless native module exists.
  */
 export function RoomQrScanner({ visible, onClose, onCodeScanned }: RoomQrScannerProps) {
+  const styles = useThemedStyles(createStyles);
   const { t } = useTranslation();
   const cameraAvailable = isExpoCameraAvailable();
 
@@ -62,37 +64,39 @@ export function RoomQrScanner({ visible, onClose, onCodeScanned }: RoomQrScanner
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.backgroundSecondary,
-    padding: spacing.md,
-    gap: spacing.md,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    textAlign: 'center',
-    marginTop: spacing.lg,
-  },
-  messageBox: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: spacing.md,
-  },
-  message: {
-    fontSize: 15,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  cancelWrap: {
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-  },
-  cancel: {
-    fontSize: 16,
-    color: colors.textSecondary,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.backgroundSecondary,
+      padding: spacing.md,
+      gap: spacing.md,
+    },
+    title: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: colors.textPrimary,
+      textAlign: 'center',
+      marginTop: spacing.lg,
+    },
+    messageBox: {
+      flex: 1,
+      justifyContent: 'center',
+      gap: spacing.md,
+    },
+    message: {
+      fontSize: 15,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      lineHeight: 22,
+    },
+    cancelWrap: {
+      alignItems: 'center',
+      paddingVertical: spacing.sm,
+    },
+    cancel: {
+      fontSize: 16,
+      color: colors.textSecondary,
+    },
+  });
+}

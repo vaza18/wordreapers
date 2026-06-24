@@ -3,7 +3,9 @@ import { Modal, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { colors, radii, spacing } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
+import { modalCardChrome, modalOverlayBackground } from '@/lib/ui/modal-chrome';
 
 interface GameVoteModalProps {
   visible: boolean;
@@ -21,6 +23,7 @@ function VoteCard({
   onNo,
   onResume,
 }: Omit<GameVoteModalProps, 'visible'>) {
+  const styles = useThemedStyles(createStyles);
   const { t } = useTranslation();
   const { bottom } = useSafeAreaInsets();
 
@@ -71,32 +74,34 @@ export function GameVoteModal({
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  card: {
-    backgroundColor: colors.backgroundPrimary,
-    borderRadius: radii.md,
-    padding: spacing.lg,
-    gap: spacing.md,
-    alignItems: 'stretch',
-  },
-  message: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: colors.textPrimary,
-    textAlign: 'center',
-  },
-  row: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  btn: {
-    flex: 1,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    overlay: {
+      flex: 1,
+      justifyContent: 'center',
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.lg,
+      backgroundColor: modalOverlayBackground(colors),
+    },
+    card: {
+      ...modalCardChrome(colors),
+      borderRadius: radii.md,
+      padding: spacing.lg,
+      gap: spacing.md,
+      alignItems: 'stretch',
+    },
+    message: {
+      fontSize: 15,
+      lineHeight: 22,
+      color: colors.textPrimary,
+      textAlign: 'center',
+    },
+    row: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+    },
+    btn: {
+      flex: 1,
+    },
+  });
+}

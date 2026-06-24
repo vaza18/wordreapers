@@ -1,18 +1,30 @@
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
-import { useScrollablePanelMetrics } from '@/hooks/useScrollablePanelMetrics';
+import {
+  notebookFillerRowCount,
+  notebookListCanScroll,
+} from '@/components/notebook/NotebookLineFiller';
+import { NotebookRuledFill } from '@/components/notebook/NotebookRuledFill';
+import {
+  SCROLL_OVERFLOW_THRESHOLD,
+  useScrollablePanelMetrics,
+} from '@/hooks/useScrollablePanelMetrics';
 import { ResultsByPlayer } from '@/components/ResultsByPlayer';
 import { ResultsGlobalWordList } from '@/components/ResultsGlobalWordList';
 import { Screen } from '@/components/Screen';
 import { ScrollableWordPanel } from '@/components/ScrollableWordPanel';
-import { colors, radii, spacing } from '@/constants/theme';
+import { SettingSwitch } from '@/components/SettingSwitch';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useThemedStyles } from '@/hooks/useThemedStyles';
+import type { RoundPlayableLexicon } from '@/lib/dictionary/round-playable-lexicon';
 import type { GlobalResultWordRow, PlayerResultRankGroup } from '@/lib/game/results-view';
+import { buildResultsWordList } from '@/lib/game/results-missing-words';
 import { formatRoundDuration } from '@/lib/game/round-duration';
-import { formatUkWords } from '@/lib/i18n/uk-plural';
+import { formatUkWords, ukWordForm } from '@/lib/i18n/uk-plural';
 import { dismissWordOverlapTooltips } from '@/lib/ui/word-overlap-tooltip';
 
 type ResultsTab = 'all' | 'players';
@@ -21,6 +33,9 @@ export interface RoundResultsViewProps {
   headline: string;
   baseWordDisplay: string;
   totalDistinctWords: number;
+  maxPlayableWords?: number | null;
+  roundLexicon?: RoundPlayableLexicon | null;
+  lexiconLoading?: boolean;
   globalWords: readonly GlobalResultWordRow[];
   playerRankGroups: readonly PlayerResultRankGroup[];
   highlightPlayerId: string;
@@ -40,6 +55,9 @@ export function RoundResultsView({
   headline,
   baseWordDisplay,
   totalDistinctWords,
+  maxPlayableWords = null,
+  roundLexicon = null,
+  lexiconLoading = false,
   globalWords,
   playerRankGroups,
   highlightPlayerId,
@@ -50,11 +68,60 @@ export function RoundResultsView({
   showWordAuthors = true,
   roundDurationSeconds,
 }: RoundResultsViewProps) {
+  const styles = useThemedStyles(createStyles);
   const { t } = useTranslation();
   const [tab, setTab] = useState<ResultsTab>('all');
+  const [showMissingWords, setShowMissingWords] = useState(false);
+  const [playerBodyHeight, setPlayerBodyHeight] = useState(0);
   const panelScroll = useScrollablePanelMetrics();
   const roundDurationLabel =
     roundDurationSeconds != null ? formatRoundDuration(roundDurationSeconds) : null;
+  const canShowMissingToggle = Boolean(roundLexicon) && !lexiconLoading;
+  const wordsMetaLabel = useMemo(() => {
+    if (showBaseWordInMeta) {
+      return maxPlayableWords != null && maxPlayableWords > 0
+        ? t('game.resultsBaseWordMetaWithMax', {
+            word: baseWordDisplay,
+            count: totalDistinctWords,
+            max: maxPlayableWords,
+            wordsLabel: ukWordForm(totalDistinctWords),
+          })
+        : t('game.resultsBaseWordMeta', {
+            word: baseWordDisplay,
+            count: totalDistinctWords,
+            wordsLabel: formatUkWords(totalDistinctWords),
+          });
+    }
+    return maxPlayableWords != null && maxPlayableWords > 0
+      ? t('game.resultsWordsMetaWithMax', {
+          count: totalDistinctWords,
+          max: maxPlayableWords,
+          wordsLabel: ukWordForm(totalDistinctWords),
+        })
+      : formatUkWords(totalDistinctWords);
+  }, [baseWordDisplay, maxPlayableWords, showBaseWordInMeta, t, totalDistinctWords]);
+  const allWordRows = useMemo(
+    () => buildResultsWordList(globalWords, roundLexicon, showMissingWords),
+    [globalWords, roundLexicon, showMissingWords],
+  );
+  const viewportHeight = panelScroll.scrollMetrics.viewportHeight;
+  const contentHeight = panelScroll.scrollMetrics.contentHeight;
+  const fillerRowCount =
+    tab === 'all' ? notebookFillerRowCount(allWordRows.length, viewportHeight, spacing.md) : 0;
+  const playersRuledHeight =
+    tab === 'players' && viewportHeight > 0 ? Math.max(viewportHeight, playerBodyHeight) : 0;
+  const canScroll =
+    tab === 'all'
+      ? notebookListCanScroll(allWordRows.length, viewportHeight, spacing.md)
+      : viewportHeight > 0 && contentHeight > viewportHeight + SCROLL_OVERFLOW_THRESHOLD;
+
+  const onPlayerBodyLayout = useCallback(
+    (event: { nativeEvent: { layout: { height: number } } }) => {
+      const nextHeight = event.nativeEvent.layout.height;
+      setPlayerBodyHeight((prev) => (prev === nextHeight ? prev : nextHeight));
+    },
+    [],
+  );
 
   return (
     <Screen scroll={false} style={styles.screen}>
@@ -67,6 +134,7 @@ export function RoundResultsView({
             active={tab === 'all'}
             onPress={() => {
               setTab('all');
+              setPlayerBodyHeight(0);
             }}
           />
           <TabButton
@@ -74,73 +142,78 @@ export function RoundResultsView({
             active={tab === 'players'}
             onPress={() => {
               setTab('players');
+              setPlayerBodyHeight(0);
             }}
           />
         </View>
 
-        <Text style={styles.meta}>
-          {showBaseWordInMeta
-            ? t('game.resultsBaseWordMeta', {
-                word: baseWordDisplay,
-                count: totalDistinctWords,
-                wordsLabel: formatUkWords(totalDistinctWords),
-              })
-            : formatUkWords(totalDistinctWords)}
+        <Text style={styles.stats}>
+          {wordsMetaLabel}
+          {roundDurationLabel
+            ? ` · ${t('game.resultsRoundDuration', { duration: roundDurationLabel })}`
+            : null}
         </Text>
-        {roundDurationLabel ? (
-          <Text style={styles.meta}>
-            {t('game.resultsRoundDuration', { duration: roundDurationLabel })}
-          </Text>
+        {tab === 'all' && canShowMissingToggle ? (
+          <SettingSwitch
+            variant="compact"
+            label={t('game.showMissingWords')}
+            value={showMissingWords}
+            onChange={setShowMissingWords}
+          />
         ) : null}
       </View>
 
-      <ScrollableWordPanel
-        style={styles.wordPanel}
-        scrollbar={panelScroll.scrollbar}
-        scrollMetrics={panelScroll.scrollMetrics}
-      >
+      <ScrollableWordPanel style={styles.wordPanel} scrollbar={panelScroll.scrollbar}>
         <View style={styles.panelScrollViewport} onLayout={panelScroll.onViewportLayout}>
-          <ScrollView
-            style={styles.panelScroll}
-            contentContainerStyle={[
-              styles.panelScrollContent,
-              panelScroll.scrollMetrics.viewportHeight > 0
-                ? {
-                    flexGrow: 1,
-                    minHeight: panelScroll.scrollMetrics.viewportHeight,
-                  }
-                : null,
-            ]}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            onScroll={panelScroll.onScroll}
-            onScrollBeginDrag={() => {
-              dismissWordOverlapTooltips();
-            }}
-            onContentSizeChange={panelScroll.onContentSizeChange}
-            scrollEventThrottle={panelScroll.scrollEventThrottle}
-          >
-            {tab === 'all' ? (
-              <ResultsGlobalWordList
-                rows={globalWords}
-                showAuthors={showWordAuthors}
-                showScoreBadges={showScores}
-              />
-            ) : (
-              <ResultsByPlayer
-                rankGroups={playerRankGroups}
-                pointsShort={t('game.pointsShort')}
-                wordsShort={t('game.wordsShort')}
-                youLabel={t('game.resultsYou')}
-                highlightPlayerId={highlightPlayerId}
-                defaultExpandedPlayerId={defaultExpandedPlayerId}
-                showScores={showScores}
-                showScoreBadges={showScores}
-                showOverlapPeers={showWordAuthors}
-                showWordsPerMinute={roundDurationSeconds != null}
-              />
-            )}
-          </ScrollView>
+          {tab === 'all' ? (
+            <ResultsGlobalWordList
+              rows={allWordRows}
+              showAuthors={showWordAuthors}
+              showScoreBadges={showScores}
+              fillerRowCount={fillerRowCount}
+              scrollEnabled={canScroll}
+              onScroll={panelScroll.onScroll}
+              onScrollBeginDrag={() => {
+                dismissWordOverlapTooltips();
+              }}
+              onContentSizeChange={panelScroll.onContentSizeChange}
+              scrollEventThrottle={panelScroll.scrollEventThrottle}
+            />
+          ) : (
+            <ScrollView
+              style={styles.panelScroll}
+              contentContainerStyle={styles.panelScrollContent}
+              showsVerticalScrollIndicator={false}
+              scrollEnabled={canScroll}
+              keyboardShouldPersistTaps="handled"
+              onScroll={panelScroll.onScroll}
+              onScrollBeginDrag={() => {
+                dismissWordOverlapTooltips();
+              }}
+              onContentSizeChange={panelScroll.onContentSizeChange}
+              scrollEventThrottle={panelScroll.scrollEventThrottle}
+            >
+              <View style={styles.scrollBody}>
+                {playersRuledHeight > 0 ? (
+                  <NotebookRuledFill height={playersRuledHeight} style={styles.ruledBackdrop} />
+                ) : null}
+                <View onLayout={onPlayerBodyLayout} style={styles.playerBody}>
+                  <ResultsByPlayer
+                    rankGroups={playerRankGroups}
+                    pointsShort={t('game.pointsShort')}
+                    wordsShort={t('game.wordsShort')}
+                    youLabel={t('game.resultsYou')}
+                    highlightPlayerId={highlightPlayerId}
+                    defaultExpandedPlayerId={defaultExpandedPlayerId}
+                    showScores={showScores}
+                    showScoreBadges={showScores}
+                    showOverlapPeers={showWordAuthors}
+                    showWordsPerMinute={roundDurationSeconds != null}
+                  />
+                </View>
+              </View>
+            </ScrollView>
+          )}
         </View>
       </ScrollableWordPanel>
 
@@ -158,6 +231,7 @@ function TabButton({
   active: boolean;
   onPress: () => void;
 }) {
+  const styles = useThemedStyles(createStyles);
   return (
     <FeedbackPressable
       accessibilityRole="button"
@@ -171,76 +245,94 @@ function TabButton({
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    padding: 0,
-    gap: 0,
-  },
-  header: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-    gap: spacing.sm,
-  },
-  headline: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: colors.accent,
-  },
-  tabs: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-  },
-  tab: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderRadius: radii.sm,
-  },
-  tabActive: {
-    backgroundColor: colors.accent,
-  },
-  tabIdle: {
-    backgroundColor: colors.backgroundPrimary,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderTertiary,
-  },
-  tabLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  tabLabelActive: {
-    color: '#E1F5EE',
-  },
-  tabLabelIdle: {
-    color: colors.textSecondary,
-  },
-  meta: {
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
-  wordPanel: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  panelScrollViewport: {
-    flex: 1,
-    minHeight: 0,
-  },
-  panelScroll: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
-  panelScrollContent: {
-    paddingHorizontal: spacing.sm,
-    paddingBottom: spacing.md,
-  },
-  actions: {
-    padding: spacing.md,
-    gap: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.borderTertiary,
-    backgroundColor: colors.backgroundSecondary,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    screen: {
+      flex: 1,
+      padding: 0,
+      gap: 0,
+    },
+    header: {
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.md,
+      paddingBottom: spacing.sm,
+      gap: spacing.sm,
+    },
+    headline: {
+      fontSize: 17,
+      fontWeight: '600',
+      color: colors.accent,
+    },
+    tabs: {
+      flexDirection: 'row',
+      gap: spacing.xs,
+    },
+    tab: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: spacing.sm,
+      borderRadius: radii.sm,
+    },
+    tabActive: {
+      backgroundColor: colors.accent,
+    },
+    tabIdle: {
+      backgroundColor: colors.backgroundPrimary,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderTertiary,
+    },
+    tabLabel: {
+      fontSize: 14,
+      fontWeight: '500',
+    },
+    tabLabelActive: {
+      color: '#E1F5EE',
+    },
+    tabLabelIdle: {
+      color: colors.textSecondary,
+    },
+    stats: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.textPrimary,
+    },
+    wordPanel: {
+      marginHorizontal: spacing.md,
+      marginBottom: spacing.sm,
+    },
+    panelScrollViewport: {
+      flex: 1,
+      minHeight: 0,
+    },
+    panelScroll: {
+      flex: 1,
+      backgroundColor: 'transparent',
+    },
+    panelScrollContent: {
+      paddingHorizontal: spacing.sm,
+      paddingBottom: spacing.md,
+    },
+    scrollBody: {
+      flexGrow: 1,
+      backgroundColor: colors.notebookPaper,
+      position: 'relative',
+    },
+    ruledBackdrop: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      zIndex: 0,
+    },
+    playerBody: {
+      zIndex: 1,
+    },
+    actions: {
+      padding: spacing.md,
+      gap: spacing.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderTertiary,
+      backgroundColor: colors.backgroundSecondary,
+    },
+  });
+}
