@@ -6,7 +6,7 @@
     "node": "20"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "mkdir -p lib/data && cp ../assets/generated/dictionaries/uk-uk/base_words.txt lib/data/base_words.uk-uk.txt && tsc",
     "build:watch": "tsc --watch",
     "serve": "npm run build && firebase emulators:start --only functions",
     "deploy": "bash ../scripts/firebase-deploy.sh --only functions"

@@ -23,6 +23,9 @@ export interface RoundSettingsFieldsProps {
   onAllowProperNounsChange: (value: boolean) => void;
   allowSlang: boolean;
   onAllowSlangChange: (value: boolean) => void;
+  /** Proper nouns / slang cannot be enabled (public or browse-joined room). */
+  dictionaryOptionsLocked?: boolean;
+  dictionaryOptionsLockedHint?: string;
 }
 
 /**
@@ -37,6 +40,8 @@ export function RoundSettingsFields({
   onAllowProperNounsChange,
   allowSlang,
   onAllowSlangChange,
+  dictionaryOptionsLocked = false,
+  dictionaryOptionsLockedHint,
 }: RoundSettingsFieldsProps) {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
@@ -74,14 +79,24 @@ export function RoundSettingsFields({
 
       <SettingSwitch
         label={t('game.allowProperNouns')}
-        hint={t('game.allowProperNounsHint')}
+        hint={
+          dictionaryOptionsLocked && dictionaryOptionsLockedHint
+            ? dictionaryOptionsLockedHint
+            : t('game.allowProperNounsHint')
+        }
         value={allowProperNouns}
+        disabled={dictionaryOptionsLocked}
         onChange={onAllowProperNounsChange}
       />
       <SettingSwitch
         label={t('game.allowSlang')}
-        hint={t('game.allowSlangHint')}
+        hint={
+          dictionaryOptionsLocked && dictionaryOptionsLockedHint
+            ? dictionaryOptionsLockedHint
+            : t('game.allowSlangHint')
+        }
         value={allowSlang}
+        disabled={dictionaryOptionsLocked}
         onChange={onAllowSlangChange}
       />
 

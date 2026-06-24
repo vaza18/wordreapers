@@ -74,6 +74,7 @@ export default function ArchivedRoundResultsScreen() {
 
       const data = buildOnlineResultsView(t, frozen.session, frozen.words, {
         finishedAtMs: frozen.session.finishedAt ?? frozen.savedAt,
+        viewerUid: myUid || undefined,
       });
       const playerIds = Object.keys(frozen.session.players);
       const highlight = myUid && frozen.session.players[myUid] ? myUid : (playerIds[0] ?? '');

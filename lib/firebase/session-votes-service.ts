@@ -27,6 +27,7 @@ import {
 import { gameSessionPath } from './paths.js';
 import { normalizeRoomCode } from './room-code.js';
 import type { GameSession, GameSessionPlayer } from './types.js';
+import { displayPlayerName } from '../online/public-lobby/display-player-name.js';
 
 export type VoteChoice = 'yes' | 'no';
 
@@ -544,7 +545,17 @@ export async function resolveResumeVoteIfExpired(gameId: string): Promise<void> 
 /**
  * Proposer display name for vote banners.
  */
-export function voteProposerName(session: GameSession, proposedBy: string): string {
+export function voteProposerName(
+  session: GameSession,
+  proposedBy: string,
+  viewerUid?: string,
+): string {
   const player: GameSessionPlayer | undefined = session.players[proposedBy];
-  return player?.name ?? proposedBy;
+  if (!player) {
+    return proposedBy;
+  }
+  if (viewerUid) {
+    return displayPlayerName(player, viewerUid, proposedBy, session);
+  }
+  return player.name;
 }

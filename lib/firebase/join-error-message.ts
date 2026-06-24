@@ -80,6 +80,12 @@ export function joinErrorMessage(error: unknown, t: TFunction): string {
   if (message === 'ROOM_NOT_FOUND') {
     return t('online.errorRoomNotFound');
   }
+  if (message === 'ROOM_FULL') {
+    return t('online.errorRoomFull');
+  }
+  if (message === 'LANGUAGE_MISMATCH') {
+    return t('online.errorLanguageMismatch');
+  }
   if (message === 'ROOM_NOT_WAITING' || message === 'ROOM_NOT_JOINABLE') {
     return t('online.errorRoomStarted');
   }

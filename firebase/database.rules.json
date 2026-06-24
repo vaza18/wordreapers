@@ -66,6 +66,39 @@
           ".validate": "newData.isNumber() && newData.val() >= 0 && (!data.exists() || newData.val() >= data.val())"
         }
       }
+    },
+    "public_lobbies": {
+      "$language": {
+        ".read": "auth != null",
+        ".indexOn": ["publishedAt", "baseWordNorm"],
+        "$gameId": {
+          ".write": "auth != null && root.child('game_sessions').child($gameId).child('status').val() == 'waiting' && ((!newData.exists() && (root.child('game_sessions').child($gameId).child('organizerId').val() === auth.uid || (data.exists() && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists()))) || (newData.exists() && root.child('game_sessions').child($gameId).child('isPublic').val() === true && (root.child('game_sessions').child($gameId).child('organizerId').val() === auth.uid || (data.exists() && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && newData.child('baseWord').val() === data.child('baseWord').val() && newData.child('baseWordNorm').val() === data.child('baseWordNorm').val() && newData.child('maxPlayers').val() === data.child('maxPlayers').val() && newData.child('publishedAt').val() === data.child('publishedAt').val() && newData.child('expiresAt').val() === data.child('expiresAt').val()))))",
+          "baseWord": {
+            ".validate": "newData.isString() && newData.val().length > 0"
+          },
+          "baseWordNorm": {
+            ".validate": "newData.isString() && newData.val().length > 0"
+          },
+          "playerCount": {
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 8"
+          },
+          "maxPlayers": {
+            ".validate": "newData.isNumber() && newData.val() === 8"
+          },
+          "publishedAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "expiresAt": {
+            ".validate": "newData.isNumber()"
+          }
+        }
+      }
+    },
+    "public_lobby_counts": {
+      "$language": {
+        ".read": "auth != null",
+        ".write": "false"
+      }
     }
   }
 }

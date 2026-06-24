@@ -18,6 +18,7 @@
   "include": [
     "scripts/**/*.ts",
     "tests/**/*.ts",
+    "functions/src/**/*.ts",
     "lib/**/*.ts",
     "constants/theme.ts",
     "vitest.config.ts",

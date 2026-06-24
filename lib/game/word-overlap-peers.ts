@@ -1,5 +1,6 @@
 import { globalWordCount } from '@/lib/firebase/session-word-maps';
 import type { GameSession } from '../firebase/types.js';
+import { displayPlayerName } from '../online/public-lobby/display-player-name.js';
 
 /** Player shown in a word-overlap tooltip (same word as viewer). */
 export interface WordOverlapPeer {
@@ -8,11 +9,15 @@ export interface WordOverlapPeer {
   avatarColorIndex: number;
 }
 
-function peerFromSession(session: GameSession, playerId: string): WordOverlapPeer {
+function peerFromSession(
+  session: GameSession,
+  playerId: string,
+  viewerPlayerId: string,
+): WordOverlapPeer {
   const player = session.players[playerId];
   return {
     playerId,
-    name: player?.name ?? playerId,
+    name: player ? displayPlayerName(player, viewerPlayerId, playerId, session) : playerId,
     avatarColorIndex: player?.avatarColorIndex ?? 0,
   };
 }
@@ -42,7 +47,7 @@ export function overlapPeersFromSession(
   return sortPeers(
     Object.keys(peerIds)
       .filter((playerId) => playerId !== viewerPlayerId)
-      .map((playerId) => peerFromSession(session, playerId)),
+      .map((playerId) => peerFromSession(session, playerId, viewerPlayerId)),
   );
 }
 

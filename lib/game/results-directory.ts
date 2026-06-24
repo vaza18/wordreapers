@@ -1,4 +1,6 @@
 import type { GameSession } from '../firebase/types.js';
+import { displayPlayerName } from '../online/public-lobby/display-player-name.js';
+import { playerGenderForDisplay } from '../online/public-lobby/session-identity.js';
 
 import type { PlayerGender } from './grammar.js';
 
@@ -58,15 +60,28 @@ export function createSoloResultsDirectory(
 /**
  * Directory for online results (Firebase player uids).
  */
-export function createOnlineResultsDirectory(session: GameSession): ResultsPlayerDirectory {
+export function createOnlineResultsDirectory(
+  session: GameSession,
+  viewerUid?: string,
+): ResultsPlayerDirectory {
   return {
     getName(playerId: string) {
-      return session.players[playerId]?.name ?? playerId;
+      const player = session.players[playerId];
+      if (!player) {
+        return playerId;
+      }
+      if (viewerUid) {
+        return displayPlayerName(player, viewerUid, playerId, session);
+      }
+      return player.name;
     },
     getAvatarColorIndex(playerId: string) {
       return session.players[playerId]?.avatarColorIndex ?? 0;
     },
     getGender(playerId: string) {
+      if (viewerUid) {
+        return playerGenderForDisplay(session, viewerUid, playerId);
+      }
       return session.players[playerId]?.gender ?? null;
     },
   };

@@ -65,4 +65,39 @@ describe('buildOnlineResultsView', () => {
     expect(view.globalWords).toHaveLength(2);
     expect(view.playerRankGroups[0]?.players[0]?.playerName).toBe('Аня');
   });
+
+  it('shows pseudonyms in finished public rooms', () => {
+    const byPlayer = new Map([
+      ['p1', new Map([['пер', storedWord('ПЕР')]])],
+      ['p2', new Map()],
+    ]);
+    const view = buildOnlineResultsView(
+      t,
+      {
+        ...session(),
+        isPublic: false,
+        identityMasked: true,
+        players: {
+          p1: {
+            name: 'iPhone 13 Pro Max',
+            publicAlias: 'Гравець 1',
+            wordCount: 1,
+            score: 1,
+            avatarColorIndex: 0,
+          },
+          p2: {
+            name: 'iPad Pro 13',
+            publicAlias: 'Гравець 2',
+            wordCount: 0,
+            score: 0,
+            avatarColorIndex: 1,
+          },
+        },
+      },
+      byPlayer,
+      { viewerUid: 'p2' },
+    );
+    expect(view.playerRankGroups[0]?.players[0]?.playerName).toBe('Гравець 1');
+    expect(view.globalWords[0]?.authors[0]?.playerName).toBe('Гравець 1');
+  });
 });

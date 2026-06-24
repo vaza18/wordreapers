@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -21,7 +22,6 @@ import { AddTimeModal } from '@/components/AddTimeModal';
 import { AddTimeVoteModal } from '@/components/AddTimeVoteModal';
 import { BottomSheetModal } from '@/components/BottomSheetModal';
 import { CenterDialogModal } from '@/components/CenterDialogModal';
-import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { GameMenuModal } from '@/components/GameMenuModal';
 import { GamePlayStatusBar } from '@/components/GamePlayStatusBar';
 import { GameTimeUpModal } from '@/components/GameTimeUpModal';
@@ -93,6 +93,11 @@ import {
   voteResume,
 } from '@/lib/firebase/session-votes-service';
 import { buildOnlineWordListDisplay } from '@/lib/online/online-word-display';
+import { viewerNeedsAddTimeVote } from '@/lib/online/add-time-vote';
+import { viewerNeedsEarlyFinishVote } from '@/lib/online/early-finish-vote';
+import { viewerNeedsPauseVote } from '@/lib/online/pause-vote';
+import { shouldShowInvitePlayVoteBanner } from '@/lib/online/play-vote-banner';
+import { displayPlayerName } from '@/lib/online/public-lobby/display-player-name';
 import {
   buildLiveStandingsFromSession,
   sessionPlayerScoresMatchWordMaps,
@@ -131,6 +136,7 @@ export default function OnlinePlayScreen() {
   }>();
   const gameId = rawGameId ?? '';
   const myUid = useFirebaseStore((state) => state.uid) ?? '';
+  const isPlayScreenFocused = useIsFocused();
   const { width: screenWidth } = useWindowDimensions();
   const composeKeySize = computeLetterKeySize(screenWidth);
   const composeKeyFontSize = letterKeyFontSizeForKeySize(composeKeySize);
@@ -169,7 +175,7 @@ export default function OnlinePlayScreen() {
   const roundEnded = session?.status === 'finished' || roundOverPendingResults;
   const { timeUpModalVisible } = useRoundTimeUpModal(roundEnded);
   const skipRematchToastRef = useRef(false);
-  const rematchToasts = useResultsRematchToast(sessionCore, skipRematchToastRef);
+  const rematchToasts = useResultsRematchToast(sessionCore, myUid, skipRematchToastRef);
   const playToasts = usePlaySessionToasts(session, myUid);
   const sessionToasts = useMemo(
     () => [...playToasts, ...rematchToasts],
@@ -423,10 +429,12 @@ export default function OnlinePlayScreen() {
   const endsAt = session?.timerEndsAt ?? null;
   const resolvedSessionSettings = session ? resolveGameSessionSettingsForSession(session) : null;
   const uniqueBonusEnabled = resolvedSessionSettings?.uniqueBonusEnabled ?? false;
+  const allowProperNouns = resolvedSessionSettings?.allowProperNouns ?? false;
+  const allowSlang = resolvedSessionSettings?.allowSlang ?? false;
   const { lexicon: roundLexicon } = useRoundPlayableLexicon({
     baseWord: session?.baseWord ?? '',
-    allowProperNouns: resolvedSessionSettings?.allowProperNouns ?? false,
-    allowSlang: resolvedSessionSettings?.allowSlang ?? false,
+    allowProperNouns,
+    allowSlang,
     releaseDictionaryAfterBuild: true,
     enabled: Boolean(session?.baseWord && session.status === 'playing'),
   });
@@ -645,8 +653,8 @@ export default function OnlinePlayScreen() {
         deps: {
           hasInDictionary: (word) =>
             dictionary.hasWord(word) ||
-            (session.settings.allowProperNouns && hasWordInSortedList(properNouns, word)) ||
-            (session.settings.allowSlang && hasWordInSortedList(slang, word)),
+            (allowProperNouns && hasWordInSortedList(properNouns, word)) ||
+            (allowSlang && hasWordInSortedList(slang, word)),
         },
         lookupDisplayUpper: (word) =>
           roundLexicon?.displays.get(word) ??
@@ -734,6 +742,8 @@ export default function OnlinePlayScreen() {
       runPendingSubmit(submitDraft);
     },
     [
+      allowProperNouns,
+      allowSlang,
       dictionary,
       draftKeyIndices,
       gameId,
@@ -971,6 +981,18 @@ export default function OnlinePlayScreen() {
     };
   }, [gameId, session?.pauseState?.active, session?.players, session?.resumeVote, session?.status]);
 
+  useEffect(() => {
+    if (session?.status !== 'playing') {
+      return;
+    }
+    const voteActive = Boolean(session.earlyFinishVote || session.pauseVote || session.addTimeVote);
+    if (!voteActive) {
+      return;
+    }
+    setShowAddTimeModal(false);
+    setShowStandings(false);
+  }, [session?.addTimeVote, session?.earlyFinishVote, session?.pauseVote, session?.status]);
+
   if (loading || !session || !myUid) {
     return (
       <View style={styles.center}>
@@ -998,76 +1020,135 @@ export default function OnlinePlayScreen() {
     showGameMenu ||
     showInviteModal ||
     showExitConfirm ||
-    (showEndEarlyConfirm && !hasOnlineOpponentInRound) ||
-    Boolean(earlyVote || pauseVote || addTimeVote);
+    (showEndEarlyConfirm && !hasOnlineOpponentInRound);
   const canProposeAddTime = !isPaused && !earlyVote && !pauseVote && !addTimeVote;
+
+  const renderActivePlayVote = (layout: 'modal' | 'banner') => {
+    if (isPaused) {
+      return null;
+    }
+    if (earlyVote) {
+      const needsVote = viewerNeedsEarlyFinishVote(session, earlyVote, myUid);
+      if (
+        layout === 'banner' &&
+        !shouldShowInvitePlayVoteBanner(earlyVote.proposedBy, myUid, needsVote)
+      ) {
+        return null;
+      }
+      return (
+        <EarlyFinishVoteModal
+          visible
+          layout={layout}
+          session={session}
+          vote={earlyVote}
+          myUid={myUid}
+          serverNow={serverNow}
+          onYes={() => {
+            void voteEarlyFinish(gameId, myUid, 'yes');
+          }}
+          onNo={() => {
+            void voteEarlyFinish(gameId, myUid, 'no');
+          }}
+          onCancelProposal={earlyVote.proposedBy === myUid ? cancelEarlyFinishProposal : undefined}
+          onLeaveNow={earlyVote.proposedBy === myUid ? leaveNowFromEarlyFinish : undefined}
+        />
+      );
+    }
+    if (pauseVote && !addTimeVote) {
+      const needsVote = viewerNeedsPauseVote(session, pauseVote, myUid);
+      if (
+        layout === 'banner' &&
+        !shouldShowInvitePlayVoteBanner(pauseVote.proposedBy, myUid, needsVote)
+      ) {
+        return null;
+      }
+      return (
+        <PauseVoteModal
+          visible
+          layout={layout}
+          session={session}
+          vote={pauseVote}
+          myUid={myUid}
+          onYes={() => {
+            void votePause(gameId, myUid, 'yes');
+          }}
+          onNo={() => {
+            void votePause(gameId, myUid, 'no');
+          }}
+          onCancelProposal={pauseVote.proposedBy === myUid ? cancelPauseProposal : undefined}
+        />
+      );
+    }
+    if (addTimeVote && session.status === 'playing' && !pauseVote) {
+      const needsVote = viewerNeedsAddTimeVote(session, addTimeVote, myUid);
+      if (
+        layout === 'banner' &&
+        !shouldShowInvitePlayVoteBanner(addTimeVote.proposedBy, myUid, needsVote)
+      ) {
+        return null;
+      }
+      return (
+        <AddTimeVoteModal
+          visible
+          layout={layout}
+          session={session}
+          vote={addTimeVote}
+          myUid={myUid}
+          serverNow={serverNow}
+          onYes={() => {
+            void voteAddTime(gameId, myUid, 'yes');
+          }}
+          onNo={() => {
+            void voteAddTime(gameId, myUid, 'no');
+          }}
+          onCancelProposal={addTimeVote.proposedBy === myUid ? cancelAddTimeProposal : undefined}
+        />
+      );
+    }
+    return null;
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
       {!isPaused ? (
         <>
-          {canProposeAddTime ? (
-            <FeedbackPressable
-              accessibilityRole="button"
-              accessibilityLabel={t('game.addTimeTitle')}
-              onPress={() => {
-                setShowAddTimeModal(true);
-              }}
-            >
-              <GamePlayStatusBar
-                timerLabel={remainingLabel}
-                timerUrgent={timerUrgent && !isPaused}
-                rank={playerRank}
-                wordCount={playerWordCount}
-                maxWordCount={roundLexicon?.maxCount ?? null}
-                score={playerScore}
-                wordsShort={t('game.wordsShort')}
-                pointsShort={t('game.pointsShort')}
-                showRank={hasOpponent}
-                showScore={showPointUi}
-                style={{ marginHorizontal: -spacing.md }}
-              />
-            </FeedbackPressable>
-          ) : (
-            <GamePlayStatusBar
-              timerLabel={remainingLabel}
-              timerUrgent={timerUrgent && !isPaused}
-              rank={playerRank}
-              wordCount={playerWordCount}
-              maxWordCount={roundLexicon?.maxCount ?? null}
-              score={playerScore}
-              wordsShort={t('game.wordsShort')}
-              pointsShort={t('game.pointsShort')}
-              showRank={hasOpponent}
-              showScore={uniqueBonusEnabled && hasOpponent}
-              style={{ marginHorizontal: -spacing.md }}
-            />
-          )}
-
-          <View style={styles.footer}>
-            {!roundEnded ? (
-              <>
-                <PrimaryButton
-                  label={t('game.menu')}
-                  variant="secondary"
-                  style={hasOpponent ? styles.footerButton : styles.footerButtonSolo}
-                  onPress={() => {
+          <GamePlayStatusBar
+            timerLabel={remainingLabel}
+            timerUrgent={timerUrgent && !isPaused}
+            rank={playerRank}
+            wordCount={playerWordCount}
+            maxWordCount={roundLexicon?.maxCount ?? null}
+            score={playerScore}
+            wordsShort={t('game.wordsShort')}
+            pointsShort={t('game.pointsShort')}
+            showRank={hasOpponent}
+            showScore={showPointUi}
+            menuLabel={t('game.menu')}
+            onMenuPress={
+              !roundEnded
+                ? () => {
                     setShowGameMenu(true);
-                  }}
-                />
-                {hasOpponent ? (
-                  <PrimaryButton
-                    label={t('game.standings')}
-                    variant="secondary"
-                    style={styles.footerButton}
-                    onPress={() => {
-                      setShowStandings(true);
-                    }}
-                  />
-                ) : null}
-              </>
-            ) : null}
-          </View>
+                  }
+                : undefined
+            }
+            onAddTimePress={
+              canProposeAddTime
+                ? () => {
+                    setShowAddTimeModal(true);
+                  }
+                : undefined
+            }
+            addTimeAccessibilityLabel={t('game.addTimeTitle')}
+            onStandingsPress={
+              hasOpponent && !roundEnded
+                ? () => {
+                    setShowStandings(true);
+                  }
+                : undefined
+            }
+            standingsAccessibilityLabel={t('game.standings')}
+            style={{ marginHorizontal: -spacing.md }}
+          />
 
           <View style={styles.playerHeader}>
             <Text style={styles.playerName} numberOfLines={1}>
@@ -1104,14 +1185,17 @@ export default function OnlinePlayScreen() {
       ) : null}
 
       <BottomSheetModal
-        visible={showStandings}
+        visible={showStandings && !gameMenuBlockedByVote}
         onClose={() => {
           setShowStandings(false);
         }}
       >
         <Text style={styles.modalTitle}>{t('game.standings')}</Text>
         {standings.map((row, index) => {
-          const name = session.players[row.playerId]?.name ?? row.playerId;
+          const player = session.players[row.playerId];
+          const name = player
+            ? displayPlayerName(player, myUid, row.playerId, session)
+            : row.playerId;
           const isMe = row.playerId === myUid;
           return (
             <View key={row.playerId} style={styles.standingRow}>
@@ -1143,135 +1227,108 @@ export default function OnlinePlayScreen() {
         />
       </BottomSheetModal>
 
-      <GameMenuModal
-        visible={showGameMenu && !gameMenuBlockedByVote}
-        endGameLabel={hasOnlineOpponentInRound ? t('game.menuProposeEnd') : t('game.menuEndEarly')}
-        showEndGame={hasOnlineOpponentInRound}
-        onClose={() => {
-          setShowGameMenu(false);
-        }}
-        onPause={() => {
-          setShowGameMenu(false);
-          void proposePause(gameId, myUid);
-        }}
-        onProposeEnd={() => {
-          setShowGameMenu(false);
-          if (hasOnlineOpponentInRound) {
-            void proposeEarlyFinish(gameId, myUid);
-          } else {
-            setShowEndEarlyConfirm(true);
+      {showGameMenu && !gameMenuBlockedByVote ? (
+        <GameMenuModal
+          visible
+          endGameLabel={
+            hasOnlineOpponentInRound ? t('game.menuProposeEnd') : t('game.menuEndEarly')
           }
-        }}
-        showPause={!isPaused && !earlyVote && !pauseVote && !addTimeVote}
-        pauseLabel={hasOnlineOpponentInRound ? t('game.menuPause') : t('game.menuPauseSolo')}
-        showInvite
-        onInvite={() => {
-          setShowGameMenu(false);
-          setShowInviteModal(true);
-        }}
-        onExit={() => {
-          setShowGameMenu(false);
-          if (hasOnlineOpponentInRound) {
-            setShowExitConfirm(true);
-          } else {
-            setShowEndEarlyConfirm(true);
-          }
-        }}
-        onOpenSettings={() => {
-          setShowGameMenu(false);
-          router.push('/settings');
-        }}
-      />
+          showEndGame={hasOnlineOpponentInRound}
+          onClose={() => {
+            setShowGameMenu(false);
+          }}
+          onPause={() => {
+            setShowGameMenu(false);
+            void proposePause(gameId, myUid);
+          }}
+          onProposeEnd={() => {
+            setShowGameMenu(false);
+            if (hasOnlineOpponentInRound) {
+              void proposeEarlyFinish(gameId, myUid);
+            } else {
+              setShowEndEarlyConfirm(true);
+            }
+          }}
+          showPause={!isPaused && !earlyVote && !pauseVote && !addTimeVote}
+          pauseLabel={hasOnlineOpponentInRound ? t('game.menuPause') : t('game.menuPauseSolo')}
+          showInvite
+          onInvite={() => {
+            setShowGameMenu(false);
+            setShowInviteModal(true);
+          }}
+          onExit={() => {
+            setShowGameMenu(false);
+            if (hasOnlineOpponentInRound) {
+              setShowExitConfirm(true);
+            } else {
+              setShowEndEarlyConfirm(true);
+            }
+          }}
+          onOpenSettings={() => {
+            setShowGameMenu(false);
+            router.push('/settings');
+          }}
+        />
+      ) : null}
 
       <RoomInviteModal
         visible={showInviteModal}
         roomCode={gameId}
         invitedByUid={myUid}
         roundInProgress={session.status === 'playing'}
+        topContent={showInviteModal ? renderActivePlayVote('banner') : undefined}
         onClose={() => {
           setShowInviteModal(false);
         }}
       />
 
-      <PauseRoundModal
-        visible={isPaused && !pauseUiObscured}
-        session={session}
-        myUid={myUid}
-        viewerGender={viewerGender}
-        serverNow={serverNow}
-        resumeVote={resumeVote}
-        hasOnlineOpponent={hasOnlineOpponentInRound}
-        onProposeResume={() => {
-          void proposeResume(gameId, myUid);
-        }}
-        onResumeYes={() => {
-          void voteResume(gameId, myUid, 'yes');
-        }}
-        onResumeNo={() => {
-          void voteResume(gameId, myUid, 'no');
-        }}
-        onCancelResumeProposal={resumeVote?.proposedBy === myUid ? cancelResumeProposal : undefined}
-        onOpenMenu={() => {
-          setShowGameMenu(true);
-        }}
-        onOpenSettings={() => {
-          router.push('/settings');
-        }}
-      />
-
-      {earlyVote ? (
-        <EarlyFinishVoteModal
-          visible
+      {isPaused ? (
+        <PauseRoundModal
+          visible={isPlayScreenFocused && !pauseUiObscured}
           session={session}
-          vote={earlyVote}
           myUid={myUid}
+          viewerGender={viewerGender}
           serverNow={serverNow}
-          onYes={() => {
+          resumeVote={resumeVote}
+          earlyFinishVote={earlyVote}
+          hasOnlineOpponent={hasOnlineOpponentInRound}
+          onProposeResume={() => {
+            void proposeResume(gameId, myUid);
+          }}
+          onResumeYes={() => {
+            void voteResume(gameId, myUid, 'yes');
+          }}
+          onResumeNo={() => {
+            void voteResume(gameId, myUid, 'no');
+          }}
+          onCancelResumeProposal={
+            resumeVote?.proposedBy === myUid ? cancelResumeProposal : undefined
+          }
+          onEarlyFinishYes={() => {
             void voteEarlyFinish(gameId, myUid, 'yes');
           }}
-          onNo={() => {
+          onEarlyFinishNo={() => {
             void voteEarlyFinish(gameId, myUid, 'no');
           }}
-          onCancelProposal={earlyVote.proposedBy === myUid ? cancelEarlyFinishProposal : undefined}
-          onLeaveNow={earlyVote.proposedBy === myUid ? leaveNowFromEarlyFinish : undefined}
+          onCancelEarlyFinishProposal={
+            earlyVote?.proposedBy === myUid ? cancelEarlyFinishProposal : undefined
+          }
+          onLeaveNowFromEarlyFinish={
+            earlyVote?.proposedBy === myUid ? leaveNowFromEarlyFinish : undefined
+          }
+          onOpenMenu={() => {
+            setShowGameMenu(true);
+          }}
+          onOpenSettings={() => {
+            router.push('/settings');
+          }}
         />
       ) : null}
 
-      {pauseVote && !isPaused && !earlyVote && !addTimeVote ? (
-        <PauseVoteModal
-          visible
-          session={session}
-          vote={pauseVote}
-          myUid={myUid}
-          onYes={() => {
-            void votePause(gameId, myUid, 'yes');
-          }}
-          onNo={() => {
-            void votePause(gameId, myUid, 'no');
-          }}
-          onCancelProposal={pauseVote.proposedBy === myUid ? cancelPauseProposal : undefined}
-        />
-      ) : null}
-
-      {addTimeVote && session.status === 'playing' && !isPaused && !earlyVote && !pauseVote ? (
-        <AddTimeVoteModal
-          visible
-          session={session}
-          vote={addTimeVote}
-          myUid={myUid}
-          serverNow={serverNow}
-          onYes={() => {
-            void voteAddTime(gameId, myUid, 'yes');
-          }}
-          onNo={() => {
-            void voteAddTime(gameId, myUid, 'no');
-          }}
-          onCancelProposal={addTimeVote.proposedBy === myUid ? cancelAddTimeProposal : undefined}
-        />
-      ) : null}
+      {!showInviteModal ? renderActivePlayVote('modal') : null}
 
       <AddTimeModal
-        visible={showAddTimeModal}
+        visible={showAddTimeModal && canProposeAddTime}
         remainingMs={remainingMs}
         requiresConsensus={hasOpponent}
         onClose={() => {
@@ -1384,17 +1441,6 @@ function createStyles(colors: ThemeColors) {
       fontSize: 12,
       color: colors.textSecondary,
       textAlign: 'right',
-    },
-    footer: {
-      flexDirection: 'row',
-      gap: spacing.sm,
-      width: '100%',
-    },
-    footerButton: {
-      flex: 1,
-    },
-    footerButtonSolo: {
-      flex: 1,
     },
     modalTitle: {
       fontSize: 18,

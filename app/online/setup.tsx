@@ -1,5 +1,5 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -23,10 +23,13 @@ import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
 import { navigateHomeWithBackAnimation } from '@/lib/navigation/navigate-home';
 import { joinErrorMessage } from '@/lib/firebase/join-error-message';
 import { subscribeGameSession, updateGameSessionSetup } from '@/lib/firebase/game-session-service';
+import type { GameSessionSnapshot } from '@/lib/firebase/game-session-service';
 import {
   gameSessionSettingsFromSetup,
-  resolveGameSessionSettings,
+  resolveGameSessionSettingsForSession,
 } from '@/lib/firebase/session-settings';
+import { sessionContentSafetyLocked } from '@/lib/online/public-lobby/content-safety';
+import { isPublicBaseWordSafeFromDisplay } from '@/lib/online/public-lobby/validate-public-base-word';
 import { ensureFirebaseReady } from '@/lib/firebase/ensure-firebase-ready';
 import { DictionaryIndex } from '@/lib/dictionary/dictionary-index';
 import { letterCount, normalizeUk, toDisplayUpper } from '@/lib/dictionary/normalize';
@@ -81,11 +84,14 @@ export default function OnlineSetupScreen() {
   const [baseWordFocused, setBaseWordFocused] = useState(false);
   const [organizerUid, setOrganizerUid] = useState<string | null>(null);
   const [playerCount, setPlayerCount] = useState(1);
+  const [lobbySession, setLobbySession] = useState<GameSessionSnapshot | null>(null);
+  const setupHydratedRef = useRef(false);
 
   useEffect(() => {
     if (!fromLobby || !gameId) {
       return undefined;
     }
+    setupHydratedRef.current = false;
     void ensureFirebaseReady().then((result) => {
       if (result?.uid) {
         setOrganizerUid(result.uid);
@@ -100,19 +106,27 @@ export default function OnlineSetupScreen() {
       if (!session) {
         return;
       }
+      setLobbySession(session);
       setPlayerCount(Object.keys(session.players).length);
-      if (session.baseWord) {
-        setBaseWordInput(
-          dictionary?.lookupDisplayUpper(session.baseWord) ?? session.baseWord.toUpperCase(),
-        );
-      }
-      if (session.settings) {
-        const resolved = resolveGameSessionSettings(
-          session.settings,
-          Object.keys(session.players).length,
-        );
+
+      const resolved = resolveGameSessionSettingsForSession(session);
+      const locked = sessionContentSafetyLocked(session);
+
+      if (!setupHydratedRef.current) {
+        setupHydratedRef.current = true;
+        if (session.baseWord) {
+          setBaseWordInput(
+            dictionary?.lookupDisplayUpper(session.baseWord) ?? session.baseWord.toUpperCase(),
+          );
+        }
         setGameSetupDuration(Math.round(resolved.durationSeconds / 60));
         setGameSetupUniqueBonusMode(resolved.uniqueBonusMode ?? 'auto');
+        setGameSetupAllowProperNouns(resolved.allowProperNouns);
+        setGameSetupAllowSlang(resolved.allowSlang);
+        return;
+      }
+
+      if (locked) {
         setGameSetupAllowProperNouns(resolved.allowProperNouns);
         setGameSetupAllowSlang(resolved.allowSlang);
       }
@@ -168,7 +182,13 @@ export default function OnlineSetupScreen() {
     count: Math.max(0, suggestionResult.total - suggestionResult.items.length),
   });
 
-  const canContinue = letterCount(baseWordInput) >= MIN_BASE_WORD_LENGTH;
+  const dictionaryOptionsLocked =
+    fromLobby && lobbySession ? sessionContentSafetyLocked(lobbySession) : false;
+  const baseWordDictionaryRequired = dictionaryOptionsLocked;
+  const baseWordAllowed = baseWordDictionaryRequired
+    ? isPublicBaseWordSafeFromDisplay(baseWordInput, baseWords)
+    : true;
+  const canContinue = letterCount(baseWordInput) >= MIN_BASE_WORD_LENGTH && baseWordAllowed;
 
   const buildSetup = (): LocalRoomSetup => ({
     baseWord: normalizeUk(baseWordInput),
@@ -179,13 +199,21 @@ export default function OnlineSetupScreen() {
     allowSlang,
   });
 
+  const returnToLobby = useCallback(() => {
+    router.replace({ pathname: '/online/lobby/[gameId]', params: { gameId } });
+  }, [gameId]);
+
   const handleBack = useCallback(() => {
-    if (fromLobby) {
-      router.back();
-      return;
-    }
-    if (gameId) {
+    if (!fromLobby && gameId) {
       removeLocalRoomDraft(gameId);
+    }
+    if (fromLobby) {
+      if (router.canDismiss()) {
+        router.dismissTo('/');
+      } else {
+        router.replace('/');
+      }
+      return;
     }
     navigateHomeWithBackAnimation();
   }, [fromLobby, gameId]);
@@ -216,9 +244,14 @@ export default function OnlineSetupScreen() {
           playerCount,
         ),
       });
-      onBack();
-    } catch {
-      setError(t('online.errorSaveSetup'));
+      returnToLobby();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '';
+      if (message === 'BASE_WORD_NOT_ALLOWED') {
+        setError(t('online.publicRoomNeedsSafeBaseWord'));
+      } else {
+        setError(t('online.errorSaveSetup'));
+      }
     } finally {
       setSaving(false);
     }
@@ -338,7 +371,12 @@ export default function OnlineSetupScreen() {
           onAllowProperNounsChange={setGameSetupAllowProperNouns}
           allowSlang={allowSlang}
           onAllowSlangChange={setGameSetupAllowSlang}
+          dictionaryOptionsLocked={dictionaryOptionsLocked}
+          dictionaryOptionsLockedHint={t('online.dictionaryOptionsLockedHint')}
         />
+        {baseWordDictionaryRequired ? (
+          <Text style={styles.rotationHint}>{t('online.publicRoomNeedsSafeBaseWord')}</Text>
+        ) : null}
 
         <View style={styles.actions}>
           {fromLobby ? (

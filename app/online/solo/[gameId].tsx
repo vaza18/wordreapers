@@ -378,38 +378,27 @@ export default function OrganizerSoloPlayScreen() {
       <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
         {!isPaused ? (
           <>
-            <FeedbackPressable
-              accessibilityRole="button"
-              accessibilityLabel={t('game.addTimeTitle')}
-              onPress={() => {
+            <GamePlayStatusBar
+              timerLabel={remainingLabel}
+              timerUrgent={timerUrgent}
+              rank={1}
+              showRank={false}
+              showScore={false}
+              wordCount={scoredWords.length}
+              maxWordCount={roundLexicon?.maxCount ?? null}
+              score={playerScore}
+              wordsShort={t('game.wordsShort')}
+              pointsShort={t('game.pointsShort')}
+              menuLabel={t('game.menu')}
+              onMenuPress={() => {
+                setShowGameMenu(true);
+              }}
+              onAddTimePress={() => {
                 setShowAddTimeModal(true);
               }}
-            >
-              <GamePlayStatusBar
-                timerLabel={remainingLabel}
-                timerUrgent={timerUrgent}
-                rank={1}
-                showRank={false}
-                showScore={false}
-                wordCount={scoredWords.length}
-                maxWordCount={roundLexicon?.maxCount ?? null}
-                score={playerScore}
-                wordsShort={t('game.wordsShort')}
-                pointsShort={t('game.pointsShort')}
-                style={{ marginHorizontal: -spacing.md }}
-              />
-            </FeedbackPressable>
-
-            <View style={styles.footer}>
-              <PrimaryButton
-                label={t('game.menu')}
-                variant="secondary"
-                style={styles.footerButtonSolo}
-                onPress={() => {
-                  setShowGameMenu(true);
-                }}
-              />
-            </View>
+              addTimeAccessibilityLabel={t('game.addTimeTitle')}
+              style={{ marginHorizontal: -spacing.md }}
+            />
 
             <View style={styles.playerHeader}>
               <Text style={styles.playerName} numberOfLines={1}>
@@ -638,14 +627,6 @@ function createStyles(colors: ThemeColors) {
       fontSize: 13,
       color: '#E24B4A',
       textAlign: 'center',
-    },
-    footer: {
-      flexDirection: 'row',
-      gap: spacing.sm,
-      width: '100%',
-    },
-    footerButtonSolo: {
-      flex: 1,
     },
     pauseOverlay: {
       flex: 1,

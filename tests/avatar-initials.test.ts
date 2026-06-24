@@ -24,5 +24,6 @@ describe('getAvatarInitials', () => {
   it('returns a placeholder for empty names', () => {
     expect(getAvatarInitials('')).toBe('?');
     expect(getAvatarInitials('   ')).toBe('?');
+    expect(getAvatarInitials(undefined)).toBe('?');
   });
 });

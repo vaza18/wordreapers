@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -11,20 +11,25 @@ import {
   type PlayToastVariant,
 } from '@/hooks/useToastQueue';
 
-/** Space below status bar / header strip. */
-const HEADER_CLEARANCE = 52;
+/** Space below status bar / header strip (menu + timer row). */
+const HEADER_CLEARANCE = 56;
 export const PLAY_TOAST_LINE_HEIGHT = 18;
-export const PLAY_TOAST_MAX_LINES = 2;
-/** Fixed slot height so stack shifts animate without LayoutAnimation. */
-export const PLAY_TOAST_SLOT_HEIGHT =
-  PLAY_TOAST_LINE_HEIGHT * PLAY_TOAST_MAX_LINES + spacing.sm * 2;
+export const PLAY_TOAST_MAX_LINES = 4;
+export const PLAY_TOAST_STACK_GAP = spacing.xs;
+export const PLAY_TOAST_MIN_HEIGHT = PLAY_TOAST_LINE_HEIGHT + spacing.sm * 2;
+/** Upper bound for one toast bubble (multi-line messages). */
+export const PLAY_TOAST_MAX_HEIGHT = PLAY_TOAST_LINE_HEIGHT * PLAY_TOAST_MAX_LINES + spacing.sm * 2;
 const STACK_SHIFT_MS = 220;
 const ENTRANCE_OFFSET = 14;
 
 interface PlaySessionToastStackProps {
   toasts: readonly PlayToastItem[];
-  /** Override top offset (e.g. results screen below stack header). */
+  /** Pin stack below the header (default) or above the bottom inset / footer. */
+  anchor?: 'top' | 'bottom';
+  /** Override top offset when anchor is `top`. */
   topOffset?: number;
+  /** Override bottom offset when anchor is `bottom`. */
+  bottomOffset?: number;
 }
 
 function getToastVariantStyles(
@@ -63,16 +68,14 @@ function createPlayToastStyles(colors: ThemeColors) {
     },
     toastSlot: {
       position: 'absolute',
-      top: 0,
-      height: PLAY_TOAST_SLOT_HEIGHT,
-      justifyContent: 'center',
+      left: 0,
+      right: 0,
     },
     toastWrap: {
+      width: '100%',
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
       borderRadius: 8,
-      maxWidth: '100%',
-      minHeight: PLAY_TOAST_SLOT_HEIGHT,
       justifyContent: 'center',
       shadowColor: colors.shadow,
       shadowOffset: { width: 0, height: 2 },
@@ -85,32 +88,60 @@ function createPlayToastStyles(colors: ThemeColors) {
       lineHeight: PLAY_TOAST_LINE_HEIGHT,
       fontWeight: '600',
       textAlign: 'center',
+      flexShrink: 1,
     },
   });
+}
+
+function computeStackMetrics(
+  toasts: readonly PlayToastItem[],
+  heightsById: Readonly<Record<string, number>>,
+): { offsets: number[]; totalHeight: number } {
+  const n = toasts.length;
+  if (n === 0) {
+    return { offsets: [], totalHeight: 0 };
+  }
+
+  const heights = toasts.map((toast) => heightsById[toast.id] ?? PLAY_TOAST_MIN_HEIGHT);
+  const offsets = new Array<number>(n).fill(0);
+
+  for (let index = n - 2; index >= 0; index -= 1) {
+    offsets[index] = offsets[index + 1] + heights[index + 1]! + PLAY_TOAST_STACK_GAP;
+  }
+
+  const totalHeight =
+    heights.reduce((sum, height) => sum + height, 0) + (n - 1) * PLAY_TOAST_STACK_GAP;
+
+  return { offsets, totalHeight };
 }
 
 function ToastBubble({
   message,
   variant,
   fading,
-  stackSlot,
+  stackOffsetY,
+  anchor,
+  onLayoutHeight,
 }: {
   message: string;
   variant: PlayToastVariant;
   fading: boolean;
-  stackSlot: number;
+  stackOffsetY: number;
+  anchor: 'top' | 'bottom';
+  onLayoutHeight: (height: number) => void;
 }) {
   const { colors } = useTheme();
   const playToastStyles = useThemedStyles(createPlayToastStyles);
   const variantStyle = getToastVariantStyles(colors)[variant];
   const opacity = useRef(new Animated.Value(0)).current;
-  const stackOffset = stackSlot * PLAY_TOAST_SLOT_HEIGHT;
-  const translateY = useRef(new Animated.Value(stackOffset - ENTRANCE_OFFSET)).current;
+  const translateY = useRef(
+    new Animated.Value(anchor === 'top' ? stackOffsetY - ENTRANCE_OFFSET : ENTRANCE_OFFSET),
+  ).current;
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(translateY, {
-        toValue: stackOffset,
+        toValue: anchor === 'top' ? stackOffsetY : 0,
         duration: STACK_SHIFT_MS,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
@@ -122,7 +153,7 @@ function ToastBubble({
         useNativeDriver: true,
       }),
     ]).start();
-  }, [opacity, stackOffset, translateY]);
+  }, [anchor, opacity, stackOffsetY, translateY]);
 
   useEffect(() => {
     if (!fading) {
@@ -139,41 +170,88 @@ function ToastBubble({
   return (
     <Animated.View
       style={[
-        playToastStyles.toastWrap,
         playToastStyles.toastSlot,
-        { backgroundColor: variantStyle.backgroundColor, opacity, transform: [{ translateY }] },
-        variantStyle.borderWidth != null
-          ? { borderColor: variantStyle.borderColor, borderWidth: variantStyle.borderWidth }
-          : null,
+        anchor === 'top' ? { top: 0 } : { bottom: stackOffsetY },
+        { opacity, transform: [{ translateY }] },
       ]}
     >
-      <Text style={[playToastStyles.toastText, { color: variantStyle.textColor }]}>{message}</Text>
+      <View
+        onLayout={(event) => {
+          onLayoutHeight(event.nativeEvent.layout.height);
+        }}
+        style={[
+          playToastStyles.toastWrap,
+          { backgroundColor: variantStyle.backgroundColor },
+          variantStyle.borderWidth != null
+            ? { borderColor: variantStyle.borderColor, borderWidth: variantStyle.borderWidth }
+            : null,
+        ]}
+      >
+        <Text
+          style={[playToastStyles.toastText, { color: variantStyle.textColor }]}
+          numberOfLines={PLAY_TOAST_MAX_LINES}
+        >
+          {message}
+        </Text>
+      </View>
     </Animated.View>
   );
 }
 
 /**
- * Stacked play toasts below the header; each new toast pushes older ones down.
+ * Stacked play toasts below the header or above the footer; each new toast pushes older ones.
  */
-export function PlaySessionToastStack({ toasts, topOffset }: PlaySessionToastStackProps) {
+export function PlaySessionToastStack({
+  toasts,
+  anchor = 'top',
+  topOffset,
+  bottomOffset,
+}: PlaySessionToastStackProps) {
   const insets = useSafeAreaInsets();
   const playToastStyles = useThemedStyles(createPlayToastStyles);
+  const [heightsById, setHeightsById] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    setHeightsById((current) => {
+      const activeIds = new Set(toasts.map((toast) => toast.id));
+      let changed = false;
+      const next = { ...current };
+      for (const id of Object.keys(next)) {
+        if (!activeIds.has(id)) {
+          delete next[id];
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [toasts]);
+
+  const handleLayoutHeight = useCallback((id: string, height: number) => {
+    setHeightsById((current) => (current[id] === height ? current : { ...current, [id]: height }));
+  }, []);
+
+  const { offsets, totalHeight } = useMemo(
+    () => computeStackMetrics(toasts, heightsById),
+    [heightsById, toasts],
+  );
 
   if (toasts.length === 0) {
     return null;
   }
 
-  const stackHeight = toasts.length * PLAY_TOAST_SLOT_HEIGHT;
-  const top = topOffset ?? insets.top + spacing.md + HEADER_CLEARANCE;
+  const edgeStyle =
+    anchor === 'top'
+      ? { top: topOffset ?? insets.top + spacing.md + HEADER_CLEARANCE }
+      : { bottom: insets.bottom + (bottomOffset ?? spacing.md) };
 
   return (
     <View
       pointerEvents="none"
       style={[
         playToastStyles.stack,
+        edgeStyle,
         {
-          top,
-          height: stackHeight,
+          height: totalHeight,
         },
       ]}
     >
@@ -183,7 +261,11 @@ export function PlaySessionToastStack({ toasts, topOffset }: PlaySessionToastSta
           message={toast.message}
           variant={toast.variant}
           fading={toast.fading}
-          stackSlot={toasts.length - 1 - index}
+          stackOffsetY={offsets[index] ?? 0}
+          anchor={anchor}
+          onLayoutHeight={(height) => {
+            handleLayoutHeight(toast.id, height);
+          }}
         />
       ))}
     </View>

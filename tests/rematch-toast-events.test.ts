@@ -40,6 +40,7 @@ describe('detectRematchToastEvent', () => {
 
     expect(detectRematchToastEvent(prev, curr)).toEqual({
       type: 'rematch_reopened',
+      pickerId: 'p2',
       pickerName: 'Маша',
       pickerGender: 'f',
       roundNumber: 2,

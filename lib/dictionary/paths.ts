@@ -1,6 +1,9 @@
 import { join } from 'node:path';
 
 import { GENERATED_DICTIONARIES_DIR } from '../assets/generated-paths.js';
+import { UK_LOCALE } from './locale.js';
+
+export { UK_LOCALE };
 
 /** Generated dictionary files under `assets/generated/dictionaries/` (Metro bundles this folder). */
 export const DICTIONARIES_DIR = GENERATED_DICTIONARIES_DIR;
@@ -43,9 +46,6 @@ export function dictionaryPaths(root: string, locale: string): DictionaryPaths {
     blocklist: join(root, 'scripts', 'dictionary', `blocklist-${locale}.txt`),
   };
 }
-
-/** Ukrainian (Ukraine) — default game locale. */
-export const UK_LOCALE = 'uk-uk';
 
 /**
  * Resolve dictionary paths for the default Ukrainian locale.
