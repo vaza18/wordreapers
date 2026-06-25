@@ -26,6 +26,8 @@ import {
   DEFAULT_WORD_ACCEPTED_FEEDBACK,
 } from '@/lib/settings/feedback-mode';
 import { DEFAULT_GAME_SETUP_PREFERENCES } from '@/lib/settings/game-setup-preferences';
+import { isFirebaseConfigured } from '@/lib/firebase/config';
+import { useFirebaseStore } from '@/store/firebase-store';
 import { usePlayerStatsStore } from '@/store/player-stats-store';
 import { useProfileStore } from '@/store/profile-store';
 import { useSettingsStore } from '@/store/settings-store';
@@ -114,6 +116,11 @@ export default function SettingsScreen() {
         wordAcceptedFeedback: DEFAULT_WORD_ACCEPTED_FEEDBACK,
         timerAlertMode: DEFAULT_TIMER_ALERT_FEEDBACK,
         gameSetup: DEFAULT_GAME_SETUP_PREFERENCES,
+      });
+      useFirebaseStore.getState().setConnection({
+        status: isFirebaseConfigured() ? 'idle' : 'not_configured',
+        uid: null,
+        errorMessage: null,
       });
       setClearDialogVisible(false);
     } finally {

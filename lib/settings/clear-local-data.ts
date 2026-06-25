@@ -1,31 +1,21 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { APPEARANCE_MODE_STORAGE_KEY } from '@/lib/settings/appearance-mode';
-import { LOCALE_STORAGE_KEY } from '@/i18n';
-import { PROFILE_STORAGE_KEY } from '@/lib/profile/player-profile';
-import { PLAYER_STATS_STORAGE_KEY } from '@/lib/profile/player-stats';
-import { GAME_SETUP_STORAGE_KEY } from '@/lib/settings/game-setup-preferences';
+import { clearRoundPlayableLexiconCache } from '@/lib/dictionary/round-playable-lexicon-cache';
+import { signOutFirebaseAuth } from '@/lib/firebase/auth';
 
-const BUTTON_FEEDBACK_STORAGE_KEY = 'wordreapers.buttonFeedback';
-const LEGACY_KEY_PRESS_FEEDBACK_STORAGE_KEY = 'wordreapers.keyPressFeedback';
-const WORD_ACCEPTED_FEEDBACK_STORAGE_KEY = 'wordreapers.wordAcceptedFeedback';
-const TIMER_ALERT_FEEDBACK_STORAGE_KEY = 'wordreapers.timerAlertFeedback';
-
-const LOCAL_DATA_STORAGE_KEYS = [
-  PROFILE_STORAGE_KEY,
-  PLAYER_STATS_STORAGE_KEY,
-  GAME_SETUP_STORAGE_KEY,
-  BUTTON_FEEDBACK_STORAGE_KEY,
-  LEGACY_KEY_PRESS_FEEDBACK_STORAGE_KEY,
-  WORD_ACCEPTED_FEEDBACK_STORAGE_KEY,
-  TIMER_ALERT_FEEDBACK_STORAGE_KEY,
-  LOCALE_STORAGE_KEY,
-  APPEARANCE_MODE_STORAGE_KEY,
-] as const;
+/** Prefix for all Wordreapers-owned AsyncStorage keys (excludes Firebase Auth persistence). */
+export const WORDREAPERS_STORAGE_PREFIX = 'wordreapers.';
 
 /**
- * Remove persisted profile, game setup, feedback, and locale from AsyncStorage.
+ * Remove persisted Wordreapers app data and the local Firebase Auth session.
+ * Server-side RTDB rows for the old anonymous uid are not deleted.
  */
 export async function clearLocalDataStorage(): Promise<void> {
-  await Promise.all(LOCAL_DATA_STORAGE_KEYS.map((key) => AsyncStorage.removeItem(key)));
+  const keys = await AsyncStorage.getAllKeys();
+  const localKeys = keys.filter((key) => key.startsWith(WORDREAPERS_STORAGE_PREFIX));
+  if (localKeys.length > 0) {
+    await AsyncStorage.multiRemove(localKeys);
+  }
+  clearRoundPlayableLexiconCache();
+  await signOutFirebaseAuth();
 }

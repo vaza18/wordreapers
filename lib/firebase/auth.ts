@@ -1,5 +1,6 @@
-import { signInAnonymously, type User } from 'firebase/auth';
+import { signInAnonymously, signOut, type User } from 'firebase/auth';
 
+import { isFirebaseConfigured } from './config.js';
 import { getFirebaseAuth } from './init.js';
 
 /**
@@ -25,4 +26,15 @@ export function getFirebaseUid(): string | null {
 export function isRegisteredFirebaseUser(): boolean {
   const user = getFirebaseAuth().currentUser;
   return user != null && !user.isAnonymous;
+}
+
+/** End the persisted Firebase Auth session on this device (no-op when offline / not configured). */
+export async function signOutFirebaseAuth(): Promise<void> {
+  if (!isFirebaseConfigured()) {
+    return;
+  }
+  const auth = getFirebaseAuth();
+  if (auth.currentUser) {
+    await signOut(auth);
+  }
 }

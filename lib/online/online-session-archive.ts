@@ -9,7 +9,11 @@ import { playableLexiconSnapshotForSession } from './playable-lexicon-archive.js
 import type { PlayableLexiconSnapshot } from '../dictionary/round-playable-lexicon.js';
 
 const FINISHED_ARCHIVES_KEY = 'wordreapers.finishedOnlineRounds';
-const MAX_FINISHED_ARCHIVES = 40;
+const MAX_FINISHED_ARCHIVES = 1000;
+/** Embedded lexicon snapshots kept on the newest archives only; older rounds rebuild on view. */
+const MAX_STORED_LEXICON_SNAPSHOTS = 40;
+
+export { MAX_FINISHED_ARCHIVES, MAX_STORED_LEXICON_SNAPSHOTS };
 
 export const FINISHED_ARCHIVE_VERSION = 3 as const;
 
@@ -120,7 +124,10 @@ async function readFinishedStore(): Promise<FinishedArchiveStore> {
 }
 
 async function writeFinishedStore(store: FinishedArchiveStore): Promise<void> {
-  await AsyncStorage.setItem(FINISHED_ARCHIVES_KEY, JSON.stringify(store));
+  await AsyncStorage.setItem(
+    FINISHED_ARCHIVES_KEY,
+    JSON.stringify(trimFinishedArchiveStore(store)),
+  );
 }
 
 function trimFinishedStore(store: FinishedArchiveStore): FinishedArchiveStore {
@@ -129,6 +136,33 @@ function trimFinishedStore(store: FinishedArchiveStore): FinishedArchiveStore {
     return store;
   }
   return Object.fromEntries(entries.slice(0, MAX_FINISHED_ARCHIVES));
+}
+
+function trimStoredLexiconSnapshots(store: FinishedArchiveStore): FinishedArchiveStore {
+  const entries = Object.entries(store).sort(([, a], [, b]) => b.savedAt - a.savedAt);
+  let lexiconSlots = 0;
+  let changed = false;
+  const next: FinishedArchiveStore = {};
+  for (const [key, archive] of entries) {
+    if (archive.playableLexicon) {
+      if (lexiconSlots < MAX_STORED_LEXICON_SNAPSHOTS) {
+        next[key] = archive;
+        lexiconSlots += 1;
+      } else {
+        const entry: FinishedRoundArchive = { ...archive };
+        delete entry.playableLexicon;
+        next[key] = entry;
+        changed = true;
+      }
+    } else {
+      next[key] = archive;
+    }
+  }
+  return changed ? next : store;
+}
+
+function trimFinishedArchiveStore(store: FinishedArchiveStore): FinishedArchiveStore {
+  return trimStoredLexiconSnapshots(trimFinishedStore(store));
 }
 
 export function playingRoundSnapshotFromSession(session: GameSession): PlayingRoundSnapshot | null {
@@ -174,7 +208,7 @@ export async function saveFinishedRoundArchive(
     playerWordCounts: playerWordCountsFromSession(session),
     ...(playableLexicon ? { playableLexicon } : {}),
   };
-  await writeFinishedStore(trimFinishedStore(store));
+  await writeFinishedStore(store);
 }
 
 /** Mark that the local finished-round archive is complete on this device. */
