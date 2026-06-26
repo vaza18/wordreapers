@@ -18,6 +18,7 @@ import { SettingsProfileRow } from '@/components/SettingsProfileRow';
 import { spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { DEFAULT_PLAYER_PROFILE } from '@/lib/profile/player-profile';
+import { navigateHomeClearingStack } from '@/lib/navigation/navigate-home';
 import { clearLocalDataStorage } from '@/lib/settings/clear-local-data';
 import { DEFAULT_APPEARANCE_MODE, type AppearanceMode } from '@/lib/settings/appearance-mode';
 import {
@@ -123,6 +124,7 @@ export default function SettingsScreen() {
         errorMessage: null,
       });
       setClearDialogVisible(false);
+      navigateHomeClearingStack();
     } finally {
       setClearing(false);
     }

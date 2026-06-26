@@ -4,13 +4,14 @@ import { FlatList, InteractionManager, StyleSheet, Text, View } from 'react-nati
 import { ScrollableWordPanel } from '@/components/ScrollableWordPanel';
 import {
   NotebookLineFiller,
-  createNotebookRowLineStyle,
   notebookFillerRowCount,
   notebookListCanScroll,
 } from '@/components/notebook/NotebookLineFiller';
+import type { createNotebookRowLineStyle } from '@/components/notebook/NotebookLineFiller';
 import { WordOverlapAvatars } from '@/components/WordOverlapAvatars';
+import { useNotebookRowHeight } from '@/hooks/useNotebookRowHeight';
+import { useNotebookRowLineStyle } from '@/hooks/useNotebookRowLineStyle';
 import { useScrollablePanelMetrics } from '@/hooks/useScrollablePanelMetrics';
-import { WORD_LIST_ROW_HEIGHT } from '@/constants/notebook';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { normalizeUk, toDisplayUpper } from '@/lib/dictionary/normalize';
@@ -79,9 +80,10 @@ function findPrefixScrollIndex(rows: readonly WordRow[], prefix: string): number
 function scrollFlatListToRow(
   listRef: RefObject<FlatList<WordRow> | null>,
   index: number,
+  rowHeight: number,
   shouldContinue: () => boolean,
 ): void {
-  const offset = rowScrollOffset(index, ROW_HEIGHT);
+  const offset = rowScrollOffset(index, rowHeight);
 
   const run = () => {
     if (!shouldContinue() || !listRef.current) {
@@ -98,8 +100,6 @@ function scrollFlatListToRow(
     });
   });
 }
-
-const ROW_HEIGHT = WORD_LIST_ROW_HEIGHT;
 
 /**
  * Split display text at the end of a normalized prefix (handles apostrophes in display).
@@ -182,7 +182,8 @@ export function WordList({
   scrollToRequestId,
 }: WordListProps) {
   const styles = useThemedStyles(createStyles);
-  const notebookRow = useThemedStyles(createNotebookRowLineStyle);
+  const notebookRow = useNotebookRowLineStyle();
+  const rowHeight = useNotebookRowHeight();
   const prefix = normalizeUk(draftPrefix);
   const listRef = useRef<FlatList<WordRow>>(null);
   const rowsRef = useRef<readonly WordRow[]>([]);
@@ -207,8 +208,8 @@ export function WordList({
   rowsRef.current = rows;
 
   const viewportHeight = panelScroll.scrollMetrics.viewportHeight;
-  const fillerRowCount = notebookFillerRowCount(rows.length, viewportHeight, spacing.sm);
-  const canScroll = notebookListCanScroll(rows.length, viewportHeight, spacing.sm);
+  const fillerRowCount = notebookFillerRowCount(rows.length, viewportHeight, spacing.sm, rowHeight);
+  const canScroll = notebookListCanScroll(rows.length, viewportHeight, spacing.sm, rowHeight);
 
   const queueScrollToNormalized = useCallback((normalized: string) => {
     scrollGenerationRef.current += 1;
@@ -230,8 +231,13 @@ export function WordList({
     const generation = scrollGenerationRef.current;
     scrollTargetRef.current = null;
     setPendingAcceptedScroll(false);
-    scrollFlatListToRow(listRef, index, () => scrollGenerationRef.current === generation);
-  }, [scrollable]);
+    scrollFlatListToRow(
+      listRef,
+      index,
+      rowHeight,
+      () => scrollGenerationRef.current === generation,
+    );
+  }, [rowHeight, scrollable]);
 
   const handleContentSizeChange = useCallback(
     (width: number, height: number) => {
@@ -260,8 +266,8 @@ export function WordList({
       return;
     }
 
-    scrollFlatListToRow(listRef, index, () => true);
-  }, [prefix, rowSignature, rows, scrollable]);
+    scrollFlatListToRow(listRef, index, rowHeight, () => true);
+  }, [prefix, rowHeight, rowSignature, rows, scrollable]);
 
   useEffect(() => {
     if (!scrollToNormalized || scrollToRequestId == null) {
@@ -339,14 +345,9 @@ export function WordList({
           }}
           onContentSizeChange={handleContentSizeChange}
           scrollEventThrottle={panelScroll.scrollEventThrottle}
-          getItemLayout={(_, index) => ({
-            length: ROW_HEIGHT,
-            offset: ROW_HEIGHT * index,
-            index,
-          })}
           onScrollToIndexFailed={(info) => {
             listRef.current?.scrollToOffset({
-              offset: rowScrollOffset(info.index, ROW_HEIGHT),
+              offset: rowScrollOffset(info.index, rowHeight),
               animated: true,
             });
           }}

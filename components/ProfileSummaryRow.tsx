@@ -18,7 +18,7 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     row: {
       flexDirection: 'row',
-      alignItems: 'stretch',
+      alignItems: 'flex-start',
       paddingVertical: spacing.sm,
       paddingHorizontal: spacing.md,
       gap: spacing.sm,
@@ -40,12 +40,15 @@ function createStyles(colors: ThemeColors) {
       gap: 2,
     },
     historySlot: {
-      justifyContent: 'center',
+      justifyContent: 'flex-start',
+      paddingTop: 2,
+      maxWidth: '36%',
     },
     name: {
       fontSize: 15,
       fontWeight: '500',
       color: colors.textPrimary,
+      flexShrink: 1,
     },
     stats: {
       fontSize: 13,
@@ -57,9 +60,11 @@ function createStyles(colors: ThemeColors) {
       color: colors.textTertiary,
     },
     historyLink: {
-      flexShrink: 0,
+      flexShrink: 1,
       fontSize: 14,
+      lineHeight: 20,
       color: colors.accent,
+      textAlign: 'right',
     },
   });
 }

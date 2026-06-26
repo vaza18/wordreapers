@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 
 import { HeaderBarButton } from '@/components/HeaderBarButton';
 import { ChevronBackIcon } from '@/components/HeaderIcons';
+import { useHeaderIconButtonLayout } from '@/hooks/useHeaderIconButtonLayout';
 import { useTheme } from '@/hooks/useTheme';
 
 interface HeaderBackButtonProps {
@@ -15,11 +16,12 @@ interface HeaderBackButtonProps {
 export function HeaderBackButton({ onPress, accessibilityLabel }: HeaderBackButtonProps) {
   const { t } = useTranslation();
   const { colors } = useTheme();
+  const { backIconSize } = useHeaderIconButtonLayout();
   const label = accessibilityLabel ?? t('common.back');
 
   return (
     <HeaderBarButton accessibilityLabel={label} onPress={onPress}>
-      <ChevronBackIcon color={colors.textPrimary} />
+      <ChevronBackIcon size={backIconSize} color={colors.textPrimary} />
     </HeaderBarButton>
   );
 }

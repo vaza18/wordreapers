@@ -1,9 +1,8 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { loadBundledBaseWords, loadBundledDictionary } from '@/services/dictionary-service';
 import {
   BaseWordSuggestDropdown,
   type BaseWordSuggestItem,
@@ -14,10 +13,11 @@ import { ShuffleBaseWordButton } from '@/components/ShuffleBaseWordButton';
 import { Screen } from '@/components/Screen';
 import { GroupPlayersIcon, SoloPlayerIcon } from '@/components/PlayerModeIcons';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { headerIconButtonSize } from '@/constants/header-button';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useHeaderIconButtonLayout } from '@/hooks/useHeaderIconButtonLayout';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
+import { useTrainingMilestone } from '@/hooks/useTrainingMilestone';
 import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
 import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
 import { navigateHomeWithBackAnimation } from '@/lib/navigation/navigate-home';
@@ -44,6 +44,7 @@ import { useFirebaseStore } from '@/store/firebase-store';
 import type { UniqueBonusMode } from '@/lib/game/scoring';
 import { useOrganizerSoloStore } from '@/store/organizer-solo-store';
 import { useSettingsStore } from '@/store/settings-store';
+import { loadBundledBaseWords, loadBundledDictionary } from '@/services/dictionary-service';
 
 const MIN_BASE_WORD_LENGTH = 6;
 const SUGGEST_DROPDOWN_LIMIT = 50;
@@ -54,6 +55,7 @@ const SUGGEST_DROPDOWN_LIMIT = 50;
 export default function OnlineSetupScreen() {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
+  const { buttonSize: headerButtonSize } = useHeaderIconButtonLayout();
   const { t } = useTranslation();
   const { gameId: rawGameId, from: rawFrom } = useLocalSearchParams<{
     gameId: string;
@@ -86,6 +88,12 @@ export default function OnlineSetupScreen() {
   const [playerCount, setPlayerCount] = useState(1);
   const [lobbySession, setLobbySession] = useState<GameSessionSnapshot | null>(null);
   const setupHydratedRef = useRef(false);
+  const { hydrated: trainingHydrated, hasCompletedTrainingRound } = useTrainingMilestone();
+  const multiplayerLocked = trainingHydrated && !hasCompletedTrainingRound;
+
+  const showInviteDisabledHint = () => {
+    Alert.alert(t('app.name'), t('online.inviteOthersLockedHint'));
+  };
 
   useEffect(() => {
     if (!fromLobby || !gameId) {
@@ -331,7 +339,11 @@ export default function OnlineSetupScreen() {
             <TextInput
               autoCapitalize="characters"
               autoCorrect={false}
-              style={[styles.input, showSuggestDropdown ? styles.inputActive : null]}
+              style={[
+                styles.input,
+                { height: headerButtonSize },
+                showSuggestDropdown ? styles.inputActive : null,
+              ]}
               value={baseWordInput}
               onChangeText={setBaseWordInput}
               onFocus={() => setBaseWordFocused(true)}
@@ -390,19 +402,36 @@ export default function OnlineSetupScreen() {
           ) : (
             <View style={styles.modeRow}>
               <SetupModeButton
-                icon={<GroupPlayersIcon color={colors.textOnAccent} size={32} />}
+                icon={
+                  <GroupPlayersIcon
+                    color={multiplayerLocked ? colors.textPrimary : colors.textOnAccent}
+                    size={32}
+                  />
+                }
                 label={t('online.inviteOthers')}
-                hint={t('online.inviteOthersHint')}
-                disabled={!canContinue || saving}
+                hint={
+                  multiplayerLocked
+                    ? t('online.inviteOthersLockedHint')
+                    : t('online.inviteOthersHint')
+                }
+                variant={multiplayerLocked ? 'secondary' : 'primary'}
+                disabled={!canContinue || saving || multiplayerLocked}
+                disabledHint={t('online.inviteOthersLockedHint')}
+                onDisabledPress={showInviteDisabledHint}
                 onPress={() => {
                   void handleInviteOthers();
                 }}
               />
               <SetupModeButton
-                icon={<SoloPlayerIcon color={colors.textPrimary} size={28} />}
+                icon={
+                  <SoloPlayerIcon
+                    color={multiplayerLocked ? colors.textOnAccent : colors.textPrimary}
+                    size={28}
+                  />
+                }
                 label={t('online.soloPlay')}
                 hint={t('online.soloPlayHint')}
-                variant="secondary"
+                variant={multiplayerLocked ? 'primary' : 'secondary'}
                 disabled={!canContinue || saving}
                 onPress={handleSoloPlay}
               />
@@ -446,7 +475,6 @@ function createStyles(colors: ThemeColors) {
     },
     input: {
       flex: 1,
-      height: headerIconButtonSize,
       borderWidth: 1,
       borderColor: colors.borderSecondary,
       borderRadius: radii.sm,

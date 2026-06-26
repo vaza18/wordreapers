@@ -2,7 +2,7 @@
   "name": "wordreapers",
   "private": true,
   "type": "module",
-  "main": "expo-router/entry",
+  "main": "index.js",
   "scripts": {
     "postinstall": "node scripts/prune-nested-react-native.mjs && npm run legal:bundle && npm run sounds:generate",
     "prepare": "husky",

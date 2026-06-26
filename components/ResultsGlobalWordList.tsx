@@ -9,16 +9,12 @@ import {
 } from 'react-native';
 
 import { ResultWordAuthorAvatars } from '@/components/ResultWordAuthorAvatars';
-import {
-  NotebookLineFiller,
-  createNotebookRowLineStyle,
-} from '@/components/notebook/NotebookLineFiller';
-import { WORD_LIST_ROW_HEIGHT } from '@/constants/notebook';
+import { NotebookLineFiller } from '@/components/notebook/NotebookLineFiller';
+import type { createNotebookRowLineStyle } from '@/components/notebook/NotebookLineFiller';
+import { useNotebookRowLineStyle } from '@/hooks/useNotebookRowLineStyle';
 import { spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import type { ResultsWordListRow } from '@/lib/game/results-missing-words';
-
-const ROW_HEIGHT = WORD_LIST_ROW_HEIGHT;
 
 interface ResultsGlobalWordListProps {
   rows: readonly ResultsWordListRow[];
@@ -77,7 +73,7 @@ export function ResultsGlobalWordList({
   scrollEventThrottle,
 }: ResultsGlobalWordListProps) {
   const styles = useThemedStyles(createStyles);
-  const notebookRow = useThemedStyles(createNotebookRowLineStyle);
+  const notebookRow = useNotebookRowLineStyle();
 
   const ruledPaperFooter = useMemo(
     () => <NotebookLineFiller rowCount={fillerRowCount} />,
@@ -112,11 +108,6 @@ export function ResultsGlobalWordList({
       onScrollBeginDrag={onScrollBeginDrag}
       onContentSizeChange={onContentSizeChange}
       scrollEventThrottle={scrollEventThrottle}
-      getItemLayout={(_, index) => ({
-        length: ROW_HEIGHT,
-        offset: ROW_HEIGHT * index,
-        index,
-      })}
       renderItem={renderItem}
     />
   );

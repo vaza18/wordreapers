@@ -5,7 +5,8 @@ import { useTheme } from '@/hooks/useTheme';
 
 /**
  * Build StyleSheet styles from the active theme colors.
- * Pass a stable factory defined outside the component.
+ * Text fontSize is scaled natively (Dynamic Type); layout sizes stay fixed unless a
+ * component opts into content-driven sizing (e.g. notebook row minHeight).
  */
 export function useThemedStyles<T extends Record<string, unknown>>(
   factory: (colors: ThemeColors) => T,

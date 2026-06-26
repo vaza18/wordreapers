@@ -160,7 +160,7 @@ export function EarlyFinishVoteModal({
   }
 
   return (
-    <Modal transparent visible animationType="fade">
+    <Modal transparent visible animationType="fade" accessibilityViewIsModal>
       <SafeAreaProvider>{body}</SafeAreaProvider>
     </Modal>
   );

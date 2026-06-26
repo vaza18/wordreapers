@@ -19,6 +19,8 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { Screen } from '@/components/Screen';
 import { spacing, type ThemeColors } from '@/constants/theme';
 import { useServerNow } from '@/hooks/useServerNow';
+import { useTrainingMilestone } from '@/hooks/useTrainingMilestone';
+import { useHeaderIconButtonLayout } from '@/hooks/useHeaderIconButtonLayout';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { joinErrorMessage } from '@/lib/firebase/join-error-message';
@@ -47,11 +49,19 @@ function minutesLeft(expiresAt: number, now: number): number {
 export default function BrowsePublicLobbiesScreen() {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
+  const { refreshIconSize } = useHeaderIconButtonLayout();
   const { t } = useTranslation();
   const { name, gender, avatarColorIndex } = useProfileStore();
   const firebaseUid = useFirebaseStore((state) => state.uid);
   const gameLanguage = playerLanguageForBrowse({ language: UK_LOCALE });
   const serverNow = useServerNow(30_000);
+  const { hydrated: trainingHydrated, hasCompletedTrainingRound } = useTrainingMilestone();
+
+  useEffect(() => {
+    if (trainingHydrated && !hasCompletedTrainingRound) {
+      router.replace('/online/join');
+    }
+  }, [hasCompletedTrainingRound, trainingHydrated]);
 
   const [sort, setSort] = useState<PublicLobbyBrowseSort>('newest');
   const [page, setPage] = useState(1);
@@ -224,7 +234,7 @@ export default function BrowsePublicLobbiesScreen() {
             {refreshing ? (
               <ActivityIndicator color={colors.textSecondary} size="small" />
             ) : (
-              <RefreshIcon color={colors.textSecondary} />
+              <RefreshIcon size={refreshIconSize} color={colors.textSecondary} />
             )}
           </HeaderBarButton>
         </View>

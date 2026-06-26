@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { spacing, type ThemeColors } from '@/constants/theme';
+import { useHeaderIconButtonLayout } from '@/hooks/useHeaderIconButtonLayout';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 interface ScreenHeaderProps {
@@ -21,7 +22,8 @@ function createStyles(colors: ThemeColors) {
       gap: spacing.xs,
     },
     backSpacer: {
-      width: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     title: {
       flex: 1,
@@ -38,18 +40,20 @@ function createStyles(colors: ThemeColors) {
  */
 export function ScreenHeader({ title, onBack, backAccessibilityLabel }: ScreenHeaderProps) {
   const styles = useThemedStyles(createStyles);
+  const { buttonSize } = useHeaderIconButtonLayout();
+  const sideStyle = [styles.backSpacer, { width: buttonSize, height: buttonSize }];
 
   return (
     <View style={styles.row}>
       {onBack ? (
         <HeaderBackButton onPress={onBack} accessibilityLabel={backAccessibilityLabel} />
       ) : (
-        <View style={styles.backSpacer} />
+        <View style={sideStyle} />
       )}
       <Text style={styles.title} numberOfLines={1}>
         {title}
       </Text>
-      <View style={styles.backSpacer} />
+      <View style={sideStyle} />
     </View>
   );
 }

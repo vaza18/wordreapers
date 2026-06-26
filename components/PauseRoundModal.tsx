@@ -24,6 +24,7 @@ import {
   compareStandings,
   shouldShowPointUi,
 } from '@/lib/game/scoring';
+import { formatStandingRowMeta } from '@/lib/game/format-play-stats';
 import { formatPlayerLeftLabel, formatVoteStatusLabel } from '@/lib/game/vote-status-label';
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import { voteProposerName } from '@/lib/firebase/session-votes-service';
@@ -189,15 +190,8 @@ function PauseBody({
                     {isMe ? ` ${t('game.resultsYou')}` : ''}
                   </Text>
                   <Text style={styles.standingMeta}>
-                    {presence} · {row.wordCount}
-                    {t('game.wordsShort')}
-                    {showStandingsScores ? (
-                      <>
-                        {' · '}
-                        {row.score}
-                        {t('game.pointsShort')}
-                      </>
-                    ) : null}
+                    {presence} ·{' '}
+                    {formatStandingRowMeta(row.wordCount, showStandingsScores ? row.score : null)}
                   </Text>
                 </View>
               </View>

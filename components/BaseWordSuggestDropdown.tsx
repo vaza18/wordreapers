@@ -2,6 +2,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useBaseWordSuggestLayout } from '@/hooks/useBaseWordSuggestLayout';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 export interface BaseWordSuggestItem {
@@ -16,9 +17,6 @@ interface BaseWordSuggestDropdownProps {
   moreLabel: string;
   onSelect: (display: string) => void;
 }
-
-const ROW_HEIGHT = 40;
-const MAX_LIST_HEIGHT = 200;
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
@@ -39,9 +37,7 @@ function createStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      minHeight: ROW_HEIGHT,
       paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.borderTertiary,
       borderLeftWidth: 3,
@@ -72,8 +68,9 @@ function createStyles(colors: ThemeColors) {
     },
     moreRow: {
       backgroundColor: colors.backgroundSecondary,
-      paddingVertical: spacing.sm,
       paddingHorizontal: spacing.md,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     moreText: {
       fontSize: 12,
@@ -93,12 +90,13 @@ export function BaseWordSuggestDropdown({
   onSelect,
 }: BaseWordSuggestDropdownProps) {
   const styles = useThemedStyles(createStyles);
+  const { rowHeight, maxListHeight, moreRowHeight } = useBaseWordSuggestLayout();
 
   if (items.length === 0) {
     return null;
   }
 
-  const listHeight = Math.min(items.length * ROW_HEIGHT, MAX_LIST_HEIGHT);
+  const listHeight = Math.min(items.length * rowHeight, maxListHeight);
   const showMoreFooter = totalCount > items.length;
 
   return (
@@ -118,7 +116,7 @@ export function BaseWordSuggestDropdown({
               onPress={() => {
                 onSelect(item.display);
               }}
-              style={[styles.item, active ? styles.itemActive : null]}
+              style={[styles.item, { height: rowHeight }, active ? styles.itemActive : null]}
             >
               <Text style={[styles.itemWord, active ? styles.itemWordActive : null]}>
                 {item.display}
@@ -131,7 +129,7 @@ export function BaseWordSuggestDropdown({
         })}
       </ScrollView>
       {showMoreFooter ? (
-        <View style={styles.moreRow}>
+        <View style={[styles.moreRow, { minHeight: moreRowHeight }]}>
           <Text style={styles.moreText}>{moreLabel}</Text>
         </View>
       ) : null}

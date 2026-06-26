@@ -21,6 +21,7 @@ function createStyles(colors: ThemeColors) {
       paddingVertical: spacing.md,
       paddingHorizontal: spacing.lg,
       alignItems: 'center',
+      justifyContent: 'center',
     },
     primary: {
       backgroundColor: colors.accent,
@@ -37,6 +38,7 @@ function createStyles(colors: ThemeColors) {
       color: colors.textOnAccent,
       fontSize: 16,
       fontWeight: '600',
+      textAlign: 'center',
     },
     labelSecondary: {
       color: colors.textPrimary,

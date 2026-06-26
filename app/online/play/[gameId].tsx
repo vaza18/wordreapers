@@ -25,6 +25,7 @@ import { CenterDialogModal } from '@/components/CenterDialogModal';
 import { GameMenuModal } from '@/components/GameMenuModal';
 import { GamePlayStatusBar } from '@/components/GamePlayStatusBar';
 import { GameTimeUpModal } from '@/components/GameTimeUpModal';
+import { HowToPlayDialog } from '@/components/HowToPlayDialog';
 import { EarlyFinishVoteModal } from '@/components/EarlyFinishVoteModal';
 import { PlaySessionToastStack } from '@/components/PlaySessionToast';
 import { PauseRoundModal } from '@/components/PauseRoundModal';
@@ -41,6 +42,7 @@ import { usePlaySessionToasts } from '@/hooks/usePlaySessionToasts';
 import { useResultsRematchToast } from '@/hooks/useResultsRematchToast';
 import { useServerNow } from '@/hooks/useServerNow';
 import { useRoundTimeUpModal } from '@/hooks/useRoundTimeUpModal';
+import { useTrainingMilestone } from '@/hooks/useTrainingMilestone';
 import { useTimerAlerts } from '@/hooks/useTimerAlerts';
 import { DictionaryIndex } from '@/lib/dictionary/dictionary-index';
 import { toDisplayUpper } from '@/lib/dictionary/normalize';
@@ -108,8 +110,13 @@ import {
   flushSubmitLatencySummary,
 } from '@/lib/online/submit-word-profile';
 import { buildLetterKeys, computeLetterKeySize } from '@/lib/game/letter-keyboard';
-import { letterKeyFontSizeForKeySize } from '@/lib/game/letter-key-style';
-import { acceptWord, type PlayWordErrorCode } from '@/lib/game/play-word';
+import { formatStandingRowMeta } from '@/lib/game/format-play-stats';
+import { acceptWord } from '@/lib/game/play-word';
+import {
+  playWordErrorMessage,
+  playWordFeedbackVariant,
+  type PlayWordFeedbackVariant,
+} from '@/lib/game/play-word-feedback';
 import {
   assignDisplayRanks,
   displayRankForPlayer,
@@ -139,10 +146,11 @@ export default function OnlinePlayScreen() {
   const isPlayScreenFocused = useIsFocused();
   const { width: screenWidth } = useWindowDimensions();
   const composeKeySize = computeLetterKeySize(screenWidth);
-  const composeKeyFontSize = letterKeyFontSizeForKeySize(composeKeySize);
   const wordAcceptedFeedback = useSettingsStore((state) => state.wordAcceptedFeedback);
   const timerAlertMode = useSettingsStore((state) => state.timerAlertMode);
   const viewerGender = useProfileStore((state) => state.gender);
+  const { hydrated: trainingHydrated, hasCompletedTrainingRound } = useTrainingMilestone();
+  const canInviteOthers = trainingHydrated && hasCompletedTrainingRound;
 
   const [sessionCore, setSessionCore] = useState<GameSessionSnapshot | null>(null);
   const [wordMaps, setWordMaps] = useState<SessionWordMaps | null>(null);
@@ -159,6 +167,7 @@ export default function OnlinePlayScreen() {
   const [draft, setDraft] = useState('');
   const [draftKeyIndices, setDraftKeyIndices] = useState<number[]>([]);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedbackVariant, setFeedbackVariant] = useState<PlayWordFeedbackVariant>('default');
   const [showStandings, setShowStandings] = useState(false);
   const [showGameMenu, setShowGameMenu] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -232,10 +241,10 @@ export default function OnlinePlayScreen() {
   }, [gameId, myUid, navigateAfterLeave, session]);
 
   useEffect(() => {
-    if (rawOpenInvite === '1') {
+    if (rawOpenInvite === '1' && canInviteOthers) {
       setShowInviteModal(true);
     }
-  }, [rawOpenInvite]);
+  }, [canInviteOthers, rawOpenInvite]);
 
   useEffect(() => {
     void purgeStaleActiveRoundCaches();
@@ -571,6 +580,7 @@ export default function OnlinePlayScreen() {
     }
     const timer = setTimeout(() => {
       setFeedback(null);
+      setFeedbackVariant('default');
     }, FEEDBACK_DISMISS_MS);
     return () => {
       clearTimeout(timer);
@@ -665,12 +675,10 @@ export default function OnlinePlayScreen() {
 
       if (!result.accepted || !result.entry) {
         activeSubmitProfileRef.current = null;
-        if (result.error === 'NOT_IN_DICTIONARY') {
-          return;
-        }
-        const message = errorMessage(t, result.error);
+        const message = playWordErrorMessage(t, result.error);
         if (message) {
           setFeedback(message);
+          setFeedbackVariant(playWordFeedbackVariant(false, result.error));
         }
         return;
       }
@@ -693,6 +701,7 @@ export default function OnlinePlayScreen() {
       setDraft('');
       setDraftKeyIndices([]);
       setFeedback(t('game.wordAccepted'));
+      setFeedbackVariant('success');
       playWordAcceptedFeedback(wordAcceptedFeedback);
       profile?.mark('optimisticUi');
 
@@ -727,6 +736,7 @@ export default function OnlinePlayScreen() {
         lastValidatedDraft.current = '';
         if (remote.error === 'DUPLICATE') {
           setFeedback(t('game.errorAlreadySubmitted'));
+          setFeedbackVariant('default');
         }
         runPendingSubmit(submitDraft);
         return;
@@ -1166,6 +1176,7 @@ export default function OnlinePlayScreen() {
             scrollToNormalized={scrollRequest?.normalized ?? null}
             scrollToRequestId={scrollRequest?.id}
             feedback={feedback}
+            feedbackVariant={feedbackVariant}
             backgroundSyncing={backgroundSyncing}
             showScoreBadges={showPointUi && hasOpponent}
             showOverlapPeers={hasOpponent}
@@ -1176,7 +1187,6 @@ export default function OnlinePlayScreen() {
             draftKeyIndices={draftKeyIndices}
             letterKeys={letterKeys}
             composeKeySize={composeKeySize}
-            composeKeyFontSize={composeKeyFontSize}
             onPressKey={pressKey}
             onClearDraft={clearDraft}
             onBackspaceDraft={backspaceDraft}
@@ -1205,15 +1215,7 @@ export default function OnlinePlayScreen() {
                 {isMe ? ` ${t('game.resultsYou')}` : ''}
               </Text>
               <Text style={styles.standingMeta}>
-                {row.wordCount}
-                {t('game.wordsShort')}
-                {showPointUi ? (
-                  <>
-                    {' · '}
-                    {row.score}
-                    {t('game.pointsShort')}
-                  </>
-                ) : null}
+                {formatStandingRowMeta(row.wordCount, showPointUi ? row.score : null)}
               </Text>
             </View>
           );
@@ -1251,7 +1253,7 @@ export default function OnlinePlayScreen() {
           }}
           showPause={!isPaused && !earlyVote && !pauseVote && !addTimeVote}
           pauseLabel={hasOnlineOpponentInRound ? t('game.menuPause') : t('game.menuPauseSolo')}
-          showInvite
+          showInvite={canInviteOthers}
           onInvite={() => {
             setShowGameMenu(false);
             setShowInviteModal(true);
@@ -1371,6 +1373,8 @@ export default function OnlinePlayScreen() {
 
       <PlaySessionToastStack toasts={sessionToasts} />
 
+      <HowToPlayDialog enabled={session.status === 'playing' && !isPaused} />
+
       <GameTimeUpModal
         visible={timeUpModalVisible}
         onViewResults={() => {
@@ -1386,25 +1390,6 @@ function formatTimer(ms: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-}
-
-function errorMessage(
-  t: (key: string) => string,
-  code: PlayWordErrorCode | undefined,
-): string | null {
-  switch (code) {
-    case 'TOO_SHORT':
-    case 'NOT_IN_DICTIONARY':
-      return null;
-    case 'IS_BASE_WORD':
-      return t('game.errorBaseWord');
-    case 'INVALID_LETTERS':
-      return t('game.errorInvalidLetters');
-    case 'ALREADY_SUBMITTED':
-      return t('game.errorAlreadySubmitted');
-    default:
-      return t('game.errorUnknown');
-  }
 }
 
 function createStyles(colors: ThemeColors) {

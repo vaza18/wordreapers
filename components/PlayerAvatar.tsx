@@ -1,7 +1,9 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { playerAvatarColors } from '@/constants/player-avatars';
 import { getAvatarInitials } from '@/lib/profile/avatar-initials';
+import { computeAvatarDisplay } from '@/lib/profile/scaled-avatar-size';
+import { centeredSquareTextStyle } from '@/lib/ui/centered-square-text';
 
 interface PlayerAvatarProps {
   name: string;
@@ -14,6 +16,7 @@ interface PlayerAvatarProps {
 
 /**
  * Initial-based avatar circle (mockup lobby / results).
+ * Glyphs and edge inset scale with capped Dynamic Type — same fill ratio as the design size.
  */
 export function PlayerAvatar({
   name,
@@ -21,33 +24,43 @@ export function PlayerAvatar({
   avatarColorIndex,
   playerIndex = 0,
 }: PlayerAvatarProps) {
+  const { width, fontScale } = useWindowDimensions();
   const colors = playerAvatarColors(avatarColorIndex ?? playerIndex);
   const initials = getAvatarInitials(name);
-  const fontSize = initials.length > 1 ? size * 0.36 : size * 0.45;
+  const { displaySize, fontSize } = computeAvatarDisplay(size, initials.length, fontScale, width);
 
   return (
     <View
       style={[
         styles.circle,
         {
-          width: size,
-          height: size,
-          borderRadius: size / 2,
+          width: displaySize,
+          height: displaySize,
+          borderRadius: displaySize / 2,
           backgroundColor: colors.background,
         },
       ]}
     >
-      <Text style={[styles.initial, { color: colors.color, fontSize }]}>{initials}</Text>
+      <Text
+        allowFontScaling={false}
+        numberOfLines={1}
+        style={[
+          styles.initial,
+          centeredSquareTextStyle(displaySize, fontSize),
+          { color: colors.color },
+        ]}
+      >
+        {initials}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   circle: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    overflow: 'hidden',
   },
   initial: {
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });
