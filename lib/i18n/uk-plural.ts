@@ -31,6 +31,18 @@ const WORD_FORMS: Record<UkPluralForm, string> = {
   many: 'слів',
 };
 
+const WIN_FORMS: Record<UkPluralForm, string> = {
+  one: 'перемога',
+  few: 'перемоги',
+  many: 'перемог',
+};
+
+const ROUND_FORMS: Record<UkPluralForm, string> = {
+  one: 'раунд',
+  few: 'раунди',
+  many: 'раундів',
+};
+
 /** «слово» / «слова» / «слів» for a given count (without the number). */
 export function ukWordForm(count: number): string {
   return WORD_FORMS[ukPluralForm(count)];
@@ -44,4 +56,14 @@ export function formatUkPlayers(count: number): string {
 /** «1 слово», «2 слова», «5 слів», … */
 export function formatUkWords(count: number): string {
   return `${count} ${WORD_FORMS[ukPluralForm(count)]}`;
+}
+
+/** «1 перемога», «2 перемоги», «5 перемог», … */
+export function formatUkWins(count: number): string {
+  return `${count} ${WIN_FORMS[ukPluralForm(count)]}`;
+}
+
+/** «1 раунд», «2 раунди», «5 раундів», … */
+export function formatUkRounds(count: number): string {
+  return `${count} ${ROUND_FORMS[ukPluralForm(count)]}`;
 }

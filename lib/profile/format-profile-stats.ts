@@ -20,15 +20,15 @@ function formatUkWins(count: number): string {
   return `${count} ${WIN_FORMS[ukPluralForm(count)]}`;
 }
 
-function formatUkCollectedWords(count: number): string {
+function formatUkWords(count: number): string {
   const form = ukPluralForm(count);
   if (form === 'one') {
-    return `${count} зібране слово`;
+    return `${count} слово`;
   }
   if (form === 'few') {
-    return `${count} зібрані слова`;
+    return `${count} слова`;
   }
-  return `${count} зібраних слів`;
+  return `${count} слів`;
 }
 
 /** «8 ігор · 3 перемоги» */
@@ -36,9 +36,9 @@ export function formatProfileStatsGamesLine(gamesPlayed: number, gamesWon: numbe
   return `${formatUkGames(gamesPlayed)} · ${formatUkWins(gamesWon)}`;
 }
 
-/** «185 зібраних слів» */
+/** «185 слів» */
 export function formatProfileStatsWordsLine(wordsCollected: number): string {
-  return formatUkCollectedWords(wordsCollected);
+  return formatUkWords(wordsCollected);
 }
 
 /** Single line — e.g. history stats band. */
