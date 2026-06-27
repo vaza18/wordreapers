@@ -276,12 +276,189 @@ export async function joinGameSession(
     throw new Error('INVALID_CODE');
   }
 
-  const snapshot = await get(sessionRef(normalized));
-  if (!snapshot.exists()) {
-    throw new Error('ROOM_NOT_FOUND');
+  const isBrowseJoin = options?.joinSource === 'browse';
+  let session: GameSession | null = null;
+
+  try {
+    const snapshot = await get(sessionRef(normalized));
+    if (!snapshot.exists()) {
+      throw new Error('ROOM_NOT_FOUND');
+    }
+    session = snapshot.val() as GameSession;
+  } catch (error) {
+    if (error instanceof Error && error.message === 'ROOM_NOT_FOUND') {
+      throw error;
+    }
+    if (isBrowseJoin || !isFirebasePermissionDenied(error)) {
+      throw error;
+    }
+    return blindJoinGameSession(normalized, profile, user.uid, options);
   }
 
+  return joinGameSessionWithSnapshot(normalized, profile, user.uid, session, options);
+}
+
+async function blindJoinGameSession(
+  gameId: string,
+  profile: PlayerProfile,
+  uid: string,
+  options?: JoinGameSessionOptions,
+): Promise<GameSessionSnapshot> {
+  const newPlayer = profileToPlayer(profile, true, options?.invitedByUid, { shareGender: true });
+  newPlayer.joinedVia = 'invite';
+
+  try {
+    await update(playersRef(gameId), { [uid]: newPlayer });
+  } catch (error) {
+    if (isFirebasePermissionDenied(error)) {
+      throw new Error('ROOM_NOT_FOUND');
+    }
+    throw error;
+  }
+
+  const committed = await commitNewPlayerJoinTransaction(gameId, uid, newPlayer, {
+    isBrowseJoin: false,
+    wordMaps: await fetchSessionWordMaps(gameId),
+  });
+
+  if (committed === 'ROOM_NOT_FOUND') {
+    const rollback = await rollbackJoinPlayerIfSessionMissing(gameId, uid);
+    if (rollback === 'ROOM_NOT_FOUND') {
+      throw new Error('ROOM_NOT_FOUND');
+    }
+  }
+  if (committed === 'ROOM_FULL') {
+    try {
+      await remove(playerRef(gameId, uid));
+    } catch {
+      // Best-effort rollback.
+    }
+    throw new Error('ROOM_FULL');
+  }
+
+  await setPlayerOnlinePresence(gameId, uid);
+  const joined = await readSessionSnapshot(gameId);
+  if (sessionIdentityMasked(joined)) {
+    await syncPublicRosterAliases(gameId, joined);
+    return readSessionSnapshot(gameId);
+  }
+  if (joined.isPublic) {
+    await syncPublicLobbyPlayerCount(gameId, joined);
+  }
+  return joined;
+}
+
+type JoinCommitResult = 'ok' | 'ROOM_FULL' | 'ROOM_NOT_FOUND';
+
+/** Patch session metadata after `players/{uid}` is written (avoids root tx vs roster races). */
+function buildJoinCommitPatch(
+  session: GameSession,
+  uid: string,
+  newPlayer: GameSessionPlayer,
+  context: { isBrowseJoin: boolean; wordMaps: SessionWordMaps },
+): { patch: Record<string, unknown>; roomFull: boolean } {
+  const next: GameSession = {
+    ...session,
+    players: session.players[uid] ? session.players : { ...session.players, [uid]: newPlayer },
+  };
+
+  if (next.isPublic) {
+    const activeCount = activePublicLobbyPlayerCount(next.players);
+    const maxPlayers = next.maxPlayers ?? PUBLIC_LOBBY_MAX_PLAYERS;
+    if (activeCount > maxPlayers) {
+      return { patch: {}, roomFull: true };
+    }
+  }
+
+  const patch: Record<string, unknown> = {};
+  const order = [...(next.baseWordPickerOrder ?? [next.organizerId])];
+  if (!order.includes(uid)) {
+    order.push(uid);
+    patch.baseWordPickerOrder = order;
+  }
+
+  if (context.isBrowseJoin && !next.identityMasked) {
+    patch.identityMasked = true;
+  }
+
+  const playerCount = Object.keys(next.players).length;
+  const resolvedSettings = applyPublicContentSafety(
+    resolveGameSessionSettings(next.settings, playerCount),
+    next,
+  );
+  if (
+    next.settings.uniqueBonusMode !== resolvedSettings.uniqueBonusMode ||
+    next.settings.uniqueBonusEnabled !== resolvedSettings.uniqueBonusEnabled ||
+    next.settings.allowProperNouns !== resolvedSettings.allowProperNouns ||
+    next.settings.allowSlang !== resolvedSettings.allowSlang
+  ) {
+    patch.settings = resolvedSettings;
+  }
+
+  const hasWords = Object.keys(context.wordMaps.wordPlayers ?? {}).length > 0;
+  if (next.status === 'playing' && hasWords) {
+    recomputeSessionPlayerScores(
+      { ...next, wordPlayers: context.wordMaps.wordPlayers },
+      resolvedSettings.uniqueBonusEnabled,
+    );
+    patch.players = next.players;
+  }
+
+  return { patch, roomFull: false };
+}
+
+async function commitNewPlayerJoinTransaction(
+  gameId: string,
+  uid: string,
+  newPlayer: GameSessionPlayer,
+  context: { isBrowseJoin: boolean; wordMaps: SessionWordMaps },
+): Promise<JoinCommitResult> {
+  const normalized = normalizeRoomCode(gameId);
+  const snapshot = await get(sessionRef(normalized));
+  if (!snapshot.exists()) {
+    return 'ROOM_NOT_FOUND';
+  }
+
+  const built = buildJoinCommitPatch(snapshot.val() as GameSession, uid, newPlayer, context);
+  if (built.roomFull) {
+    return 'ROOM_FULL';
+  }
+  if (Object.keys(built.patch).length === 0) {
+    return 'ok';
+  }
+
+  await update(sessionRef(normalized), built.patch);
+  return 'ok';
+}
+
+async function rollbackJoinPlayerIfSessionMissing(
+  gameId: string,
+  uid: string,
+): Promise<'ROOM_NOT_FOUND' | 'partial_ok'> {
+  const normalized = normalizeRoomCode(gameId);
+  const snapshot = await get(sessionRef(normalized));
+  if (!snapshot.exists()) {
+    try {
+      await remove(playerRef(normalized, uid));
+    } catch {
+      // Best-effort rollback.
+    }
+    return 'ROOM_NOT_FOUND';
+  }
   const session = snapshot.val() as GameSession;
+  if (session.players[uid]) {
+    return 'partial_ok';
+  }
+  return 'ROOM_NOT_FOUND';
+}
+
+async function joinGameSessionWithSnapshot(
+  gameId: string,
+  profile: PlayerProfile,
+  uid: string,
+  session: GameSession,
+  options?: JoinGameSessionOptions,
+): Promise<GameSessionSnapshot> {
   if (
     session.status !== 'waiting' &&
     session.status !== 'playing' &&
@@ -290,11 +467,11 @@ export async function joinGameSession(
     throw new Error('ROOM_NOT_JOINABLE');
   }
 
-  if (session.players[user.uid]) {
-    await rejoinExistingPlayer(normalized, user.uid, profile);
-    const updated = await readSessionSnapshot(normalized);
-    if (updated.status === 'waiting' && updated.organizerId === user.uid) {
-      await clearWaitingLobbyPlayerWordsAsOrganizer(normalized, updated, user.uid);
+  if (session.players[uid]) {
+    await rejoinExistingPlayer(gameId, uid, profile);
+    const updated = await readSessionSnapshot(gameId);
+    if (updated.status === 'waiting' && updated.organizerId === uid) {
+      await clearWaitingLobbyPlayerWordsAsOrganizer(gameId, updated, uid);
     }
     return updated;
   }
@@ -331,86 +508,38 @@ export async function joinGameSession(
     newPlayer.publicAlias = nextPublicAlias(collectPublicAliases(session.players), locale);
   }
 
-  await update(playersRef(normalized), {
-    [user.uid]: newPlayer,
+  await update(playersRef(gameId), {
+    [uid]: newPlayer,
   });
 
-  const wordMaps = await fetchSessionWordMaps(normalized);
-
-  let joinRejectedRoomFull = false;
-  await runRtdbTransaction(sessionRef(normalized), (current) => {
-    if (current == null) {
-      return undefined;
-    }
-    const next = current as GameSession;
-    let changed = false;
-
-    if (!next.players[user.uid]) {
-      next.players = { ...next.players, [user.uid]: newPlayer };
-      changed = true;
-    }
-
-    if (next.isPublic) {
-      const activeCount = activePublicLobbyPlayerCount(next.players);
-      const maxPlayers = next.maxPlayers ?? PUBLIC_LOBBY_MAX_PLAYERS;
-      if (activeCount > maxPlayers) {
-        joinRejectedRoomFull = true;
-        return undefined;
-      }
-    }
-
-    const order = [...(next.baseWordPickerOrder ?? [next.organizerId])];
-    if (!order.includes(user.uid)) {
-      order.push(user.uid);
-      next.baseWordPickerOrder = order;
-      changed = true;
-    }
-
-    const playerCount = Object.keys(next.players).length;
-    if (isBrowseJoin) {
-      next.identityMasked = true;
-      changed = true;
-    }
-
-    const resolvedSettings = applyPublicContentSafety(
-      resolveGameSessionSettings(next.settings, playerCount),
-      next,
-    );
-    if (
-      next.settings.uniqueBonusMode !== resolvedSettings.uniqueBonusMode ||
-      next.settings.uniqueBonusEnabled !== resolvedSettings.uniqueBonusEnabled ||
-      next.settings.allowProperNouns !== resolvedSettings.allowProperNouns ||
-      next.settings.allowSlang !== resolvedSettings.allowSlang
-    ) {
-      next.settings = resolvedSettings;
-      changed = true;
-    }
-
-    const hasWords = Object.keys(wordMaps.wordPlayers ?? {}).length > 0;
-    if (next.status === 'playing' && hasWords) {
-      recomputeSessionPlayerScores(
-        { ...next, wordPlayers: wordMaps.wordPlayers },
-        resolvedSettings.uniqueBonusEnabled,
-      );
-      changed = true;
-    }
-
-    return changed ? next : undefined;
+  const committed = await commitNewPlayerJoinTransaction(gameId, uid, newPlayer, {
+    isBrowseJoin,
+    wordMaps: await fetchSessionWordMaps(gameId),
   });
 
-  if (joinRejectedRoomFull) {
-    await remove(playerRef(normalized, user.uid));
+  if (committed === 'ROOM_FULL') {
+    try {
+      await remove(playerRef(gameId, uid));
+    } catch {
+      // Best-effort rollback.
+    }
     throw new Error('ROOM_FULL');
   }
+  if (committed === 'ROOM_NOT_FOUND') {
+    const rollback = await rollbackJoinPlayerIfSessionMissing(gameId, uid);
+    if (rollback === 'ROOM_NOT_FOUND') {
+      throw new Error('ROOM_NOT_FOUND');
+    }
+  }
 
-  await setPlayerOnlinePresence(normalized, user.uid);
-  let joined = await readSessionSnapshot(normalized);
+  await setPlayerOnlinePresence(gameId, uid);
+  let joined = await readSessionSnapshot(gameId);
   if (sessionIdentityMasked(joined)) {
-    await syncPublicRosterAliases(normalized, joined);
-    joined = await readSessionSnapshot(normalized);
+    await syncPublicRosterAliases(gameId, joined);
+    joined = await readSessionSnapshot(gameId);
   }
   if (joined.isPublic) {
-    await syncPublicLobbyPlayerCount(normalized, joined);
+    await syncPublicLobbyPlayerCount(gameId, joined);
   }
   return joined;
 }

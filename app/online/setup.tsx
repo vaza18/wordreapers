@@ -21,7 +21,7 @@ import { useTrainingMilestone } from '@/hooks/useTrainingMilestone';
 import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
 import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
 import { navigateHomeWithBackAnimation } from '@/lib/navigation/navigate-home';
-import { joinErrorMessage } from '@/lib/firebase/join-error-message';
+import { joinErrorMessage, firebaseBootstrapErrorMessage } from '@/lib/firebase/join-error-message';
 import { subscribeGameSession, updateGameSessionSetup } from '@/lib/firebase/game-session-service';
 import type { GameSessionSnapshot } from '@/lib/firebase/game-session-service';
 import {
@@ -278,14 +278,16 @@ export default function OnlineSetupScreen() {
     setError(null);
     try {
       const firebase = await ensureFirebaseReady();
-      if (firebase?.uid) {
-        setOrganizerUid(firebase.uid);
-        useFirebaseStore.getState().setConnection({
-          status: firebase.status,
-          uid: firebase.uid,
-          errorMessage: firebase.errorMessage ?? null,
-        });
+      if (!firebase || firebase.status !== 'ok' || !firebase.uid) {
+        setError(firebaseBootstrapErrorMessage(firebase?.errorMessage, t));
+        return;
       }
+      setOrganizerUid(firebase.uid);
+      useFirebaseStore.getState().setConnection({
+        status: firebase.status,
+        uid: firebase.uid,
+        errorMessage: firebase.errorMessage ?? null,
+      });
       const setup = buildSetup();
       const publishedId = await publishWaitingRoomForDraft(draft, setup);
       router.push({ pathname: '/online/lobby/[gameId]', params: { gameId: publishedId } });

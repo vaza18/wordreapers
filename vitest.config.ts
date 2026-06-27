@@ -12,6 +12,7 @@ export default defineConfig({
   },
   test: {
     include: ['tests/**/*.test.ts', 'lib/**/__tests__/**/*.test.ts'],
+    exclude: process.env.VITEST_RULES ? [] : ['tests/firebase/database.rules.test.ts'],
     coverage: {
       provider: 'v8',
       include: ['lib/**/*.ts'],

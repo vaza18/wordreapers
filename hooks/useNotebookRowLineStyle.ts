@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-import { createNotebookRowLineStyle } from '@/components/notebook/NotebookLineFiller';
+import { createNotebookRowLineStyle } from '@/lib/notebook/row-line-style';
 import { useTheme } from '@/hooks/useTheme';
 
 import { useNotebookRowHeight } from './useNotebookRowHeight';

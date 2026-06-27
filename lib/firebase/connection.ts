@@ -1,6 +1,7 @@
 import { onValue, ref } from 'firebase/database';
 
 import { ensureAnonymousAuth } from './auth.js';
+import { ensureFirebaseAppCheck } from './app-check.js';
 import { getFirebaseDatabase } from './init.js';
 import { startServerClockSync } from './server-clock.js';
 
@@ -63,6 +64,7 @@ export function waitForRtdbConnected(timeoutMs = RTDB_CONNECT_TIMEOUT_MS): Promi
  */
 export async function bootstrapFirebaseConnection(): Promise<FirebaseConnectionResult> {
   try {
+    await ensureFirebaseAppCheck();
     const user = await ensureAnonymousAuth();
     await waitForRtdbConnected();
     startServerClockSync();

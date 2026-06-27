@@ -20,7 +20,11 @@ export interface PurgeResult {
  */
 export async function purgeExpiredRtdbSessions(now = Date.now()): Promise<PurgeResult> {
   const db = admin.database();
-  const sessionsSnap = await db.ref('game_sessions').once('value');
+  const sessionsSnap = await db
+    .ref('game_sessions')
+    .orderByChild('purgeAfterAt')
+    .endAt(now)
+    .once('value');
   if (!sessionsSnap.exists()) {
     return { scanned: 0, purged: 0 };
   }

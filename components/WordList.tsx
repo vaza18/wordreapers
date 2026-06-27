@@ -7,7 +7,7 @@ import {
   notebookFillerRowCount,
   notebookListCanScroll,
 } from '@/components/notebook/NotebookLineFiller';
-import type { createNotebookRowLineStyle } from '@/components/notebook/NotebookLineFiller';
+import type { createNotebookRowLineStyle } from '@/lib/notebook/row-line-style';
 import { WordOverlapAvatars } from '@/components/WordOverlapAvatars';
 import { useNotebookRowHeight } from '@/hooks/useNotebookRowHeight';
 import { useNotebookRowLineStyle } from '@/hooks/useNotebookRowLineStyle';

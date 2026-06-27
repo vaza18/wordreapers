@@ -53,4 +53,4 @@ export async function rollbackWordMapsShard(
   }
 }
 
-export { wordPlayersPerWordRef, wordFirstPerWordRef };
+export { wordPlayersPerWordRef, wordPlayersShardPlayerRef, wordFirstPerWordRef };

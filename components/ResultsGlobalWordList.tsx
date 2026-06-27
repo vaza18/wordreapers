@@ -10,7 +10,7 @@ import {
 
 import { ResultWordAuthorAvatars } from '@/components/ResultWordAuthorAvatars';
 import { NotebookLineFiller } from '@/components/notebook/NotebookLineFiller';
-import type { createNotebookRowLineStyle } from '@/components/notebook/NotebookLineFiller';
+import type { createNotebookRowLineStyle } from '@/lib/notebook/row-line-style';
 import { useNotebookRowLineStyle } from '@/hooks/useNotebookRowLineStyle';
 import { spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';

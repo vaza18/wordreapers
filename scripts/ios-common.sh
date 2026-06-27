@@ -4,31 +4,43 @@ metro_ready() {
   curl -sf "http://127.0.0.1:8081/status" >/dev/null 2>&1
 }
 
-ensure_metro() {
-  local device_udid="${1:-}"
-  local metro_args=(start --dev-client --port 8081)
+metro_manifest_ready() {
+  curl -sfI -X HEAD \
+    -H 'expo-platform: ios' \
+    -H 'accept: application/expo+json,application/json' \
+    'http://127.0.0.1:8081/' \
+    | grep -qi 'HTTP/1.1 200'
+}
 
-  if [ -z "$device_udid" ]; then
-    metro_args+=(--localhost)
+ensure_metro() {
+  if ! metro_ready; then
+    echo "Metro is not running on http://127.0.0.1:8081"
+    echo ""
+    echo "Start Metro in a separate terminal first, then re-run this command:"
+    echo "  npm start          # iOS Simulator (uses localhost)"
+    echo "  npm run start:lan  # physical iPhone on the same Wi-Fi"
+    echo ""
+    echo "JS logs (Firebase, App Check, RTDB errors) appear in that Metro terminal."
+    echo "For a physical iPhone without LAN routing, use: npm run start:tunnel"
+    exit 1
   fi
 
-  if metro_ready; then
+  if metro_manifest_ready; then
+    echo "Metro is ready on http://127.0.0.1:8081"
     return 0
   fi
 
-  echo "Metro is not running on http://127.0.0.1:8081"
-  echo "Starting Metro in the background (logs: /tmp/wordreapers-metro.log)…"
-  nohup npx expo "${metro_args[@]}" > /tmp/wordreapers-metro.log 2>&1 &
-  disown || true
-  for _ in $(seq 1 45); do
-    if metro_ready; then
+  echo "Waiting for Metro dev server…"
+  for _ in $(seq 1 30); do
+    if metro_manifest_ready; then
+      echo "Metro is ready on http://127.0.0.1:8081"
       return 0
     fi
     sleep 1
   done
 
-  echo "Metro failed to start. Run manually in another terminal:"
-  echo "  npm start"
+  echo "Metro answered /status but the dev manifest is not ready yet."
+  echo "In the Metro terminal, wait until you see \"Metro waiting on\", then run npm run ios again."
   exit 1
 }
 
@@ -218,6 +230,22 @@ apply_ios_native_patches() {
   fi
 }
 
+patch_ios_dev_client_simulator_launch() {
+  local root="$1"
+  local info_plist="$root/ios/Slovozbirachi/Info.plist"
+
+  if [ ! -f "$info_plist" ]; then
+    return 0
+  fi
+
+  # Avoid auto-reconnect to a stale LAN Metro URL on cold start (expo-dev-launcher crash).
+  if /usr/libexec/PlistBuddy -c "Print :DEV_CLIENT_TRY_TO_LAUNCH_LAST_BUNDLE" "$info_plist" >/dev/null 2>&1; then
+    /usr/libexec/PlistBuddy -c "Set :DEV_CLIENT_TRY_TO_LAUNCH_LAST_BUNDLE false" "$info_plist"
+  else
+    /usr/libexec/PlistBuddy -c "Add :DEV_CLIENT_TRY_TO_LAUNCH_LAST_BUNDLE bool false" "$info_plist"
+  fi
+}
+
 apply_ios_simulator_patches() {
   local root="$1"
   local local_file="$root/ios/.xcode.env.local"
@@ -225,6 +253,7 @@ apply_ios_simulator_patches() {
   strip_ios_push_entitlement_if_needed "$root"
   patch_ios_automatic_ui_style "$root"
   patch_ios_embed_bundle_on_device "$root"
+  patch_ios_dev_client_simulator_launch "$root"
 
   if [ -f "$local_file" ]; then
     grep -v 'REACT_NATIVE_PACKAGER_HOSTNAME' "$local_file" >"${local_file}.tmp" || true

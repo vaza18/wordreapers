@@ -40,6 +40,6 @@ describe('reserveUniqueRoomCode', () => {
       .mockResolvedValueOnce({ exists: () => false });
     const code = await reserveUniqueRoomCode('ABCD', 'org-1');
     expect(code).not.toBe('ABCD');
-    expect(code).toHaveLength(4);
+    expect(code).toHaveLength(5);
   });
 });

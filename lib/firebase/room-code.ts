@@ -1,7 +1,7 @@
 /** Letters/digits without 0/O, 1/I/l confusion (mockup: 7 X 3 K). */
 const ROOM_CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 
-const DEFAULT_CODE_LENGTH = 4;
+export const DEFAULT_CODE_LENGTH = 5;
 
 /**
  * Generate a random room code (uppercase).

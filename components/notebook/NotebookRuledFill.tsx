@@ -34,9 +34,9 @@ const styles = StyleSheet.create({
 });
 
 export {
-  createNotebookRowLineStyle,
   notebookFillerRowCount,
   notebookListCanScroll,
   notebookListScrollHeight,
 } from './NotebookLineFiller';
+export { createNotebookRowLineStyle } from '@/lib/notebook/row-line-style';
 export { notebookPaperHeight } from './notebookPaperHeight';

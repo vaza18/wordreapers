@@ -106,10 +106,6 @@ export default function JoinRoomScreen() {
         resetFirebaseBootstrap();
       }
       const firebase = await ensureFirebaseReady({ forceRetry: firebaseStatus === 'error' });
-      if (!firebase) {
-        setError(firebaseBootstrapErrorMessage(undefined, t));
-        return;
-      }
       useFirebaseStore.getState().setConnection({
         status: firebase.status,
         uid: firebase.uid ?? null,

@@ -4,9 +4,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
-import { normalizeRoomCode } from '@/lib/firebase/room-code';
-
-const CODE_LENGTH = 4;
+import { DEFAULT_CODE_LENGTH, normalizeRoomCode } from '@/lib/firebase/room-code';
 
 interface RoomCodeInputProps {
   value: string;
@@ -54,14 +52,14 @@ function createStyles(colors: ThemeColors) {
 }
 
 /**
- * Four-cell room code entry (mockup screen 8).
+ * Room code entry (mockup screen 8). Default length is {@link DEFAULT_CODE_LENGTH}.
  */
 export function RoomCodeInput({ value, onChange, disabled = false }: RoomCodeInputProps) {
   const styles = useThemedStyles(createStyles);
   const { t } = useTranslation();
   const inputRef = useRef<TextInput>(null);
-  const normalized = normalizeRoomCode(value).slice(0, CODE_LENGTH);
-  const cells = Array.from({ length: CODE_LENGTH }, (_, index) => normalized[index] ?? '');
+  const normalized = normalizeRoomCode(value).slice(0, DEFAULT_CODE_LENGTH);
+  const cells = Array.from({ length: DEFAULT_CODE_LENGTH }, (_, index) => normalized[index] ?? '');
 
   return (
     <View style={styles.wrap}>
@@ -69,7 +67,7 @@ export function RoomCodeInput({ value, onChange, disabled = false }: RoomCodeInp
         ref={inputRef}
         autoCapitalize="characters"
         autoCorrect={false}
-        maxLength={CODE_LENGTH}
+        maxLength={DEFAULT_CODE_LENGTH}
         value={normalized}
         editable={!disabled}
         onChangeText={(text) => {

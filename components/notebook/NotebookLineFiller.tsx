@@ -1,27 +1,7 @@
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
 import { NOTEBOOK_ROW_HEIGHT } from '@/constants/notebook';
-import { type ThemeColors } from '@/constants/theme';
 import { useNotebookRowLineStyle } from '@/hooks/useNotebookRowLineStyle';
-
-/** One ruled notebook row — fixed height so ruled lines track Dynamic Type. */
-export function createNotebookRowLineStyle(colors: ThemeColors, rowHeight: number) {
-  return StyleSheet.create({
-    row: {
-      height: rowHeight,
-      justifyContent: 'center',
-      borderBottomWidth: 1,
-      borderBottomColor: colors.notebookLine,
-      backgroundColor: colors.notebookPaper,
-    },
-    fillerRow: {
-      height: rowHeight,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.notebookLine,
-      backgroundColor: colors.notebookPaper,
-    },
-  });
-}
 
 interface NotebookLineFillerProps {
   rowCount: number;

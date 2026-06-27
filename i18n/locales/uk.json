@@ -118,6 +118,8 @@
     "errorFirebasePermission": "Немає доступу до Firebase. Опублікуйте rules з firebase/database.rules.json у Firebase Console",
     "errorFirebaseApiKey": "Firebase API key заблоковано для iOS. У Google Cloud → API key зніміть обмеження або додайте bundle id com.wordreapers.app",
     "errorFirebaseNetwork": "Немає зʼєднання з хмарою Firebase. Потрібен інтернет (Wi‑Fi або LTE), не локальна мережа з Mac",
+    "errorFirebaseNativeInit": "Firebase на iOS не ініціалізовано. Перезбери dev client: npm run ios",
+    "errorFirebaseAnonymousDisabled": "У Firebase Console увімкни Authentication → Sign-in method → Anonymous",
     "cloudConnecting": "Підключення до хмари…",
     "errorSaveSetup": "Не вдалося зберегти налаштування",
     "errorBaseWordMissing": "Спочатку налаштуйте базове слово",
