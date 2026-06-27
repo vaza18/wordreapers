@@ -4,11 +4,12 @@ import type { GameSession } from '../lib/firebase/types.js';
 
 const getMock = vi.fn();
 const updateMock = vi.fn();
-const runTransactionMock = vi.fn();
+const removeMock = vi.fn();
 
 vi.mock('firebase/database', () => ({
   get: (...args: unknown[]) => getMock(...args),
   update: (...args: unknown[]) => updateMock(...args),
+  remove: (...args: unknown[]) => removeMock(...args),
   ref: (_db: unknown, path: string) => ({ path }),
   onDisconnect: () => ({
     set: vi.fn().mockResolvedValue(undefined),
@@ -16,7 +17,6 @@ vi.mock('firebase/database', () => ({
     update: vi.fn().mockResolvedValue(undefined),
   }),
   onValue: vi.fn(),
-  remove: vi.fn(),
 }));
 
 vi.mock('../lib/firebase/init.js', () => ({
@@ -26,10 +26,6 @@ vi.mock('../lib/firebase/init.js', () => ({
 vi.mock('../lib/firebase/auth.js', () => ({
   ensureAnonymousAuth: vi.fn().mockResolvedValue({ uid: 'joiner' }),
   getFirebaseUid: vi.fn().mockResolvedValue('joiner'),
-}));
-
-vi.mock('../lib/firebase/rtdb-transaction.js', () => ({
-  runRtdbTransaction: (...args: unknown[]) => runTransactionMock(...args),
 }));
 
 vi.mock('../lib/firebase/session-word-maps-service.js', () => ({
@@ -96,13 +92,9 @@ describe('joinGameSession public rooms', () => {
   beforeEach(() => {
     getMock.mockReset();
     updateMock.mockReset();
-    runTransactionMock.mockReset();
+    removeMock.mockReset();
     updateMock.mockResolvedValue(undefined);
-    runTransactionMock.mockImplementation(async (_ref, mutator) => {
-      const session = publicSession(2);
-      const next = mutator(session);
-      return next ?? session;
-    });
+    removeMock.mockResolvedValue(undefined);
   });
 
   it('rejects browse join when language mismatches', async () => {
@@ -117,7 +109,8 @@ describe('joinGameSession public rooms', () => {
   });
 
   it('rejects join when room is full', async () => {
-    getMock.mockResolvedValueOnce(snapshot(publicSession(8)));
+    const full = publicSession(8);
+    getMock.mockResolvedValueOnce(snapshot(full)).mockResolvedValueOnce(snapshot(full));
     await expect(
       joinGameSession('ABCD', { name: 'New', gender: 'm', avatarColorIndex: 1 }),
     ).rejects.toThrow('ROOM_FULL');
@@ -138,12 +131,9 @@ describe('joinGameSession public rooms', () => {
     };
     getMock
       .mockResolvedValueOnce(snapshot(session))
+      .mockResolvedValueOnce(snapshot({ ...session, players: joined.players }))
       .mockResolvedValueOnce(snapshot(joined))
       .mockResolvedValueOnce(snapshot(joined));
-    runTransactionMock.mockImplementation(async (_ref, mutator) => {
-      const next = mutator(session);
-      return next ?? joined;
-    });
 
     const result = await joinGameSession(
       'ABCD',
@@ -159,7 +149,6 @@ describe('joinGameSession public rooms', () => {
 
   it('sets joinedVia browse and identityMasked on browse join', async () => {
     const session = publicSession(2);
-    let transactionSession: GameSession | undefined;
     const joined = {
       ...session,
       identityMasked: true,
@@ -174,12 +163,9 @@ describe('joinGameSession public rooms', () => {
     };
     getMock
       .mockResolvedValueOnce(snapshot(session))
+      .mockResolvedValueOnce(snapshot({ ...session, players: joined.players }))
       .mockResolvedValueOnce(snapshot(joined))
       .mockResolvedValueOnce(snapshot(joined));
-    runTransactionMock.mockImplementation(async (_ref, mutator) => {
-      transactionSession = mutator(session) as GameSession;
-      return transactionSession ?? joined;
-    });
 
     await joinGameSession(
       'ABCD',
@@ -193,7 +179,10 @@ describe('joinGameSession public rooms', () => {
     >;
     expect(playerUpdate.joiner?.joinedVia).toBe('browse');
     expect(playerUpdate.joiner?.gender).toBeUndefined();
-    expect(transactionSession?.identityMasked).toBe(true);
+    const sessionPatch = updateMock.mock.calls.find(([, patch]) =>
+      Boolean((patch as { identityMasked?: boolean }).identityMasked),
+    )?.[1] as { identityMasked?: boolean };
+    expect(sessionPatch?.identityMasked).toBe(true);
   });
 
   it('does not enforce language match for code join', async () => {
@@ -207,12 +196,9 @@ describe('joinGameSession public rooms', () => {
     };
     getMock
       .mockResolvedValueOnce(snapshot(session))
+      .mockResolvedValueOnce(snapshot({ ...session, players: joined.players }))
       .mockResolvedValueOnce(snapshot(joined))
       .mockResolvedValueOnce(snapshot(joined));
-    runTransactionMock.mockImplementation(async (_ref, mutator) => {
-      const next = mutator(session);
-      return next ?? joined;
-    });
 
     await expect(
       joinGameSession('ABCD', { name: 'New', gender: 'm', avatarColorIndex: 1 }),

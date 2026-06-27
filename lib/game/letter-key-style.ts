@@ -5,9 +5,9 @@
  * `letterKeyProportions(screenWidth)` instead of duplicating theme tokens inline.
  * Until then, keep `LETTER_KEY_*` constants in sync with `components/LetterKeyboard.tsx`.
  */
-import { radii, spacing } from '../../constants/theme.js';
+import { radii } from '../../constants/theme.js';
 
-import { computeLetterKeySize } from './letter-keyboard.js';
+import { computeLetterKeyGap, computeLetterKeySize } from './letter-keyboard.js';
 
 /** Typical phone width for deriving letter-key ratios (iPhone 15 class). */
 export const LETTER_KEY_REFERENCE_SCREEN_WIDTH = 390;
@@ -16,7 +16,7 @@ export const LETTER_KEY_REFERENCE_SCREEN_WIDTH = 390;
 export const LETTER_KEY_REFERENCE_KEY_SIZE = 56;
 
 /** Gameplay letter key font size (px) at reference key size. */
-export const LETTER_KEY_FONT_SIZE = 22;
+export const LETTER_KEY_FONT_SIZE = 28;
 
 /** Semibold label on available keys (`LetterKeyboard`). */
 export const LETTER_KEY_FONT_WEIGHT = 700;
@@ -44,7 +44,7 @@ export function letterKeyProportions(
   screenWidth = LETTER_KEY_REFERENCE_SCREEN_WIDTH,
 ): LetterKeyProportions {
   const keySize = computeLetterKeySize(screenWidth);
-  const gap = spacing.xs;
+  const gap = computeLetterKeyGap(keySize);
   const borderRadius = radii.sm;
   const fontSize = letterKeyFontSizeForKeySize(keySize);
 

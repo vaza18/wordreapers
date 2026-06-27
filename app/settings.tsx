@@ -18,6 +18,7 @@ import { SettingsProfileRow } from '@/components/SettingsProfileRow';
 import { spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { DEFAULT_PLAYER_PROFILE } from '@/lib/profile/player-profile';
+import { navigateHomeClearingStack } from '@/lib/navigation/navigate-home';
 import { clearLocalDataStorage } from '@/lib/settings/clear-local-data';
 import { DEFAULT_APPEARANCE_MODE, type AppearanceMode } from '@/lib/settings/appearance-mode';
 import {
@@ -26,6 +27,8 @@ import {
   DEFAULT_WORD_ACCEPTED_FEEDBACK,
 } from '@/lib/settings/feedback-mode';
 import { DEFAULT_GAME_SETUP_PREFERENCES } from '@/lib/settings/game-setup-preferences';
+import { isFirebaseConfigured } from '@/lib/firebase/config';
+import { useFirebaseStore } from '@/store/firebase-store';
 import { usePlayerStatsStore } from '@/store/player-stats-store';
 import { useProfileStore } from '@/store/profile-store';
 import { useSettingsStore } from '@/store/settings-store';
@@ -115,7 +118,13 @@ export default function SettingsScreen() {
         timerAlertMode: DEFAULT_TIMER_ALERT_FEEDBACK,
         gameSetup: DEFAULT_GAME_SETUP_PREFERENCES,
       });
+      useFirebaseStore.getState().setConnection({
+        status: isFirebaseConfigured() ? 'idle' : 'not_configured',
+        uid: null,
+        errorMessage: null,
+      });
       setClearDialogVisible(false);
+      navigateHomeClearingStack();
     } finally {
       setClearing(false);
     }

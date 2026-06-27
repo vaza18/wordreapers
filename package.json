@@ -2,14 +2,15 @@
   "name": "wordreapers",
   "private": true,
   "type": "module",
-  "main": "expo-router/entry",
+  "main": "index.js",
   "scripts": {
     "postinstall": "node scripts/prune-nested-react-native.mjs && npm run legal:bundle && npm run sounds:generate",
     "prepare": "husky",
     "ci:check": "bash scripts/ci-check.sh",
     "prestart": "npm run legal:bundle",
     "pretest": "npm run legal:bundle",
-    "start": "expo start --dev-client",
+    "start": "expo start --dev-client --localhost",
+    "start:lan": "expo start --dev-client",
     "start:tunnel": "expo start --tunnel --dev-client",
     "android": "bash scripts/run-android.sh",
     "android:check": "bash scripts/check-android-env.sh",
@@ -33,6 +34,7 @@
     "sounds:generate": "tsx scripts/generate-feedback-sounds.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run",
+    "test:rules": "firebase emulators:exec --only database --project wordreapers-rules-test \"VITEST_RULES=1 vitest run tests/firebase/database.rules.test.ts\"",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "lint": "eslint .",
@@ -50,6 +52,7 @@
   "devDependencies": {
     "@babel/core": "^7.29.7",
     "@eslint/js": "^9.39.4",
+    "@firebase/rules-unit-testing": "^4.0.1",
     "@types/node": "^22.15.29",
     "@types/react": "~19.1.10",
     "@vitest/coverage-v8": "^4.1.8",
@@ -70,7 +73,10 @@
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-firebase/app": "^25.1.0",
+    "@react-native-firebase/app-check": "^25.1.0",
     "expo": "~54.0.0",
+    "expo-application": "~7.0.8",
     "expo-asset": "~12.0.13",
     "expo-audio": "~1.1.1",
     "expo-build-properties": "~1.0.10",
@@ -107,5 +113,5 @@
     "js-yaml": "4.2.0"
   },
   "packageManager": "npm@11.6.2",
-  "version": "1.0.0"
+  "version": "1.2.0"
 }

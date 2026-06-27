@@ -8,6 +8,7 @@ import { WordOverlapAvatars } from '@/components/WordOverlapAvatars';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import type { PlayerResultRankGroup } from '@/lib/game/results-view';
+import { formatRankWithMedal } from '@/lib/game/format-rank-label';
 
 interface ResultsByPlayerProps {
   rankGroups: readonly PlayerResultRankGroup[];
@@ -71,6 +72,7 @@ export function ResultsByPlayer({
           group.isTopRank ? styles.tierTop : null,
           multi ? styles.tierMulti : null,
         ];
+        const rank = formatRankWithMedal(group.rank);
 
         return (
           <View key={`rank-${group.rank}`} style={tierStyle}>
@@ -78,12 +80,12 @@ export function ResultsByPlayer({
               <Text style={[styles.tierLabel, group.isTopRank ? styles.tierLabelTop : null]}>
                 {showScores
                   ? t('game.resultsRankTier', {
-                      rank: group.rank,
+                      rank,
                       score: rep?.score ?? 0,
                       words: rep?.wordCount ?? 0,
                     })
                   : t('game.resultsRankTierWords', {
-                      rank: group.rank,
+                      rank,
                       words: rep?.wordCount ?? 0,
                     })}
               </Text>
@@ -119,7 +121,9 @@ export function ResultsByPlayer({
                             style={[styles.name, isYou ? styles.nameYou : null]}
                             numberOfLines={1}
                           >
-                            {multi ? section.playerName : `${section.rank}. ${section.playerName}`}
+                            {multi
+                              ? section.playerName
+                              : `${formatRankWithMedal(section.rank)}. ${section.playerName}`}
                             {isYou ? ` ${youLabel}` : ''}
                           </Text>
                           <Text style={styles.meta}>

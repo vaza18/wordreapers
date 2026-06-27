@@ -17,15 +17,15 @@ describe('formatProfileStatsGamesLine', () => {
 
 describe('formatProfileStatsWordsLine', () => {
   it('formats collected words with Ukrainian plural', () => {
-    expect(formatProfileStatsWordsLine(185)).toBe('185 зібраних слів');
-    expect(formatProfileStatsWordsLine(1)).toBe('1 зібране слово');
+    expect(formatProfileStatsWordsLine(185)).toBe('185 слів');
+    expect(formatProfileStatsWordsLine(1)).toBe('1 слово');
   });
 });
 
 describe('formatProfileStatsSummary', () => {
   it('joins games and words lines for single-line layouts', () => {
-    expect(formatProfileStatsSummary(8, 8, 185)).toBe('8 ігор · 8 перемог · 185 зібраних слів');
-    expect(formatProfileStatsSummary(1, 1, 1)).toBe('1 гра · 1 перемога · 1 зібране слово');
-    expect(formatProfileStatsSummary(10, 5, 158)).toBe('10 ігор · 5 перемог · 158 зібраних слів');
+    expect(formatProfileStatsSummary(8, 8, 185)).toBe('8 ігор · 8 перемог · 185 слів');
+    expect(formatProfileStatsSummary(1, 1, 1)).toBe('1 гра · 1 перемога · 1 слово');
+    expect(formatProfileStatsSummary(10, 5, 158)).toBe('10 ігор · 5 перемог · 158 слів');
   });
 });

@@ -7,7 +7,8 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { RoomCodeInput } from '@/components/RoomCodeInput';
 import { RoomQrScanner } from '@/components/RoomQrScanner';
 import { Screen } from '@/components/Screen';
-import { spacing, type ThemeColors } from '@/constants/theme';
+import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useTrainingMilestone } from '@/hooks/useTrainingMilestone';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { resetFirebaseBootstrap } from '@/lib/firebase/bootstrap';
@@ -44,6 +45,8 @@ export default function JoinRoomScreen() {
   const [prewarming, setPrewarming] = useState(false);
   const canScanQr = isExpoCameraAvailable();
   const firebaseStatus = useFirebaseStore((state) => state.status);
+  const { hydrated: trainingHydrated, hasCompletedTrainingRound } = useTrainingMilestone();
+  const joinLocked = trainingHydrated && !hasCompletedTrainingRound;
 
   useEffect(() => {
     if (firebaseStatus === 'not_configured' || firebaseStatus === 'ok') {
@@ -82,6 +85,10 @@ export default function JoinRoomScreen() {
   }, [codeFromLink, invitedByFromLink]);
 
   const joinWithCode = async (rawCode: string, joinOptions?: { invitedByUid?: string }) => {
+    if (joinLocked) {
+      setError(t('online.joinLockedBanner'));
+      return;
+    }
     const normalized = normalizeRoomCode(rawCode);
     if (!isValidRoomCode(normalized)) {
       setError(t('online.errorInvalidCode'));
@@ -99,10 +106,6 @@ export default function JoinRoomScreen() {
         resetFirebaseBootstrap();
       }
       const firebase = await ensureFirebaseReady({ forceRetry: firebaseStatus === 'error' });
-      if (!firebase) {
-        setError(firebaseBootstrapErrorMessage(undefined, t));
-        return;
-      }
       useFirebaseStore.getState().setConnection({
         status: firebase.status,
         uid: firebase.uid ?? null,
@@ -149,8 +152,11 @@ export default function JoinRoomScreen() {
     <>
       <Stack.Screen options={screenOptions} />
       <Screen>
+        {joinLocked ? (
+          <Text style={styles.lockedBanner}>{t('online.joinLockedBanner')}</Text>
+        ) : null}
         <Text style={styles.hint}>{t('online.joinHint')}</Text>
-        <RoomCodeInput value={code} onChange={setCode} />
+        <RoomCodeInput value={code} onChange={setCode} disabled={joinLocked} />
         {prewarming && !loading ? (
           <Text style={styles.hint}>{t('online.cloudConnecting')}</Text>
         ) : null}
@@ -158,7 +164,7 @@ export default function JoinRoomScreen() {
         {loading ? <ActivityIndicator color={colors.accent} /> : null}
         <PrimaryButton
           label={t('online.joinAction')}
-          disabled={loading || !isValidRoomCode(normalizeRoomCode(code))}
+          disabled={joinLocked || loading || !isValidRoomCode(normalizeRoomCode(code))}
           onPress={handleJoin}
         />
 
@@ -173,7 +179,7 @@ export default function JoinRoomScreen() {
             <PrimaryButton
               label={t('online.scanQr')}
               variant="secondary"
-              disabled={loading}
+              disabled={joinLocked || loading}
               onPress={() => {
                 setScannerOpen(true);
               }}
@@ -196,7 +202,7 @@ export default function JoinRoomScreen() {
         <PrimaryButton
           label={t('online.findPublicGame')}
           variant="secondary"
-          disabled={loading}
+          disabled={joinLocked || loading}
           onPress={() => {
             router.push('/online/browse');
           }}
@@ -211,6 +217,17 @@ function createStyles(colors: ThemeColors) {
     hint: {
       fontSize: 14,
       color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    lockedBanner: {
+      fontSize: 14,
+      lineHeight: 20,
+      color: colors.composeDraftText,
+      backgroundColor: colors.composeDraftBg,
+      borderWidth: 1,
+      borderColor: colors.alert,
+      borderRadius: radii.sm,
+      padding: spacing.sm,
       textAlign: 'center',
     },
     error: {

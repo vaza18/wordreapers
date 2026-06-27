@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { HeaderBarButton } from '@/components/HeaderBarButton';
 import { SettingsGearIcon } from '@/components/HeaderIcons';
+import { useHeaderIconButtonLayout } from '@/hooks/useHeaderIconButtonLayout';
 import { useTheme } from '@/hooks/useTheme';
 
 interface SettingsIconButtonProps {
@@ -15,6 +16,7 @@ interface SettingsIconButtonProps {
 export function SettingsIconButton({ onPress }: SettingsIconButtonProps = {}) {
   const { t } = useTranslation();
   const { colors } = useTheme();
+  const { settingsIconSize } = useHeaderIconButtonLayout();
 
   const handlePress = () => {
     if (onPress) {
@@ -26,7 +28,7 @@ export function SettingsIconButton({ onPress }: SettingsIconButtonProps = {}) {
 
   return (
     <HeaderBarButton accessibilityLabel={t('nav.settings')} onPress={handlePress}>
-      <SettingsGearIcon color={colors.textSecondary} />
+      <SettingsGearIcon size={settingsIconSize} color={colors.textSecondary} />
     </HeaderBarButton>
   );
 }

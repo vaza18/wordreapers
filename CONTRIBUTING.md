@@ -15,6 +15,15 @@ npm run dict:all                     # required once after clone
 
 Fill Firebase `EXPO_PUBLIC_*` values in `.env` for online play. The same `EXPO_PUBLIC_FIREBASE_PROJECT_ID` is used by `npm run firebase:deploy:*`.
 
+Download from Firebase Console → **Project settings → General** (gitignored, project root):
+
+- `google-services.json` (Android app `com.wordreapers.app`)
+- `GoogleService-Info.plist` (iOS app `com.wordreapers.app`)
+
+Register **App Check** providers (Console → App Check → Apps): Android **Play Integrity**, iOS **App Attest**. Add the same debug UUID under **Manage debug tokens** on both platforms; put it in `EXPO_PUBLIC_FIREBASE_APP_CHECK_DEBUG_TOKEN` for dev builds.
+
+After changing native Firebase plugins or config files, rebuild the dev client (`npm run android` / `npm run ios`) — a Metro reload is not enough.
+
 Install the **development client** once (`npm run android` or `npm run ios`), then use `npm start` for daily JS work — not Expo Go.
 
 ## Quality checks

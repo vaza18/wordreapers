@@ -5,6 +5,10 @@ functions/node_modules/
 .env
 .env.*
 !.env.example
+google-services.json
+GoogleService-Info.plist
+credentials.json
+credentials/
 
 # Generated assets (see assets/README.md)
 assets/generated/

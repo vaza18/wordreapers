@@ -1,19 +1,25 @@
 import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
+import { ClearDraftIcon } from '@/components/ComposeActionIcons';
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { LetterKeyboard } from '@/components/LetterKeyboard';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useComposePanelLayout } from '@/hooks/useComposePanelLayout';
+import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { toDisplayUpper } from '@/lib/dictionary/normalize';
 import type { LetterKey } from '@/lib/game/letter-keyboard';
+import { centeredSquareTextStyle } from '@/lib/ui/centered-square-text';
+
+const COMPOSE_HIT_SLOP = 6;
 
 export interface OnlinePlayComposePanelProps {
   draft: string;
   draftKeyIndices: readonly number[];
   letterKeys: readonly LetterKey[];
   composeKeySize: number;
-  composeKeyFontSize: number;
   onPressKey: (index: number) => void;
   onClearDraft: () => void;
   onBackspaceDraft: () => void;
@@ -27,12 +33,15 @@ export const OnlinePlayComposePanel = memo(function OnlinePlayComposePanel({
   draftKeyIndices,
   letterKeys,
   composeKeySize,
-  composeKeyFontSize,
   onPressKey,
   onClearDraft,
   onBackspaceDraft,
 }: OnlinePlayComposePanelProps) {
   const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
+  const { t } = useTranslation();
+  const { draftFontSize, backspaceGlyphSize, clearIconSize } =
+    useComposePanelLayout(composeKeySize);
   const usedKeyIndices = new Set(draftKeyIndices);
 
   return (
@@ -40,6 +49,8 @@ export const OnlinePlayComposePanel = memo(function OnlinePlayComposePanel({
       <View style={styles.composeRow}>
         <FeedbackPressable
           accessibilityRole="button"
+          accessibilityLabel={t('game.clearDraft')}
+          hitSlop={COMPOSE_HIT_SLOP}
           onPress={onClearDraft}
           style={[
             styles.composeKey,
@@ -47,13 +58,30 @@ export const OnlinePlayComposePanel = memo(function OnlinePlayComposePanel({
             styles.composeKeyDanger,
           ]}
         >
-          <Text style={[styles.composeKeyLabel, { fontSize: composeKeyFontSize }]}>✕</Text>
+          <ClearDraftIcon size={clearIconSize} color={colors.textOnAccent} />
         </FeedbackPressable>
         <View style={[styles.draftBox, { height: composeKeySize }]}>
-          <Text style={styles.draftText}>{toDisplayUpper(draft) || ' '}</Text>
+          <Text
+            allowFontScaling={false}
+            adjustsFontSizeToFit
+            minimumFontScale={0.45}
+            numberOfLines={1}
+            style={[
+              styles.draftText,
+              {
+                fontSize: draftFontSize,
+                lineHeight: composeKeySize,
+                height: composeKeySize,
+              },
+            ]}
+          >
+            {toDisplayUpper(draft) || ' '}
+          </Text>
         </View>
         <FeedbackPressable
           accessibilityRole="button"
+          accessibilityLabel={t('game.backspaceDraft')}
+          hitSlop={COMPOSE_HIT_SLOP}
           onPress={onBackspaceDraft}
           style={[
             styles.composeKey,
@@ -61,7 +89,16 @@ export const OnlinePlayComposePanel = memo(function OnlinePlayComposePanel({
             styles.composeKeyAlert,
           ]}
         >
-          <Text style={[styles.composeKeyLabel, { fontSize: composeKeyFontSize }]}>⌫</Text>
+          <Text
+            allowFontScaling={false}
+            numberOfLines={1}
+            style={[
+              styles.composeKeyLabel,
+              centeredSquareTextStyle(composeKeySize, backspaceGlyphSize),
+            ]}
+          >
+            ⌫
+          </Text>
         </FeedbackPressable>
       </View>
 
@@ -79,6 +116,7 @@ function createStyles(colors: ThemeColors) {
     },
     composeKey: {
       borderRadius: radii.sm,
+      overflow: 'hidden',
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -98,9 +136,9 @@ function createStyles(colors: ThemeColors) {
       borderRadius: radii.sm,
       paddingHorizontal: spacing.md,
       justifyContent: 'center',
+      overflow: 'hidden',
     },
     draftText: {
-      fontSize: 16,
       fontWeight: '600',
       letterSpacing: 1,
       color: colors.composeDraftText,

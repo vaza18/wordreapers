@@ -16,7 +16,10 @@ import { useTheme } from '@/hooks/useTheme';
 import i18n, { initI18n } from '@/i18n';
 import { LOCAL_BOOTSTRAP_TIMEOUT_MS, withBootstrapTimeout } from '@/lib/app/bootstrap-timeout';
 import { warmUpFeedbackModules } from '@/lib/feedback/game-feedback';
+import { enableAccessibleTypography } from '@/lib/typography/enable-accessible-typography';
 import { subscribeImmersiveStatusBar } from '@/lib/system-ui';
+
+enableAccessibleTypography();
 import { useRoundFinishedNotificationRouting } from '@/hooks/useRoundFinishedNotificationRouting';
 import { useOnlineSyncCoordinator } from '@/hooks/useOnlineSyncCoordinator';
 import { purgeStaleActiveRoundCaches } from '@/lib/online/cache-active-round';

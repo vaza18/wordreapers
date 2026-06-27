@@ -1,3 +1,4 @@
+import { nativeApplicationVersion, nativeBuildVersion } from 'expo-application';
 import Constants from 'expo-constants';
 
 /** Installed app version and native build number, when available. */
@@ -18,9 +19,8 @@ function readVersionString(value: unknown): string | null {
 /** User-facing app version and native build number from the installed binary. */
 export function getAppVersionInfo(): AppVersionInfo {
   const version =
-    readVersionString(Constants.nativeApplicationVersion) ??
-    readVersionString(Constants.expoConfig?.version);
-  const build = readVersionString(Constants.nativeBuildVersion);
+    readVersionString(nativeApplicationVersion) ?? readVersionString(Constants.expoConfig?.version);
+  const build = readVersionString(nativeBuildVersion);
 
   return { version, build };
 }

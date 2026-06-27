@@ -1,10 +1,7 @@
 import type { TFunction } from 'i18next';
 
 import { describeFirebaseConfigGap, FIREBASE_CONFIG_ALPHA_DIAGNOSTICS } from './config.js';
-
-function isPermissionDenied(text: string): boolean {
-  return /permission[-_]?denied/i.test(text);
-}
+import { isFirebasePermissionDenied } from './rtdb-errors.js';
 
 function isNetworkError(text: string, code: string | null): boolean {
   return (
@@ -50,7 +47,7 @@ export function firebaseBootstrapErrorMessage(
   if (isFirebaseConfigError(message)) {
     return firebaseConfigErrorMessage(t, message);
   }
-  if (isPermissionDenied(message)) {
+  if (isFirebasePermissionDenied(message)) {
     return t('online.errorFirebasePermission');
   }
   if (/api[- ]?key|API_KEY_INVALID/i.test(message)) {
@@ -58,6 +55,9 @@ export function firebaseBootstrapErrorMessage(
   }
   if (isNetworkError(message, null) || /connection timed out/i.test(message)) {
     return t('online.errorFirebaseNetwork');
+  }
+  if (/No Firebase App|FirebaseApp\.configure|initializeAppCheck|App Check/i.test(message)) {
+    return withAlphaFirebaseDiagnostics(t('online.errorFirebaseNativeInit'), message);
   }
   return t('online.errorJoinFailed');
 }
@@ -89,17 +89,23 @@ export function joinErrorMessage(error: unknown, t: TFunction): string {
   if (message === 'ROOM_NOT_WAITING' || message === 'ROOM_NOT_JOINABLE') {
     return t('online.errorRoomStarted');
   }
+  if (message === 'ROOM_CODE_CONFLICT') {
+    return t('online.errorFirebasePermission');
+  }
   if (isFirebaseConfigError(message) || message.includes('Firebase is not configured')) {
     return firebaseConfigErrorMessage(t, message);
   }
-  if (code === 'permission-denied' || isPermissionDenied(message)) {
-    return t('online.errorFirebasePermission');
+  if (code === 'auth/operation-not-allowed') {
+    return t('online.errorFirebaseAnonymousDisabled');
   }
   if (code === 'auth/api-key-not-valid' || /api[- ]?key/i.test(message)) {
     return t('online.errorFirebaseApiKey');
   }
   if (isNetworkError(message, code)) {
     return t('online.errorFirebaseNetwork');
+  }
+  if (isFirebasePermissionDenied(error)) {
+    return t('online.errorRoomNotFound');
   }
 
   return t('online.errorJoinFailed');

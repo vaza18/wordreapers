@@ -12,10 +12,10 @@ describe('letterKeyProportions', () => {
     expect(props.keySize).toBe(56);
     expect(props.gap).toBe(4);
     expect(props.borderRadius).toBe(8);
-    expect(props.fontSize).toBe(22);
+    expect(props.fontSize).toBe(28);
     expect(props.gapRatio).toBeCloseTo(4 / 56);
     expect(props.borderRadiusRatio).toBeCloseTo(8 / 56);
-    expect(props.fontSizeRatio).toBeCloseTo(22 / 56);
+    expect(props.fontSizeRatio).toBeCloseTo(28 / 56);
   });
 });
 

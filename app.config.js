@@ -19,23 +19,37 @@ module.exports = ({ config }) => {
   }
 
   const plugins = [
-    ...(config.plugins ?? []),
+    ...(config.plugins ?? []).map((plugin) => {
+      if (!isProductionBuild && plugin === 'expo-dev-client') {
+        return ['expo-dev-client', { launchMode: 'launcher' }];
+      }
+      return plugin;
+    }),
     './plugins/with-automatic-ui-style.cjs',
     './plugins/with-firebase-extra.cjs',
     './plugins/without-ios-push-entitlement.cjs',
-  ];
-
-  if (isProductionBuild) {
-    plugins.push([
+    './plugins/with-ios-modular-headers.cjs',
+    '@react-native-firebase/app',
+    '@react-native-firebase/app-check',
+    './plugins/with-ios-firebase-native-init.cjs',
+    [
       'expo-build-properties',
       {
-        android: {
-          enableMinifyInReleaseBuilds: true,
-          enableShrinkResourcesInReleaseBuilds: true,
+        ios: {
+          useFrameworks: 'static',
+          deploymentTarget: '15.1',
         },
+        ...(isProductionBuild
+          ? {
+              android: {
+                enableMinifyInReleaseBuilds: true,
+                enableShrinkResourcesInReleaseBuilds: true,
+              },
+            }
+          : {}),
       },
-    ]);
-  }
+    ],
+  ];
 
   if (!isProductionBuild) {
     plugins.push('./plugins/with-ios-device-metro-host.cjs');
@@ -47,11 +61,16 @@ module.exports = ({ config }) => {
     ios: {
       ...config.ios,
       userInterfaceStyle: 'automatic',
+      googleServicesFile:
+        process.env.GOOGLE_SERVICES_PLIST ??
+        process.env.GOOGLE_SERVICE_INFO_PLIST ??
+        config.ios?.googleServicesFile,
       infoPlist: baseIosInfoPlist,
     },
     android: {
       ...config.android,
       userInterfaceStyle: 'automatic',
+      googleServicesFile: process.env.GOOGLE_SERVICES_JSON ?? config.android?.googleServicesFile,
     },
     plugins,
   };

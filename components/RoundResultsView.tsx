@@ -21,6 +21,7 @@ import { Screen } from '@/components/Screen';
 import { ScrollableWordPanel } from '@/components/ScrollableWordPanel';
 import { SettingSwitch } from '@/components/SettingSwitch';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useNotebookRowHeight } from '@/hooks/useNotebookRowHeight';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import type { RoundPlayableLexicon } from '@/lib/dictionary/round-playable-lexicon';
 import type { GlobalResultWordRow, PlayerResultRankGroup } from '@/lib/game/results-view';
@@ -49,7 +50,7 @@ export interface RoundResultsViewProps {
   showScores?: boolean;
   showWordAuthors?: boolean;
   roundDurationSeconds?: number;
-  /** When true, «Показати невідомі слова» is visible but not interactive (e.g. early exit while round plays). */
+  /** When true, «Показати незнайдені слова» is visible but not interactive (e.g. early exit while round plays). */
   missingWordsToggleDisabled?: boolean;
 }
 
@@ -75,6 +76,7 @@ export function RoundResultsView({
   missingWordsToggleDisabled = false,
 }: RoundResultsViewProps) {
   const styles = useThemedStyles(createStyles);
+  const rowHeight = useNotebookRowHeight();
   const { t } = useTranslation();
   const [tab, setTab] = useState<ResultsTab>('all');
   const [showMissingWords, setShowMissingWords] = useState(false);
@@ -120,12 +122,14 @@ export function RoundResultsView({
   const viewportHeight = panelScroll.scrollMetrics.viewportHeight;
   const contentHeight = panelScroll.scrollMetrics.contentHeight;
   const fillerRowCount =
-    tab === 'all' ? notebookFillerRowCount(allWordRows.length, viewportHeight, spacing.md) : 0;
+    tab === 'all'
+      ? notebookFillerRowCount(allWordRows.length, viewportHeight, spacing.md, rowHeight)
+      : 0;
   const playersRuledHeight =
     tab === 'players' && viewportHeight > 0 ? Math.max(viewportHeight, playerBodyHeight) : 0;
   const canScroll =
     tab === 'all'
-      ? notebookListCanScroll(allWordRows.length, viewportHeight, spacing.md)
+      ? notebookListCanScroll(allWordRows.length, viewportHeight, spacing.md, rowHeight)
       : viewportHeight > 0 && contentHeight > viewportHeight + SCROLL_OVERFLOW_THRESHOLD;
 
   const onPlayerBodyLayout = useCallback(
@@ -271,6 +275,7 @@ function TabButton({
   return (
     <FeedbackPressable
       accessibilityRole="button"
+      accessibilityState={{ selected: active }}
       onPress={onPress}
       style={[styles.tab, active ? styles.tabActive : styles.tabIdle]}
     >

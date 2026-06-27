@@ -11,18 +11,19 @@ import {
   loadBundledSupplements,
 } from '@/services/dictionary-service';
 import { AddTimeModal } from '@/components/AddTimeModal';
-import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { GameMenuModal } from '@/components/GameMenuModal';
 import { GamePlayStatusBar } from '@/components/GamePlayStatusBar';
 import { GameTimeUpModal } from '@/components/GameTimeUpModal';
-import { LetterKeyboard } from '@/components/LetterKeyboard';
-import { PrimaryButton } from '@/components/PrimaryButton';
-import { WordList } from '@/components/WordList';
-import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { HowToPlayDialog } from '@/components/HowToPlayDialog';
+import { OnlinePlayComposePanel } from '@/components/online/OnlinePlayComposePanel';
+import { OnlinePlayWordListSection } from '@/components/online/OnlinePlayWordListSection';
+import { PauseRoundModal } from '@/components/PauseRoundModal';
+import { spacing, type ThemeColors } from '@/constants/theme';
 import { modalOverlayBackground } from '@/lib/ui/modal-chrome';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useAutoPauseOnAppBackground } from '@/hooks/useAutoPauseOnAppBackground';
+import { useTrainingMilestone } from '@/hooks/useTrainingMilestone';
 import { useTimerAlerts } from '@/hooks/useTimerAlerts';
 import { useRoundTimeUpModal } from '@/hooks/useRoundTimeUpModal';
 import { DictionaryIndex } from '@/lib/dictionary/dictionary-index';
@@ -31,10 +32,15 @@ import { playWordAcceptedFeedback } from '@/lib/feedback/game-feedback';
 import { ensureFirebaseReady } from '@/lib/firebase/ensure-firebase-ready';
 import { joinErrorMessage } from '@/lib/firebase/join-error-message';
 import { buildLetterKeys, computeLetterKeySize } from '@/lib/game/letter-keyboard';
-import { letterKeyFontSizeForKeySize } from '@/lib/game/letter-key-style';
-import { acceptWord, type PlayWordErrorCode } from '@/lib/game/play-word';
+import { acceptWord } from '@/lib/game/play-word';
+import {
+  playWordErrorMessage,
+  playWordFeedbackVariant,
+  type PlayWordFeedbackVariant,
+} from '@/lib/game/play-word-feedback';
 import { formatPlayRulesLabel } from '@/lib/online/play-rules-label';
 import { gameSessionSettingsFromSetup } from '@/lib/firebase/session-settings';
+import type { GameSession } from '@/lib/firebase/types';
 import { computePlayerScore } from '@/lib/game/scoring';
 import { getLocalRoomDraft } from '@/lib/online/local-room-draft';
 import { publishPlayingSoloForDraft } from '@/lib/online/publish-room';
@@ -56,25 +62,6 @@ function formatTimer(ms: number): string {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
-function errorMessage(
-  t: (key: string) => string,
-  code: PlayWordErrorCode | undefined,
-): string | null {
-  switch (code) {
-    case 'TOO_SHORT':
-    case 'NOT_IN_DICTIONARY':
-      return null;
-    case 'IS_BASE_WORD':
-      return t('game.errorBaseWord');
-    case 'INVALID_LETTERS':
-      return t('game.errorInvalidLetters');
-    case 'ALREADY_SUBMITTED':
-      return t('game.errorAlreadySubmitted');
-    default:
-      return t('game.errorUnknown');
-  }
-}
-
 /**
  * Organizer solo round — local only until invite publishes to Firebase.
  */
@@ -86,10 +73,13 @@ export default function OrganizerSoloPlayScreen() {
   const gameId = rawGameId ?? '';
   const { width: screenWidth } = useWindowDimensions();
   const composeKeySize = computeLetterKeySize(screenWidth);
-  const composeKeyFontSize = letterKeyFontSizeForKeySize(composeKeySize);
   const wordAcceptedFeedback = useSettingsStore((state) => state.wordAcceptedFeedback);
   const timerAlertMode = useSettingsStore((state) => state.timerAlertMode);
   const myName = useProfileStore((state) => state.name) || t('profile.namePlaceholder');
+  const viewerGender = useProfileStore((state) => state.gender);
+  const myUid = useFirebaseStore((state) => state.uid) ?? 'solo';
+  const { hydrated: trainingHydrated, hasCompletedTrainingRound } = useTrainingMilestone();
+  const canInviteOthers = trainingHydrated && hasCompletedTrainingRound;
 
   const setup = useOrganizerSoloStore((state) => state.setup);
   const status = useOrganizerSoloStore((state) => state.status);
@@ -111,6 +101,7 @@ export default function OrganizerSoloPlayScreen() {
   const [draft, setDraft] = useState('');
   const [draftKeyIndices, setDraftKeyIndices] = useState<number[]>([]);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedbackVariant, setFeedbackVariant] = useState<PlayWordFeedbackVariant>('default');
   const [scrollRequest, setScrollRequest] = useState<{ normalized: string; id: number } | null>(
     null,
   );
@@ -174,7 +165,10 @@ export default function OrganizerSoloPlayScreen() {
     if (!feedback) {
       return;
     }
-    const timer = setTimeout(() => setFeedback(null), FEEDBACK_DISMISS_MS);
+    const timer = setTimeout(() => {
+      setFeedback(null);
+      setFeedbackVariant('default');
+    }, FEEDBACK_DISMISS_MS);
     return () => clearTimeout(timer);
   }, [feedback]);
 
@@ -203,6 +197,51 @@ export default function OrganizerSoloPlayScreen() {
         )
       : null,
   );
+
+  const pauseSession = useMemo((): GameSession | null => {
+    if (!setup || !isPaused) {
+      return null;
+    }
+    return {
+      baseWord: setup.baseWord,
+      status: 'playing',
+      settings: gameSessionSettingsFromSetup(
+        setup.durationMinutes,
+        setup.uniqueBonusMode,
+        setup.allowProperNouns,
+        setup.allowSlang,
+        1,
+      ),
+      timerEndsAt: null,
+      organizerId: myUid,
+      players: {
+        [myUid]: {
+          name: myName,
+          gender: viewerGender,
+          wordCount: scoredWords.length,
+          score: playerScore,
+          online: true,
+        },
+      },
+      pauseState: {
+        active: true,
+        frozenRemainingMs: remainingMs,
+        frozenAt: now,
+      },
+    };
+  }, [
+    setup,
+    isPaused,
+    myUid,
+    myName,
+    viewerGender,
+    scoredWords.length,
+    playerScore,
+    remainingMs,
+    now,
+  ]);
+
+  const pauseUiObscured = showGameMenu;
 
   const submitDraft = useCallback(
     (draftValue: string) => {
@@ -240,12 +279,10 @@ export default function OrganizerSoloPlayScreen() {
       });
 
       if (!result.accepted || !result.entry) {
-        if (result.error === 'NOT_IN_DICTIONARY') {
-          return;
-        }
-        const message = errorMessage(t, result.error);
+        const message = playWordErrorMessage(t, result.error);
         if (message) {
           setFeedback(message);
+          setFeedbackVariant(playWordFeedbackVariant(false, result.error));
         }
         return;
       }
@@ -263,6 +300,7 @@ export default function OrganizerSoloPlayScreen() {
       setDraftKeyIndices([]);
       lastValidatedDraft.current = '';
       setFeedback(t('game.wordAccepted'));
+      setFeedbackVariant('success');
       playWordAcceptedFeedback(wordAcceptedFeedback);
     },
     [
@@ -323,7 +361,7 @@ export default function OrganizerSoloPlayScreen() {
   };
 
   const handleInvite = async () => {
-    if (!setup || !gameId || publishing) {
+    if (!canInviteOthers || !setup || !gameId || publishing) {
       return;
     }
     const draftRoom = getLocalRoomDraft(gameId);
@@ -412,72 +450,57 @@ export default function OrganizerSoloPlayScreen() {
             </View>
 
             <View style={styles.wordListSection}>
-              <WordList
+              <OnlinePlayWordListSection
                 entries={scoredWords}
                 displays={displays}
                 draftPrefix={draft}
                 scrollToNormalized={scrollRequest?.normalized ?? null}
                 scrollToRequestId={scrollRequest?.id}
+                feedback={feedback}
+                feedbackVariant={feedbackVariant}
+                backgroundSyncing={false}
                 showScoreBadges={false}
                 showOverlapPeers={false}
               />
-              <View style={styles.feedbackSlot}>
-                {feedback ? <Text style={styles.feedbackToast}>{feedback}</Text> : null}
-                {publishError ? <Text style={styles.publishError}>{publishError}</Text> : null}
-              </View>
+              {publishError ? <Text style={styles.publishError}>{publishError}</Text> : null}
             </View>
 
-            <View style={styles.composeRow}>
-              <FeedbackPressable
-                accessibilityRole="button"
-                onPress={clearDraft}
-                style={[
-                  styles.composeKey,
-                  { width: composeKeySize, height: composeKeySize },
-                  styles.composeKeyDanger,
-                ]}
-              >
-                <Text style={[styles.composeKeyLabel, { fontSize: composeKeyFontSize }]}>✕</Text>
-              </FeedbackPressable>
-              <View style={[styles.draftBox, { height: composeKeySize }]}>
-                <Text style={styles.draftText}>{toDisplayUpper(draft) || ' '}</Text>
-              </View>
-              <FeedbackPressable
-                accessibilityRole="button"
-                onPress={backspaceDraft}
-                style={[
-                  styles.composeKey,
-                  { width: composeKeySize, height: composeKeySize },
-                  styles.composeKeyAlert,
-                ]}
-              >
-                <Text style={[styles.composeKeyLabel, { fontSize: composeKeyFontSize }]}>⌫</Text>
-              </FeedbackPressable>
-            </View>
-
-            <LetterKeyboard
-              keys={letterKeys}
-              usedKeyIndices={usedKeyIndices}
+            <OnlinePlayComposePanel
+              draft={draft}
+              draftKeyIndices={draftKeyIndices}
+              letterKeys={letterKeys}
+              composeKeySize={composeKeySize}
               onPressKey={pressKey}
+              onClearDraft={clearDraft}
+              onBackspaceDraft={backspaceDraft}
             />
           </>
-        ) : (
-          <View style={styles.pauseOverlay}>
-            <Text style={styles.pauseTitle}>{t('game.pauseTitle')}</Text>
-            <Text style={styles.pauseTimer}>
-              {t('game.pauseFrozenTimer', { time: formatTimer(remainingMs) })}
-            </Text>
-            <PrimaryButton label={t('game.pauseResumeNow')} onPress={resumeRound} />
-            <PrimaryButton
-              label={t('game.menu')}
-              variant="secondary"
-              onPress={() => {
-                setShowGameMenu(true);
-              }}
-            />
-          </View>
-        )}
+        ) : null}
       </SafeAreaView>
+
+      {isPaused && pauseSession ? (
+        <PauseRoundModal
+          visible={!pauseUiObscured}
+          session={pauseSession}
+          myUid={myUid}
+          viewerGender={viewerGender}
+          serverNow={now}
+          resumeVote={null}
+          earlyFinishVote={null}
+          hasOnlineOpponent={false}
+          onProposeResume={resumeRound}
+          onResumeYes={() => {}}
+          onResumeNo={() => {}}
+          onEarlyFinishYes={() => {}}
+          onEarlyFinishNo={() => {}}
+          onOpenMenu={() => {
+            setShowGameMenu(true);
+          }}
+          onOpenSettings={() => {
+            router.push('/settings');
+          }}
+        />
+      ) : null}
 
       <GameMenuModal
         visible={showGameMenu}
@@ -495,7 +518,7 @@ export default function OrganizerSoloPlayScreen() {
         onProposeEnd={() => {}}
         showPause={!isPaused}
         pauseLabel={t('game.menuPauseSolo')}
-        showInvite
+        showInvite={canInviteOthers}
         onInvite={() => {
           void handleInvite();
         }}
@@ -524,6 +547,8 @@ export default function OrganizerSoloPlayScreen() {
           addTime(minutes);
         }}
       />
+
+      <HowToPlayDialog enabled={status === 'playing'} />
 
       {publishing ? (
         <View style={styles.publishingOverlay}>
@@ -569,82 +594,14 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
       textAlign: 'right',
     },
-    composeRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.xs,
-    },
-    composeKey: {
-      borderRadius: radii.sm,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    composeKeyDanger: {
-      backgroundColor: colors.dangerLight,
-    },
-    composeKeyAlert: {
-      backgroundColor: colors.alert,
-    },
-    composeKeyLabel: {
-      color: colors.textOnAccent,
-      fontWeight: '700',
-    },
-    draftBox: {
-      flex: 1,
-      backgroundColor: colors.composeDraftBg,
-      borderRadius: radii.sm,
-      paddingHorizontal: spacing.md,
-      justifyContent: 'center',
-    },
-    draftText: {
-      fontSize: 16,
-      fontWeight: '600',
-      letterSpacing: 1,
-      color: colors.composeDraftText,
-    },
     wordListSection: {
       flex: 1,
       minHeight: 0,
-    },
-    feedbackSlot: {
-      height: 32,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    feedbackToast: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: colors.textPrimary,
-      backgroundColor: colors.feedbackToastBg,
-      borderWidth: 1,
-      borderColor: colors.borderSecondary,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.xs,
-      borderRadius: radii.sm,
-      overflow: 'hidden',
     },
     publishError: {
       fontSize: 13,
       color: '#E24B4A',
       textAlign: 'center',
-    },
-    pauseOverlay: {
-      flex: 1,
-      justifyContent: 'center',
-      gap: spacing.md,
-      padding: spacing.lg,
-    },
-    pauseTitle: {
-      fontSize: 20,
-      fontWeight: '600',
-      color: colors.textPrimary,
-      textAlign: 'center',
-    },
-    pauseTimer: {
-      fontSize: 16,
-      color: colors.textSecondary,
-      textAlign: 'center',
-      marginBottom: spacing.sm,
     },
     publishingOverlay: {
       ...StyleSheet.absoluteFillObject,

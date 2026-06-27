@@ -1,5 +1,11 @@
-/** Row height for WordList rows — ruled line interval must match. */
+/** Legacy mockup row height before tightness (42px at 18px word size). */
 export const WORD_LIST_ROW_HEIGHT = 42;
+
+/** Less vertical air between word glyphs and ruled lines (~20%). */
+export const NOTEBOOK_ROW_HEIGHT_TIGHTNESS = 0.8;
+
+/** Ruled-row height at the design font scale — used by WordList and fillers. */
+export const NOTEBOOK_ROW_HEIGHT = Math.round(WORD_LIST_ROW_HEIGHT * NOTEBOOK_ROW_HEIGHT_TIGHTNESS);
 
 /** Top spiral-bound holes strip layout (must match NotebookHolesHeader). */
 export const NOTEBOOK_HOLES_PADDING_TOP = 20;

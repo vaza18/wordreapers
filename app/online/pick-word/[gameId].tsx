@@ -12,8 +12,8 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { RoundSettingsFields } from '@/components/RoundSettingsFields';
 import { Screen } from '@/components/Screen';
 import { ShuffleBaseWordButton } from '@/components/ShuffleBaseWordButton';
-import { headerIconButtonSize } from '@/constants/header-button';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useHeaderIconButtonLayout } from '@/hooks/useHeaderIconButtonLayout';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
@@ -46,6 +46,7 @@ const SUGGEST_DROPDOWN_LIMIT = 50;
 export default function OnlinePickWordScreen() {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
+  const { buttonSize: headerButtonSize } = useHeaderIconButtonLayout();
   const { t } = useTranslation();
   const { gameId: rawGameId } = useLocalSearchParams<{ gameId: string }>();
   const gameId = rawGameId ?? '';
@@ -226,7 +227,11 @@ export default function OnlinePickWordScreen() {
             <TextInput
               autoCapitalize="characters"
               autoCorrect={false}
-              style={[styles.input, showSuggestDropdown ? styles.inputActive : null]}
+              style={[
+                styles.input,
+                { height: headerButtonSize },
+                showSuggestDropdown ? styles.inputActive : null,
+              ]}
               value={baseWordInput}
               onChangeText={setBaseWordInput}
               onFocus={() => setBaseWordFocused(true)}
@@ -315,7 +320,6 @@ function createStyles(colors: ThemeColors) {
     },
     input: {
       flex: 1,
-      height: headerIconButtonSize,
       backgroundColor: colors.backgroundPrimary,
       borderWidth: 1,
       borderColor: colors.borderSecondary,
