@@ -11,10 +11,9 @@ import {
 
 import { runRtdbTransaction } from './rtdb-transaction.js';
 
-import { toScoredWordEntry, type ScoredWordEntry } from '../game/scoring.js';
+import { toScoredWordEntry, type ScoredWordEntry, type WordScoreKind } from '../game/scoring.js';
 
 import {
-  applyWordSubmitToWordPlayersShard,
   buildPartialWordMaps,
   planPlayerScoreUpdate,
   type PlayerScoreUpdatePlan,
@@ -24,6 +23,7 @@ import {
   rollbackWordMapsShard,
   wordFirstPerWordRef,
   wordPlayersPerWordRef,
+  wordPlayersShardPlayerRef,
 } from '../online/word-maps-shard-rollback.js';
 import { wordsAreFromPreviousRound } from '../online/stale-player-words.js';
 
@@ -429,19 +429,12 @@ export async function submitOnlineWord(
     let prevGlobal: number;
     try {
       const committedShard = await runRtdbTransaction(
-        wordPlayersPerWordRef(roomId, normalized),
+        wordPlayersShardPlayerRef(roomId, normalized, uid),
         (current) => {
-          const applied = applyWordSubmitToWordPlayersShard(
-            (current as Record<string, boolean> | null) ?? null,
-            uid,
-            normalized,
-            uniqueBonusEnabled,
-          );
-          if (!applied.ok) {
+          if (current === true) {
             return undefined;
           }
-          entry = applied.entry;
-          return applied.maps.wordPlayers?.[normalized];
+          return true;
         },
       );
       profile?.mark('wordPlayersShardTx');
@@ -450,11 +443,15 @@ export async function submitOnlineWord(
         return { ok: false, error: 'DUPLICATE' };
       }
 
-      playersOnWord = (committedShard.snapshot.val() as Record<string, boolean> | null) ?? {};
+      const parentSnapshot = await get(wordPlayersPerWordRef(roomId, normalized));
+      playersOnWord = (parentSnapshot.val() as Record<string, boolean> | null) ?? {};
       if (!playersOnWord[uid]) {
         return { ok: false, error: 'NOT_PLAYING' };
       }
-      prevGlobal = Math.max(0, Object.keys(playersOnWord).length - 1);
+      const globalCount = Object.keys(playersOnWord).length;
+      prevGlobal = Math.max(0, globalCount - 1);
+      const kind: WordScoreKind = globalCount > 1 ? 'normal' : 'unique';
+      entry = toScoredWordEntry(normalized, kind, uniqueBonusEnabled, globalCount);
     } catch (error) {
       if (isFirebasePermissionDenied(error)) {
         return { ok: false, error: 'NOT_PLAYING' };

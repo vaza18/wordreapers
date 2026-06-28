@@ -11,12 +11,16 @@ import { formatResultsHeadline } from '@/lib/game/results-headline';
 import { createSoloResultsDirectory } from '@/lib/game/results-directory';
 import { buildGlobalResultWords, buildPlayerResultRankGroups } from '@/lib/game/results-view';
 import { computeRoundDurationSeconds } from '@/lib/game/round-duration';
-import { removeLocalRoomDraft } from '@/lib/online/local-room-draft';
+import {
+  meetsTrainingMilestone,
+  markTrainingRoundCompleted,
+} from '@/lib/onboarding/training-milestone';
 import {
   buildSoloFinishedArchiveWords,
   buildSoloFinishedSession,
   saveSoloFinishedRoundArchive,
 } from '@/lib/online/solo-round-archive';
+import { removeLocalRoomDraft } from '@/lib/online/local-room-draft';
 import { organizerSoloStandings, useOrganizerSoloStore } from '@/store/organizer-solo-store';
 import { usePlayerStatsStore } from '@/store/player-stats-store';
 import { useProfileStore } from '@/store/profile-store';
@@ -31,6 +35,7 @@ export default function OrganizerSoloResultsScreen() {
   const gameId = rawGameId ?? '';
   const statsRecordedRef = useRef(false);
   const archiveRecordedRef = useRef(false);
+  const milestoneMarkedRef = useRef(false);
 
   const setup = useOrganizerSoloStore((state) => state.setup);
   const status = useOrganizerSoloStore((state) => state.status);
@@ -157,6 +162,22 @@ export default function OrganizerSoloResultsScreen() {
     allowSlang: setup?.allowSlang ?? false,
     enabled: Boolean(setup?.baseWord),
   });
+
+  useEffect(() => {
+    if (status !== 'finished' || !setup || lexiconLoading || milestoneMarkedRef.current) {
+      return;
+    }
+    const lexiconMaxCount = roundLexicon?.maxCount ?? 0;
+    if (lexiconMaxCount <= 0) {
+      return;
+    }
+    const standings = organizerSoloStandings(useOrganizerSoloStore.getState());
+    const wordsCollected = standings[0]?.wordCount ?? 0;
+    if (meetsTrainingMilestone(wordsCollected, lexiconMaxCount)) {
+      milestoneMarkedRef.current = true;
+      void markTrainingRoundCompleted();
+    }
+  }, [lexiconLoading, roundLexicon?.maxCount, setup, status]);
 
   if (!setup || !viewData) {
     return (

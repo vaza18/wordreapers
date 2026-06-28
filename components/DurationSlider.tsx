@@ -1,13 +1,19 @@
 import { useCallback, useMemo, useRef } from 'react';
-import { PanResponder, StyleSheet, Text, View } from 'react-native';
+import { PanResponder, Platform, StyleSheet, Text, View } from 'react-native';
 
-import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { playButtonFeedback } from '@/lib/feedback/game-feedback';
 import { useSettingsStore } from '@/store/settings-store';
 
 export const DURATION_MIN_MINUTES = 5;
 export const DURATION_MAX_MINUTES = 20;
+
+const TRACK_HEIGHT = 6;
+/** Match native Switch thumb diameter on each platform. */
+const THUMB_SIZE = Platform.select({ ios: 28, android: 20, default: 28 }) ?? 28;
+const THUMB_RADIUS = THUMB_SIZE / 2;
+const TRACK_TOP = (THUMB_SIZE - TRACK_HEIGHT) / 2;
 
 interface DurationSliderProps {
   label: string;
@@ -40,19 +46,44 @@ function createStyles(colors: ThemeColors) {
     trackHit: {
       flex: 1,
       justifyContent: 'center',
-      minHeight: 36,
+      minHeight: 44,
       paddingVertical: spacing.sm,
+      paddingHorizontal: THUMB_RADIUS,
+    },
+    sliderTrack: {
+      flex: 1,
+      height: THUMB_SIZE,
+      justifyContent: 'center',
     },
     track: {
-      height: 6,
-      borderRadius: radii.sm,
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      top: TRACK_TOP,
+      height: TRACK_HEIGHT,
+      borderRadius: TRACK_HEIGHT / 2,
       backgroundColor: colors.controlTrack,
-      overflow: 'hidden',
     },
     trackFill: {
-      height: '100%',
+      position: 'absolute',
+      left: 0,
+      top: TRACK_TOP,
+      height: TRACK_HEIGHT,
       backgroundColor: colors.accent,
-      borderRadius: radii.sm,
+      borderRadius: TRACK_HEIGHT / 2,
+    },
+    thumb: {
+      position: 'absolute',
+      top: 0,
+      width: THUMB_SIZE,
+      height: THUMB_SIZE,
+      borderRadius: THUMB_RADIUS,
+      backgroundColor: colors.switchThumbOn,
+      shadowColor: colors.shadow,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.22,
+      shadowRadius: 2,
+      elevation: 3,
     },
     value: {
       minWidth: 52,
@@ -88,7 +119,7 @@ export function DurationSlider({
       if (width <= 0) {
         return;
       }
-      const ratio = Math.max(0, Math.min(1, locationX / width));
+      const ratio = Math.max(0, Math.min(1, (locationX - THUMB_RADIUS) / width));
       const next = clampMinutes(min + ratio * (max - min), min, max);
       if (next !== valueRef.current) {
         onChange(next);
@@ -121,9 +152,6 @@ export function DurationSlider({
       <View style={styles.row}>
         <View
           style={styles.trackHit}
-          onLayout={(event) => {
-            trackWidthRef.current = event.nativeEvent.layout.width;
-          }}
           accessibilityRole="adjustable"
           accessibilityLabel={label}
           accessibilityValue={{
@@ -134,8 +162,21 @@ export function DurationSlider({
           }}
           {...panResponder.panHandlers}
         >
-          <View style={styles.track}>
+          <View
+            style={styles.sliderTrack}
+            onLayout={(event) => {
+              trackWidthRef.current = event.nativeEvent.layout.width;
+            }}
+          >
+            <View style={styles.track} />
             <View style={[styles.trackFill, { width: `${fillPercent}%` }]} />
+            <View
+              pointerEvents="none"
+              style={[
+                styles.thumb,
+                { left: `${fillPercent}%`, transform: [{ translateX: -THUMB_RADIUS }] },
+              ]}
+            />
           </View>
         </View>
         <Text style={styles.value}>

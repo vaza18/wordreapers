@@ -7,7 +7,7 @@ import { gameSessionPath } from '../firebase/paths.js';
 import { getServerNow } from '../firebase/server-clock.js';
 import { restorePlayerWordsToFirebase } from '../firebase/player-words-service.js';
 import { normalizeRoomCode } from '../firebase/room-code.js';
-import { sessionWordMapsRef } from '../firebase/session-word-maps-service.js';
+import { writeSessionWordMapsShards } from '../firebase/session-word-maps-service.js';
 import { sessionWordMapsFromSession } from '../firebase/session-word-maps.js';
 import type { GameSession } from '../firebase/types.js';
 import type { PlayerProfile } from '../profile/player-profile.js';
@@ -87,7 +87,7 @@ export async function restorePlayingSessionFromLocalCache(
     await set(sessionRef(normalized), sessionCoreFromSnapshot(entry.sessionSnapshot));
     const wordMaps = sessionWordMapsFromSession(entry.sessionSnapshot);
     if (Object.keys(wordMaps.wordPlayers ?? {}).length > 0) {
-      await set(sessionWordMapsRef(normalized), wordMaps);
+      await writeSessionWordMapsShards(normalized, wordMaps);
     }
   }
 

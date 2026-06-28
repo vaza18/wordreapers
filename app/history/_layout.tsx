@@ -17,6 +17,7 @@ export default function HistoryLayout() {
       }}
     >
       <Stack.Screen name="index" />
+      <Stack.Screen name="room/[gameId]" />
       <Stack.Screen name="[archiveKey]" />
     </Stack>
   );

@@ -6,6 +6,7 @@ import { MenuIcon, StarIcon } from '@/components/HeaderIcons';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useTheme } from '@/hooks/useTheme';
+import { formatPlayStatsAccessible, formatPlayStatsCompact } from '@/lib/game/format-play-stats';
 
 /** Matches timer line box + chrome so menu and stats buttons align with the timer chip. */
 const ACTION_BUTTON_HEIGHT = 44;
@@ -62,7 +63,7 @@ function createStyles(colors: ThemeColors) {
       borderWidth: 1,
       borderColor: colors.borderSecondary,
       borderRadius: radii.md,
-      height: ACTION_BUTTON_HEIGHT,
+      minHeight: ACTION_BUTTON_HEIGHT,
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -142,19 +143,20 @@ export function GamePlayStatusBar({
   const styles = useThemedStyles(createStyles);
   const horizontal = Math.max(insets.left, insets.right, spacing.md);
 
-  const statsParts: string[] = [];
-  if (showRank) {
-    statsParts.push(`${rank}м`);
-  }
-  const wordsLabel =
-    maxWordCount != null && maxWordCount > 0
-      ? `${wordCount}/${maxWordCount}${wordsShort}`
-      : `${wordCount}${wordsShort}`;
-  statsParts.push(wordsLabel);
-  if (showScore) {
-    statsParts.push(`${score}${pointsShort}`);
-  }
-  const statsText = statsParts.join(' · ');
+  const statsInput = {
+    rank,
+    wordCount,
+    maxWordCount,
+    score,
+    showRank,
+    showScore,
+  };
+  const statsText = formatPlayStatsCompact(statsInput, {
+    rankSuffix: 'м',
+    wordsSuffix: wordsShort,
+    pointsSuffix: pointsShort,
+  });
+  const statsAccessibleText = formatPlayStatsAccessible(statsInput);
   const starColor = showRank && rank === 1 ? RANK_FIRST_STAR_COLOR : colors.textSecondary;
   const timerPressable = onAddTimePress != null;
 
@@ -213,7 +215,7 @@ export function GamePlayStatusBar({
         {onStandingsPress ? (
           <FeedbackPressable
             accessibilityRole="button"
-            accessibilityLabel={standingsAccessibilityLabel ?? statsText}
+            accessibilityLabel={standingsAccessibilityLabel ?? statsAccessibleText}
             onPress={onStandingsPress}
             style={[styles.actionButton, styles.statsButton]}
           >
@@ -223,7 +225,11 @@ export function GamePlayStatusBar({
             </Text>
           </FeedbackPressable>
         ) : (
-          <Text style={styles.statsPlain} numberOfLines={1}>
+          <Text
+            accessibilityLabel={statsAccessibleText}
+            style={styles.statsPlain}
+            numberOfLines={1}
+          >
             {statsText}
           </Text>
         )}

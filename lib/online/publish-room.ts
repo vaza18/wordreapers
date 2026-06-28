@@ -15,7 +15,7 @@ import {
   defaultGameSessionSettings,
   resolveGameSessionSettings,
 } from '../firebase/session-settings.js';
-import { sessionWordMapsRef } from '../firebase/session-word-maps-service.js';
+import { writeSessionWordMapsShards } from '../firebase/session-word-maps-service.js';
 import type { StoredPlayerWord } from '../firebase/player-words-service.js';
 import type {
   GameSession,
@@ -197,7 +197,7 @@ export async function publishPlayingSoloRound(input: PublishPlayingSoloInput): P
   await writeSession(normalized, session, input.organizerUid);
 
   if (input.words.length > 0) {
-    await set(sessionWordMapsRef(normalized), wordMaps);
+    await writeSessionWordMapsShards(normalized, wordMaps);
     const record: Record<string, StoredPlayerWord> = {};
     for (const word of input.words) {
       record[word.normalized] = {

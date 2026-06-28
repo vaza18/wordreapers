@@ -1,6 +1,5 @@
 import { useNavigation } from '@react-navigation/native';
 import { useEffect } from 'react';
-import { AppState } from 'react-native';
 
 import { abandonWaitingGameSession } from '../firebase/game-session-service.js';
 import type { GameSessionStatus } from '../firebase/types.js';
@@ -13,7 +12,8 @@ import { setOrganizerWaitingRoom } from './organizer-waiting-room.js';
 const ORGANIZER_EXIT_BACK_ACTIONS = new Set(['GO_BACK', 'POP', 'POP_TO']);
 
 /**
- * Drop waiting rooms when the organizer leaves lobby (back, home, or app background).
+ * Drop waiting rooms when the organizer leaves lobby via back navigation.
+ * Screen lock / app background must not delete the room — use exitOnlineToHome for explicit leave.
  */
 export function useOrganizerAbandonWaitingOnExit(
   gameId: string,
@@ -48,15 +48,8 @@ export function useOrganizerAbandonWaitingOnExit(
       runCleanup();
     });
 
-    const appSub = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'background') {
-        runCleanup();
-      }
-    });
-
     return () => {
       onBack();
-      appSub.remove();
     };
   }, [enabled, gameId, navigation, organizerUid, sessionStatus]);
 }

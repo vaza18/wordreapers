@@ -2,7 +2,7 @@
   "expo": {
     "name": "Словозбирачі",
     "slug": "wordreapers",
-    "version": "1.0.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "scheme": "wordreapers",
     "userInterfaceStyle": "automatic",
@@ -15,6 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.wordreapers.app",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "UIDesignRequiresCompatibility": true,
         "UIStatusBarHidden": true,
@@ -24,6 +25,7 @@
     },
     "android": {
       "package": "com.wordreapers.app",
+      "googleServicesFile": "./google-services.json",
       "blockedPermissions": ["android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"],
       "adaptiveIcon": {
         "foregroundImage": "./assets/icons/adaptive-icon-foreground.png",

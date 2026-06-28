@@ -11,6 +11,8 @@ interface SetupModeButtonProps {
   hint: string;
   onPress: () => void;
   disabled?: boolean;
+  disabledHint?: string;
+  onDisabledPress?: () => void;
   variant?: 'primary' | 'secondary';
   style?: StyleProp<ViewStyle>;
 }
@@ -77,17 +79,23 @@ export function SetupModeButton({
   hint,
   onPress,
   disabled = false,
+  disabledHint,
+  onDisabledPress,
   variant = 'primary',
   style,
 }: SetupModeButtonProps) {
   const styles = useThemedStyles(createStyles);
   const isSecondary = variant === 'secondary';
+  const showDisabledPress = disabled && onDisabledPress != null;
 
   return (
     <FeedbackPressable
       accessibilityRole="button"
-      disabled={disabled}
-      onPress={onPress}
+      accessibilityLabel={label}
+      accessibilityHint={disabled ? disabledHint : undefined}
+      accessibilityState={{ disabled }}
+      disabled={disabled && !showDisabledPress}
+      onPress={showDisabledPress ? onDisabledPress : onPress}
       style={[
         styles.base,
         isSecondary ? styles.secondary : styles.primary,

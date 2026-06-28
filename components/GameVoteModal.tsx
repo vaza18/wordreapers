@@ -60,7 +60,7 @@ export function GameVoteModal({
   onResume,
 }: GameVoteModalProps) {
   return (
-    <Modal transparent visible={visible} animationType="fade">
+    <Modal transparent visible={visible} animationType="fade" accessibilityViewIsModal>
       <SafeAreaProvider>
         <VoteCard
           message={message}

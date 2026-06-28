@@ -3,6 +3,7 @@ import {
   onValue,
   ref,
   remove,
+  update,
   type DatabaseReference,
   type Unsubscribe,
 } from 'firebase/database';
@@ -69,6 +70,29 @@ export function subscribeSessionWordMaps(
       listener(null);
     },
   );
+}
+
+/** Write per-word shards (RTDB rules deny bulk root writes on `session_word_maps`). */
+export async function writeSessionWordMapsShards(
+  gameId: string,
+  maps: SessionWordMaps,
+): Promise<void> {
+  const roomId = normalizeRoomCode(gameId);
+  const payload: Record<string, string | boolean> = {};
+  for (const [normalized, uid] of Object.entries(maps.wordFirst ?? {})) {
+    payload[`wordFirst/${normalized}`] = uid;
+  }
+  for (const [normalized, playersOnWord] of Object.entries(maps.wordPlayers ?? {})) {
+    for (const [uid, onWord] of Object.entries(playersOnWord)) {
+      if (onWord) {
+        payload[`wordPlayers/${normalized}/${uid}`] = true;
+      }
+    }
+  }
+  if (Object.keys(payload).length === 0) {
+    return;
+  }
+  await update(sessionWordMapsRef(roomId), payload);
 }
 
 /** Clear word maps on rematch / new round start. */

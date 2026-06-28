@@ -1,11 +1,16 @@
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
-import { computeLetterKeySize } from '@/lib/game/letter-keyboard';
+import { computeLetterKeyGap, computeLetterKeySize } from '@/lib/game/letter-keyboard';
 import { letterKeyFontSizeForKeySize, letterKeyProportions } from '@/lib/game/letter-key-style';
 import type { LetterKey } from '@/lib/game/letter-keyboard';
+import { playableGlyphFontSize } from '@/lib/typography/font-scale';
+import { centeredSquareTextStyle } from '@/lib/ui/centered-square-text';
+
+const LETTER_KEY_HIT_SLOP = 6;
 
 interface LetterKeyboardProps {
   keys: readonly LetterKey[];
@@ -22,8 +27,7 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
     },
     key: {
-      alignItems: 'center',
-      justifyContent: 'center',
+      overflow: 'hidden',
     },
     keyAvailable: {
       backgroundColor: colors.penBlue,
@@ -35,7 +39,7 @@ function createStyles(colors: ThemeColors) {
       fontWeight: '600',
     },
     keyLabelAvailable: {
-      color: colors.penBlueMuted,
+      color: colors.textOnAccent,
     },
     keyLabelUsed: {
       color: colors.textSecondary,
@@ -46,11 +50,18 @@ function createStyles(colors: ThemeColors) {
 
 /** Interactive keyboard built from the base word letters. */
 export function LetterKeyboard({ keys, usedKeyIndices, onPressKey }: LetterKeyboardProps) {
-  const { width: screenWidth } = useWindowDimensions();
+  const { t } = useTranslation();
+  const { width: screenWidth, fontScale } = useWindowDimensions();
   const styles = useThemedStyles(createStyles);
   const keySize = computeLetterKeySize(screenWidth);
-  const { gap, borderRadius } = letterKeyProportions(screenWidth);
-  const labelFontSize = letterKeyFontSizeForKeySize(keySize);
+  const gap = computeLetterKeyGap(keySize);
+  const { borderRadius } = letterKeyProportions(screenWidth);
+  const labelFontSize = playableGlyphFontSize(
+    letterKeyFontSizeForKeySize(keySize),
+    fontScale,
+    screenWidth,
+    keySize,
+  );
 
   return (
     <View style={[styles.grid, { gap }]}>
@@ -60,7 +71,14 @@ export function LetterKeyboard({ keys, usedKeyIndices, onPressKey }: LetterKeybo
           <FeedbackPressable
             key={key.id}
             accessibilityRole="button"
+            accessibilityLabel={
+              used
+                ? t('game.letterKeyUsed', { letter: key.label })
+                : t('game.letterKey', { letter: key.label })
+            }
+            accessibilityState={{ disabled: used }}
             disabled={used}
+            hitSlop={LETTER_KEY_HIT_SLOP}
             onPress={() => {
               onPressKey(index);
             }}
@@ -71,9 +89,11 @@ export function LetterKeyboard({ keys, usedKeyIndices, onPressKey }: LetterKeybo
             ]}
           >
             <Text
+              allowFontScaling={false}
+              numberOfLines={1}
               style={[
                 styles.keyLabel,
-                { fontSize: labelFontSize },
+                centeredSquareTextStyle(keySize, labelFontSize),
                 used ? styles.keyLabelUsed : styles.keyLabelAvailable,
               ]}
             >

@@ -5,28 +5,58 @@ import { WordList } from '@/components/WordList';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
-import type { OnlineWordListRow } from '@/lib/online/online-word-display';
+import type { PlayWordFeedbackVariant } from '@/lib/game/play-word-feedback';
+import type { ScoredWordEntry } from '@/lib/game/scoring';
+import type { WordOverlapPeer } from '@/lib/game/word-overlap-peers';
 
 export interface OnlinePlayWordListSectionProps {
-  entries: readonly OnlineWordListRow[];
+  entries: readonly (ScoredWordEntry & { overlapPeers?: readonly WordOverlapPeer[] })[];
   displays: readonly string[];
   draftPrefix: string;
   scrollToNormalized?: string | null;
   scrollToRequestId?: number;
   feedback: string | null;
+  feedbackVariant?: PlayWordFeedbackVariant;
   backgroundSyncing: boolean;
   showScoreBadges: boolean;
   showOverlapPeers: boolean;
 }
 
+function feedbackChipStyle(
+  colors: ThemeColors,
+  variant: PlayWordFeedbackVariant,
+): { backgroundColor: string; color: string; borderColor: string } {
+  switch (variant) {
+    case 'success':
+      return {
+        backgroundColor: colors.accent,
+        color: colors.textOnAccent,
+        borderColor: colors.accent,
+      };
+    case 'warning':
+      return {
+        backgroundColor: colors.composeDraftBg,
+        color: colors.composeDraftText,
+        borderColor: colors.alert,
+      };
+    default:
+      return {
+        backgroundColor: colors.feedbackToastBg,
+        color: colors.textPrimary,
+        borderColor: colors.borderSecondary,
+      };
+  }
+}
+
 function createStyles(colors: ThemeColors) {
+  void colors;
   return StyleSheet.create({
     wordListSection: {
       flex: 1,
       minHeight: 0,
     },
     feedbackSlot: {
-      height: 32,
+      minHeight: 32,
       alignItems: 'center',
       justifyContent: 'center',
       flexDirection: 'row',
@@ -35,14 +65,11 @@ function createStyles(colors: ThemeColors) {
     feedbackToast: {
       fontSize: 13,
       fontWeight: '600',
-      color: colors.textPrimary,
-      backgroundColor: colors.feedbackToastBg,
-      borderWidth: 1,
-      borderColor: colors.borderSecondary,
       paddingHorizontal: spacing.md,
       paddingVertical: spacing.xs,
       borderRadius: radii.sm,
       overflow: 'hidden',
+      borderWidth: 1,
     },
     syncIndicator: {
       opacity: 0.7,
@@ -60,12 +87,14 @@ export const OnlinePlayWordListSection = memo(function OnlinePlayWordListSection
   scrollToNormalized = null,
   scrollToRequestId,
   feedback,
+  feedbackVariant = 'default',
   backgroundSyncing,
   showScoreBadges,
   showOverlapPeers,
 }: OnlinePlayWordListSectionProps) {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
+  const chipColors = feedbackChipStyle(colors, feedbackVariant);
 
   return (
     <View style={styles.wordListSection}>
@@ -79,7 +108,21 @@ export const OnlinePlayWordListSection = memo(function OnlinePlayWordListSection
         showOverlapPeers={showOverlapPeers}
       />
       <View style={styles.feedbackSlot}>
-        {feedback ? <Text style={styles.feedbackToast}>{feedback}</Text> : null}
+        {feedback ? (
+          <Text
+            accessibilityLiveRegion="polite"
+            style={[
+              styles.feedbackToast,
+              {
+                backgroundColor: chipColors.backgroundColor,
+                color: chipColors.color,
+                borderColor: chipColors.borderColor,
+              },
+            ]}
+          >
+            {feedback}
+          </Text>
+        ) : null}
         {backgroundSyncing ? (
           <ActivityIndicator size="small" color={colors.accent} style={styles.syncIndicator} />
         ) : null}

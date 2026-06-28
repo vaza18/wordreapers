@@ -1,15 +1,13 @@
 import { StyleSheet } from 'react-native';
 
 import { radii, type ThemeColors } from '@/constants/theme';
+import { HEADER_ICON_BUTTON_SIZE, headerIconButtonSize } from '@/lib/ui/header-icon-button-layout';
 
-/** Shared 40×40 rounded-square chrome for header icon buttons. */
-export const headerIconButtonSize = 40;
+export { HEADER_ICON_BUTTON_SIZE, headerIconButtonSize };
 
 export function createHeaderIconButtonStyles(colors: ThemeColors) {
   return StyleSheet.create({
     button: {
-      width: headerIconButtonSize,
-      height: headerIconButtonSize,
       borderRadius: radii.sm,
       backgroundColor: colors.backgroundPrimary,
       borderWidth: StyleSheet.hairlineWidth,
@@ -21,8 +19,6 @@ export function createHeaderIconButtonStyles(colors: ThemeColors) {
       opacity: 0.5,
     },
     slot: {
-      width: headerIconButtonSize,
-      height: headerIconButtonSize,
       alignItems: 'center',
       justifyContent: 'center',
     },

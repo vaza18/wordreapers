@@ -1,27 +1,55 @@
 import { spacing } from '../../constants/theme.js';
+import { TABLET_LAYOUT_MIN_WIDTH } from '../typography/font-scale.js';
 import { normalizeUk, toDisplayUpper } from '../dictionary/normalize.js';
 
-export const LETTER_KEYBOARD_COLUMNS = 6;
-/** Horizontal padding on play screen (matches `play.tsx` container). */
+/** Max letter keys per row on phones (tablets use fixed key size + natural wrap). */
+export const LETTER_KEYBOARD_PHONE_COLUMNS = 6;
+/** @deprecated Use {@link LETTER_KEYBOARD_PHONE_COLUMNS}. */
+export const LETTER_KEYBOARD_COLUMNS = LETTER_KEYBOARD_PHONE_COLUMNS;
+/** Horizontal padding on play screen (matches play container). */
 export const LETTER_KEYBOARD_HORIZONTAL_PADDING = spacing.md * 2;
-/** Cap letter/compose key size on wide screens (~laptop keycap). */
-export const LETTER_KEY_MAX_SIZE = 48;
-/** Apply the cap from this width (phones keep the 6-column layout). */
-export const LETTER_KEY_TABLET_MIN_WIDTH = 600;
+/** Use laptop-like key sizing from this width (points). */
+export const LETTER_KEY_TABLET_MIN_WIDTH = TABLET_LAYOUT_MIN_WIDTH;
+/** Target letter-key edge on tablets (~MacBook 1u keycap). */
+export const LETTER_KEY_TABLET_MM = 15;
+
+const MM_PER_INCH = 25.4;
+/** Baseline logical px per inch (React Native dp). */
+const LAYOUT_DP_PER_INCH = 160;
+
+/** Convert millimeters to layout dp (density-independent points). */
+export function mmToLayoutDp(mm: number): number {
+  return Math.round((mm * LAYOUT_DP_PER_INCH) / MM_PER_INCH);
+}
+
+/** Fixed square key size on tablets ({@link LETTER_KEY_TABLET_MM} mm). */
+export const LETTER_KEY_TABLET_SIZE = mmToLayoutDp(LETTER_KEY_TABLET_MM);
+
+/**
+ * Gap between letter keys — scales with key size (same ratio as the phone reference).
+ */
+export function computeLetterKeyGap(keySize: number): number {
+  const referenceGap = spacing.xs;
+  const phoneReferenceKeySize = 56;
+  return Math.max(referenceGap, Math.round(keySize * (referenceGap / phoneReferenceKeySize)));
+}
 
 /**
  * Square key size for letter keyboard and compose action buttons.
+ * Phones: fill width with 6 columns. Tablets: ~15 mm keys, more per row via flex wrap.
  */
 export function computeLetterKeySize(screenWidth: number): number {
   const gap = spacing.xs;
   const available = screenWidth - LETTER_KEYBOARD_HORIZONTAL_PADDING;
-  const uncapped = Math.floor(
-    (available - gap * (LETTER_KEYBOARD_COLUMNS - 1)) / LETTER_KEYBOARD_COLUMNS,
-  );
-  if (screenWidth < LETTER_KEY_TABLET_MIN_WIDTH) {
-    return uncapped;
-  }
-  return Math.min(LETTER_KEY_MAX_SIZE, uncapped);
+
+  const base =
+    screenWidth >= LETTER_KEY_TABLET_MIN_WIDTH
+      ? LETTER_KEY_TABLET_SIZE
+      : Math.floor(
+          (available - gap * (LETTER_KEYBOARD_PHONE_COLUMNS - 1)) / LETTER_KEYBOARD_PHONE_COLUMNS,
+        );
+
+  return Math.round(base);
 }
 
 /** One pressable key on the interactive letter keyboard. */

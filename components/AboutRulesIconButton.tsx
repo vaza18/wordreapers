@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { HeaderBarButton } from '@/components/HeaderBarButton';
 import { InfoIcon } from '@/components/HeaderIcons';
+import { useHeaderIconButtonLayout } from '@/hooks/useHeaderIconButtonLayout';
 import { useTheme } from '@/hooks/useTheme';
 
 /**
@@ -11,6 +12,7 @@ import { useTheme } from '@/hooks/useTheme';
 export function AboutRulesIconButton() {
   const { t } = useTranslation();
   const { colors } = useTheme();
+  const { infoIconSize } = useHeaderIconButtonLayout();
 
   return (
     <HeaderBarButton
@@ -19,7 +21,7 @@ export function AboutRulesIconButton() {
         router.push('/about');
       }}
     >
-      <InfoIcon color={colors.textSecondary} />
+      <InfoIcon size={infoIconSize} color={colors.textSecondary} />
     </HeaderBarButton>
   );
 }

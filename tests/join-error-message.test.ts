@@ -25,12 +25,17 @@ describe('joinErrorMessage', () => {
     );
   });
 
-  it('maps firebase permission and network failures', () => {
-    expect(joinErrorMessage({ code: 'permission-denied' }, t)).toBe(
-      'online.errorFirebasePermission',
-    );
+  it('maps firebase permission to room not found on join', () => {
+    expect(joinErrorMessage({ code: 'permission-denied' }, t)).toBe('online.errorRoomNotFound');
+    expect(joinErrorMessage({ code: 'PERMISSION_DENIED' }, t)).toBe('online.errorRoomNotFound');
+    expect(
+      joinErrorMessage(new Error("Client doesn't have permission to access the desired data."), t),
+    ).toBe('online.errorRoomNotFound');
     expect(joinErrorMessage({ code: 'auth/network-request-failed' }, t)).toBe(
       'online.errorFirebaseNetwork',
+    );
+    expect(joinErrorMessage({ code: 'auth/operation-not-allowed' }, t)).toBe(
+      'online.errorFirebaseAnonymousDisabled',
     );
   });
 

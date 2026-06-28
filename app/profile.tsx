@@ -88,6 +88,7 @@ export default function ProfileScreen() {
       <TextInput
         autoCapitalize="words"
         autoCorrect={false}
+        accessibilityLabel={t('profile.name')}
         style={styles.input}
         value={name}
         onChangeText={setName}

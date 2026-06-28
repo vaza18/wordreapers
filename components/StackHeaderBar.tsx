@@ -4,8 +4,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { SettingsIconButton } from '@/components/SettingsIconButton';
-import { headerIconButtonSize } from '@/constants/header-button';
 import { spacing, type ThemeColors } from '@/constants/theme';
+import { useHeaderIconButtonLayout } from '@/hooks/useHeaderIconButtonLayout';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import type { AppStackHeaderOptions } from '@/lib/navigation/stack-header-types';
@@ -19,15 +19,15 @@ function createStyles(colors: ThemeColors) {
       borderBottomColor: colors.borderTertiary,
     },
     row: {
-      height: HEADER_BAR_HEIGHT,
+      minHeight: HEADER_BAR_HEIGHT,
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: spacing.sm,
       gap: spacing.xs,
     },
     sideSlot: {
-      width: headerIconButtonSize,
-      height: headerIconButtonSize,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     titleSlot: {
       flex: 1,
@@ -50,6 +50,7 @@ export function StackHeaderBar({ options }: NativeStackHeaderProps) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const { buttonSize } = useHeaderIconButtonLayout();
   const headerOptions = options as AppStackHeaderOptions;
   const showBack = headerOptions.headerBackAction != null;
   const showSettings = headerOptions.headerShowSettings ?? false;
@@ -91,12 +92,16 @@ export function StackHeaderBar({ options }: NativeStackHeaderProps) {
         {showBack ? (
           <HeaderBackButton onPress={headerOptions.headerBackAction!} />
         ) : (
-          <View style={styles.sideSlot} />
+          <View style={[styles.sideSlot, { width: buttonSize, height: buttonSize }]} />
         )}
 
         <View style={styles.titleSlot}>{renderTitle()}</View>
 
-        {showSettings ? <SettingsIconButton /> : <View style={styles.sideSlot} />}
+        {showSettings ? (
+          <SettingsIconButton />
+        ) : (
+          <View style={[styles.sideSlot, { width: buttonSize, height: buttonSize }]} />
+        )}
       </View>
     </View>
   );

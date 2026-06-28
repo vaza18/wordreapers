@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { createHeaderIconButtonStyles } from '@/constants/header-button';
+import { useHeaderIconButtonLayout } from '@/hooks/useHeaderIconButtonLayout';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 
 interface HeaderBarButtonProps {
@@ -12,7 +13,7 @@ interface HeaderBarButtonProps {
 }
 
 /**
- * Rounded-square header icon button — same chrome on home and stack screens.
+ * Rounded-square header icon button — scales with capped Dynamic Type.
  */
 export function HeaderBarButton({
   accessibilityLabel,
@@ -21,15 +22,20 @@ export function HeaderBarButton({
   disabled = false,
 }: HeaderBarButtonProps) {
   const styles = useThemedStyles(createHeaderIconButtonStyles);
+  const { buttonSize } = useHeaderIconButtonLayout();
 
   return (
     <FeedbackPressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       disabled={disabled}
-      hitSlop={4}
+      hitSlop={8}
       onPress={onPress}
-      style={[styles.button, disabled ? styles.disabled : null]}
+      style={[
+        styles.button,
+        { width: buttonSize, height: buttonSize },
+        disabled ? styles.disabled : null,
+      ]}
     >
       {children}
     </FeedbackPressable>

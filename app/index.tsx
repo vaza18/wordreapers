@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { Alert, Image, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AboutRulesIconButton } from '@/components/AboutRulesIconButton';
@@ -8,12 +8,13 @@ import { LegalFooterLinks } from '@/components/LegalFooterLinks';
 import { ProfileSummaryRow } from '@/components/ProfileSummaryRow';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { SettingsIconButton } from '@/components/SettingsIconButton';
-import { continueWithProfileOrRedirect } from '@/lib/online/require-profile';
-import { navigateToNewOnlineRoom } from '@/lib/online/create-room';
-import { joinErrorMessage } from '@/lib/firebase/join-error-message';
-import { useProfileStore } from '@/store/profile-store';
 import { spacing, type ThemeColors } from '@/constants/theme';
+import { useTrainingMilestone } from '@/hooks/useTrainingMilestone';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
+import { joinErrorMessage } from '@/lib/firebase/join-error-message';
+import { navigateToNewOnlineRoom } from '@/lib/online/create-room';
+import { continueWithProfileOrRedirect } from '@/lib/online/require-profile';
+import { useProfileStore } from '@/store/profile-store';
 
 const appIcon = require('../assets/icons/app-icon.png');
 
@@ -23,6 +24,8 @@ const appIcon = require('../assets/icons/app-icon.png');
 export default function HomeScreen() {
   const styles = useThemedStyles(createStyles);
   const { t } = useTranslation();
+  const { hydrated: trainingHydrated, hasCompletedTrainingRound } = useTrainingMilestone();
+  const joinLocked = trainingHydrated && !hasCompletedTrainingRound;
 
   const handleCreateOnline = () => {
     if (!continueWithProfileOrRedirect('create')) {
@@ -35,6 +38,10 @@ export default function HomeScreen() {
   };
 
   const handleJoinOnline = () => {
+    if (joinLocked) {
+      Alert.alert(t('app.name'), t('nav.joinLockedHint'));
+      return;
+    }
     if (!continueWithProfileOrRedirect('join')) {
       return;
     }
@@ -48,27 +55,39 @@ export default function HomeScreen() {
         <SettingsIconButton />
       </View>
 
-      <View style={styles.hero}>
-        <Image source={appIcon} style={styles.appIcon} accessibilityIgnoresInvertColors />
-        <Text style={styles.brand}>Wordreapers</Text>
-        <Text style={styles.appName}>{t('app.name')}</Text>
-        <Text style={styles.tagline}>{t('app.tagline')}</Text>
-      </View>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.hero}>
+          <Image source={appIcon} style={styles.appIcon} accessibilityIgnoresInvertColors />
+          <Text style={styles.brand}>Wordreapers</Text>
+          <Text style={styles.appName}>{t('app.name')}</Text>
+          <Text style={styles.tagline}>{t('app.tagline')}</Text>
+        </View>
 
-      <View style={styles.actions}>
-        <PrimaryButton label={t('nav.newGame')} onPress={handleCreateOnline} />
-        <Text style={styles.description}>{t('nav.newGameDescription')}</Text>
-        {/* <Text style={styles.tagline}>{t('nav.or')}</Text> */}
-        <PrimaryButton label={t('nav.join')} onPress={handleJoinOnline} variant="secondary" />
-        <Text style={styles.description}>{t('nav.joinDescription')}</Text>
-      </View>
+        <View style={styles.actions}>
+          <PrimaryButton label={t('nav.newGame')} onPress={handleCreateOnline} />
+          <Text style={styles.description}>{t('nav.newGameDescription')}</Text>
+          <PrimaryButton
+            label={t('nav.join')}
+            onPress={handleJoinOnline}
+            variant="secondary"
+            disabled={joinLocked}
+          />
+          <Text style={styles.description}>
+            {joinLocked ? t('nav.joinLockedDescription') : t('nav.joinDescription')}
+          </Text>
+        </View>
 
-      <View style={styles.bottomSection}>
-        <View style={styles.footerDivider} />
-        <ProfileSummaryRow />
-        <View style={[styles.footerDivider, styles.documentsDivider]} />
-        <LegalFooterLinks />
-      </View>
+        <View style={styles.bottomSection}>
+          <View style={styles.footerDivider} />
+          <ProfileSummaryRow />
+          <View style={[styles.footerDivider, styles.documentsDivider]} />
+          <LegalFooterLinks />
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -79,6 +98,10 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
       backgroundColor: colors.backgroundSecondary,
     },
+    scrollContent: {
+      flexGrow: 1,
+      paddingBottom: spacing.sm,
+    },
     topBar: {
       flexDirection: 'row',
       justifyContent: 'space-between',
@@ -87,11 +110,13 @@ function createStyles(colors: ThemeColors) {
       paddingTop: spacing.xs,
     },
     hero: {
-      flex: 1,
+      flexGrow: 1,
       justifyContent: 'center',
       alignItems: 'center',
       paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.lg,
       gap: spacing.xs,
+      minHeight: 160,
     },
     appIcon: {
       width: 64,
@@ -103,6 +128,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: 28,
       fontWeight: '600',
       color: colors.accent,
+      textAlign: 'center',
     },
     appName: {
       fontSize: 14,
@@ -126,6 +152,7 @@ function createStyles(colors: ThemeColors) {
       gap: spacing.sm,
       paddingHorizontal: spacing.md,
       paddingBottom: spacing.md,
+      flexShrink: 0,
     },
     bottomSection: {
       paddingTop: spacing.sm,
