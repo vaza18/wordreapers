@@ -12,18 +12,22 @@ function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
     wrap: {
       alignItems: 'center',
-      maxWidth: 240,
+      width: '100%',
       gap: 1,
     },
     title: {
       fontSize: 17,
       fontWeight: '600',
       color: colors.textPrimary,
+      textAlign: 'center',
+      width: '100%',
     },
     subtitle: {
       fontSize: 13,
       fontWeight: '400',
       color: colors.textSecondary,
+      textAlign: 'center',
+      width: '100%',
     },
   });
 }

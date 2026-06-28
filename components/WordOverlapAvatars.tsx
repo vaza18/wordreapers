@@ -15,6 +15,7 @@ import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { PlayerAvatar } from '@/components/PlayerAvatar';
 import { playerAvatarColors } from '@/constants/player-avatars';
 import { radii, spacing } from '@/constants/theme';
+import { useCompactAvatarLayout } from '@/hooks/useCompactAvatarLayout';
 import type { WordOverlapPeer } from '@/lib/game/word-overlap-peers';
 import {
   dismissWordOverlapTooltips,
@@ -47,6 +48,7 @@ function getAnchorRef(
  */
 export function WordOverlapAvatars({ peers }: WordOverlapAvatarsProps) {
   const insets = useSafeAreaInsets();
+  const avatarLayout = useCompactAvatarLayout(AVATAR_SIZE);
   const [revealedPlayerId, setRevealedPlayerId] = useState<string | null>(null);
   const anchorRefs = useRef(new Map<string, RefObject<RNView | null>>());
 
@@ -75,22 +77,30 @@ export function WordOverlapAvatars({ peers }: WordOverlapAvatarsProps) {
   }
 
   return (
-    <View style={styles.avatars}>
+    <View style={[styles.avatars, { gap: avatarLayout.gap }]}>
       {peers.map((peer) => {
         const anchorRef = getAnchorRef(anchorRefs.current, peer.playerId);
         const palette = playerAvatarColors(peer.avatarColorIndex);
         const isVisible = revealedPlayerId === peer.playerId;
+        const slotSize = avatarLayout.diameter;
 
         return (
-          <View key={peer.playerId} style={styles.avatarSlot}>
-            <View ref={anchorRef} collapsable={false} style={styles.avatarAnchor}>
+          <View
+            key={peer.playerId}
+            style={[styles.avatarSlot, { width: slotSize, height: slotSize }]}
+          >
+            <View
+              ref={anchorRef}
+              collapsable={false}
+              style={[styles.avatarAnchor, { width: slotSize, height: slotSize }]}
+            >
               <FeedbackPressable
                 accessibilityRole="button"
                 accessibilityLabel={peer.name}
                 onPress={() => {
                   toggleTooltip(peer);
                 }}
-                style={styles.avatarButton}
+                style={[styles.avatarButton, { borderRadius: slotSize / 2 }]}
               >
                 <PlayerAvatar
                   name={peer.name}
@@ -138,19 +148,10 @@ const styles = StyleSheet.create({
   avatars: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
   },
-  avatarSlot: {
-    width: AVATAR_SIZE,
-    height: AVATAR_SIZE,
-  },
-  avatarAnchor: {
-    width: AVATAR_SIZE,
-    height: AVATAR_SIZE,
-  },
-  avatarButton: {
-    borderRadius: AVATAR_SIZE / 2,
-  },
+  avatarSlot: {},
+  avatarAnchor: {},
+  avatarButton: {},
   popoverBackdrop: {
     backgroundColor: 'rgba(0, 0, 0, 0.12)',
   },

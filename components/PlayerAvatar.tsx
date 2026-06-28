@@ -27,7 +27,7 @@ export function PlayerAvatar({
   const { width, fontScale } = useWindowDimensions();
   const colors = playerAvatarColors(avatarColorIndex ?? playerIndex);
   const initials = getAvatarInitials(name);
-  const { displaySize, fontSize } = computeAvatarDisplay(size, initials.length, fontScale, width);
+  const { displaySize, fontSize } = computeAvatarDisplay(size, initials, fontScale, width);
 
   return (
     <View
@@ -43,8 +43,6 @@ export function PlayerAvatar({
     >
       <Text
         allowFontScaling={false}
-        adjustsFontSizeToFit
-        minimumFontScale={0.75}
         numberOfLines={1}
         style={[
           styles.initial,
