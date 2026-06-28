@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -193,8 +193,7 @@ export default function OnlinePlayScreen() {
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastValidatedDraft = useRef('');
-  const submittingRef = useRef(false);
-  const pendingSubmitDraftRef = useRef<string | null>(null);
+  const syncInFlightRef = useRef(0);
   const pendingListenerWordRef = useRef<string | null>(null);
   const activeSubmitProfileRef = useRef<ReturnType<typeof createSubmitWordProfile>>(null);
   const finishAttemptedRef = useRef(false);
@@ -303,7 +302,13 @@ export default function OnlinePlayScreen() {
         setSessionCore(next);
         setLoading(false);
       });
-      unsubMaps = subscribeSessionWordMaps(gameId, setWordMaps);
+      unsubMaps = subscribeSessionWordMaps(gameId, (maps) => {
+        queueMicrotask(() => {
+          if (!cancelled) {
+            setWordMaps(maps);
+          }
+        });
+      });
       unsubWords = subscribePlayerWords(gameId, myUid, setMyWords);
     });
 
@@ -489,6 +494,12 @@ export default function OnlinePlayScreen() {
     }
   }, [endsAt, gameId, isPaused, serverNow, session?.addTimeVote, session?.status]);
 
+  const deferredWordMaps = useDeferredValue(wordMaps);
+  const sessionForWordList = useMemo(
+    () => (sessionCore ? mergeSessionWithWordMaps(sessionCore, deferredWordMaps) : null),
+    [deferredWordMaps, sessionCore],
+  );
+
   const baseWord = session?.baseWord ?? '';
   const baseWordDisplay = dictionary?.lookupDisplayUpper(baseWord) ?? toDisplayUpper(baseWord);
   const letterKeys = useMemo(() => buildLetterKeys(baseWordDisplay), [baseWordDisplay]);
@@ -507,11 +518,11 @@ export default function OnlinePlayScreen() {
   }, [myWords, optimisticWords]);
 
   const { entries: scoredWords, displays } = useMemo(() => {
-    if (!session) {
+    if (!sessionForWordList) {
       return { entries: [], displays: [] };
     }
-    return buildOnlineWordListDisplay(wordsForDisplay, session, myUid);
-  }, [myUid, session, wordsForDisplay]);
+    return buildOnlineWordListDisplay(wordsForDisplay, sessionForWordList, myUid);
+  }, [myUid, sessionForWordList, wordsForDisplay]);
 
   const myPlayer = session?.players[myUid];
   const standings = useMemo((): PlayerStandings[] => {
@@ -612,18 +623,13 @@ export default function OnlinePlayScreen() {
     }
   }, [myWords]);
 
-  const runPendingSubmit = useCallback((submitFn: (draftValue: string) => Promise<void>) => {
-    const pending = pendingSubmitDraftRef.current;
-    if (!pending || pending === lastValidatedDraft.current) {
-      pendingSubmitDraftRef.current = null;
-      return;
-    }
-    pendingSubmitDraftRef.current = null;
-    void submitFn(pending);
+  const finishBackgroundSync = useCallback(() => {
+    syncInFlightRef.current = Math.max(0, syncInFlightRef.current - 1);
+    setBackgroundSyncing(syncInFlightRef.current > 0);
   }, []);
 
   const submitDraft = useCallback(
-    async (draftValue: string) => {
+    (draftValue: string) => {
       if (
         !session ||
         session.status !== 'playing' ||
@@ -636,10 +642,6 @@ export default function OnlinePlayScreen() {
         return;
       }
       if (draftValue === lastValidatedDraft.current) {
-        return;
-      }
-      if (submittingRef.current) {
-        pendingSubmitDraftRef.current = draftValue;
         return;
       }
 
@@ -705,62 +707,54 @@ export default function OnlinePlayScreen() {
       playWordAcceptedFeedback(wordAcceptedFeedback);
       profile?.mark('optimisticUi');
 
-      submittingRef.current = true;
+      syncInFlightRef.current += 1;
       setBackgroundSyncing(true);
       pendingListenerWordRef.current = result.normalized;
 
-      const remote = await submitOnlineWord(
-        gameId,
-        myUid,
-        result.normalized,
-        display,
-        uniqueBonusEnabled,
-        { profile },
-      );
+      void submitOnlineWord(gameId, myUid, result.normalized, display, uniqueBonusEnabled, {
+        profile,
+      }).then((remote) => {
+        finishBackgroundSync();
+        profile?.mark('remoteDone');
 
-      submittingRef.current = false;
-      setBackgroundSyncing(false);
-      profile?.mark('remoteDone');
-
-      if (!remote.ok) {
-        pendingListenerWordRef.current = null;
-        profile?.finish();
-        activeSubmitProfileRef.current = null;
-        setOptimisticWords((prev) => {
-          const next = new Map(prev);
-          next.delete(result.normalized);
-          return next;
-        });
-        setDraft(savedDraft);
-        setDraftKeyIndices(savedKeyIndices);
-        lastValidatedDraft.current = '';
-        if (remote.error === 'DUPLICATE') {
-          setFeedback(t('game.errorAlreadySubmitted'));
-          setFeedbackVariant('default');
+        if (!remote.ok) {
+          pendingListenerWordRef.current = null;
+          profile?.finish();
+          activeSubmitProfileRef.current = null;
+          setOptimisticWords((prev) => {
+            const next = new Map(prev);
+            next.delete(result.normalized);
+            return next;
+          });
+          setDraft(savedDraft);
+          setDraftKeyIndices(savedKeyIndices);
+          lastValidatedDraft.current = '';
+          if (remote.error === 'DUPLICATE') {
+            setFeedback(t('game.errorAlreadySubmitted'));
+            setFeedbackVariant('default');
+          }
+          return;
         }
-        runPendingSubmit(submitDraft);
-        return;
-      }
 
-      lastValidatedDraft.current = '';
-      if (myWordsRef.current.has(result.normalized)) {
-        profile?.mark('listener');
-        profile?.finish();
-        activeSubmitProfileRef.current = null;
-        pendingListenerWordRef.current = null;
-      }
-      runPendingSubmit(submitDraft);
+        lastValidatedDraft.current = '';
+        if (myWordsRef.current.has(result.normalized)) {
+          profile?.mark('listener');
+          profile?.finish();
+          activeSubmitProfileRef.current = null;
+          pendingListenerWordRef.current = null;
+        }
+      });
     },
     [
       allowProperNouns,
       allowSlang,
       dictionary,
       draftKeyIndices,
+      finishBackgroundSync,
       gameId,
       myUid,
       properNouns,
       roundLexicon,
-      runPendingSubmit,
       session,
       slang,
       supplementsReady,
@@ -788,7 +782,7 @@ export default function OnlinePlayScreen() {
       return;
     }
     debounceRef.current = setTimeout(() => {
-      void submitDraft(draft);
+      submitDraft(draft);
     }, VALIDATION_DEBOUNCE_MS);
     return () => {
       if (debounceRef.current) {
@@ -1003,6 +997,18 @@ export default function OnlinePlayScreen() {
     setShowStandings(false);
   }, [session?.addTimeVote, session?.earlyFinishVote, session?.pauseVote, session?.status]);
 
+  useEffect(() => {
+    if (!roundEnded) {
+      return;
+    }
+    setShowStandings(false);
+    setShowGameMenu(false);
+    setShowInviteModal(false);
+    setShowExitConfirm(false);
+    setShowEndEarlyConfirm(false);
+    setShowAddTimeModal(false);
+  }, [roundEnded]);
+
   if (loading || !session || !myUid) {
     return (
       <View style={styles.center}>
@@ -1011,7 +1017,7 @@ export default function OnlinePlayScreen() {
     );
   }
 
-  if (session.status !== 'playing' && !roundOverPendingResults) {
+  if (session.status !== 'playing' && !roundEnded) {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={colors.accent} />
@@ -1195,7 +1201,7 @@ export default function OnlinePlayScreen() {
       ) : null}
 
       <BottomSheetModal
-        visible={showStandings && !gameMenuBlockedByVote}
+        visible={showStandings && !gameMenuBlockedByVote && !roundEnded}
         onClose={() => {
           setShowStandings(false);
         }}
@@ -1229,7 +1235,7 @@ export default function OnlinePlayScreen() {
         />
       </BottomSheetModal>
 
-      {showGameMenu && !gameMenuBlockedByVote ? (
+      {showGameMenu && !gameMenuBlockedByVote && !roundEnded ? (
         <GameMenuModal
           visible
           endGameLabel={
@@ -1274,7 +1280,7 @@ export default function OnlinePlayScreen() {
       ) : null}
 
       <RoomInviteModal
-        visible={showInviteModal}
+        visible={showInviteModal && !roundEnded}
         roomCode={gameId}
         invitedByUid={myUid}
         roundInProgress={session.status === 'playing'}
@@ -1330,7 +1336,7 @@ export default function OnlinePlayScreen() {
       {!showInviteModal ? renderActivePlayVote('modal') : null}
 
       <AddTimeModal
-        visible={showAddTimeModal && canProposeAddTime}
+        visible={showAddTimeModal && canProposeAddTime && !roundEnded}
         remainingMs={remainingMs}
         requiresConsensus={hasOpponent}
         onClose={() => {
@@ -1342,7 +1348,7 @@ export default function OnlinePlayScreen() {
       />
 
       <CenterDialogModal
-        visible={showEndEarlyConfirm && !hasOnlineOpponentInRound}
+        visible={showEndEarlyConfirm && !hasOnlineOpponentInRound && !roundEnded}
         title={t('game.endEarlyConfirmTitle')}
         body={t('game.endEarlyConfirmBody')}
         primaryLabel={t('game.endEarlyConfirmAction')}
@@ -1357,7 +1363,7 @@ export default function OnlinePlayScreen() {
       />
 
       <CenterDialogModal
-        visible={showExitConfirm}
+        visible={showExitConfirm && !roundEnded}
         title={t('online.exitConfirmTitle')}
         body={t('online.exitConfirmBody')}
         primaryLabel={t('online.exitConfirmAction')}

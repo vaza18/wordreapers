@@ -43,6 +43,8 @@ export function PlayerAvatar({
     >
       <Text
         allowFontScaling={false}
+        adjustsFontSizeToFit
+        minimumFontScale={0.75}
         numberOfLines={1}
         style={[
           styles.initial,

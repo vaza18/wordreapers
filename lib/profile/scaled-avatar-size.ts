@@ -12,7 +12,8 @@ export function avatarGlyphInset(designDiameter: number): number {
 
 /** Target glyph size at the design diameter (before accessibility scale). */
 export function avatarInitialFillRatio(initialsLength: number): number {
-  return initialsLength > 1 ? 0.55 : 0.6;
+  // Two glyphs must fit side by side; wide Cyrillic letters (М, Ш, Щ, …) need a smaller fill.
+  return initialsLength > 1 ? 0.46 : 0.6;
 }
 
 /** Base initial glyph size at the design diameter. */

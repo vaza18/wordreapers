@@ -6,7 +6,10 @@ import { MenuIcon, StarIcon } from '@/components/HeaderIcons';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useTheme } from '@/hooks/useTheme';
-import { formatPlayStatsAccessible, formatPlayStatsCompact } from '@/lib/game/format-play-stats';
+import {
+  formatPlayStatsAccessible,
+  formatPlayStatsCompactSegments,
+} from '@/lib/game/format-play-stats';
 
 /** Matches timer line box + chrome so menu and stats buttons align with the timer chip. */
 const ACTION_BUTTON_HEIGHT = 44;
@@ -104,6 +107,9 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
       flexShrink: 1,
     },
+    statsDeemphasized: {
+      fontSize: 13,
+    },
     statsPlain: {
       fontSize: 17,
       fontWeight: '600',
@@ -151,7 +157,7 @@ export function GamePlayStatusBar({
     showRank,
     showScore,
   };
-  const statsText = formatPlayStatsCompact(statsInput, {
+  const statsText = formatPlayStatsCompactSegments(statsInput, {
     rankSuffix: 'м',
     wordsSuffix: wordsShort,
     pointsSuffix: pointsShort,
@@ -159,6 +165,28 @@ export function GamePlayStatusBar({
   const statsAccessibleText = formatPlayStatsAccessible(statsInput);
   const starColor = showRank && rank === 1 ? RANK_FIRST_STAR_COLOR : colors.textSecondary;
   const timerPressable = onAddTimePress != null;
+
+  const renderStatsLabel = (
+    textStyle: typeof styles.stats | typeof styles.statsPlain,
+    accessibilityLabel?: string,
+  ) => (
+    <Text
+      style={textStyle}
+      accessibilityLabel={accessibilityLabel}
+      numberOfLines={1}
+      adjustsFontSizeToFit
+      minimumFontScale={0.85}
+    >
+      {statsText.map((segment, index) => (
+        <Text
+          key={`${index}-${segment.text}`}
+          style={segment.variant === 'deemphasized' ? styles.statsDeemphasized : undefined}
+        >
+          {segment.text}
+        </Text>
+      ))}
+    </Text>
+  );
 
   const timerText = (
     <Text style={[styles.timer, timerUrgent ? styles.timerUrgent : null]}>{timerLabel}</Text>
@@ -220,18 +248,10 @@ export function GamePlayStatusBar({
             style={[styles.actionButton, styles.statsButton]}
           >
             <StarIcon size={16} color={starColor} />
-            <Text style={styles.stats} numberOfLines={1} ellipsizeMode="tail">
-              {statsText}
-            </Text>
+            {renderStatsLabel(styles.stats)}
           </FeedbackPressable>
         ) : (
-          <Text
-            accessibilityLabel={statsAccessibleText}
-            style={styles.statsPlain}
-            numberOfLines={1}
-          >
-            {statsText}
-          </Text>
+          renderStatsLabel(styles.statsPlain, statsAccessibleText)
         )}
       </View>
     </View>

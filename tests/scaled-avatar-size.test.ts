@@ -18,13 +18,13 @@ describe('avatarGlyphInset', () => {
 describe('avatarInitialFillRatio', () => {
   it('uses a smaller fill ratio for two-letter initials', () => {
     expect(avatarInitialFillRatio(1)).toBe(0.6);
-    expect(avatarInitialFillRatio(2)).toBe(0.55);
+    expect(avatarInitialFillRatio(2)).toBe(0.46);
   });
 });
 
 describe('avatarInitialFontSize', () => {
   it('derives glyph size from the design diameter', () => {
-    expect(avatarInitialFontSize(40, 2)).toBe(22);
+    expect(avatarInitialFontSize(40, 2)).toBe(18);
     expect(avatarInitialFontSize(40, 1)).toBe(24);
   });
 });
@@ -32,7 +32,7 @@ describe('avatarInitialFontSize', () => {
 describe('computeAvatarDisplay', () => {
   it('matches the design diameter at unit scale', () => {
     expect(computeAvatarDisplay(40, 1, 1, 390)).toEqual({ displaySize: 40, fontSize: 24 });
-    expect(computeAvatarDisplay(40, 2, 1, 390)).toEqual({ displaySize: 38, fontSize: 22 });
+    expect(computeAvatarDisplay(40, 2, 1, 390)).toEqual({ displaySize: 34, fontSize: 18 });
   });
 
   it('scales glyphs and inset proportionally', () => {

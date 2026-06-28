@@ -12,6 +12,7 @@ import { ResultWordAuthorAvatars } from '@/components/ResultWordAuthorAvatars';
 import { NotebookLineFiller } from '@/components/notebook/NotebookLineFiller';
 import type { createNotebookRowLineStyle } from '@/lib/notebook/row-line-style';
 import { useNotebookRowLineStyle } from '@/hooks/useNotebookRowLineStyle';
+import { useVirtualWordListProps } from '@/hooks/useVirtualWordListProps';
 import { spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import type { ResultsWordListRow } from '@/lib/game/results-missing-words';
@@ -74,6 +75,7 @@ export function ResultsGlobalWordList({
 }: ResultsGlobalWordListProps) {
   const styles = useThemedStyles(createStyles);
   const notebookRow = useNotebookRowLineStyle();
+  const virtualList = useVirtualWordListProps();
 
   const ruledPaperFooter = useMemo(
     () => <NotebookLineFiller rowCount={fillerRowCount} />,
@@ -108,6 +110,11 @@ export function ResultsGlobalWordList({
       onScrollBeginDrag={onScrollBeginDrag}
       onContentSizeChange={onContentSizeChange}
       scrollEventThrottle={scrollEventThrottle}
+      getItemLayout={virtualList.getItemLayout}
+      initialNumToRender={virtualList.initialNumToRender}
+      maxToRenderPerBatch={virtualList.maxToRenderPerBatch}
+      windowSize={virtualList.windowSize}
+      updateCellsBatchingPeriod={virtualList.updateCellsBatchingPeriod}
       renderItem={renderItem}
     />
   );
