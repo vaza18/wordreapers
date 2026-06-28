@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import Markdown, { type RenderRules } from 'react-native-markdown-display';
 
 import { AppVersionLabel } from '@/components/AppVersionLabel';
@@ -112,11 +112,6 @@ function createMarkdownStyles(colors: ThemeColors) {
       fontSize: 13,
       color: colors.textPrimary,
     },
-    inlineRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      alignItems: 'center',
-    },
   });
 }
 
@@ -201,19 +196,10 @@ export function LegalDocumentView({ documentKey, showAppVersion = false }: Legal
           {children}
         </View>
       ),
-      inline: (node, children, _parent, styles) => (
-        <View key={node.key} style={[styles._VIEW_SAFE_inline, markdownStyles.inlineRow]}>
-          {children}
-        </View>
-      ),
-      textgroup: (node, children, _parent, styles) => (
-        <View key={node.key} style={[styles._VIEW_SAFE_textgroup, markdownStyles.inlineRow]}>
-          {children}
-        </View>
-      ),
       link: (node: MarkdownAstNode, children, _parent, styles) => (
-        <Pressable
+        <Text
           key={node.key}
+          style={styles.link}
           accessibilityRole="link"
           onPress={() => {
             const href = node.attributes?.href;
@@ -222,11 +208,11 @@ export function LegalDocumentView({ documentKey, showAppVersion = false }: Legal
             }
           }}
         >
-          <Text style={styles.link}>{children}</Text>
-        </Pressable>
+          {children}
+        </Text>
       ),
     };
-  }, [markdownStyles.inlineRow, onLinkPress]);
+  }, [onLinkPress]);
 
   return (
     <ScrollView ref={scrollRef} style={styles.scroll} contentContainerStyle={styles.content}>
