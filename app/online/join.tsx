@@ -199,14 +199,18 @@ export default function JoinRoomScreen() {
           </>
         ) : null}
 
-        <PrimaryButton
-          label={t('online.findPublicGame')}
-          variant="secondary"
-          disabled={joinLocked || loading}
-          onPress={() => {
-            router.push('/online/browse');
-          }}
-        />
+        <View style={styles.publicSection}>
+          <View style={styles.sectionDivider} />
+          <Text style={styles.findPublicHint}>{t('online.findPublicGameHint')}</Text>
+          <PrimaryButton
+            label={t('online.findPublicGame')}
+            variant="secondary"
+            disabled={joinLocked || loading}
+            onPress={() => {
+              router.push('/online/browse');
+            }}
+          />
+        </View>
       </Screen>
     </>
   );
@@ -249,6 +253,21 @@ function createStyles(colors: ThemeColors) {
     dividerText: {
       fontSize: 13,
       color: colors.textTertiary,
+    },
+    publicSection: {
+      gap: spacing.sm,
+      marginTop: spacing.xs,
+    },
+    sectionDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.borderSecondary,
+      marginVertical: spacing.sm,
+    },
+    findPublicHint: {
+      fontSize: 14,
+      lineHeight: 20,
+      color: colors.textSecondary,
+      textAlign: 'center',
     },
   });
 }
