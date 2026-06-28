@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import { isFirebaseConfigured } from './config.js';
 import { getFirebaseApp } from './init.js';
 import { useProductionAppCheckProviders } from './app-check-mode.js';
+import { hasNativeFirebaseAppModule } from './has-native-firebase-app-module.js';
 
 let initPromise: Promise<void> | null = null;
 
@@ -26,6 +27,15 @@ export async function ensureFirebaseAppCheck(): Promise<void> {
 }
 
 async function initNativeAppCheck(): Promise<void> {
+  if (!hasNativeFirebaseAppModule()) {
+    if (__DEV__) {
+      console.warn(
+        '[firebase] Native module RNFBAppModule missing — App Check skipped. Rebuild dev client: npm run ios or npm run android (not Expo Go).',
+      );
+    }
+    return;
+  }
+
   getFirebaseApp();
 
   const { getApp } = await import('@react-native-firebase/app');
