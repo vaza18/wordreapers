@@ -236,6 +236,42 @@ describe('players write', () => {
       authed('p1').database().ref('game_sessions/ABCDE/players/org/score').set(12),
     );
   });
+
+  it('allows stranger to join playing session roster', async () => {
+    await assertSucceeds(
+      authed('joiner')
+        .database()
+        .ref('game_sessions/ABCDE/players/joiner')
+        .set({ name: 'Late', wordCount: 0, score: 0, online: true, avatarColorIndex: 2 }),
+    );
+  });
+
+  it('allows joiner to patch picker order after mid-round roster add', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .database()
+        .ref('game_sessions/ABCDE/players/joiner')
+        .set({ name: 'Late', wordCount: 0, score: 0, online: true, avatarColorIndex: 2 });
+    });
+    await assertSucceeds(
+      authed('joiner')
+        .database()
+        .ref('game_sessions/ABCDE')
+        .update({ baseWordPickerOrder: ['org', 'p1', 'joiner'] }),
+    );
+  });
+
+  it('denies joiner from changing settings mid-round', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .database()
+        .ref('game_sessions/ABCDE/players/joiner')
+        .set({ name: 'Late', wordCount: 0, score: 0, online: true, avatarColorIndex: 2 });
+    });
+    await assertFails(
+      authed('joiner').database().ref('game_sessions/ABCDE/settings/uniqueBonusEnabled').set(true),
+    );
+  });
 });
 
 describe('session_word_maps', () => {

@@ -120,4 +120,58 @@ describe('joinGameSession blind invite join', () => {
     expect(updateMock).toHaveBeenCalled();
     expect(result.players.joiner).toBeDefined();
   });
+
+  it('completes blind join when session read is denied and words are in play', async () => {
+    getMock.mockRejectedValueOnce({ code: 'permission-denied' });
+
+    const sessionWithWords = {
+      ...playingSession(),
+      settings: {
+        ...playingSession().settings,
+        uniqueBonusMode: 'auto' as const,
+        uniqueBonusEnabled: false,
+      },
+      players: {
+        ...playingSession().players,
+        p2: { name: 'Two', wordCount: 1, score: 5, online: true },
+      },
+    };
+
+    const joined = {
+      ...sessionWithWords,
+      players: {
+        ...sessionWithWords.players,
+        joiner: { name: 'New', wordCount: 0, score: 0, online: true, avatarColorIndex: 1 },
+      },
+      baseWordPickerOrder: ['org', 'joiner'],
+    };
+
+    getMock
+      .mockResolvedValueOnce({
+        exists: () => true,
+        val: () => sessionWithWords,
+      })
+      .mockResolvedValueOnce({
+        exists: () => true,
+        val: () => joined,
+      });
+
+    const { fetchSessionWordMaps } = await import('../lib/firebase/session-word-maps-service.js');
+    vi.mocked(fetchSessionWordMaps).mockResolvedValueOnce({
+      wordPlayers: { slovo: { org: true } },
+      wordFirst: { slovo: 'org' },
+    });
+
+    const result = await joinGameSession('ABCDE', {
+      name: 'New',
+      gender: 'm',
+      avatarColorIndex: 1,
+    });
+
+    const sessionUpdate = updateMock.mock.calls.find(
+      ([, payload]) => payload && typeof payload === 'object' && 'baseWordPickerOrder' in payload,
+    );
+    expect(sessionUpdate?.[1]).not.toHaveProperty('settings');
+    expect(result.players.joiner).toBeDefined();
+  });
 });

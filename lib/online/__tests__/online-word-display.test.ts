@@ -37,10 +37,14 @@ describe('resolveOnlineWordEntry', () => {
     expect(entry.badge).toBe('+1');
   });
 
-  it('returns x2 when unique and bonus enabled', () => {
+  it('returns x2 when unique and bonus enabled at round start', () => {
     const s = session({
       wordPlayers: { слово: { org: true } },
-      settings: { ...session().settings, uniqueBonusMode: 'auto' },
+      settings: {
+        ...session().settings,
+        uniqueBonusMode: 'auto',
+        uniqueBonusEnabled: true,
+      },
       players: {
         org: { name: 'Орг', wordCount: 0, score: 0, avatarColorIndex: 0 },
         a: { name: 'А', wordCount: 0, score: 0, avatarColorIndex: 1 },

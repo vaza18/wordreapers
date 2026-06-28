@@ -24,7 +24,7 @@ Core session document for a room.
 
 - **Roster members** — full read on `game_sessions/{gameId}` for any `status`.
 - **Non-members** — read only when `status === 'waiting'` (browse / lobby peek).
-- **Invite into `playing` room** — no pre-read; client uses blind join (`players/{self}` + session transaction), then reads as roster.
+- **Invite into `playing` room** — no pre-read; client uses blind join (`players/{self}` + session metadata patch), then reads as roster. Session `settings` are **immutable while `status === 'playing'`** (RTDB rules); mid-round joins do not flip `uniqueBonusEnabled` even if roster grows to 3+.
 
 `players/{uid}.joinedVia`:
 

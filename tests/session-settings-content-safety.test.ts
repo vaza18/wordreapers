@@ -43,4 +43,26 @@ describe('resolveGameSessionSettingsForSession content safety', () => {
     expect(resolved.allowProperNouns).toBe(true);
     expect(resolved.allowSlang).toBe(true);
   });
+
+  it('keeps unique bonus frozen during playing after mid-round join', () => {
+    const resolved = resolveGameSessionSettingsForSession(
+      session({
+        status: 'playing',
+        settings: {
+          durationSeconds: 600,
+          uniqueBonusEnabled: false,
+          uniqueBonusMode: 'auto',
+          language: 'uk-uk',
+          allowProperNouns: false,
+          allowSlang: false,
+        },
+        players: {
+          org: { name: 'Org', wordCount: 0, score: 0 },
+          p1: { name: 'One', wordCount: 0, score: 0 },
+          joiner: { name: 'Late', wordCount: 0, score: 0 },
+        },
+      }),
+    );
+    expect(resolved.uniqueBonusEnabled).toBe(false);
+  });
 });

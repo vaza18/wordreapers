@@ -36,12 +36,38 @@ export function playerCountForSession(session: Pick<GameSession, 'players'>): nu
   return Object.keys(session.players ?? {}).length;
 }
 
+/**
+ * Unique bonus for scoring during an active or just-finished round.
+ * Roster size can grow mid-round (invite QR), but rules are frozen from round start.
+ */
+export function uniqueBonusEnabledForActiveRound(
+  session: Pick<GameSession, 'settings' | 'players' | 'status'>,
+): boolean {
+  if (session.status === 'playing' || session.status === 'finished') {
+    const stored = session.settings?.uniqueBonusEnabled;
+    if (typeof stored === 'boolean') {
+      return stored;
+    }
+  }
+  return resolveGameSessionSettings(session.settings, playerCountForSession(session))
+    .uniqueBonusEnabled;
+}
+
 /** Apply roster-dependent fields (e.g. auto x2 for 3+ players) to stored settings. */
 export function resolveGameSessionSettingsForSession(
-  session: Pick<GameSession, 'settings' | 'players' | 'identityMasked' | 'isPublic'>,
+  session: Pick<GameSession, 'settings' | 'players' | 'identityMasked' | 'isPublic'> & {
+    status?: GameSession['status'];
+  },
 ): GameSessionSettings {
-  const resolved = resolveGameSessionSettings(session.settings, playerCountForSession(session));
-  return applyPublicContentSafety(resolved, session);
+  const playerCount = playerCountForSession(session);
+  const resolved = resolveGameSessionSettings(session.settings, playerCount);
+  const uniqueBonusEnabled =
+    session.status === 'playing' || session.status === 'finished'
+      ? uniqueBonusEnabledForActiveRound(
+          session as Pick<GameSession, 'settings' | 'players' | 'status'>,
+        )
+      : resolved.uniqueBonusEnabled;
+  return applyPublicContentSafety({ ...resolved, uniqueBonusEnabled }, session);
 }
 
 /** Fallback for partial RTDB snapshots missing `settings`. */

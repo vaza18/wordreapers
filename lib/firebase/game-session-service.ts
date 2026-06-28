@@ -17,7 +17,10 @@ import type { PlayerProfile } from '../profile/player-profile.js';
 import { currentBaseWordPickerUid } from '../online/base-word-picker.js';
 import { clearAllActiveRoundCachesForGame } from '../online/active-round-cache.js';
 import { setOrganizerWaitingRoom } from '../online/organizer-waiting-room.js';
-import { resolveGameSessionSettings } from './session-settings.js';
+import {
+  resolveGameSessionSettings,
+  uniqueBonusEnabledForActiveRound,
+} from './session-settings.js';
 import { recomputeSessionPlayerScores } from '../game/scoring.js';
 import { computeRoundPlayedSecondsAtFinish } from '../game/round-duration.js';
 import {
@@ -386,20 +389,23 @@ function buildJoinCommitPatch(
     resolveGameSessionSettings(next.settings, playerCount),
     next,
   );
-  if (
-    next.settings.uniqueBonusMode !== resolvedSettings.uniqueBonusMode ||
-    next.settings.uniqueBonusEnabled !== resolvedSettings.uniqueBonusEnabled ||
-    next.settings.allowProperNouns !== resolvedSettings.allowProperNouns ||
-    next.settings.allowSlang !== resolvedSettings.allowSlang
-  ) {
-    patch.settings = resolvedSettings;
+  // Mid-round joins must not change settings — RTDB rules reject settings writes while playing.
+  if (next.status !== 'playing') {
+    if (
+      next.settings.uniqueBonusMode !== resolvedSettings.uniqueBonusMode ||
+      next.settings.uniqueBonusEnabled !== resolvedSettings.uniqueBonusEnabled ||
+      next.settings.allowProperNouns !== resolvedSettings.allowProperNouns ||
+      next.settings.allowSlang !== resolvedSettings.allowSlang
+    ) {
+      patch.settings = resolvedSettings;
+    }
   }
 
   const hasWords = Object.keys(context.wordMaps.wordPlayers ?? {}).length > 0;
   if (next.status === 'playing' && hasWords) {
     recomputeSessionPlayerScores(
       { ...next, wordPlayers: context.wordMaps.wordPlayers },
-      resolvedSettings.uniqueBonusEnabled,
+      uniqueBonusEnabledForActiveRound(next),
     );
     patch.players = next.players;
   }
@@ -427,7 +433,15 @@ async function commitNewPlayerJoinTransaction(
     return 'ok';
   }
 
-  await update(sessionRef(normalized), built.patch);
+  try {
+    await update(sessionRef(normalized), built.patch);
+  } catch (error) {
+    // Roster write already succeeded; metadata patch must not block join/rejoin.
+    if (isFirebasePermissionDenied(error)) {
+      return 'ok';
+    }
+    throw error;
+  }
   return 'ok';
 }
 
@@ -568,26 +582,18 @@ export async function syncSessionPlayerScores(
         return undefined;
       }
 
-      const playerCount = Object.keys(session.players).length;
-      const resolvedSettings = resolveGameSessionSettings(session.settings, playerCount);
+      const uniqueBonusEnabled = uniqueBonusEnabledForActiveRound(session);
       const players = Object.fromEntries(
         Object.entries(session.players).map(([playerId, player]) => [playerId, { ...player }]),
       );
-      recomputeSessionPlayerScores(
-        { players, wordPlayers: maps.wordPlayers },
-        resolvedSettings.uniqueBonusEnabled,
-      );
+      recomputeSessionPlayerScores({ players, wordPlayers: maps.wordPlayers }, uniqueBonusEnabled);
 
-      let changed =
-        session.settings.uniqueBonusEnabled !== resolvedSettings.uniqueBonusEnabled ||
-        session.settings.uniqueBonusMode !== resolvedSettings.uniqueBonusMode;
-      if (!changed) {
-        for (const [playerId, player] of Object.entries(players)) {
-          const stored = session.players[playerId];
-          if (stored?.score !== player.score || stored?.wordCount !== player.wordCount) {
-            changed = true;
-            break;
-          }
+      let changed = false;
+      for (const [playerId, player] of Object.entries(players)) {
+        const stored = session.players[playerId];
+        if (stored?.score !== player.score || stored?.wordCount !== player.wordCount) {
+          changed = true;
+          break;
         }
       }
 
@@ -597,7 +603,6 @@ export async function syncSessionPlayerScores(
 
       return {
         ...session,
-        settings: resolvedSettings,
         players,
       };
     });
@@ -898,14 +903,12 @@ export async function finishGameSessionIfExpired(
       if (session.addTimeVote) {
         return undefined;
       }
-      const playerCount = Object.keys(session.players).length;
-      const resolvedSettings = resolveGameSessionSettings(session.settings, playerCount);
+      const uniqueBonusEnabled = uniqueBonusEnabledForActiveRound(session);
       if (Object.keys(wordMaps.wordPlayers ?? {}).length > 0) {
         recomputeSessionPlayerScores(
           { ...session, wordPlayers: wordMaps.wordPlayers },
-          resolvedSettings.uniqueBonusEnabled,
+          uniqueBonusEnabled,
         );
-        session.settings = resolvedSettings;
       }
       const finishAt = session.timerEndsAt;
       const roundPlayedSeconds = computeRoundPlayedSecondsAtFinish(session, finishAt);
@@ -951,14 +954,12 @@ export async function finishGameSession(
     if (session.status !== 'playing') {
       return undefined;
     }
-    const playerCount = Object.keys(session.players).length;
-    const resolvedSettings = resolveGameSessionSettings(session.settings, playerCount);
+    const uniqueBonusEnabled = uniqueBonusEnabledForActiveRound(session);
     if (Object.keys(wordMaps.wordPlayers ?? {}).length > 0) {
       recomputeSessionPlayerScores(
         { ...session, wordPlayers: wordMaps.wordPlayers },
-        resolvedSettings.uniqueBonusEnabled,
+        uniqueBonusEnabled,
       );
-      session.settings = resolvedSettings;
     }
     const roundPlayedSeconds = computeRoundPlayedSecondsAtFinish(session, finishedAt);
     return withFinishedPurgeFields(
