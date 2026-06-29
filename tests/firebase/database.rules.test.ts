@@ -206,6 +206,7 @@ describe('players write', () => {
         .set({
           ...waitingSession,
           baseWordPickerOrder: ['org', 'p2'],
+          baseWordPickerUid: 'p2',
           baseWordRound: 1,
           players: {
             org: { name: 'Org', wordCount: 0, score: 0, online: true },
@@ -269,6 +270,7 @@ describe('players write', () => {
         .set({
           ...waitingSession,
           baseWordPickerOrder: ['org', 'p2', 'p3'],
+          baseWordPickerUid: 'p2',
           baseWordRound: 1,
           players: {
             org: { name: 'Org', wordCount: 0, score: 0, online: true },
@@ -282,6 +284,39 @@ describe('players write', () => {
         .database()
         .ref('game_sessions/REMCH')
         .update({ status: 'playing', timerEndsAt: Date.now() + 60_000 }),
+    );
+  });
+
+  it('allows stored baseWordPickerUid to start when round index exceeds picker order length', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .database()
+        .ref('game_sessions/REMCH')
+        .set({
+          ...waitingSession,
+          baseWord: 'сміховисько',
+          baseWordPickerOrder: ['org', 'p1', 'p3'],
+          baseWordPickerUid: 'p1',
+          baseWordRound: 3,
+          players: {
+            org: { name: 'Org', wordCount: 0, score: 0, online: true },
+            p1: { name: 'One', wordCount: 0, score: 0, online: true },
+            p3: { name: 'Three', wordCount: 0, score: 0, online: true },
+          },
+        });
+    });
+    const now = Date.now();
+    await assertSucceeds(
+      authed('p1')
+        .database()
+        .ref('game_sessions/REMCH')
+        .update({
+          status: 'playing',
+          timerEndsAt: now + 60_000,
+          roundStartedAt: now,
+          roundTimerBudgetSeconds: 600,
+          roundPlayedSeconds: null,
+        }),
     );
   });
 

@@ -23,13 +23,29 @@ export function baseWordPickerOrder(session: GameSession): string[] {
   return order;
 }
 
-/**
- * Active picker uid for the current lobby round (skips offline / left players).
- */
-export function currentBaseWordPickerUid(session: GameSession): string {
+/** Uids currently in the lobby and eligible to pick (online, not left). */
+export function eligibleBaseWordPickerUids(session: GameSession): string[] {
+  return baseWordPickerOrder(session).filter((uid) =>
+    isEligibleBaseWordPickerPlayer(session.players[uid]),
+  );
+}
+
+/** Static rotation slot for a round index (ignores who is online in the lobby). */
+export function scheduledBaseWordPickerUid(session: GameSession, round: number): string {
   const order = baseWordPickerOrder(session);
-  const round = session.baseWordRound ?? 0;
-  const startIndex = order.length > 0 ? round % order.length : 0;
+  if (order.length === 0) {
+    return session.organizerId;
+  }
+  const index = ((round % order.length) + order.length) % order.length;
+  return order[index] ?? session.organizerId;
+}
+
+function firstEligibleFromRotation(session: GameSession, startRound: number): string {
+  const order = baseWordPickerOrder(session);
+  if (order.length === 0) {
+    return session.organizerId;
+  }
+  const startIndex = ((startRound % order.length) + order.length) % order.length;
 
   for (let offset = 0; offset < order.length; offset += 1) {
     const uid = order[(startIndex + offset) % order.length];
@@ -45,6 +61,40 @@ export function currentBaseWordPickerUid(session: GameSession): string {
   }
 
   return session.organizerId;
+}
+
+/**
+ * Active picker uid for the current lobby round.
+ * Round 1: first eligible in join order.
+ * Later rounds: another eligible player when 2+ are present; repeat only when alone.
+ */
+export function currentBaseWordPickerUid(session: GameSession): string {
+  const round = session.baseWordRound ?? 0;
+  if (round === 0) {
+    return firstEligibleFromRotation(session, 0);
+  }
+
+  const eligible = eligibleBaseWordPickerUids(session);
+  if (eligible.length <= 1) {
+    return eligible[0] ?? session.organizerId;
+  }
+
+  const previousPicker = scheduledBaseWordPickerUid(session, round - 1);
+  const candidateSet = new Set(eligible.filter((uid) => uid !== previousPicker));
+  if (candidateSet.size === 0) {
+    return eligible[0] ?? session.organizerId;
+  }
+
+  const order = baseWordPickerOrder(session);
+  const startIndex = ((round % order.length) + order.length) % order.length;
+  for (let offset = 0; offset < order.length; offset += 1) {
+    const uid = order[(startIndex + offset) % order.length];
+    if (uid && candidateSet.has(uid)) {
+      return uid;
+    }
+  }
+
+  return eligible[0] ?? session.organizerId;
 }
 
 export function isCurrentBaseWordPicker(session: GameSession, uid: string): boolean {

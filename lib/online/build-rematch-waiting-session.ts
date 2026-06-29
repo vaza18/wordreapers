@@ -1,5 +1,6 @@
 import { resolveGameSessionSettings } from '../firebase/session-settings.js';
 import type { GameSession, GameSessionPlayer } from '../firebase/types.js';
+import { currentBaseWordPickerUid } from './base-word-picker.js';
 
 /** Build a clean RTDB document for rematch bootstrap (no finished-round coordination fields). */
 export function buildRematchWaitingSession(source: GameSession): GameSession {
@@ -13,8 +14,9 @@ export function buildRematchWaitingSession(source: GameSession): GameSession {
       ? [...source.baseWordPickerOrder]
       : [source.organizerId];
 
-  return {
+  const session: GameSession = {
     baseWord: '',
+    baseWordChosenBy: null,
     status: 'waiting',
     settings: resolveGameSessionSettings(source.settings, Object.keys(source.players).length),
     timerEndsAt: null,
@@ -26,5 +28,10 @@ export function buildRematchWaitingSession(source: GameSession): GameSession {
     pauseVote: null,
     pauseState: null,
     resumeVote: null,
+  };
+
+  return {
+    ...session,
+    baseWordPickerUid: currentBaseWordPickerUid(session),
   };
 }

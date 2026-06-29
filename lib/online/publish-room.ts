@@ -127,6 +127,7 @@ export async function publishWaitingRoom(input: PublishWaitingRoomInput): Promis
     },
     baseWordPickerOrder: [input.organizerUid],
     baseWordRound: 0,
+    baseWordPickerUid: input.organizerUid,
   };
 
   await writeSession(gameId, session, input.organizerUid);

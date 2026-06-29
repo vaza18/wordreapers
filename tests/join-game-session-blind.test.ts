@@ -109,6 +109,10 @@ describe('joinGameSession blind invite join', () => {
       .mockResolvedValueOnce({
         exists: () => true,
         val: () => joined,
+      })
+      .mockResolvedValueOnce({
+        exists: () => true,
+        val: () => joined,
       });
 
     const result = await joinGameSession('ABCDE', {
@@ -150,6 +154,10 @@ describe('joinGameSession blind invite join', () => {
       .mockResolvedValueOnce({
         exists: () => true,
         val: () => sessionWithWords,
+      })
+      .mockResolvedValueOnce({
+        exists: () => true,
+        val: () => joined,
       })
       .mockResolvedValueOnce({
         exists: () => true,

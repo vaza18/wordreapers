@@ -148,6 +148,49 @@ async function setPlayerOnlinePresence(gameId: string, uid: string): Promise<voi
     await onDisconnect(node).cancel();
     await update(node, { online: true });
     await onDisconnect(node).update({ online: false });
+    await reconcileLobbyPickerState(normalized);
+  } catch (error) {
+    if (isFirebasePermissionDenied(error)) {
+      return;
+    }
+    throw error;
+  }
+}
+
+/** Keep lobby picker uid and base word aligned with who is online in waiting. */
+async function reconcileLobbyPickerState(gameId: string): Promise<void> {
+  const snapshot = await get(sessionRef(gameId));
+  if (!snapshot.exists()) {
+    return;
+  }
+  const session = snapshot.val() as GameSession;
+  if (session.status !== 'waiting') {
+    return;
+  }
+
+  const pickerUid = currentBaseWordPickerUid(session);
+  const updates: Record<string, string | null> = {};
+
+  if (session.baseWordPickerUid !== pickerUid) {
+    updates.baseWordPickerUid = pickerUid;
+  }
+
+  if (
+    session.baseWord &&
+    session.baseWord.length >= 2 &&
+    session.baseWordChosenBy &&
+    session.baseWordChosenBy !== pickerUid
+  ) {
+    updates.baseWord = '';
+    updates.baseWordChosenBy = null;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return;
+  }
+
+  try {
+    await update(sessionRef(gameId), updates);
   } catch (error) {
     if (isFirebasePermissionDenied(error)) {
       return;
@@ -707,7 +750,11 @@ export async function updateGameSessionSetup(
     throw new Error('ROOM_NOT_WAITING');
   }
 
-  const updates: { settings: GameSessionSettings; baseWord?: string } = {
+  const updates: {
+    settings: GameSessionSettings;
+    baseWord?: string;
+    baseWordChosenBy?: string;
+  } = {
     settings: applyPublicContentSafety(payload.settings, session),
   };
   if (payload.baseWord !== undefined) {
@@ -716,6 +763,7 @@ export async function updateGameSessionSetup(
     }
     await assertSessionBaseWordAllowed(payload.baseWord, session);
     updates.baseWord = payload.baseWord;
+    updates.baseWordChosenBy = actorUid;
   }
 
   await update(sessionRef(normalized), updates);
@@ -746,7 +794,7 @@ export async function updateGameSessionBaseWord(
   }
   await assertSessionBaseWordAllowed(baseWord, session);
 
-  await update(sessionRef(normalized), { baseWord });
+  await update(sessionRef(normalized), { baseWord, baseWordChosenBy: uid });
 }
 
 /** Fix parking from uniqueBonusMode - updateGameSessionSetup receives uniqueBonusEnabled boolean already */
@@ -1030,6 +1078,16 @@ export async function rematchFinishedSessionToWaiting(
     };
   }
 
+  const waitingSession: GameSession = {
+    ...preSession,
+    status: 'waiting',
+    baseWord: '',
+    baseWordChosenBy: null,
+    baseWordRound: nextBaseWordRound,
+    players,
+  };
+  const baseWordPickerUid = currentBaseWordPickerUid(waitingSession);
+
   try {
     await update(sessionRef(normalized), {
       status: 'waiting',
@@ -1039,7 +1097,9 @@ export async function rematchFinishedSessionToWaiting(
       roundTimerBudgetSeconds: null,
       roundPlayedSeconds: null,
       baseWord: '',
+      baseWordChosenBy: null,
       baseWordRound: nextBaseWordRound,
+      baseWordPickerUid,
       earlyFinishVote: null,
       pauseVote: null,
       pauseState: null,
