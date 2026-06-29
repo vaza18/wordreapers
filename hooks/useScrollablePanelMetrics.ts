@@ -16,11 +16,14 @@ export interface PanelScrollMetrics {
 const MIN_THUMB_HEIGHT = 28;
 export const SCROLL_OVERFLOW_THRESHOLD = 4;
 
+/** Reuse last measured list height so notebook filler rows stay stable on mount. */
+let lastWordListViewportHeight = 0;
+
 /**
  * Tracks scroll metrics for a flex-growing panel and derives a visible scrollbar thumb.
  */
 export function useScrollablePanelMetrics() {
-  const [viewportHeight, setViewportHeight] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(() => lastWordListViewportHeight);
   const [contentHeight, setContentHeight] = useState(0);
   const [scrollOffset, setScrollOffset] = useState(0);
 
@@ -43,7 +46,12 @@ export function useScrollablePanelMetrics() {
   }, [contentHeight, scrollOffset, viewportHeight]);
 
   const onViewportLayout = useCallback((event: LayoutChangeEvent) => {
-    setViewportHeight(event.nativeEvent.layout.height);
+    const nextHeight = event.nativeEvent.layout.height;
+    if (nextHeight <= 0) {
+      return;
+    }
+    lastWordListViewportHeight = nextHeight;
+    setViewportHeight((prev) => (prev === nextHeight ? prev : nextHeight));
   }, []);
 
   const onContentSizeChange = useCallback((_width: number, height: number) => {

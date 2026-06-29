@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { GameSession } from '../lib/firebase/types.js';
-import { shouldLoadViewingRoundFromArchive } from '../lib/online/should-load-viewing-round-from-archive.js';
+import { shouldLoadViewingRoundFromArchive } from '../lib/online/frozen-round-view.js';
 
 function session(status: GameSession['status'], baseWordRound: number): GameSession {
   return {

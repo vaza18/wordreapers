@@ -388,8 +388,6 @@ async function commitPlayerScorePlan(
         ...(player as GameSession['players'][string]),
         score: plan.nextScore,
         wordCount: plan.nextWordCount,
-        online: true,
-        hasLeft: false,
       };
     });
     profile?.mark('sessionFastTx');
@@ -410,8 +408,6 @@ async function commitPlayerScorePlan(
       ...next[plan.uid],
       score: plan.nextScore,
       wordCount: plan.nextWordCount,
-      online: true,
-      hasLeft: false,
     };
     return next;
   });

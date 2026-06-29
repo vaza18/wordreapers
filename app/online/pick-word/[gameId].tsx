@@ -54,6 +54,7 @@ export default function OnlinePickWordScreen() {
   const isFocused = useIsFocused();
 
   const [loading, setLoading] = useState(true);
+  const [sessionLoaded, setSessionLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [session, setSession] = useState<GameSessionSnapshot | null>(null);
@@ -88,7 +89,10 @@ export default function OnlinePickWordScreen() {
     void ensureAnonymousAuth().then((user) => {
       setMyUid(user.uid);
     });
-    return subscribeGameSession(gameId, setSession);
+    return subscribeGameSession(gameId, (next) => {
+      setSession(next);
+      setSessionLoaded(true);
+    });
   }, [gameId]);
 
   usePlayerOnlinePresence(gameId, myUid ?? undefined, Boolean(gameId && myUid));
@@ -204,6 +208,30 @@ export default function OnlinePickWordScreen() {
   };
 
   const turn = session ? baseWordPickerTurnNumber(session) : 1;
+
+  if (!loading && sessionLoaded && !session) {
+    return (
+      <>
+        <Stack.Screen options={screenOptions} />
+        <Screen>
+          <Text style={styles.error}>{t('online.errorRoomNotFound')}</Text>
+          <PrimaryButton
+            label={t('online.roomRematchRetry')}
+            onPress={() => {
+              router.replace({ pathname: '/online/lobby/[gameId]', params: { gameId } });
+            }}
+          />
+          <PrimaryButton
+            label={t('nav.home')}
+            variant="secondary"
+            onPress={() => {
+              router.replace('/');
+            }}
+          />
+        </Screen>
+      </>
+    );
+  }
 
   if (loading || !session || !myUid) {
     return (

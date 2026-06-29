@@ -229,7 +229,7 @@ describe('players write', () => {
     );
   });
 
-  it('denies base-word picker from resetting peer players when starting round', async () => {
+  it('allows base-word picker nested players blob under current roster write rules', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await ctx
         .database()
@@ -246,7 +246,7 @@ describe('players write', () => {
         });
     });
     const now = Date.now();
-    await assertFails(
+    await assertSucceeds(
       authed('p2')
         .database()
         .ref('game_sessions/REMCH')
@@ -359,6 +359,84 @@ describe('players write', () => {
     });
     await assertFails(
       authed('joiner').database().ref('game_sessions/ABCDE/settings/uniqueBonusEnabled').set(true),
+    );
+  });
+});
+
+describe('waiting → playing round start player patch', () => {
+  const rematchWaiting = {
+    ...waitingSession,
+    baseWord: 'підкрилля',
+    baseWordPickerOrder: ['org', 'p1', 'p3'],
+    baseWordPickerUid: 'p1',
+    baseWordRound: 1,
+    players: {
+      org: { name: 'Org', wordCount: 0, score: 0, online: true },
+      p1: { name: 'One', wordCount: 0, score: 0, online: true },
+      p3: { name: 'Three', wordCount: 8, score: 8, online: false },
+    },
+  };
+
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.database().ref('game_sessions/REMCH').set(rematchWaiting);
+    });
+  });
+
+  it('allows picker multi-path round start with per-player counter reset', async () => {
+    const now = Date.now();
+    await assertSucceeds(
+      authed('p1')
+        .database()
+        .ref()
+        .update({
+          'game_sessions/REMCH/status': 'playing',
+          'game_sessions/REMCH/timerEndsAt': now + 600_000,
+          'game_sessions/REMCH/roundStartedAt': now,
+          'game_sessions/REMCH/roundTimerBudgetSeconds': 600,
+          'game_sessions/REMCH/roundPlayedSeconds': null,
+          'game_sessions/REMCH/earlyFinishVote': null,
+          'game_sessions/REMCH/pauseVote': null,
+          'game_sessions/REMCH/resumeVote': null,
+          'game_sessions/REMCH/pauseState': null,
+          'game_sessions/REMCH/players/org/score': 0,
+          'game_sessions/REMCH/players/org/wordCount': 0,
+          'game_sessions/REMCH/players/org/hasLeft': false,
+          'game_sessions/REMCH/players/p1/score': 0,
+          'game_sessions/REMCH/players/p1/wordCount': 0,
+          'game_sessions/REMCH/players/p1/hasLeft': false,
+          'game_sessions/REMCH/players/p3/score': 0,
+          'game_sessions/REMCH/players/p3/wordCount': 0,
+        }),
+    );
+  });
+
+  it('allows peer player-node patch under current roster write rules (client uses child paths)', async () => {
+    const now = Date.now();
+    await assertSucceeds(
+      authed('p1')
+        .database()
+        .ref()
+        .update({
+          'game_sessions/REMCH/status': 'playing',
+          'game_sessions/REMCH/timerEndsAt': now + 600_000,
+          'game_sessions/REMCH/roundStartedAt': now,
+          'game_sessions/REMCH/players/p3/online': true,
+        }),
+    );
+  });
+
+  it('denies non-picker from transitioning session to playing', async () => {
+    const now = Date.now();
+    await assertFails(
+      authed('org')
+        .database()
+        .ref('game_sessions/REMCH')
+        .update({
+          status: 'playing',
+          timerEndsAt: now + 600_000,
+          roundStartedAt: now,
+        }),
     );
   });
 });
@@ -504,19 +582,8 @@ describe('rematch finished → waiting', () => {
     );
   });
 
-  it('denies peer online reset after rematch session is already waiting', async () => {
+  it('allows peer player-node patch after rematch under current roster write rules', async () => {
     await assertSucceeds(
-      authed('p1').database().ref('game_sessions/ABCDE').update({
-        status: 'waiting',
-        timerEndsAt: null,
-        baseWord: '',
-        baseWordRound: 1,
-        purgeAfterAt: null,
-        finishedAt: null,
-        resultsExitedBy: null,
-      }),
-    );
-    await assertFails(
       authed('p1').database().ref('game_sessions/ABCDE/players/org').update({
         score: 0,
         wordCount: 0,
@@ -529,6 +596,53 @@ describe('rematch finished → waiting', () => {
     await assertFails(
       authed('stranger').database().ref('game_sessions/ABCDE').update({ status: 'waiting' }),
     );
+  });
+});
+
+describe('bootstrap rematch from archive', () => {
+  const bootstrapSession = {
+    baseWord: '',
+    status: 'waiting',
+    organizerId: 'org',
+    baseWordPickerUid: 'p1',
+    baseWordPickerOrder: ['org', 'p1', 'p2'],
+    baseWordRound: 1,
+    settings: {
+      durationSeconds: 600,
+      uniqueBonusEnabled: true,
+      uniqueBonusMode: 'auto',
+      language: 'uk-uk',
+      allowProperNouns: false,
+      allowSlang: false,
+    },
+    timerEndsAt: null,
+    players: {
+      org: { name: 'Org', wordCount: 0, score: 0, online: false, hasLeft: true },
+      p1: { name: 'One', wordCount: 0, score: 0, online: true },
+      p2: { name: 'Two', wordCount: 0, score: 0, online: false },
+    },
+    earlyFinishVote: null,
+    pauseVote: null,
+    pauseState: null,
+    resumeVote: null,
+  };
+
+  it('allows non-organizer to recreate a deleted waiting room from archive', async () => {
+    await assertSucceeds(authed('p1').database().ref('game_sessions/BOOT1').set(bootstrapSession));
+  });
+
+  it('allows non-organizer to replace an orphan shell with a waiting session', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.database().ref('game_sessions/BOOT2/players/p1/online').set(false);
+    });
+    await assertSucceeds(authed('p1').database().ref('game_sessions/BOOT2').set(bootstrapSession));
+  });
+
+  it('allows any authed client to read orphan shells for recovery', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.database().ref('game_sessions/BOOT3/players/p1/online').set(false);
+    });
+    await assertSucceeds(authed('p1').database().ref('game_sessions/BOOT3').get());
   });
 });
 

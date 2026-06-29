@@ -9,7 +9,6 @@ import {
 
 /**
  * Keep `players/{uid}.online` accurate across reconnects and app foreground.
- * Cleanup cancels onDisconnect only — no forced offline (avoids Strict Mode remount races).
  */
 export function usePlayerOnlinePresence(
   gameId: string | undefined,

@@ -6,6 +6,7 @@ import {
   abandonWaitingGameSession,
   leaveGameSession,
   markPlayerOffline,
+  organizerLeaveWaitingLobby,
 } from '../firebase/game-session-service.js';
 import { getFirebaseDatabase } from '../firebase/init.js';
 import { gameSessionPath } from '../firebase/paths.js';
@@ -73,7 +74,9 @@ async function runExitCleanup(options: ExitOnlineFlowOptions): Promise<void> {
   }
 
   if (isOrganizer || isLiveOrganizer) {
-    if (liveStatus === 'waiting') {
+    if (liveStatus === 'waiting' && liveFromDb) {
+      await organizerLeaveWaitingLobby(gameId, uid, liveFromDb);
+    } else if (liveStatus === 'waiting') {
       await markPlayerOffline(gameId, uid);
       await abandonWaitingGameSession(gameId, uid);
     }

@@ -173,10 +173,10 @@ function PauseBody({
           {standings.map((row) => {
             const player = session.players[row.playerId];
             const isMe = row.playerId === myUid;
-            const presence = player?.hasLeft
-              ? formatPlayerLeftLabel(t, playerGenderForDisplay(session, myUid, row.playerId))
-              : player?.online
-                ? t('game.pauseStatusInRound')
+            const presence = player?.online
+              ? t('game.pauseStatusInRound')
+              : player?.hasLeft
+                ? formatPlayerLeftLabel(t, playerGenderForDisplay(session, myUid, row.playerId))
                 : t('game.playerOffline');
             const displayName = player
               ? displayPlayerName(player, myUid, row.playerId, session)
@@ -215,15 +215,20 @@ function PauseBody({
                         {row.playerId === myUid ? ` ${t('game.resultsYou')}` : ''}
                       </Text>
                       <Text style={styles.participantPresence}>
-                        {row.hasLeft
-                          ? formatPlayerLeftLabel(t, row.gender)
-                          : row.online
-                            ? t('game.playerOnline')
+                        {row.online
+                          ? t('game.playerOnline')
+                          : row.hasLeft
+                            ? formatPlayerLeftLabel(t, row.gender)
                             : t('game.playerOffline')}
                       </Text>
                     </View>
                     <Text style={styles.participantVote}>
-                      {formatVoteStatusLabel(t, row.voteStatus, row.hasLeft, row.gender)}
+                      {formatVoteStatusLabel(
+                        t,
+                        row.voteStatus,
+                        !row.online && row.hasLeft,
+                        row.gender,
+                      )}
                     </Text>
                   </View>
                 ))}
@@ -246,15 +251,20 @@ function PauseBody({
                         {row.playerId === myUid ? ` ${t('game.resultsYou')}` : ''}
                       </Text>
                       <Text style={styles.participantPresence}>
-                        {row.hasLeft
-                          ? formatPlayerLeftLabel(t, row.gender)
-                          : row.online
-                            ? t('game.playerOnline')
+                        {row.online
+                          ? t('game.playerOnline')
+                          : row.hasLeft
+                            ? formatPlayerLeftLabel(t, row.gender)
                             : t('game.playerOffline')}
                       </Text>
                     </View>
                     <Text style={styles.participantVote}>
-                      {formatVoteStatusLabel(t, row.voteStatus, row.hasLeft, row.gender)}
+                      {formatVoteStatusLabel(
+                        t,
+                        row.voteStatus,
+                        !row.online && row.hasLeft,
+                        row.gender,
+                      )}
                     </Text>
                   </View>
                 ))}

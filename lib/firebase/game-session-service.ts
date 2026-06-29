@@ -22,7 +22,13 @@ import {
   resolveGameSessionSettingsForSession,
 } from './session-settings.js';
 import { recomputeSessionPlayerScores } from '../game/scoring.js';
-import { rematchWaitingPlayerPatch } from '../online/rematch-waiting-player-patch.js';
+import { buildPlayersPatchForRoundStart } from '../online/players-patch-for-round-start.js';
+import {
+  appendLiveRoundPlayerUid,
+  rematchWaitingPlayerPatch,
+  waitingLobbyOptInUids,
+} from '../online/live-round-membership.js';
+import { shouldOrganizerAbandonWaitingRoom } from '../online/should-organizer-abandon-waiting-room.js';
 import { computeRoundPlayedSecondsAtFinish } from '../game/round-duration.js';
 import {
   resolveEarlyFinishVoteIfExpired,
@@ -158,6 +164,10 @@ async function setPlayerOnlinePresence(gameId: string, uid: string): Promise<voi
 }
 
 /** Keep lobby picker uid and base word aligned with who is online in waiting. */
+export async function syncLobbyPickerState(gameId: string): Promise<void> {
+  await reconcileLobbyPickerState(gameId);
+}
+
 async function reconcileLobbyPickerState(gameId: string): Promise<void> {
   const snapshot = await get(sessionRef(gameId));
   if (!snapshot.exists()) {
@@ -280,6 +290,28 @@ async function readSessionSnapshot(gameId: string): Promise<GameSessionSnapshot>
   return { id: normalized, ...(snapshot.val() as GameSession) };
 }
 
+/** Fresh RTDB session read for routing after rematch / rejoin. */
+export async function readGameSessionSnapshot(gameId: string): Promise<GameSessionSnapshot> {
+  return readSessionSnapshot(gameId);
+}
+
+/** Like `readGameSessionSnapshot`, but returns null when the room root is absent. */
+export async function tryReadGameSessionSnapshot(
+  gameId: string,
+): Promise<GameSessionSnapshot | null> {
+  try {
+    return await readSessionSnapshot(gameId);
+  } catch (error) {
+    if (error instanceof Error && error.message === 'ROOM_NOT_FOUND') {
+      return null;
+    }
+    if (isFirebasePermissionDenied(error)) {
+      return null;
+    }
+    throw error;
+  }
+}
+
 /**
  * Rejoin a rostered player who left or went offline (clears `hasLeft`, restores presence).
  */
@@ -296,6 +328,15 @@ export async function rejoinExistingPlayer(
     hasLeft: false,
   });
   await setPlayerOnlinePresence(normalized, uid);
+  const sessionSnapshot = await get(sessionRef(normalized));
+  if (sessionSnapshot.exists()) {
+    const session = sessionSnapshot.val() as GameSession;
+    if (session.status === 'playing') {
+      await update(sessionRef(normalized), {
+        liveRoundPlayerUids: appendLiveRoundPlayerUid(session.liveRoundPlayerUids, uid),
+      });
+    }
+  }
 }
 
 /**
@@ -700,8 +741,11 @@ export async function markPlayerOnline(gameId: string, uid: string): Promise<voi
       return;
     }
     const player = snapshot.val() as GameSessionPlayer;
-    if (player.hasLeft === true) {
+    if (player.hasLeft === true && player.online !== true) {
       return;
+    }
+    if (player.hasLeft === true) {
+      await update(node, { hasLeft: false });
     }
     await setPlayerOnlinePresence(normalized, uid);
   } catch (error) {
@@ -848,7 +892,8 @@ export async function startGameSession(gameId: string, actorUid: string): Promis
     await unpublishPublicLobby(normalized, actorUid, { force: true });
   }
 
-  await update(sessionRef(normalized), {
+  const playersPatch = buildPlayersPatchForRoundStart(session);
+  const sessionStartPatch: Record<string, unknown> = {
     status: 'playing',
     timerEndsAt: endsAt,
     roundStartedAt: now,
@@ -861,7 +906,22 @@ export async function startGameSession(gameId: string, actorUid: string): Promis
     pauseState: null,
     isPublic: false,
     publicPublishedAt: null,
-  });
+    liveRoundPlayerUids: waitingLobbyOptInUids(session),
+    resultsExitedBy: null,
+  };
+
+  const rootRef = ref(getFirebaseDatabase());
+  const basePath = gameSessionPath(normalized);
+  const multiPath: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(sessionStartPatch)) {
+    multiPath[`${basePath}/${key}`] = value;
+  }
+  for (const [uid, patch] of Object.entries(playersPatch)) {
+    for (const [field, value] of Object.entries(patch)) {
+      multiPath[`${basePath}/players/${uid}/${field}`] = value;
+    }
+  }
+  await update(rootRef, multiPath);
 }
 
 /**
@@ -1107,6 +1167,7 @@ export async function rematchFinishedSessionToWaiting(
       purgeAfterAt: null,
       finishedAt: null,
       resultsExitedBy: null,
+      liveRoundPlayerUids: null,
       isPublic: false,
       publicPublishedAt: null,
       players,
@@ -1129,6 +1190,22 @@ export async function rematchFinishedSessionToWaiting(
   if (actorUid === preSession.organizerId) {
     setOrganizerWaitingRoom(normalized);
   }
+}
+
+/**
+ * Organizer leaves waiting lobby — delete the room only when nobody else can continue.
+ */
+export async function organizerLeaveWaitingLobby(
+  gameId: string,
+  organizerUid: string,
+  session: GameSession,
+): Promise<void> {
+  await markPlayerOffline(gameId, organizerUid);
+  if (shouldOrganizerAbandonWaitingRoom(session, organizerUid)) {
+    await abandonWaitingGameSession(gameId, organizerUid);
+    return;
+  }
+  await leaveGameSession(gameId, organizerUid);
 }
 
 /**

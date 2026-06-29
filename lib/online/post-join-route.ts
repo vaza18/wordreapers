@@ -1,5 +1,5 @@
 import { currentBaseWordPickerUid } from './base-word-picker.js';
-import { isActiveInLivePlayingRound } from './is-active-in-live-playing-round.js';
+import { isActiveLivePlayer } from './live-round-membership.js';
 import type { GameSession } from '../firebase/types.js';
 
 export interface PostJoinRoute {
@@ -21,7 +21,7 @@ export function resolvePostJoinRoute(
   gameId: string,
 ): PostJoinRoute {
   if (session.status === 'playing') {
-    if (isActiveInLivePlayingRound(session, uid)) {
+    if (isActiveLivePlayer(session, uid)) {
       return { pathname: '/online/play/[gameId]', params: { gameId } };
     }
     return { pathname: '/online/results/[gameId]', params: { gameId } };

@@ -170,7 +170,6 @@ describe('applyPlayerScorePlan', () => {
     expect(next.p1?.score).toBe(1);
     expect(next.p2?.score).toBe(1);
     expect(next.p2?.wordCount).toBe(1);
-    expect(next.p2?.hasLeft).toBe(false);
   });
 });
 

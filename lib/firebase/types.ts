@@ -99,6 +99,8 @@ export interface GameSession {
   purgeAfterAt?: number | null;
   /** Uids that left the results screen for home (metadata only). */
   resultsExitedBy?: Record<string, boolean> | null;
+  /** Uids that started the current `playing` round from the waiting lobby; mid-round rejoin appends. */
+  liveRoundPlayerUids?: string[] | null;
   /** Public matchmaking lobby (v2). */
   isPublic?: boolean;
   /** Server ms when room was listed publicly. */

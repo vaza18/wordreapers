@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import type { GameSession } from '../lib/firebase/types.js';
 import {
-  hasOptedIntoRematch,
+  hasOptedIntoNextRound,
   rematchWaitingPlayerPatch,
-} from '../lib/online/rematch-waiting-player-patch.js';
+} from '../lib/online/live-round-membership.js';
 
 function finishedSession(resultsExitedBy?: Record<string, boolean>): GameSession {
   return {
@@ -29,12 +29,12 @@ function finishedSession(resultsExitedBy?: Record<string, boolean>): GameSession
   };
 }
 
-describe('hasOptedIntoRematch', () => {
+describe('hasOptedIntoNextRound', () => {
   it('includes the actor and players who left results via Play again', () => {
     const session = finishedSession({ org: true, p2: true });
-    expect(hasOptedIntoRematch(session, 'org', 'org')).toBe(true);
-    expect(hasOptedIntoRematch(session, 'p2', 'org')).toBe(true);
-    expect(hasOptedIntoRematch(session, 'p3', 'org')).toBe(false);
+    expect(hasOptedIntoNextRound(session, 'org', 'org')).toBe(true);
+    expect(hasOptedIntoNextRound(session, 'p2', 'org')).toBe(true);
+    expect(hasOptedIntoNextRound(session, 'p3', 'org')).toBe(false);
   });
 });
 

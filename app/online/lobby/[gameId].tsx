@@ -1,5 +1,5 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { useIsFocused, useNavigation } from '@react-navigation/native';
+import { useIsFocused } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
@@ -14,10 +14,14 @@ import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { formatRoomCodeDisplay } from '@/lib/firebase/format-room-code';
+import { loadBundledDictionary, loadBundledSupplements } from '@/services/dictionary-service';
 import {
+  markPlayerOnline,
+  readGameSessionSnapshot,
   rejoinExistingPlayer,
   startGameSession,
   subscribeGameSession,
+  syncLobbyPickerState,
   type GameSessionSnapshot,
 } from '@/lib/firebase/game-session-service';
 import { syncPublicRosterAliases } from '@/lib/firebase/public-lobby-service';
@@ -31,6 +35,7 @@ import {
 import { formatLobbySettingsLabel } from '@/lib/online/lobby-settings-label';
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
+import { useLiveRoundLobbyScreen } from '@/hooks/useLiveRoundLobbyScreen';
 import { usePublicLobbyPublish } from '@/hooks/usePublicLobbyPublish';
 import { useServerNow } from '@/hooks/useServerNow';
 import {
@@ -38,7 +43,7 @@ import {
   type FinishedRoundArchive,
 } from '@/lib/online/online-session-archive';
 import { restartRematchOnlineRound } from '@/lib/online/restart-rematch-online-round';
-import { isActiveInLivePlayingRound } from '@/lib/online/is-active-in-live-playing-round';
+import { useProfileStore } from '@/store/profile-store';
 import {
   comparePlayersByJoinOrder,
   playerGenderForDisplay,
@@ -50,17 +55,17 @@ import {
 } from '@/lib/online/public-lobby/display-player-name';
 import { needsPublicAliasReconcile } from '@/lib/online/public-lobby/public-alias';
 import { PUBLIC_LOBBY_TTL_MS } from '@/lib/online/public-lobby/constants';
-import {
-  shouldSkipWaitingAbandonOnBack,
-  type BackNavigationState,
-} from '@/lib/online/should-skip-waiting-abandon-on-back';
 import { useOrganizerAbandonWaitingOnExit } from '@/lib/online/use-organizer-abandon-on-exit';
 import { usePlayerOnlinePresence } from '@/lib/online/use-player-online-presence';
 import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
+import { isLobbyVisiblePlayer } from '@/lib/online/rematch-waiting-lobby';
+import {
+  claimPlayRouteNavigation,
+  seedPlaySessionBootstrap,
+} from '@/lib/online/play-session-bootstrap';
 import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
 import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
 import { useFirebaseStore } from '@/store/firebase-store';
-import { useProfileStore } from '@/store/profile-store';
 import { tGendered } from '@/lib/game/grammar';
 
 /**
@@ -70,10 +75,13 @@ export default function LobbyScreen() {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const navigation = useNavigation();
   const isFocused = useIsFocused();
-  const { gameId: rawGameId } = useLocalSearchParams<{ gameId: string }>();
+  const { gameId: rawGameId, optedIn: rawOptedIn } = useLocalSearchParams<{
+    gameId: string;
+    optedIn?: string;
+  }>();
   const gameId = rawGameId ?? '';
+  const justOptedIn = rawOptedIn === '1';
   const firebaseUid = useFirebaseStore((state) => state.uid);
   const serverNow = useServerNow(30_000);
 
@@ -87,7 +95,6 @@ export default function LobbyScreen() {
     undefined,
   );
   const lobbyWordsClearedForRoundRef = useRef<number | null>(null);
-  const lateJoinRoundKeyRef = useRef<string | null>(null);
   const myUid = firebaseUid ?? '';
 
   useEffect(() => {
@@ -127,43 +134,14 @@ export default function LobbyScreen() {
     };
   }, [gameId, loading, session]);
 
-  useEffect(() => {
-    if (!isFocused || !myUid || !session) {
-      return undefined;
-    }
-    if (session.status !== 'playing') {
-      return undefined;
-    }
-    if (isActiveInLivePlayingRound(session, myUid)) {
-      router.replace({ pathname: '/online/play/[gameId]', params: { gameId } });
-      return undefined;
-    }
-
-    const roundKey = `${session.baseWordRound ?? 0}:${session.timerEndsAt ?? 0}`;
-    if (lateJoinRoundKeyRef.current === roundKey) {
-      return undefined;
-    }
-    lateJoinRoundKeyRef.current = roundKey;
-
-    let cancelled = false;
-    const { name, gender, avatarColorIndex } = useProfileStore.getState();
-    void rejoinExistingPlayer(gameId, myUid, { name, gender, avatarColorIndex })
-      .then(() => {
-        if (!cancelled) {
-          router.replace({ pathname: '/online/play/[gameId]', params: { gameId } });
-        }
-      })
-      .catch((error) => {
-        lateJoinRoundKeyRef.current = null;
-        if (__DEV__) {
-          console.warn('lobby late join live round', error);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [gameId, isFocused, myUid, session]);
+  useLiveRoundLobbyScreen({
+    gameId,
+    myUid,
+    session,
+    isFocused,
+    justOptedIn,
+    onJoinFailed: setError,
+  });
 
   usePlayerOnlinePresence(
     gameId,
@@ -176,6 +154,20 @@ export default function LobbyScreen() {
     ),
   );
   const isOrganizer = session?.organizerId === myUid;
+
+  useEffect(() => {
+    if (!gameId || !session || session.status !== 'waiting') {
+      return;
+    }
+    const picker = currentBaseWordPickerUid(session);
+    const pickerDrifted = session.baseWordPickerUid !== picker;
+    const wordDrifted = Boolean(
+      session.baseWord && session.baseWordChosenBy && session.baseWordChosenBy !== picker,
+    );
+    if (pickerDrifted || wordDrifted) {
+      void syncLobbyPickerState(gameId);
+    }
+  }, [gameId, session]);
 
   useEffect(() => {
     if (!gameId || !session || session.status !== 'waiting' || !isOrganizer || !myUid) {
@@ -192,6 +184,7 @@ export default function LobbyScreen() {
   useOrganizerAbandonWaitingOnExit(
     gameId,
     myUid,
+    session,
     session?.status,
     Boolean(isOrganizer && (session?.status === 'waiting' || session?.status === 'finished')),
   );
@@ -218,6 +211,7 @@ export default function LobbyScreen() {
     }
     const joinOrder = rosterJoinOrder(session);
     return Object.entries(session.players)
+      .filter(([uid]) => isLobbyVisiblePlayer(session, uid))
       .map(([uid, player]) => ({ uid, ...player }))
       .sort((a, b) => comparePlayersByJoinOrder(a, b, joinOrder));
   }, [session]);
@@ -251,6 +245,9 @@ export default function LobbyScreen() {
     setError(null);
     try {
       await restartRematchOnlineRound(gameId, myUid, rematchArchive.baseWordRound);
+      const { name, gender, avatarColorIndex } = useProfileStore.getState();
+      await rejoinExistingPlayer(gameId, myUid, { name, gender, avatarColorIndex });
+      await markPlayerOnline(gameId, myUid);
     } catch (err) {
       const message = err instanceof Error ? err.message : '';
       if (message === 'NO_FINISHED_ARCHIVE') {
@@ -270,7 +267,14 @@ export default function LobbyScreen() {
     setStarting(true);
     setError(null);
     try {
+      await Promise.all([loadBundledDictionary(), loadBundledSupplements()]);
       await startGameSession(gameId, myUid);
+      await markPlayerOnline(gameId, myUid);
+      const snapshot = await readGameSessionSnapshot(gameId);
+      if (claimPlayRouteNavigation(gameId, snapshot)) {
+        seedPlaySessionBootstrap(snapshot);
+        router.replace({ pathname: '/online/play/[gameId]', params: { gameId } });
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : '';
       if (message === 'BASE_WORD_MISSING') {
@@ -300,22 +304,8 @@ export default function LobbyScreen() {
     if (!myUid) {
       return;
     }
-
-    if (isOrganizer && session?.status === 'waiting') {
-      const navState = navigation.getState() as BackNavigationState | undefined;
-      if (navState && shouldSkipWaitingAbandonOnBack(navState, gameId)) {
-        router.back();
-        return;
-      }
-      router.replace({
-        pathname: '/online/setup',
-        params: { gameId, from: 'lobby' },
-      });
-      return;
-    }
-
     handleLeaveToHome();
-  }, [gameId, handleLeaveToHome, isOrganizer, myUid, navigation, session?.status]);
+  }, [handleLeaveToHome, myUid]);
 
   const onBack = useSyncedStackBack(handleBack);
 
@@ -553,7 +543,7 @@ export default function LobbyScreen() {
           <>
             <PrimaryButton
               label={t('online.startGame')}
-              disabled={!canStart || starting}
+              disabled={!canStart || starting || lobbyLexiconLoading}
               onPress={() => {
                 void handleStart();
               }}

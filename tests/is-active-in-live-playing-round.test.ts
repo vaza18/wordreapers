@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { GameSession } from '../lib/firebase/types.js';
-import { isActiveInLivePlayingRound } from '../lib/online/is-active-in-live-playing-round.js';
+import { isActiveLivePlayer } from '../lib/online/live-round-membership.js';
 
 function session(overrides: Partial<GameSession>): GameSession {
   return {
@@ -24,23 +24,53 @@ function session(overrides: Partial<GameSession>): GameSession {
   };
 }
 
-describe('isActiveInLivePlayingRound', () => {
+describe('isActiveLivePlayer', () => {
   it('requires playing status and online presence', () => {
-    expect(isActiveInLivePlayingRound(session({}), 'org')).toBe(true);
-    expect(isActiveInLivePlayingRound(session({}), 'p1')).toBe(false);
-    expect(isActiveInLivePlayingRound(session({ status: 'finished' }), 'org')).toBe(false);
-    expect(isActiveInLivePlayingRound(null, 'org')).toBe(false);
+    expect(isActiveLivePlayer(session({}), 'org')).toBe(true);
+    expect(isActiveLivePlayer(session({}), 'p1')).toBe(false);
+    expect(isActiveLivePlayer(session({ status: 'finished' }), 'org')).toBe(false);
+    expect(isActiveLivePlayer(null, 'org')).toBe(false);
   });
 
-  it('excludes players who left the round', () => {
+  it('excludes players who voluntarily left (offline with hasLeft)', () => {
     expect(
-      isActiveInLivePlayingRound(
+      isActiveLivePlayer(
+        session({
+          players: {
+            org: { name: 'Org', wordCount: 0, score: 0, online: false, hasLeft: true },
+          },
+        }),
+        'org',
+      ),
+    ).toBe(false);
+  });
+
+  it('includes stale hasLeft when player is still online', () => {
+    expect(
+      isActiveLivePlayer(
         session({
           players: {
             org: { name: 'Org', wordCount: 0, score: 0, online: true, hasLeft: true },
           },
+          liveRoundPlayerUids: ['org'],
         }),
         'org',
+      ),
+    ).toBe(true);
+  });
+
+  it('excludes online roster member not in liveRoundPlayerUids', () => {
+    expect(
+      isActiveLivePlayer(
+        session({
+          baseWordRound: 2,
+          liveRoundPlayerUids: ['org'],
+          players: {
+            org: { name: 'Org', wordCount: 0, score: 0, online: true },
+            p3: { name: 'Three', wordCount: 0, score: 0, online: true },
+          },
+        }),
+        'p3',
       ),
     ).toBe(false);
   });

@@ -1,8 +1,8 @@
 import { useNavigation } from '@react-navigation/native';
 import { useEffect } from 'react';
 
-import { abandonWaitingGameSession } from '../firebase/game-session-service.js';
-import type { GameSessionStatus } from '../firebase/types.js';
+import { organizerLeaveWaitingLobby } from '../firebase/game-session-service.js';
+import type { GameSession, GameSessionStatus } from '../firebase/types.js';
 import {
   shouldSkipWaitingAbandonOnBack,
   type BackNavigationState,
@@ -18,20 +18,21 @@ const ORGANIZER_EXIT_BACK_ACTIONS = new Set(['GO_BACK', 'POP', 'POP_TO']);
 export function useOrganizerAbandonWaitingOnExit(
   gameId: string,
   organizerUid: string | null | undefined,
+  session: GameSession | null | undefined,
   sessionStatus: GameSessionStatus | undefined,
   enabled: boolean,
 ): void {
   const navigation = useNavigation();
 
   useEffect(() => {
-    if (!enabled || !organizerUid || !gameId || sessionStatus !== 'waiting') {
+    if (!enabled || !organizerUid || !gameId || sessionStatus !== 'waiting' || !session) {
       return undefined;
     }
 
     setOrganizerWaitingRoom(gameId);
 
     const runCleanup = () => {
-      void abandonWaitingGameSession(gameId, organizerUid).then(() => {
+      void organizerLeaveWaitingLobby(gameId, organizerUid, session).then(() => {
         setOrganizerWaitingRoom(null);
       });
     };
@@ -51,5 +52,5 @@ export function useOrganizerAbandonWaitingOnExit(
     return () => {
       onBack();
     };
-  }, [enabled, gameId, navigation, organizerUid, sessionStatus]);
+  }, [enabled, gameId, navigation, organizerUid, session, sessionStatus]);
 }

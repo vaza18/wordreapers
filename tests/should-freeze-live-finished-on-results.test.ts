@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { shouldFreezeLiveFinishedOnResults } from '../lib/online/should-freeze-live-finished-on-results.js';
+import { shouldFreezeLiveFinishedOnResults } from '../lib/online/frozen-round-view.js';
 
 describe('shouldFreezeLiveFinishedOnResults', () => {
   it('allows freezing when viewing the same or a later round', () => {

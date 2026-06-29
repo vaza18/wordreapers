@@ -81,15 +81,15 @@ function VoteCard({
                   {row.playerId === myUid ? ` ${t('game.resultsYou')}` : ''}
                 </Text>
                 <Text style={styles.participantPresence}>
-                  {row.hasLeft
-                    ? formatPlayerLeftLabel(t, row.gender)
-                    : row.online
-                      ? t('game.playerOnline')
+                  {row.online
+                    ? t('game.playerOnline')
+                    : row.hasLeft
+                      ? formatPlayerLeftLabel(t, row.gender)
                       : t('game.playerOffline')}
                 </Text>
               </View>
               <Text style={styles.participantVote}>
-                {formatVoteStatusLabel(t, row.voteStatus, row.hasLeft, row.gender)}
+                {formatVoteStatusLabel(t, row.voteStatus, !row.online && row.hasLeft, row.gender)}
               </Text>
             </View>
           ))}

@@ -112,8 +112,8 @@ describe('currentBaseWordPickerUid', () => {
       baseWordRound: 1,
       players: {
         org: { name: 'Org', wordCount: 0, score: 0, online: true },
-        p2: { name: 'Two', wordCount: 0, score: 0, online: false },
-        p3: { name: 'Three', wordCount: 0, score: 0, online: false },
+        p2: { name: 'Two', wordCount: 0, score: 0, online: false, hasLeft: true },
+        p3: { name: 'Three', wordCount: 0, score: 0, online: false, hasLeft: true },
       },
     });
     expect(currentBaseWordPickerUid(s)).toBe('org');
@@ -142,6 +142,30 @@ describe('currentBaseWordPickerUid', () => {
     });
     expect(currentBaseWordPickerUid(s)).toBe('p2');
     expect(eligibleBaseWordPickerUids(s)).toEqual(['org', 'p2']);
+  });
+
+  it('keeps the sole rematch participant as picker when others have not opted in', () => {
+    const s = session({
+      baseWordRound: 1,
+      players: {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        p2: { name: 'Two', wordCount: 0, score: 0, online: false },
+        p3: { name: 'Three', wordCount: 0, score: 0, online: false },
+      },
+    });
+    expect(currentBaseWordPickerUid(s)).toBe('org');
+  });
+
+  it('skips players who permanently left the room', () => {
+    const s = session({
+      baseWordRound: 1,
+      players: {
+        org: { name: 'Org', wordCount: 0, score: 0, online: false, hasLeft: true },
+        p2: { name: 'Two', wordCount: 0, score: 0, online: true },
+        p3: { name: 'Three', wordCount: 0, score: 0, online: true },
+      },
+    });
+    expect(currentBaseWordPickerUid(s)).toBe('p2');
   });
 });
 

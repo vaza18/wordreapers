@@ -9,6 +9,16 @@ export function buildRematchWaitingSession(source: GameSession): GameSession {
     players[uid] = { ...player, score: 0, wordCount: 0 };
   }
 
+  if (!players[source.organizerId]) {
+    players[source.organizerId] = {
+      name: 'Organizer',
+      wordCount: 0,
+      score: 0,
+      online: false,
+      hasLeft: true,
+    };
+  }
+
   const baseWordPickerOrder =
     source.baseWordPickerOrder && source.baseWordPickerOrder.length > 0
       ? [...source.baseWordPickerOrder]

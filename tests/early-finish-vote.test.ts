@@ -48,7 +48,24 @@ describe('earlyFinishRequiredVoterIds', () => {
     expect(ids).toEqual(['a']);
   });
 
-  it('excludes players who left even if still marked online', () => {
+  it('excludes players who voluntarily left (offline with hasLeft)', () => {
+    const ids = earlyFinishRequiredVoterIds(
+      session({
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        a: {
+          name: 'A',
+          wordCount: 0,
+          score: 0,
+          online: false,
+          hasLeft: true,
+        },
+      }),
+      'org',
+    );
+    expect(ids).toEqual([]);
+  });
+
+  it('includes stale hasLeft when player is still online and in liveRoundPlayerUids', () => {
     const ids = earlyFinishRequiredVoterIds(
       session({
         org: { name: 'Org', wordCount: 0, score: 0, online: true },
@@ -60,6 +77,36 @@ describe('earlyFinishRequiredVoterIds', () => {
           hasLeft: true,
         },
       }),
+      'org',
+    );
+    expect(ids).toEqual(['a']);
+  });
+
+  it('excludes online roster member not opted into current round', () => {
+    const ids = earlyFinishRequiredVoterIds(
+      {
+        ...session({
+          org: { name: 'Org', wordCount: 0, score: 0, online: true },
+          p2: { name: 'Two', wordCount: 0, score: 0, online: true },
+          p3: { name: 'Three', wordCount: 0, score: 0, online: true },
+        }),
+        baseWordRound: 2,
+        liveRoundPlayerUids: ['org', 'p2'],
+      },
+      'org',
+    );
+    expect(ids).toEqual(['p2']);
+  });
+
+  it('excludes players who are online in roster but not active in the live round', () => {
+    const ids = earlyFinishRequiredVoterIds(
+      {
+        ...session({
+          org: { name: 'Org', wordCount: 0, score: 0, online: true },
+          p2: { name: 'Two', wordCount: 0, score: 0, online: true },
+        }),
+        status: 'finished',
+      },
       'org',
     );
     expect(ids).toEqual([]);
@@ -125,7 +172,7 @@ describe('viewerNeedsEarlyFinishVote', () => {
         name: 'C',
         wordCount: 0,
         score: 0,
-        online: true,
+        online: false,
         hasLeft: true,
       },
     });
@@ -134,10 +181,36 @@ describe('viewerNeedsEarlyFinishVote', () => {
     expect(viewerNeedsEarlyFinishVote(s, vote, 'b')).toBe(false);
     expect(viewerNeedsEarlyFinishVote(s, vote, 'c')).toBe(false);
   });
+
+  it('requires vote from stale hasLeft player who is still online', () => {
+    const s = session({
+      org: { name: 'Org', wordCount: 0, score: 0, online: true },
+      a: {
+        name: 'A',
+        wordCount: 0,
+        score: 0,
+        online: true,
+        hasLeft: true,
+      },
+    });
+    expect(viewerNeedsEarlyFinishVote(s, vote, 'a')).toBe(true);
+  });
 });
 
 describe('buildEarlyFinishParticipantRows', () => {
-  it('marks offline players as not required', () => {
+  it('lists only proposer and required voters', () => {
+    const rows = buildEarlyFinishParticipantRows(
+      session({
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        a: { name: 'A', wordCount: 0, score: 0, online: true },
+        b: { name: 'B', wordCount: 8, score: 8, online: false },
+      }),
+      vote,
+    );
+    expect(rows.map((row) => row.playerId).sort()).toEqual(['a', 'org']);
+  });
+
+  it('omits offline non-voters from the modal list', () => {
     const rows = buildEarlyFinishParticipantRows(
       session({
         org: { name: 'Org', wordCount: 0, score: 0, online: true },
@@ -148,10 +221,10 @@ describe('buildEarlyFinishParticipantRows', () => {
     );
     expect(rows.find((row) => row.playerId === 'org')?.voteStatus).toBe('yes');
     expect(rows.find((row) => row.playerId === 'a')?.voteStatus).toBe('pending');
-    expect(rows.find((row) => row.playerId === 'b')?.voteStatus).toBe('not_required');
+    expect(rows.find((row) => row.playerId === 'b')).toBeUndefined();
   });
 
-  it('lists players who left as not required', () => {
+  it('omits players who voluntarily left from the modal list', () => {
     const rows = buildEarlyFinishParticipantRows(
       session({
         org: { name: 'Org', wordCount: 0, score: 0, online: true },
@@ -159,14 +232,13 @@ describe('buildEarlyFinishParticipantRows', () => {
           name: 'A',
           wordCount: 0,
           score: 0,
-          online: true,
+          online: false,
           hasLeft: true,
         },
       }),
       vote,
     );
-    expect(rows.find((row) => row.playerId === 'a')?.voteStatus).toBe('not_required');
-    expect(rows.find((row) => row.playerId === 'a')?.hasLeft).toBe(true);
+    expect(rows.map((row) => row.playerId)).toEqual(['org']);
   });
 });
 
@@ -178,7 +250,7 @@ describe('shouldFinishFromEarlyVote when others left', () => {
         name: 'A',
         wordCount: 0,
         score: 0,
-        online: true,
+        online: false,
         hasLeft: true,
       },
     });

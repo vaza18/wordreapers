@@ -120,6 +120,22 @@ export function releaseBundledDictionaryCaches(): void {
   cachedSupplementSlang = null;
 }
 
+/** Sync peek when assets were already loaded (e.g. lobby lexicon build). */
+export function getBundledDictionaryIfLoaded(): DictionaryIndex | null {
+  return cachedMain;
+}
+
+/** Sync peek for supplement lists when already in memory. */
+export function getBundledSupplementsIfLoaded(): {
+  properNouns: string[];
+  slang: string[];
+} | null {
+  if (!cachedSupplementProper || !cachedSupplementSlang) {
+    return null;
+  }
+  return { properNouns: cachedSupplementProper, slang: cachedSupplementSlang };
+}
+
 /**
  * Binary search helper for supplement lists loaded at runtime.
  */

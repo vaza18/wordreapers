@@ -1,6 +1,6 @@
 import type { GameSession } from '../firebase/types.js';
 
-import { shouldKeepFrozenResultsOverLiveFinished } from './should-keep-frozen-results-over-live-finished.js';
+import { shouldKeepFrozenResultsOverLiveFinished } from './frozen-round-view.js';
 
 /** Keep a locally frozen finished round when RTDB reports a later round finished. */
 export function resolveRoundEndSessionSnapshot<T extends GameSession>(

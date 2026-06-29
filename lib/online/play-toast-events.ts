@@ -3,7 +3,7 @@ import { assignDisplayRanks } from '../game/scoring.js';
 import { resolveGameSessionSettingsForSession } from '../firebase/session-settings.js';
 import type { GameSession } from '../firebase/types.js';
 import { buildLiveStandingsFromSession } from './live-standings.js';
-import { votingPlayerIds } from './voting-player-ids.js';
+import { isActiveLivePlayer, liveParticipantIds } from './live-round-membership.js';
 
 export type PlayToastEvent =
   | {
@@ -49,6 +49,10 @@ function isCompetingInRound(session: GameSession, playerId: string): boolean {
   return session.players[playerId]?.online === true;
 }
 
+function becameActiveInLiveRound(prev: GameSession, curr: GameSession, playerId: string): boolean {
+  return isActiveLivePlayer(curr, playerId) && !isActiveLivePlayer(prev, playerId);
+}
+
 function detectRosterEvents(prev: GameSession, curr: GameSession, myUid: string): PlayToastEvent[] {
   const events: PlayToastEvent[] = [];
   const currRanks = assignDisplayRanks(buildLiveStandingsFromSession(curr));
@@ -60,11 +64,23 @@ function detectRosterEvents(prev: GameSession, curr: GameSession, myUid: string)
 
     const wasPresent = Boolean(prev.players[playerId]);
     const wasRosterActive = wasPresent && isRosterActive(prev, playerId);
-    const isRosterActiveNow = isRosterActive(curr, playerId);
-    const wasOnline = prev.players[playerId]?.online === true;
-    const isOnline = player.online === true;
 
-    if (!wasPresent && isRosterActiveNow) {
+    if (wasRosterActive && player.hasLeft === true && player.online !== true) {
+      events.push({
+        type: 'player_left',
+        playerId,
+        name: player.name,
+        gender: playerGender(curr, playerId),
+        rank: currRanks.get(playerId) ?? Object.keys(curr.players).length,
+      });
+      continue;
+    }
+
+    if (!becameActiveInLiveRound(prev, curr, playerId)) {
+      continue;
+    }
+
+    if (!wasPresent) {
       const inviterUid = player.invitedBy;
       if (inviterUid === myUid) {
         continue;
@@ -81,49 +97,31 @@ function detectRosterEvents(prev: GameSession, curr: GameSession, myUid: string)
       continue;
     }
 
-    if (wasPresent && !wasRosterActive && isRosterActiveNow) {
-      events.push({
-        type: 'player_joined',
-        playerId,
-        name: player.name,
-        gender: playerGender(curr, playerId),
-      });
-      continue;
-    }
-
-    if (wasPresent && !wasOnline && isOnline && player.hasLeft === true) {
-      const prevWordCount = prev.players[playerId]?.wordCount ?? 0;
-      const currWordCount = player.wordCount ?? 0;
-      if (prevWordCount === 0 && currWordCount <= 1) {
-        continue;
-      }
-      events.push({
-        type: 'player_joined',
-        playerId,
-        name: player.name,
-        gender: playerGender(curr, playerId),
-      });
-      continue;
-    }
-
-    if (wasRosterActive && player.hasLeft === true && !isOnline) {
-      events.push({
-        type: 'player_left',
-        playerId,
-        name: player.name,
-        gender: playerGender(curr, playerId),
-        rank: currRanks.get(playerId) ?? Object.keys(curr.players).length,
-      });
-    }
+    events.push({
+      type: 'player_joined',
+      playerId,
+      name: player.name,
+      gender: playerGender(curr, playerId),
+    });
   }
 
-  const prevActive = votingPlayerIds(prev);
-  const currActive = votingPlayerIds(curr);
+  const prevActive =
+    prev.status === 'playing'
+      ? liveParticipantIds(prev).filter((id) => isActiveLivePlayer(prev, id))
+      : [];
+  const currActive =
+    curr.status === 'playing'
+      ? liveParticipantIds(curr).filter((id) => isActiveLivePlayer(curr, id))
+      : [];
+  const othersStillInLiveRound = liveParticipantIds(curr).filter(
+    (id) => id !== myUid && isRosterActive(curr, id),
+  );
   if (
     prevActive.length > 1 &&
     prevActive.includes(myUid) &&
     currActive.length === 1 &&
-    currActive[0] === myUid
+    currActive[0] === myUid &&
+    othersStillInLiveRound.length === 0
   ) {
     events.push({ type: 'alone_in_game' });
   }

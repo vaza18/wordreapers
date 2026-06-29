@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { GameSession } from '../lib/firebase/types.js';
-import { shouldRecoverFinishedRoundFromArchive } from '../lib/online/should-recover-finished-round-from-archive.js';
+import { shouldRecoverFinishedRoundFromArchive } from '../lib/online/frozen-round-view.js';
 
 function session(status: GameSession['status']): GameSession {
   return {

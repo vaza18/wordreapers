@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { shouldKeepFrozenResultsOverLiveFinished } from '../lib/online/should-keep-frozen-results-over-live-finished.js';
+import { shouldKeepFrozenResultsOverLiveFinished } from '../lib/online/frozen-round-view.js';
 
 describe('shouldKeepFrozenResultsOverLiveFinished', () => {
   it('keeps round 1 results when round 2 finishes elsewhere', () => {

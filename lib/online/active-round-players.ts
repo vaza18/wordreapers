@@ -1,5 +1,6 @@
 import type { GameSession } from '../firebase/types.js';
-import { votingPlayerIds } from './voting-player-ids.js';
+
+import { liveParticipantIds } from './live-round-membership.js';
 
 export interface ActiveRoundPlayerRow {
   playerId: string;
@@ -8,9 +9,9 @@ export interface ActiveRoundPlayerRow {
   hasLeft: boolean;
 }
 
-/** Players still in the round with live presence flags. */
+/** Live-round participants with presence flags. */
 export function activeRoundPlayerRows(session: GameSession): ActiveRoundPlayerRow[] {
-  return votingPlayerIds(session).map((playerId) => {
+  return liveParticipantIds(session).map((playerId) => {
     const player = session.players[playerId];
     return {
       playerId,

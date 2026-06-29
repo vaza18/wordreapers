@@ -1,5 +1,7 @@
 import type { GameSession, GameSessionPlayer } from '../firebase/types.js';
 
+import { isRematchWaitingLobby } from './rematch-waiting-lobby.js';
+
 /** True when the player may pick the base word this round (online, still in roster). */
 export function isEligibleBaseWordPickerPlayer(player: GameSessionPlayer | undefined): boolean {
   if (!player || player.hasLeft === true) {
@@ -40,6 +42,12 @@ export function scheduledBaseWordPickerUid(session: GameSession, round: number):
   return order[index] ?? session.organizerId;
 }
 
+function rosterPlayersStillInGame(session: GameSession): string[] {
+  return baseWordPickerOrder(session).filter(
+    (uid) => session.players[uid] && session.players[uid].hasLeft !== true,
+  );
+}
+
 function firstEligibleFromRotation(session: GameSession, startRound: number): string {
   const order = baseWordPickerOrder(session);
   if (order.length === 0) {
@@ -60,7 +68,33 @@ function firstEligibleFromRotation(session: GameSession, startRound: number): st
     }
   }
 
-  return session.organizerId;
+  const remaining = rosterPlayersStillInGame(session);
+  return remaining[0] ?? session.organizerId;
+}
+
+function pickFromCandidates(session: GameSession, round: number, candidates: string[]): string {
+  if (candidates.length === 0) {
+    const remaining = rosterPlayersStillInGame(session);
+    return remaining[0] ?? session.organizerId;
+  }
+  if (candidates.length === 1) {
+    return candidates[0] ?? session.organizerId;
+  }
+
+  const previousPicker = scheduledBaseWordPickerUid(session, round - 1);
+  const withoutPrevious = candidates.filter((uid) => uid !== previousPicker);
+  const pool = withoutPrevious.length > 0 ? withoutPrevious : candidates;
+
+  const order = baseWordPickerOrder(session);
+  const startIndex = ((round % order.length) + order.length) % order.length;
+  for (let offset = 0; offset < order.length; offset += 1) {
+    const uid = order[(startIndex + offset) % order.length];
+    if (uid && pool.includes(uid)) {
+      return uid;
+    }
+  }
+
+  return pool[0] ?? session.organizerId;
 }
 
 /**
@@ -75,26 +109,22 @@ export function currentBaseWordPickerUid(session: GameSession): string {
   }
 
   const eligible = eligibleBaseWordPickerUids(session);
-  if (eligible.length <= 1) {
-    return eligible[0] ?? session.organizerId;
+  if (eligible.length >= 2) {
+    return pickFromCandidates(session, round, eligible);
   }
-
-  const previousPicker = scheduledBaseWordPickerUid(session, round - 1);
-  const candidateSet = new Set(eligible.filter((uid) => uid !== previousPicker));
-  if (candidateSet.size === 0) {
-    return eligible[0] ?? session.organizerId;
-  }
-
-  const order = baseWordPickerOrder(session);
-  const startIndex = ((round % order.length) + order.length) % order.length;
-  for (let offset = 0; offset < order.length; offset += 1) {
-    const uid = order[(startIndex + offset) % order.length];
-    if (uid && candidateSet.has(uid)) {
-      return uid;
+  if (eligible.length === 1) {
+    const remaining = rosterPlayersStillInGame(session);
+    if (remaining.length >= 2 && !isRematchWaitingLobby(session)) {
+      return pickFromCandidates(session, round, remaining);
     }
+    return eligible[0] ?? session.organizerId;
   }
 
-  return eligible[0] ?? session.organizerId;
+  if (isRematchWaitingLobby(session)) {
+    return session.organizerId;
+  }
+
+  return pickFromCandidates(session, round, rosterPlayersStillInGame(session));
 }
 
 export function isCurrentBaseWordPicker(session: GameSession, uid: string): boolean {

@@ -64,6 +64,10 @@ export function subscribeSessionWordMaps(
       listener(parseSessionWordMaps(snapshot.val()));
     },
     (error) => {
+      if (isFirebasePermissionDenied(error)) {
+        listener({ ...EMPTY_SESSION_WORD_MAPS });
+        return;
+      }
       if (__DEV__) {
         console.warn('subscribeSessionWordMaps', error);
       }

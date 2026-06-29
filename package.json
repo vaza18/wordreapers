@@ -35,6 +35,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run",
     "test:rules": "firebase emulators:exec --only database --project wordreapers-rules-test \"VITEST_RULES=1 vitest run tests/firebase/database.rules.test.ts\"",
+    "qa:round-two-vote": "vitest run tests/online-round-two-vote-scenario.test.ts && npm run test:rules",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "lint": "eslint .",

@@ -14,10 +14,8 @@ import { spacing, type ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { ensureAnonymousAuth } from '@/lib/firebase/auth';
-import { markResultsExited } from '@/lib/firebase/results-coordination-service';
 import {
   markPlayerOffline,
-  rejoinExistingPlayer,
   removeOrphanGameSessionShell,
   subscribeGameSession,
   type GameSessionSnapshot,
@@ -28,7 +26,6 @@ import {
 } from '@/lib/firebase/player-words-service';
 import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
 import { persistLocalArchive } from '@/lib/online/coordinated-session-cleanup';
-import { restartRematchOnlineRound } from '@/lib/online/restart-rematch-online-round';
 import { mergeAllPlayerWords, type AllPlayerWords } from '@/lib/online/clone-player-words';
 import { isSessionWordsSnapshotReady } from '@/lib/online/session-words-bootstrap';
 import {
@@ -44,11 +41,14 @@ import {
   isFinishedArchiveStale,
 } from '@/lib/online/online-session-archive';
 import { buildOnlineResultsView } from '@/lib/online/online-results-data';
-import { shouldRecoverFinishedRoundFromArchive } from '@/lib/online/should-recover-finished-round-from-archive';
-import { resolveRematchNavigationRoute } from '@/lib/online/resolve-rematch-navigation-route';
+import {
+  shouldFreezeLiveFinishedOnResults,
+  shouldLoadViewingRoundFromArchive,
+  shouldRecoverFinishedRoundFromArchive,
+} from '@/lib/online/frozen-round-view';
+import { optIntoLiveRound } from '@/lib/online/opt-into-live-round';
+import { resolveResultsPresence } from '@/lib/online/live-round-screen-actions';
 import { parseViewingBaseWordRoundParam } from '@/lib/online/parse-viewing-base-word-round-param';
-import { shouldFreezeLiveFinishedOnResults } from '@/lib/online/should-freeze-live-finished-on-results';
-import { shouldLoadViewingRoundFromArchive } from '@/lib/online/should-load-viewing-round-from-archive';
 import { mergeSessionWithWordMaps } from '@/lib/firebase/session-word-maps';
 import { subscribeSessionWordMaps } from '@/lib/firebase/session-word-maps-service';
 import type { SessionWordMaps } from '@/lib/firebase/types';
@@ -100,6 +100,7 @@ export default function OnlineResultsScreen() {
   const archivePromiseRef = useRef<Promise<void> | null>(null);
   const freezeAttemptedRef = useRef(false);
   const skipRematchToastRef = useRef(false);
+  const skipResultsOfflineRef = useRef(false);
   const rematchToasts = useResultsRematchToast(liveSession, myUid, skipRematchToastRef);
 
   const session = frozenRound?.session ?? liveSession;
@@ -373,14 +374,15 @@ export default function OnlineResultsScreen() {
   }, [ensureArchived, frozenRound, gameId, myUid, session, viewData]);
 
   useEffect(() => {
-    if (!gameId || !myUid) {
+    if (!gameId || !myUid || skipResultsOfflineRef.current) {
       return;
     }
-    if (liveSession?.status !== 'finished' && !frozenRound) {
+    const frozenRoundNum = frozenRound?.session.baseWordRound ?? viewingBaseWordRound ?? null;
+    if (!resolveResultsPresence({ liveSession, frozenBaseWordRound: frozenRoundNum })) {
       return;
     }
     void markPlayerOffline(gameId, myUid);
-  }, [frozenRound, gameId, liveSession?.status, myUid]);
+  }, [frozenRound, gameId, liveSession, myUid, viewingBaseWordRound]);
 
   const isOrganizer = session?.organizerId === myUid;
 
@@ -388,34 +390,29 @@ export default function OnlineResultsScreen() {
     setRematchError(null);
     setRematchLoading(true);
     skipRematchToastRef.current = true;
+    skipResultsOfflineRef.current = true;
     try {
-      await markResultsExited(gameId, myUid);
-      const sessionStatus = liveSession?.status ?? session?.status;
-      if (sessionStatus === 'finished') {
-        const baseWordRound = session?.baseWordRound ?? frozenRound?.session.baseWordRound ?? 0;
-        await restartRematchOnlineRound(gameId, myUid, baseWordRound);
-      } else if (sessionStatus === 'playing') {
-        const { name, gender, avatarColorIndex } = useProfileStore.getState();
-        await rejoinExistingPlayer(gameId, myUid, { name, gender, avatarColorIndex });
+      const baseWordRound = session?.baseWordRound ?? frozenRound?.session.baseWordRound ?? 0;
+      const { name, gender, avatarColorIndex } = useProfileStore.getState();
+      const route = await optIntoLiveRound(
+        gameId,
+        myUid,
+        { name, gender, avatarColorIndex },
+        baseWordRound,
+      );
+      setRematchLoading(false);
+      if (route.pathname === '/online/lobby/[gameId]') {
+        router.replace({ ...route, params: { ...route.params, optedIn: '1' } });
+      } else {
+        router.replace(route);
       }
     } catch {
       skipRematchToastRef.current = false;
+      skipResultsOfflineRef.current = false;
       setRematchError(t('online.errorRematchFailed'));
       setRematchLoading(false);
-      return;
     }
-    setRematchLoading(false);
-    const sessionStatus = liveSession?.status ?? session?.status;
-    router.replace(resolveRematchNavigationRoute(sessionStatus, gameId));
-  }, [
-    frozenRound?.session.baseWordRound,
-    gameId,
-    liveSession?.status,
-    myUid,
-    session?.baseWordRound,
-    session?.status,
-    t,
-  ]);
+  }, [frozenRound?.session.baseWordRound, gameId, myUid, session?.baseWordRound, t]);
 
   const handleHome = useCallback(() => {
     void exitOnlineToHome({
