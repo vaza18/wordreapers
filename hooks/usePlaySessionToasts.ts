@@ -23,6 +23,7 @@ export {
 export function usePlaySessionToasts(
   session: GameSessionSnapshot | null,
   myUid: string,
+  enabled = true,
 ): PlayToastItem[] {
   const { t } = useTranslation();
   const viewerGender = useProfileStore((state) => state.gender);
@@ -30,7 +31,7 @@ export function usePlaySessionToasts(
   const prevSessionRef = useRef<GameSessionSnapshot | null>(null);
 
   useEffect(() => {
-    if (!session || session.status !== 'playing' || !myUid) {
+    if (!enabled || !session || session.status !== 'playing' || !myUid) {
       prevSessionRef.current = session;
       return;
     }
@@ -44,7 +45,7 @@ export function usePlaySessionToasts(
     const events = detectPlayToastEvents(prev, session, myUid);
     const items = formatPlayToastEvents(t, events, viewerGender, session, myUid);
     enqueueToasts(items);
-  }, [enqueueToasts, myUid, session, t, viewerGender]);
+  }, [enabled, enqueueToasts, myUid, session, t, viewerGender]);
 
   return toasts;
 }

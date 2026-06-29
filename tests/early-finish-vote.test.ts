@@ -64,6 +64,18 @@ describe('earlyFinishRequiredVoterIds', () => {
     );
     expect(ids).toEqual([]);
   });
+
+  it('excludes offline players with stale word counts from a prior round', () => {
+    const ids = earlyFinishRequiredVoterIds(
+      session({
+        org: { name: 'Org', wordCount: 1, score: 1, online: true },
+        p2: { name: 'Two', wordCount: 2, score: 2, online: true },
+        p3: { name: 'Three', wordCount: 8, score: 8, online: false },
+      }),
+      'org',
+    );
+    expect(ids).toEqual(['p2']);
+  });
 });
 
 describe('shouldFinishFromEarlyVote', () => {

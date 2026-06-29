@@ -28,11 +28,35 @@ describe('resolvePostJoinRoute', () => {
   it('routes active rounds to play', () => {
     expect(
       resolvePostJoinRoute(
-        session({ status: 'playing', timerEndsAt: Date.now() + 60_000 }),
+        session({
+          status: 'playing',
+          timerEndsAt: Date.now() + 60_000,
+          players: {
+            org: { name: 'Org', wordCount: 0, score: 0, online: true },
+            a: { name: 'A', wordCount: 0, score: 0, online: true },
+          },
+        }),
         'a',
         'AB12',
       ),
     ).toEqual({ pathname: '/online/play/[gameId]', params: { gameId: 'AB12' } });
+  });
+
+  it('routes passive roster members on an active round to results', () => {
+    expect(
+      resolvePostJoinRoute(
+        session({
+          status: 'playing',
+          timerEndsAt: Date.now() + 60_000,
+          players: {
+            org: { name: 'Org', wordCount: 0, score: 0, online: true },
+            a: { name: 'A', wordCount: 0, score: 0, online: false },
+          },
+        }),
+        'a',
+        'AB12',
+      ),
+    ).toEqual({ pathname: '/online/results/[gameId]', params: { gameId: 'AB12' } });
   });
 
   it('routes rejoin after voluntary leave to play', () => {

@@ -45,6 +45,7 @@ import {
   finishGameSession,
   finishGameSessionIfExpired,
   leaveGameSession,
+  markPlayerOffline,
   rejoinExistingPlayer,
   subscribeGameSession,
   syncSessionPlayerScores,
@@ -63,6 +64,11 @@ import {
 } from '@/lib/online/cache-active-round';
 import { usePlayerOnlinePresence } from '@/lib/online/use-player-online-presence';
 import { hasOnlineOpponent, onlineActiveOpponentNames } from '@/lib/online/session-presence';
+import { isActiveInLivePlayingRound } from '@/lib/online/is-active-in-live-playing-round';
+import { isReviewingPriorRoundOnPlayScreen } from '@/lib/online/is-reviewing-prior-round-on-play';
+import { onlineResultsRoute } from '@/lib/online/online-results-route';
+import { resolveRoundEndSessionSnapshot } from '@/lib/online/resolve-round-end-session-snapshot';
+import { shouldKeepFrozenResultsOverLiveFinished } from '@/lib/online/should-keep-frozen-results-over-live-finished';
 import {
   submitOnlineWord,
   subscribePlayerWords,
@@ -172,11 +178,17 @@ export default function OnlinePlayScreen() {
   );
   const serverNow = useServerNow(250);
   const [roundOverPendingResults, setRoundOverPendingResults] = useState(false);
+  const [roundEndWordsSnapshot, setRoundEndWordsSnapshot] = useState<Map<
+    string,
+    StoredPlayerWord
+  > | null>(null);
+  const [roundEndSessionSnapshot, setRoundEndSessionSnapshot] =
+    useState<GameSessionSnapshot | null>(null);
   const roundEnded = session?.status === 'finished' || roundOverPendingResults;
   const { timeUpModalVisible } = useRoundTimeUpModal(roundEnded);
   const skipRematchToastRef = useRef(false);
   const rematchToasts = useResultsRematchToast(sessionCore, myUid, skipRematchToastRef);
-  const playToasts = usePlaySessionToasts(session, myUid);
+  const playToasts = usePlaySessionToasts(session, myUid, !roundEnded);
   const sessionToasts = useMemo(
     () => [...playToasts, ...rematchToasts],
     [playToasts, rematchToasts],
@@ -250,6 +262,7 @@ export default function OnlinePlayScreen() {
       gameId &&
       myUid &&
       session?.status === 'playing' &&
+      !roundEnded &&
       !myHasLeft &&
       !leavingIntentionallyRef.current,
     ),
@@ -275,6 +288,30 @@ export default function OnlinePlayScreen() {
       }
     });
   }, [gameId, myUid, session]);
+
+  useEffect(() => {
+    if (!isPlayScreenFocused || !gameId || !myUid || !session) {
+      return;
+    }
+    if (session.status !== 'playing' || leavingIntentionallyRef.current) {
+      return;
+    }
+    if (isActiveInLivePlayingRound(session, myUid)) {
+      return;
+    }
+    const endedRound = roundEndSessionSnapshot?.baseWordRound ?? playRoundKeyRef.current ?? null;
+    if (isReviewingPriorRoundOnPlayScreen(roundEnded, endedRound, session.baseWordRound ?? null)) {
+      return;
+    }
+    router.replace(onlineResultsRoute(gameId, endedRound ?? undefined));
+  }, [
+    gameId,
+    isPlayScreenFocused,
+    myUid,
+    roundEndSessionSnapshot?.baseWordRound,
+    roundEnded,
+    session,
+  ]);
 
   useEffect(() => {
     if (!gameId || !myUid) {
@@ -377,20 +414,75 @@ export default function OnlinePlayScreen() {
   }, [session?.status]);
 
   useEffect(() => {
+    if (!roundEnded) {
+      setRoundEndWordsSnapshot(null);
+      setRoundEndSessionSnapshot(null);
+      return;
+    }
+    setRoundEndWordsSnapshot((prev) => {
+      if (prev !== null) {
+        return prev;
+      }
+      if (myWords.size === 0) {
+        return null;
+      }
+      return new Map(myWords);
+    });
+  }, [myWords, roundEnded]);
+
+  useEffect(() => {
+    if (!gameId || session?.status !== 'finished') {
+      return;
+    }
+    setRoundEndSessionSnapshot((prev) =>
+      resolveRoundEndSessionSnapshot(prev, { ...session, id: gameId }),
+    );
+  }, [gameId, session]);
+
+  const displaySession = useMemo(() => {
+    if (roundEnded && roundEndSessionSnapshot) {
+      return roundEndSessionSnapshot;
+    }
+    return session;
+  }, [roundEnded, roundEndSessionSnapshot, session]);
+
+  useEffect(() => {
+    if (!gameId || !myUid || !roundEnded) {
+      return;
+    }
+    void markPlayerOffline(gameId, myUid);
+  }, [gameId, myUid, roundEnded]);
+
+  useEffect(() => {
+    if (!gameId || !myUid || !roundEnded || !roundEndSessionSnapshot) {
+      return;
+    }
+    const endedRound = roundEndSessionSnapshot.baseWordRound ?? 0;
+    const liveRound = session?.baseWordRound ?? endedRound;
+    if (liveRound > endedRound) {
+      void markPlayerOffline(gameId, myUid);
+    }
+  }, [gameId, myUid, roundEndSessionSnapshot, roundEnded, session?.baseWordRound]);
+
+  useEffect(() => {
     if (!gameId || !session || session.status !== 'finished') {
       return;
     }
-    const round = session.baseWordRound ?? 0;
-    if (finishedArchiveRoundRef.current === round) {
+    const liveRound = session.baseWordRound ?? 0;
+    const frozenRound = roundEndSessionSnapshot?.baseWordRound;
+    if (frozenRound != null && shouldKeepFrozenResultsOverLiveFinished(frozenRound, liveRound)) {
       return;
     }
-    finishedArchiveRoundRef.current = round;
+    if (finishedArchiveRoundRef.current === liveRound) {
+      return;
+    }
+    finishedArchiveRoundRef.current = liveRound;
     void archiveFinishedRoundFromFirebase(gameId, session).catch((error) => {
       if (__DEV__) {
         console.warn('archiveFinishedRoundFromFirebase', error);
       }
     });
-  }, [gameId, session]);
+  }, [gameId, roundEndSessionSnapshot?.baseWordRound, session]);
 
   const navigateToResults = useCallback(async () => {
     if (!gameId || resultsNavigatedRef.current || !session) {
@@ -405,17 +497,19 @@ export default function OnlinePlayScreen() {
       clearTimeout(debounceRef.current);
       debounceRef.current = null;
     }
+    const archiveSession = roundEndSessionSnapshot ?? session;
+    const viewingRound = archiveSession.baseWordRound ?? null;
     try {
-      if (session.status === 'finished') {
-        await archiveFinishedRoundFromFirebase(gameId, session);
+      if (archiveSession.status === 'finished') {
+        await archiveFinishedRoundFromFirebase(gameId, archiveSession);
       }
     } catch (error) {
       if (__DEV__) {
         console.warn('archiveFinishedRoundFromFirebase', error);
       }
     }
-    router.replace({ pathname: '/online/results/[gameId]', params: { gameId } });
-  }, [gameId, roundOverPendingResults, session]);
+    router.replace(onlineResultsRoute(gameId, viewingRound));
+  }, [gameId, roundEndSessionSnapshot, roundOverPendingResults, session]);
 
   useEffect(() => {
     void Promise.all([loadBundledDictionary(), loadBundledSupplements()]).then(
@@ -431,21 +525,23 @@ export default function OnlinePlayScreen() {
     };
   }, []);
 
-  const endsAt = session?.timerEndsAt ?? null;
-  const resolvedSessionSettings = session ? resolveGameSessionSettingsForSession(session) : null;
+  const endsAt = displaySession?.timerEndsAt ?? null;
+  const resolvedSessionSettings = displaySession
+    ? resolveGameSessionSettingsForSession(displaySession)
+    : null;
   const uniqueBonusEnabled = resolvedSessionSettings?.uniqueBonusEnabled ?? false;
   const allowProperNouns = resolvedSessionSettings?.allowProperNouns ?? false;
   const allowSlang = resolvedSessionSettings?.allowSlang ?? false;
   const { lexicon: roundLexicon } = useRoundPlayableLexicon({
-    baseWord: session?.baseWord ?? '',
+    baseWord: displaySession?.baseWord ?? '',
     allowProperNouns,
     allowSlang,
     releaseDictionaryAfterBuild: true,
-    enabled: Boolean(session?.baseWord && session.status === 'playing'),
+    enabled: Boolean(displaySession?.baseWord && displaySession.status === 'playing'),
   });
   const showPointUi = shouldShowPointUi(uniqueBonusEnabled);
 
-  const isPaused = session?.pauseState?.active === true;
+  const isPaused = displaySession?.pauseState?.active === true;
 
   useEffect(() => {
     if (
@@ -486,27 +582,30 @@ export default function OnlinePlayScreen() {
   }, [endsAt, gameId, isPaused, serverNow, session?.addTimeVote, session?.status]);
 
   const deferredWordMaps = useDeferredValue(wordMaps);
-  const sessionForWordList = useMemo(
-    () => (sessionCore ? mergeSessionWithWordMaps(sessionCore, deferredWordMaps) : null),
-    [deferredWordMaps, sessionCore],
-  );
+  const sessionForWordList = useMemo(() => {
+    if (roundEnded && roundEndSessionSnapshot) {
+      return roundEndSessionSnapshot;
+    }
+    return sessionCore ? mergeSessionWithWordMaps(sessionCore, deferredWordMaps) : null;
+  }, [deferredWordMaps, roundEnded, roundEndSessionSnapshot, sessionCore]);
 
-  const baseWord = session?.baseWord ?? '';
+  const baseWord = displaySession?.baseWord ?? '';
   const baseWordDisplay = dictionary?.lookupDisplayUpper(baseWord) ?? toDisplayUpper(baseWord);
   const letterKeys = useMemo(() => buildLetterKeys(baseWordDisplay), [baseWordDisplay]);
 
   const wordsForDisplay = useMemo(() => {
+    const baseWords = roundEndWordsSnapshot ?? myWords;
     if (optimisticWords.size === 0) {
-      return myWords;
+      return baseWords;
     }
-    const merged = new Map(myWords);
+    const merged = new Map(baseWords);
     for (const [normalized, word] of optimisticWords) {
       if (!merged.has(normalized)) {
         merged.set(normalized, word);
       }
     }
     return merged;
-  }, [myWords, optimisticWords]);
+  }, [myWords, optimisticWords, roundEndWordsSnapshot]);
 
   const { entries: scoredWords, displays } = useMemo(() => {
     if (!sessionForWordList) {
@@ -515,13 +614,13 @@ export default function OnlinePlayScreen() {
     return buildOnlineWordListDisplay(wordsForDisplay, sessionForWordList, myUid);
   }, [myUid, sessionForWordList, wordsForDisplay]);
 
-  const myPlayer = session?.players[myUid];
+  const myPlayer = displaySession?.players[myUid];
   const standings = useMemo((): PlayerStandings[] => {
-    if (!session) {
+    if (!displaySession) {
       return [];
     }
-    return buildLiveStandingsFromSession(session);
-  }, [session]);
+    return buildLiveStandingsFromSession(displaySession);
+  }, [displaySession]);
 
   const playerScore = standings.find((row) => row.playerId === myUid)?.score ?? 0;
   // Local word list is authoritative for the viewer — avoids flicker when session totals lag maps.
@@ -574,7 +673,7 @@ export default function OnlinePlayScreen() {
   const displayRanks = useMemo(() => assignDisplayRanks(standings), [standings]);
   const playerRank = displayRankForPlayer(standings, myUid);
   const hasOpponent = standings.length >= 2;
-  const playRulesLabel = formatPlayRulesLabel(t, session?.settings);
+  const playRulesLabel = formatPlayRulesLabel(t, displaySession?.settings);
 
   useEffect(() => {
     if (!feedback) {

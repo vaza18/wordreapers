@@ -1,5 +1,5 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { useNavigation } from '@react-navigation/native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
@@ -15,6 +15,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { formatRoomCodeDisplay } from '@/lib/firebase/format-room-code';
 import {
+  rejoinExistingPlayer,
   startGameSession,
   subscribeGameSession,
   type GameSessionSnapshot,
@@ -37,6 +38,7 @@ import {
   type FinishedRoundArchive,
 } from '@/lib/online/online-session-archive';
 import { restartRematchOnlineRound } from '@/lib/online/restart-rematch-online-round';
+import { isActiveInLivePlayingRound } from '@/lib/online/is-active-in-live-playing-round';
 import {
   comparePlayersByJoinOrder,
   playerGenderForDisplay,
@@ -58,6 +60,7 @@ import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
 import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
 import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
 import { useFirebaseStore } from '@/store/firebase-store';
+import { useProfileStore } from '@/store/profile-store';
 import { tGendered } from '@/lib/game/grammar';
 
 /**
@@ -68,6 +71,7 @@ export default function LobbyScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const navigation = useNavigation();
+  const isFocused = useIsFocused();
   const { gameId: rawGameId } = useLocalSearchParams<{ gameId: string }>();
   const gameId = rawGameId ?? '';
   const firebaseUid = useFirebaseStore((state) => state.uid);
@@ -83,6 +87,8 @@ export default function LobbyScreen() {
     undefined,
   );
   const lobbyWordsClearedForRoundRef = useRef<number | null>(null);
+  const lateJoinRoundKeyRef = useRef<string | null>(null);
+  const myUid = firebaseUid ?? '';
 
   useEffect(() => {
     if (!gameId) {
@@ -122,13 +128,43 @@ export default function LobbyScreen() {
   }, [gameId, loading, session]);
 
   useEffect(() => {
-    if (session?.status !== 'playing') {
-      return;
+    if (!isFocused || !myUid || !session) {
+      return undefined;
     }
-    router.replace({ pathname: '/online/play/[gameId]', params: { gameId } });
-  }, [gameId, session?.status]);
+    if (session.status !== 'playing') {
+      return undefined;
+    }
+    if (isActiveInLivePlayingRound(session, myUid)) {
+      router.replace({ pathname: '/online/play/[gameId]', params: { gameId } });
+      return undefined;
+    }
 
-  const myUid = firebaseUid ?? '';
+    const roundKey = `${session.baseWordRound ?? 0}:${session.timerEndsAt ?? 0}`;
+    if (lateJoinRoundKeyRef.current === roundKey) {
+      return undefined;
+    }
+    lateJoinRoundKeyRef.current = roundKey;
+
+    let cancelled = false;
+    const { name, gender, avatarColorIndex } = useProfileStore.getState();
+    void rejoinExistingPlayer(gameId, myUid, { name, gender, avatarColorIndex })
+      .then(() => {
+        if (!cancelled) {
+          router.replace({ pathname: '/online/play/[gameId]', params: { gameId } });
+        }
+      })
+      .catch((error) => {
+        lateJoinRoundKeyRef.current = null;
+        if (__DEV__) {
+          console.warn('lobby late join live round', error);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [gameId, isFocused, myUid, session]);
+
   usePlayerOnlinePresence(
     gameId,
     myUid,

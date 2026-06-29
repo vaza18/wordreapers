@@ -44,16 +44,9 @@ function isRosterActive(session: GameSession, playerId: string): boolean {
   return Boolean(player) && player.hasLeft !== true;
 }
 
-/** Includes players back online while RTDB still has stale `hasLeft: true`. */
+/** Active in the current playing round (online in RTDB). */
 function isCompetingInRound(session: GameSession, playerId: string): boolean {
-  const player = session.players[playerId];
-  if (!player) {
-    return false;
-  }
-  if (player.hasLeft === true) {
-    return player.online === true;
-  }
-  return true;
+  return session.players[playerId]?.online === true;
 }
 
 function detectRosterEvents(prev: GameSession, curr: GameSession, myUid: string): PlayToastEvent[] {
@@ -222,6 +215,9 @@ export function detectPlayToastEvents(
   myUid: string,
 ): PlayToastEvent[] {
   if (curr.status !== 'playing' || prev.status !== 'playing') {
+    return [];
+  }
+  if (curr.players[myUid] && !isCompetingInRound(curr, myUid)) {
     return [];
   }
 

@@ -228,6 +228,39 @@ describe('players write', () => {
     );
   });
 
+  it('denies base-word picker from resetting peer players when starting round', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .database()
+        .ref('game_sessions/REMCH')
+        .set({
+          ...waitingSession,
+          baseWord: 'слово',
+          baseWordPickerOrder: ['org', 'p2'],
+          baseWordRound: 1,
+          players: {
+            org: { name: 'Org', wordCount: 0, score: 0, online: false },
+            p2: { name: 'Two', wordCount: 0, score: 0, online: true },
+          },
+        });
+    });
+    const now = Date.now();
+    await assertFails(
+      authed('p2')
+        .database()
+        .ref('game_sessions/REMCH')
+        .update({
+          status: 'playing',
+          timerEndsAt: now + 60_000,
+          roundStartedAt: now,
+          players: {
+            org: { name: 'Org', wordCount: 0, score: 0, online: true },
+            p2: { name: 'Two', wordCount: 0, score: 0, online: true },
+          },
+        }),
+    );
+  });
+
   it('denies non-picker roster member from starting waiting session', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await ctx
@@ -386,7 +419,7 @@ describe('rematch finished → waiting', () => {
     );
   });
 
-  it('allows non-organizer rematch via session update and peer score reset', async () => {
+  it('allows non-organizer atomic rematch with opted-in and peer offline flags', async () => {
     await assertSucceeds(
       authed('p1')
         .database()
@@ -395,25 +428,64 @@ describe('rematch finished → waiting', () => {
           status: 'waiting',
           settings: { ...finishedSession.settings, uniqueBonusEnabled: true },
           timerEndsAt: null,
+          roundStartedAt: null,
+          roundTimerBudgetSeconds: null,
+          roundPlayedSeconds: null,
           baseWord: '',
           baseWordRound: 1,
+          earlyFinishVote: null,
+          pauseVote: null,
+          pauseState: null,
+          resumeVote: null,
           purgeAfterAt: null,
           finishedAt: null,
           resultsExitedBy: null,
+          isPublic: false,
+          publicPublishedAt: null,
+          players: {
+            org: {
+              ...finishedSession.players.org,
+              score: 0,
+              wordCount: 0,
+              online: false,
+              hasLeft: false,
+            },
+            p1: {
+              ...finishedSession.players.p1,
+              score: 0,
+              wordCount: 0,
+              online: true,
+              hasLeft: false,
+            },
+            p2: {
+              ...finishedSession.players.p2,
+              score: 0,
+              wordCount: 0,
+              online: false,
+              hasLeft: false,
+            },
+          },
         }),
     );
+  });
+
+  it('denies peer online reset after rematch session is already waiting', async () => {
     await assertSucceeds(
+      authed('p1').database().ref('game_sessions/ABCDE').update({
+        status: 'waiting',
+        timerEndsAt: null,
+        baseWord: '',
+        baseWordRound: 1,
+        purgeAfterAt: null,
+        finishedAt: null,
+        resultsExitedBy: null,
+      }),
+    );
+    await assertFails(
       authed('p1').database().ref('game_sessions/ABCDE/players/org').update({
         score: 0,
         wordCount: 0,
-      }),
-    );
-    await assertSucceeds(
-      authed('p1').database().ref('game_sessions/ABCDE/players/p1').update({
-        score: 0,
-        wordCount: 0,
-        online: true,
-        hasLeft: false,
+        online: false,
       }),
     );
   });

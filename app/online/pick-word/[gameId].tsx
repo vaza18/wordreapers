@@ -1,4 +1,5 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -50,6 +51,7 @@ export default function OnlinePickWordScreen() {
   const { t } = useTranslation();
   const { gameId: rawGameId } = useLocalSearchParams<{ gameId: string }>();
   const gameId = rawGameId ?? '';
+  const isFocused = useIsFocused();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -92,7 +94,7 @@ export default function OnlinePickWordScreen() {
   usePlayerOnlinePresence(gameId, myUid ?? undefined, Boolean(gameId && myUid));
 
   useEffect(() => {
-    if (!session || !myUid) {
+    if (!isFocused || !session || !myUid) {
       return;
     }
     if (session.status !== 'waiting') {
@@ -102,7 +104,7 @@ export default function OnlinePickWordScreen() {
     if (!isCurrentBaseWordPicker(session, myUid)) {
       router.replace({ pathname: '/online/lobby/[gameId]', params: { gameId } });
     }
-  }, [gameId, myUid, session]);
+  }, [gameId, isFocused, myUid, session]);
 
   useEffect(() => {
     if (!session || !dictionary || sessionPrefilledRef.current) {

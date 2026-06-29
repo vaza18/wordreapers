@@ -1,5 +1,4 @@
 import type { GameSession, SessionVote } from '../firebase/types.js';
-import { isPlayerConnectedInSession } from './session-presence.js';
 import { displayPlayerName } from '../online/public-lobby/display-player-name.js';
 import { playerGenderForDisplay } from '../online/public-lobby/session-identity.js';
 import { playerGenderFromSession } from '../game/vote-status-label.js';
@@ -17,11 +16,7 @@ export interface EarlyFinishParticipantRow {
   voteStatus: EarlyFinishVoteStatus;
 }
 
-function isPlayerOnline(session: GameSession, playerId: string): boolean {
-  return isPlayerConnectedInSession(session.players[playerId]);
-}
-
-/** Must vote: still in the round, connected, not the proposer. */
+/** Must vote: online in RTDB, still in roster, not the proposer. */
 export function isEarlyFinishVoteRequired(
   session: GameSession,
   playerId: string,
@@ -34,7 +29,7 @@ export function isEarlyFinishVoteRequired(
   if (!player || player.hasLeft === true) {
     return false;
   }
-  return isPlayerConnectedInSession(player);
+  return player.online === true;
 }
 
 /**
@@ -100,7 +95,7 @@ export function buildEarlyFinishParticipantRows(
     .sort((a, b) => session.players[a].name.localeCompare(session.players[b].name, 'uk'))
     .map((playerId) => {
       const player = session.players[playerId];
-      const online = isPlayerOnline(session, playerId);
+      const online = player.online === true;
       const hasLeft = player.hasLeft === true;
       let voteStatus: EarlyFinishVoteStatus = 'not_required';
 

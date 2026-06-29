@@ -22,6 +22,7 @@ import {
   resolveGameSessionSettingsForSession,
 } from './session-settings.js';
 import { recomputeSessionPlayerScores } from '../game/scoring.js';
+import { rematchWaitingPlayerPatch } from '../online/rematch-waiting-player-patch.js';
 import { computeRoundPlayedSecondsAtFinish } from '../game/round-duration.js';
 import {
   resolveEarlyFinishVoteIfExpired,
@@ -80,17 +81,6 @@ async function assertSessionBaseWordAllowed(baseWord: string, session: GameSessi
 export { resolveGameSessionSettings } from './session-settings.js';
 
 export type GameSessionSnapshot = GameSession & { id: string };
-
-/** Reset per-player totals and presence when a new round or rematch lobby opens. */
-function playerForFreshRound(player: GameSessionPlayer): GameSessionPlayer {
-  return {
-    ...player,
-    score: 0,
-    wordCount: 0,
-    hasLeft: false,
-    online: true,
-  };
-}
 
 function sessionRef(gameId: string): DatabaseReference {
   return ref(getFirebaseDatabase(), gameSessionPath(gameId));
@@ -790,10 +780,6 @@ export async function startGameSession(gameId: string, actorUid: string): Promis
 
   const now = getServerNow();
   const endsAt = now + settings.durationSeconds * 1000;
-  const players: Record<string, GameSessionPlayer> = {};
-  for (const [uid, player] of Object.entries(session.players)) {
-    players[uid] = playerForFreshRound(player);
-  }
 
   setOrganizerWaitingRoom(null);
 
@@ -821,7 +807,6 @@ export async function startGameSession(gameId: string, actorUid: string): Promis
     roundTimerBudgetSeconds: settings.durationSeconds,
     roundPlayedSeconds: null,
     settings,
-    players,
     earlyFinishVote: null,
     pauseVote: null,
     resumeVote: null,
@@ -1037,6 +1022,13 @@ export async function rematchFinishedSessionToWaiting(
   const playerIds = Object.keys(preSession.players);
   const resolvedSettings = resolveGameSessionSettings(preSession.settings, playerIds.length);
   const nextBaseWordRound = (preSession.baseWordRound ?? 0) + 1;
+  const players: Record<string, GameSessionPlayer> = {};
+  for (const uid of playerIds) {
+    players[uid] = {
+      ...preSession.players[uid],
+      ...rematchWaitingPlayerPatch(preSession, uid, actorUid),
+    };
+  }
 
   try {
     await update(sessionRef(normalized), {
@@ -1057,6 +1049,7 @@ export async function rematchFinishedSessionToWaiting(
       resultsExitedBy: null,
       isPublic: false,
       publicPublishedAt: null,
+      players,
     });
   } catch (error) {
     if (isFirebasePermissionDenied(error)) {
@@ -1067,23 +1060,6 @@ export async function rematchFinishedSessionToWaiting(
     }
     throw error;
   }
-
-  await Promise.all(
-    playerIds.map(async (uid) => {
-      const patch =
-        uid === actorUid
-          ? { score: 0, wordCount: 0, online: true, hasLeft: false }
-          : { score: 0, wordCount: 0 };
-      try {
-        await update(playerRef(normalized, uid), patch);
-      } catch (error) {
-        if (isFirebasePermissionDenied(error)) {
-          return;
-        }
-        throw error;
-      }
-    }),
-  );
 
   const after = await get(sessionRef(normalized));
   if (!after.exists() || (after.val() as GameSession).status !== 'waiting') {

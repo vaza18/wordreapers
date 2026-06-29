@@ -57,3 +57,18 @@ export async function loadLatestFrozenFinishedRoundFromArchive(
   }
   return null;
 }
+
+/** Latest local archive strictly before the live `baseWordRound` (skipped rounds). */
+export async function loadFrozenFinishedRoundBeforeLive(
+  gameId: string,
+  liveBaseWordRound: number,
+  maxRound = 5,
+): Promise<FrozenFinishedRound | null> {
+  for (let round = Math.min(liveBaseWordRound - 1, maxRound); round >= 0; round -= 1) {
+    const archived = await loadFrozenFinishedRoundFromArchive(gameId, round);
+    if (archived) {
+      return archived;
+    }
+  }
+  return null;
+}

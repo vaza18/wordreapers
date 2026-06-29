@@ -461,6 +461,7 @@ function createStyles(colors: ThemeColors) {
     },
     participantMain: {
       flex: 1,
+      minWidth: 0,
       gap: 2,
     },
     participantName: {
@@ -473,10 +474,10 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
     },
     participantVote: {
+      flexShrink: 0,
       fontSize: 12,
       fontWeight: '500',
       color: colors.accent,
-      maxWidth: 110,
       textAlign: 'right',
     },
     row: {

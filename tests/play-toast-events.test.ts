@@ -473,4 +473,19 @@ describe('detectPlayToastEvents', () => {
     );
     expect(detectPlayToastEvents(prev, curr, 'org')).toEqual([]);
   });
+
+  it('suppresses toasts for offline viewers not in the active round', () => {
+    const prev = scoringSession({
+      p1: { name: 'One', wordCount: 1, score: 1, online: true },
+      p2: { name: 'Two', wordCount: 1, score: 1, online: true },
+      p3: { name: 'Three', wordCount: 0, score: 0, online: false },
+    });
+    const curr = scoringSession({
+      p1: { name: 'One', wordCount: 2, score: 2, online: true },
+      p2: { name: 'Two', wordCount: 1, score: 1, online: true },
+      p3: { name: 'Three', wordCount: 0, score: 0, online: false },
+    });
+
+    expect(detectPlayToastEvents(prev, curr, 'p3')).toEqual([]);
+  });
 });
