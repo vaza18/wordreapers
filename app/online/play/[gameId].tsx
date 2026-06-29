@@ -2,14 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  ActivityIndicator,
-  AppState,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
@@ -109,7 +102,7 @@ import {
   createSubmitWordProfile,
   flushSubmitLatencySummary,
 } from '@/lib/online/submit-word-profile';
-import { buildLetterKeys, computeLetterKeySize } from '@/lib/game/letter-keyboard';
+import { buildLetterKeys } from '@/lib/game/letter-keyboard';
 import { formatStandingRowMeta } from '@/lib/game/format-play-stats';
 import { acceptWord } from '@/lib/game/play-word';
 import {
@@ -144,8 +137,6 @@ export default function OnlinePlayScreen() {
   const gameId = rawGameId ?? '';
   const myUid = useFirebaseStore((state) => state.uid) ?? '';
   const isPlayScreenFocused = useIsFocused();
-  const { width: screenWidth } = useWindowDimensions();
-  const composeKeySize = computeLetterKeySize(screenWidth);
   const wordAcceptedFeedback = useSettingsStore((state) => state.wordAcceptedFeedback);
   const timerAlertMode = useSettingsStore((state) => state.timerAlertMode);
   const viewerGender = useProfileStore((state) => state.gender);
@@ -1192,7 +1183,6 @@ export default function OnlinePlayScreen() {
             draft={draft}
             draftKeyIndices={draftKeyIndices}
             letterKeys={letterKeys}
-            composeKeySize={composeKeySize}
             onPressKey={pressKey}
             onClearDraft={clearDraft}
             onBackspaceDraft={backspaceDraft}

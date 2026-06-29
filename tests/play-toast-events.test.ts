@@ -31,7 +31,7 @@ function scoringSession(
   players: GameSession['players'],
   status: GameSession['status'] = 'playing',
 ): GameSession {
-  return session(players, status, { uniqueBonusMode: 'auto', uniqueBonusEnabled: true });
+  return session(players, status, { uniqueBonusMode: 'auto' });
 }
 
 describe('detectPlayToastEvents', () => {

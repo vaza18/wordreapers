@@ -34,22 +34,66 @@ export function computeLetterKeyGap(keySize: number): number {
   return Math.max(referenceGap, Math.round(keySize * (referenceGap / phoneReferenceKeySize)));
 }
 
+/** Options for {@link computeLetterKeySize} and {@link computeLetterKeyLayout}. */
+export interface LetterKeyLayoutOptions {
+  /** When true, `width` is the inner compose/keyboard width (parent padding already excluded). */
+  contentWidth?: boolean;
+}
+
+/** Total row width for `columns` square keys and the gaps between them. */
+export function letterKeyboardRowWidth(
+  keySize: number,
+  gap: number,
+  columns = LETTER_KEYBOARD_PHONE_COLUMNS,
+): number {
+  return columns * keySize + (columns - 1) * gap;
+}
+
 /**
  * Square key size for letter keyboard and compose action buttons.
  * Phones: fill width with 6 columns. Tablets: ~15 mm keys, more per row via flex wrap.
+ *
+ * Uses the same scaled gap as the live grid (`computeLetterKeyGap`) so wider phones
+ * still fit six keys per row.
  */
-export function computeLetterKeySize(screenWidth: number): number {
-  const gap = spacing.xs;
-  const available = screenWidth - LETTER_KEYBOARD_HORIZONTAL_PADDING;
+export function computeLetterKeySize(width: number, options: LetterKeyLayoutOptions = {}): number {
+  const { contentWidth = false } = options;
+  const layoutWidth = contentWidth ? width + LETTER_KEYBOARD_HORIZONTAL_PADDING : width;
 
-  const base =
-    screenWidth >= LETTER_KEY_TABLET_MIN_WIDTH
-      ? LETTER_KEY_TABLET_SIZE
-      : Math.floor(
-          (available - gap * (LETTER_KEYBOARD_PHONE_COLUMNS - 1)) / LETTER_KEYBOARD_PHONE_COLUMNS,
-        );
+  if (layoutWidth >= LETTER_KEY_TABLET_MIN_WIDTH) {
+    return LETTER_KEY_TABLET_SIZE;
+  }
 
-  return Math.round(base);
+  const available = contentWidth ? width : width - LETTER_KEYBOARD_HORIZONTAL_PADDING;
+  if (available <= 0) {
+    return 1;
+  }
+
+  let keySize = Math.floor(
+    (available - spacing.xs * (LETTER_KEYBOARD_PHONE_COLUMNS - 1)) / LETTER_KEYBOARD_PHONE_COLUMNS,
+  );
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const gap = computeLetterKeyGap(keySize);
+    const next = Math.floor(
+      (available - gap * (LETTER_KEYBOARD_PHONE_COLUMNS - 1)) / LETTER_KEYBOARD_PHONE_COLUMNS,
+    );
+    if (next === keySize || next <= 0) {
+      break;
+    }
+    keySize = next;
+  }
+
+  return Math.round(keySize);
+}
+
+/** Key size and inter-key gap for a given layout width. */
+export function computeLetterKeyLayout(
+  width: number,
+  options: LetterKeyLayoutOptions = {},
+): { keySize: number; gap: number } {
+  const keySize = computeLetterKeySize(width, options);
+  return { keySize, gap: computeLetterKeyGap(keySize) };
 }
 
 /** One pressable key on the interactive letter keyboard. */

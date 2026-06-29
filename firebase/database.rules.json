@@ -18,7 +18,7 @@
           ".validate": "newData.isNumber() || newData.val() === null"
         },
         "settings": {
-          ".validate": "newData.hasChildren(['durationSeconds', 'uniqueBonusEnabled', 'uniqueBonusMode', 'language', 'allowProperNouns', 'allowSlang']) && (newData.child('uniqueBonusMode').val() == 'auto' || newData.child('uniqueBonusMode').val() == 'off') && (!data.exists() || data.parent().child('status').val() == 'waiting' || (newData.child('durationSeconds').val() == data.child('durationSeconds').val() && newData.child('uniqueBonusEnabled').val() == data.child('uniqueBonusEnabled').val() && newData.child('uniqueBonusMode').val() == data.child('uniqueBonusMode').val() && newData.child('language').val() == data.child('language').val() && newData.child('allowProperNouns').val() == data.child('allowProperNouns').val() && newData.child('allowSlang').val() == data.child('allowSlang').val()))"
+          ".validate": "newData.hasChildren(['durationSeconds', 'uniqueBonusEnabled', 'uniqueBonusMode', 'language', 'allowProperNouns', 'allowSlang']) && (newData.child('uniqueBonusMode').val() == 'auto' || newData.child('uniqueBonusMode').val() == 'off') && (!data.exists() || newData.parent().child('status').val() == 'waiting' || (newData.child('durationSeconds').val() == data.child('durationSeconds').val() && newData.child('uniqueBonusEnabled').val() == data.child('uniqueBonusEnabled').val() && newData.child('uniqueBonusMode').val() == data.child('uniqueBonusMode').val() && newData.child('language').val() == data.child('language').val() && newData.child('allowProperNouns').val() == data.child('allowProperNouns').val() && newData.child('allowSlang').val() == data.child('allowSlang').val()))"
         },
         "resultsExitedBy": {
           "$uid": {
@@ -29,7 +29,7 @@
         "players": {
           ".write": "auth != null && root.child('game_sessions').child($gameId).child('status').exists() && (root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() || (!root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && newData.hasChild(auth.uid) && (root.child('game_sessions').child($gameId).child('status').val() == 'waiting' || root.child('game_sessions').child($gameId).child('status').val() == 'playing')))",
           "$playerId": {
-            ".write": "auth != null && auth.uid == $playerId && (!data.exists() || root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists())",
+            ".write": "auth != null && ((auth.uid == $playerId && (!data.exists() || root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists())) || (root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && root.child('game_sessions').child($gameId).child('status').val() == 'finished' && newData.parent().parent().child('status').val() == 'waiting' && newData.child('score').val() == 0 && newData.child('wordCount').val() == 0))",
             "name": {
               ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40"
             },
@@ -42,25 +42,25 @@
               ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 500"
             },
             "online": {
-              ".write": "auth != null && auth.uid == $playerId"
+              ".write": "auth != null && (auth.uid == $playerId || (root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && root.child('game_sessions').child($gameId).child('status').val() == 'finished' && newData.parent().parent().parent().child('status').val() == 'waiting'))"
             },
             "hasLeft": {
-              ".write": "auth != null && auth.uid == $playerId"
+              ".write": "auth != null && (auth.uid == $playerId || (root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && root.child('game_sessions').child($gameId).child('status').val() == 'finished' && newData.parent().parent().parent().child('status').val() == 'waiting'))"
             },
             "gender": {
-              ".write": "auth != null && auth.uid == $playerId"
+              ".write": "auth != null && (auth.uid == $playerId || (root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && root.child('game_sessions').child($gameId).child('status').val() == 'finished' && newData.parent().parent().parent().child('status').val() == 'waiting'))"
             },
             "avatarColorIndex": {
-              ".write": "auth != null && auth.uid == $playerId"
+              ".write": "auth != null && (auth.uid == $playerId || (root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && root.child('game_sessions').child($gameId).child('status').val() == 'finished' && newData.parent().parent().parent().child('status').val() == 'waiting'))"
             },
             "publicAlias": {
               ".write": "auth != null && (auth.uid == $playerId || root.child('game_sessions').child($gameId).child('organizerId').val() === auth.uid || root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists())"
             },
             "joinedVia": {
-              ".write": "auth != null && auth.uid == $playerId"
+              ".write": "auth != null && (auth.uid == $playerId || (root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && root.child('game_sessions').child($gameId).child('status').val() == 'finished' && newData.parent().parent().parent().child('status').val() == 'waiting'))"
             },
             "invitedBy": {
-              ".write": "auth != null && auth.uid == $playerId"
+              ".write": "auth != null && (auth.uid == $playerId || (root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && root.child('game_sessions').child($gameId).child('status').val() == 'finished' && newData.parent().parent().parent().child('status').val() == 'waiting'))"
             }
           }
         }

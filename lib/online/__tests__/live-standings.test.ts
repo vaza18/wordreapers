@@ -26,16 +26,8 @@ function session(overrides: Partial<GameSession> = {}): GameSession {
 }
 
 describe('buildLiveStandingsFromSession', () => {
-  it('applies x2 from word maps when bonus was enabled at round start', () => {
+  it('applies x2 from word maps when roster has 3+ players', () => {
     const s = session({
-      settings: {
-        durationSeconds: 600,
-        uniqueBonusMode: 'auto',
-        uniqueBonusEnabled: true,
-        language: 'uk-uk',
-        allowProperNouns: false,
-        allowSlang: false,
-      },
       players: {
         org: { name: 'Орг', score: 3, wordCount: 3, avatarColorIndex: 0 },
         a: { name: 'А', score: 1, wordCount: 1, avatarColorIndex: 1 },

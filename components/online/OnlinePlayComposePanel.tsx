@@ -7,6 +7,7 @@ import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { LetterKeyboard } from '@/components/LetterKeyboard';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useComposePanelLayout } from '@/hooks/useComposePanelLayout';
+import { useLetterKeyboardLayout } from '@/hooks/useLetterKeyboardLayout';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { toDisplayUpper } from '@/lib/dictionary/normalize';
@@ -19,7 +20,6 @@ export interface OnlinePlayComposePanelProps {
   draft: string;
   draftKeyIndices: readonly number[];
   letterKeys: readonly LetterKey[];
-  composeKeySize: number;
   onPressKey: (index: number) => void;
   onClearDraft: () => void;
   onBackspaceDraft: () => void;
@@ -32,7 +32,6 @@ export const OnlinePlayComposePanel = memo(function OnlinePlayComposePanel({
   draft,
   draftKeyIndices,
   letterKeys,
-  composeKeySize,
   onPressKey,
   onClearDraft,
   onBackspaceDraft,
@@ -40,12 +39,13 @@ export const OnlinePlayComposePanel = memo(function OnlinePlayComposePanel({
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const { onLayout, keySize: composeKeySize, gap } = useLetterKeyboardLayout();
   const { draftFontSize, backspaceGlyphSize, clearIconSize } =
     useComposePanelLayout(composeKeySize);
   const usedKeyIndices = new Set(draftKeyIndices);
 
   return (
-    <>
+    <View style={styles.panel} onLayout={onLayout}>
       <View style={styles.composeRow}>
         <FeedbackPressable
           accessibilityRole="button"
@@ -102,13 +102,22 @@ export const OnlinePlayComposePanel = memo(function OnlinePlayComposePanel({
         </FeedbackPressable>
       </View>
 
-      <LetterKeyboard keys={letterKeys} usedKeyIndices={usedKeyIndices} onPressKey={onPressKey} />
-    </>
+      <LetterKeyboard
+        keys={letterKeys}
+        usedKeyIndices={usedKeyIndices}
+        onPressKey={onPressKey}
+        keySize={composeKeySize}
+        gap={gap}
+      />
+    </View>
   );
 });
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
+    panel: {
+      gap: spacing.sm,
+    },
     composeRow: {
       flexDirection: 'row',
       alignItems: 'center',

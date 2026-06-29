@@ -19,7 +19,7 @@ import { clearAllActiveRoundCachesForGame } from '../online/active-round-cache.j
 import { setOrganizerWaitingRoom } from '../online/organizer-waiting-room.js';
 import {
   resolveGameSessionSettings,
-  uniqueBonusEnabledForActiveRound,
+  resolveGameSessionSettingsForSession,
 } from './session-settings.js';
 import { recomputeSessionPlayerScores } from '../game/scoring.js';
 import { computeRoundPlayedSecondsAtFinish } from '../game/round-duration.js';
@@ -405,7 +405,7 @@ function buildJoinCommitPatch(
   if (next.status === 'playing' && hasWords) {
     recomputeSessionPlayerScores(
       { ...next, wordPlayers: context.wordMaps.wordPlayers },
-      uniqueBonusEnabledForActiveRound(next),
+      resolvedSettings.uniqueBonusEnabled,
     );
     patch.players = next.players;
   }
@@ -572,25 +572,33 @@ export async function syncSessionPlayerScores(
   if (Object.keys(maps.wordPlayers ?? {}).length === 0) {
     return;
   }
+  const preSnapshot = await get(sessionRef(normalized));
+  if (!preSnapshot.exists()) {
+    return;
+  }
+  const session = preSnapshot.val() as GameSession;
+  if (session.status !== 'playing') {
+    return;
+  }
+  const uniqueBonusEnabled = resolveGameSessionSettingsForSession(session).uniqueBonusEnabled;
+
   try {
-    await runRtdbTransaction(sessionRef(normalized), (current) => {
-      if (current == null) {
-        return undefined;
-      }
-      const session = current as GameSession;
-      if (session.status !== 'playing') {
+    await runRtdbTransaction(playersRef(normalized), (current) => {
+      if (current == null || typeof current !== 'object') {
         return undefined;
       }
 
-      const uniqueBonusEnabled = uniqueBonusEnabledForActiveRound(session);
       const players = Object.fromEntries(
-        Object.entries(session.players).map(([playerId, player]) => [playerId, { ...player }]),
+        Object.entries(current as GameSession['players']).map(([playerId, player]) => [
+          playerId,
+          { ...player },
+        ]),
       );
       recomputeSessionPlayerScores({ players, wordPlayers: maps.wordPlayers }, uniqueBonusEnabled);
 
       let changed = false;
       for (const [playerId, player] of Object.entries(players)) {
-        const stored = session.players[playerId];
+        const stored = (current as GameSession['players'])[playerId];
         if (stored?.score !== player.score || stored?.wordCount !== player.wordCount) {
           changed = true;
           break;
@@ -601,10 +609,7 @@ export async function syncSessionPlayerScores(
         return undefined;
       }
 
-      return {
-        ...session,
-        players,
-      };
+      return players;
     });
   } catch (error) {
     if (__DEV__) {
@@ -903,7 +908,7 @@ export async function finishGameSessionIfExpired(
       if (session.addTimeVote) {
         return undefined;
       }
-      const uniqueBonusEnabled = uniqueBonusEnabledForActiveRound(session);
+      const uniqueBonusEnabled = resolveGameSessionSettingsForSession(session).uniqueBonusEnabled;
       if (Object.keys(wordMaps.wordPlayers ?? {}).length > 0) {
         recomputeSessionPlayerScores(
           { ...session, wordPlayers: wordMaps.wordPlayers },
@@ -954,7 +959,7 @@ export async function finishGameSession(
     if (session.status !== 'playing') {
       return undefined;
     }
-    const uniqueBonusEnabled = uniqueBonusEnabledForActiveRound(session);
+    const uniqueBonusEnabled = resolveGameSessionSettingsForSession(session).uniqueBonusEnabled;
     if (Object.keys(wordMaps.wordPlayers ?? {}).length > 0) {
       recomputeSessionPlayerScores(
         { ...session, wordPlayers: wordMaps.wordPlayers },
@@ -1029,31 +1034,20 @@ export async function rematchFinishedSessionToWaiting(
     await unpublishPublicLobby(normalized, actorUid, { force: true });
   }
 
-  const result = await runRtdbTransaction(sessionRef(normalized), (current) => {
-    if (current == null) {
-      return undefined;
-    }
-    const session = current as GameSession;
-    if (session.status !== 'finished' || !session.players[actorUid]) {
-      return undefined;
-    }
+  const playerIds = Object.keys(preSession.players);
+  const resolvedSettings = resolveGameSessionSettings(preSession.settings, playerIds.length);
+  const nextBaseWordRound = (preSession.baseWordRound ?? 0) + 1;
 
-    const players: Record<string, GameSessionPlayer> = {};
-    for (const [uid, player] of Object.entries(session.players)) {
-      players[uid] = playerForFreshRound(player);
-    }
-
-    return {
-      ...session,
+  try {
+    await update(sessionRef(normalized), {
       status: 'waiting',
-      settings: resolveGameSessionSettings(session.settings, Object.keys(session.players).length),
+      settings: resolvedSettings,
       timerEndsAt: null,
       roundStartedAt: null,
       roundTimerBudgetSeconds: null,
       roundPlayedSeconds: null,
       baseWord: '',
-      baseWordRound: (session.baseWordRound ?? 0) + 1,
-      players,
+      baseWordRound: nextBaseWordRound,
       earlyFinishVote: null,
       pauseVote: null,
       pauseState: null,
@@ -1063,14 +1057,36 @@ export async function rematchFinishedSessionToWaiting(
       resultsExitedBy: null,
       isPublic: false,
       publicPublishedAt: null,
-    } satisfies GameSession;
-  });
-
-  if (!result.committed) {
-    const again = await get(sessionRef(normalized));
-    if (again.exists() && (again.val() as GameSession).status === 'waiting') {
-      return;
+    });
+  } catch (error) {
+    if (isFirebasePermissionDenied(error)) {
+      const again = await get(sessionRef(normalized));
+      if (again.exists() && (again.val() as GameSession).status === 'waiting') {
+        return;
+      }
     }
+    throw error;
+  }
+
+  await Promise.all(
+    playerIds.map(async (uid) => {
+      const patch =
+        uid === actorUid
+          ? { score: 0, wordCount: 0, online: true, hasLeft: false }
+          : { score: 0, wordCount: 0 };
+      try {
+        await update(playerRef(normalized, uid), patch);
+      } catch (error) {
+        if (isFirebasePermissionDenied(error)) {
+          return;
+        }
+        throw error;
+      }
+    }),
+  );
+
+  const after = await get(sessionRef(normalized));
+  if (!after.exists() || (after.val() as GameSession).status !== 'waiting') {
     throw new Error('REMATCH_FAILED');
   }
   await clearAllActiveRoundCachesForGame(normalized);

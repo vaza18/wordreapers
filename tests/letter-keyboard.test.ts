@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   buildLetterKeys,
   computeLetterKeyGap,
+  computeLetterKeyLayout,
   computeLetterKeySize,
+  letterKeyboardRowWidth,
+  LETTER_KEYBOARD_PHONE_COLUMNS,
   LETTER_KEY_TABLET_MIN_WIDTH,
   LETTER_KEY_TABLET_SIZE,
   mmToLayoutDp,
@@ -26,6 +29,14 @@ describe('mmToLayoutDp', () => {
 describe('computeLetterKeySize', () => {
   it('keeps 6-column phone sizing below tablet breakpoint', () => {
     expect(computeLetterKeySize(390)).toBe(56);
+  });
+
+  it('fits six keys per row on wider phones when gap scales with key size', () => {
+    const { keySize, gap } = computeLetterKeyLayout(440);
+    expect(keySize).toBe(63);
+    expect(letterKeyboardRowWidth(keySize, gap, LETTER_KEYBOARD_PHONE_COLUMNS)).toBeLessThanOrEqual(
+      440 - 32,
+    );
   });
 
   it('uses ~15 mm keys on tablets so more keys fit per row via wrap', () => {

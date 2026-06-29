@@ -44,7 +44,7 @@ describe('resolveGameSessionSettingsForSession content safety', () => {
     expect(resolved.allowSlang).toBe(true);
   });
 
-  it('keeps unique bonus frozen during playing after mid-round join', () => {
+  it('enables unique bonus during playing when roster grows to 3+ with auto mode', () => {
     const resolved = resolveGameSessionSettingsForSession(
       session({
         status: 'playing',
@@ -63,6 +63,6 @@ describe('resolveGameSessionSettingsForSession content safety', () => {
         },
       }),
     );
-    expect(resolved.uniqueBonusEnabled).toBe(false);
+    expect(resolved.uniqueBonusEnabled).toBe(true);
   });
 });
