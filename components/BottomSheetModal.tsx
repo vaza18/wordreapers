@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
+import { ConditionalModal } from '@/lib/ui/conditional-modal';
 import { modalOverlayBackground, modalSheetChrome } from '@/lib/ui/modal-chrome';
 
 interface BottomSheetModalProps {
@@ -57,10 +58,10 @@ function BottomSheetBody({ onClose, children }: { onClose: () => void; children:
  */
 export function BottomSheetModal({ visible, onClose, children }: BottomSheetModalProps) {
   return (
-    <Modal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
+    <ConditionalModal transparent visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaProvider>
         <BottomSheetBody onClose={onClose}>{children}</BottomSheetBody>
       </SafeAreaProvider>
-    </Modal>
+    </ConditionalModal>
   );
 }

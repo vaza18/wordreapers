@@ -4,7 +4,6 @@ import {
   ref,
   remove,
   set,
-  update,
   type DatabaseReference,
   type Unsubscribe,
 } from 'firebase/database';
@@ -226,26 +225,40 @@ export async function restorePlayerWordsToFirebase(
     return;
   }
 
-  const record: Record<string, StoredPlayerWord> = {};
-  for (const [key, value] of words) {
-    record[key] = { display: value.display, at: value.at };
+  const remoteSnapshot = await get(playerWordsRootRef(roomId, uid));
+  const remoteKeys = new Set<string>();
+  if (remoteSnapshot.exists()) {
+    for (const key of Object.keys(remoteSnapshot.val() as Record<string, unknown>)) {
+      remoteKeys.add(key);
+    }
   }
-  try {
-    await update(playerWordsRootRef(roomId, uid), record);
-  } catch (error) {
-    if (isFirebasePermissionDenied(error)) {
-      if (__DEV__) {
-        console.warn('restorePlayerWordsToFirebase permission_denied', {
-          uid,
-          wordCount: words.size,
-        });
+
+  await Promise.all(
+    [...words.entries()].map(async ([normalized, value]) => {
+      if (remoteKeys.has(normalized)) {
+        return;
       }
-      return;
-    }
-    if (__DEV__) {
-      console.warn('restorePlayerWordsToFirebase', error);
-    }
-  }
+      try {
+        await set(playerWordRef(roomId, uid, normalized), {
+          display: value.display,
+          at: value.at,
+        });
+      } catch (error) {
+        if (isFirebasePermissionDenied(error)) {
+          if (__DEV__) {
+            console.warn('restorePlayerWordsToFirebase permission_denied', {
+              uid,
+              normalized,
+            });
+          }
+          return;
+        }
+        if (__DEV__) {
+          console.warn('restorePlayerWordsToFirebase', error);
+        }
+      }
+    }),
+  );
 }
 
 function emitMergedPlayerWords(

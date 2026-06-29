@@ -37,7 +37,7 @@ describe('resolveOnlineWordEntry', () => {
     expect(entry.badge).toBe('+1');
   });
 
-  it('returns x2 when unique and bonus enabled', () => {
+  it('returns x2 when unique and bonus enabled for 3+ roster', () => {
     const s = session({
       wordPlayers: { слово: { org: true } },
       settings: { ...session().settings, uniqueBonusMode: 'auto' },

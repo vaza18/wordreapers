@@ -4,8 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
-import { computeLetterKeyGap, computeLetterKeySize } from '@/lib/game/letter-keyboard';
-import { letterKeyFontSizeForKeySize, letterKeyProportions } from '@/lib/game/letter-key-style';
+import { letterKeyProportions } from '@/lib/game/letter-key-style';
+import { letterKeyFontSizeForKeySize } from '@/lib/game/letter-key-style';
 import type { LetterKey } from '@/lib/game/letter-keyboard';
 import { playableGlyphFontSize } from '@/lib/typography/font-scale';
 import { centeredSquareTextStyle } from '@/lib/ui/centered-square-text';
@@ -17,6 +17,8 @@ interface LetterKeyboardProps {
   /** Key indices already pressed for the current draft (each physical key toggles once). */
   usedKeyIndices: ReadonlySet<number>;
   onPressKey: (index: number) => void;
+  keySize: number;
+  gap: number;
 }
 
 function createStyles(colors: ThemeColors) {
@@ -49,12 +51,16 @@ function createStyles(colors: ThemeColors) {
 }
 
 /** Interactive keyboard built from the base word letters. */
-export function LetterKeyboard({ keys, usedKeyIndices, onPressKey }: LetterKeyboardProps) {
+export function LetterKeyboard({
+  keys,
+  usedKeyIndices,
+  onPressKey,
+  keySize,
+  gap,
+}: LetterKeyboardProps) {
   const { t } = useTranslation();
   const { width: screenWidth, fontScale } = useWindowDimensions();
   const styles = useThemedStyles(createStyles);
-  const keySize = computeLetterKeySize(screenWidth);
-  const gap = computeLetterKeyGap(keySize);
   const { borderRadius } = letterKeyProportions(screenWidth);
   const labelFontSize = playableGlyphFontSize(
     letterKeyFontSizeForKeySize(keySize),

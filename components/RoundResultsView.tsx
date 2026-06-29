@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import {
@@ -22,6 +22,7 @@ import { ScrollableWordPanel } from '@/components/ScrollableWordPanel';
 import { SettingSwitch } from '@/components/SettingSwitch';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useNotebookRowHeight } from '@/hooks/useNotebookRowHeight';
+import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import type { RoundPlayableLexicon } from '@/lib/dictionary/round-playable-lexicon';
 import type { GlobalResultWordRow, PlayerResultRankGroup } from '@/lib/game/results-view';
@@ -76,10 +77,13 @@ export function RoundResultsView({
   missingWordsToggleDisabled = false,
 }: RoundResultsViewProps) {
   const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const rowHeight = useNotebookRowHeight();
   const { t } = useTranslation();
   const [tab, setTab] = useState<ResultsTab>('all');
   const [showMissingWords, setShowMissingWords] = useState(false);
+  const deferredShowMissingWords = useDeferredValue(showMissingWords);
+  const missingListPending = showMissingWords !== deferredShowMissingWords;
   const [playerBodyHeight, setPlayerBodyHeight] = useState(0);
   const [footerHeight, setFooterHeight] = useState(0);
 
@@ -116,8 +120,8 @@ export function RoundResultsView({
       : formatUkWords(totalDistinctWords);
   }, [baseWordDisplay, maxPlayableWords, showBaseWordInMeta, t, totalDistinctWords]);
   const allWordRows = useMemo(
-    () => buildResultsWordList(globalWords, roundLexicon, showMissingWords),
-    [globalWords, roundLexicon, showMissingWords],
+    () => buildResultsWordList(globalWords, roundLexicon, deferredShowMissingWords),
+    [deferredShowMissingWords, globalWords, roundLexicon],
   );
   const viewportHeight = panelScroll.scrollMetrics.viewportHeight;
   const contentHeight = panelScroll.scrollMetrics.contentHeight;
@@ -194,19 +198,26 @@ export function RoundResultsView({
         <ScrollableWordPanel style={styles.wordPanel} scrollbar={panelScroll.scrollbar}>
           <View style={styles.panelScrollViewport} onLayout={panelScroll.onViewportLayout}>
             {tab === 'all' ? (
-              <ResultsGlobalWordList
-                rows={allWordRows}
-                showAuthors={showWordAuthors}
-                showScoreBadges={showScores}
-                fillerRowCount={fillerRowCount}
-                scrollEnabled={canScroll}
-                onScroll={panelScroll.onScroll}
-                onScrollBeginDrag={() => {
-                  dismissWordOverlapTooltips();
-                }}
-                onContentSizeChange={panelScroll.onContentSizeChange}
-                scrollEventThrottle={panelScroll.scrollEventThrottle}
-              />
+              <>
+                <ResultsGlobalWordList
+                  rows={allWordRows}
+                  showAuthors={showWordAuthors}
+                  showScoreBadges={showScores}
+                  fillerRowCount={fillerRowCount}
+                  scrollEnabled={canScroll}
+                  onScroll={panelScroll.onScroll}
+                  onScrollBeginDrag={() => {
+                    dismissWordOverlapTooltips();
+                  }}
+                  onContentSizeChange={panelScroll.onContentSizeChange}
+                  scrollEventThrottle={panelScroll.scrollEventThrottle}
+                />
+                {missingListPending ? (
+                  <View pointerEvents="none" style={styles.missingListPending}>
+                    <ActivityIndicator size="small" color={colors.accent} />
+                  </View>
+                ) : null}
+              </>
             ) : (
               <ScrollView
                 style={styles.panelScroll}
@@ -344,6 +355,13 @@ function createStyles(colors: ThemeColors) {
     panelScrollViewport: {
       flex: 1,
       minHeight: 0,
+    },
+    missingListPending: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.notebookPaper,
+      opacity: 0.72,
     },
     panelScroll: {
       flex: 1,

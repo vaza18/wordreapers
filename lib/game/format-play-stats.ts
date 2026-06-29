@@ -19,6 +19,15 @@ export interface PlayStatsInput {
   showScore?: boolean;
 }
 
+/** Visual weight for compact play-header stat fragments. */
+export type PlayStatsCompactSegmentVariant = 'normal' | 'deemphasized';
+
+/** One styled fragment of compact play-header stats text. */
+export interface PlayStatsCompactSegment {
+  text: string;
+  variant: PlayStatsCompactSegmentVariant;
+}
+
 const DEFAULT_LABELS: PlayStatsLabels = {
   rankSuffix: 'м',
   wordsSuffix: 'сл',
@@ -28,6 +37,40 @@ const DEFAULT_LABELS: PlayStatsLabels = {
     `${score} ${score === 1 ? 'очко' : score >= 2 && score <= 4 ? 'очки' : 'очок'}`,
 };
 
+function pushPlayStatsSeparator(segments: PlayStatsCompactSegment[]): void {
+  if (segments.length > 0) {
+    segments.push({ text: ' · ', variant: 'normal' });
+  }
+}
+
+/**
+ * Compact play header stats as styled fragments (max word count is de-emphasized).
+ */
+export function formatPlayStatsCompactSegments(
+  input: PlayStatsInput,
+  labels: Pick<PlayStatsLabels, 'rankSuffix' | 'wordsSuffix' | 'pointsSuffix'> = DEFAULT_LABELS,
+): PlayStatsCompactSegment[] {
+  const segments: PlayStatsCompactSegment[] = [];
+
+  if (input.showRank !== false) {
+    segments.push({ text: `${input.rank}${labels.rankSuffix}`, variant: 'normal' });
+  }
+
+  pushPlayStatsSeparator(segments);
+  segments.push({ text: `${input.wordCount}`, variant: 'normal' });
+  if (input.maxWordCount != null && input.maxWordCount > 0) {
+    segments.push({ text: `/${input.maxWordCount}`, variant: 'deemphasized' });
+  }
+  segments.push({ text: labels.wordsSuffix, variant: 'normal' });
+
+  if (input.showScore !== false) {
+    pushPlayStatsSeparator(segments);
+    segments.push({ text: `${input.score}${labels.pointsSuffix}`, variant: 'normal' });
+  }
+
+  return segments;
+}
+
 /**
  * Compact play header stats (e.g. `2м · 12/571сл · 14оч`).
  */
@@ -35,19 +78,9 @@ export function formatPlayStatsCompact(
   input: PlayStatsInput,
   labels: Pick<PlayStatsLabels, 'rankSuffix' | 'wordsSuffix' | 'pointsSuffix'> = DEFAULT_LABELS,
 ): string {
-  const parts: string[] = [];
-  if (input.showRank !== false) {
-    parts.push(`${input.rank}${labels.rankSuffix}`);
-  }
-  const wordsLabel =
-    input.maxWordCount != null && input.maxWordCount > 0
-      ? `${input.wordCount}/${input.maxWordCount}${labels.wordsSuffix}`
-      : `${input.wordCount}${labels.wordsSuffix}`;
-  parts.push(wordsLabel);
-  if (input.showScore !== false) {
-    parts.push(`${input.score}${labels.pointsSuffix}`);
-  }
-  return parts.join(' · ');
+  return formatPlayStatsCompactSegments(input, labels)
+    .map((segment) => segment.text)
+    .join('');
 }
 
 /**

@@ -53,6 +53,27 @@ const playingSession = {
   },
 };
 
+const finishedSession = {
+  ...playingSession,
+  status: 'finished',
+  timerEndsAt: null,
+  baseWord: 'книговидавництво',
+  baseWordRound: 0,
+  baseWordPickerOrder: ['org', 'p1', 'p2'],
+  settings: {
+    ...playingSession.settings,
+    uniqueBonusMode: 'auto',
+    uniqueBonusEnabled: true,
+  },
+  players: {
+    org: { name: 'Org', wordCount: 7, score: 11, online: true },
+    p1: { name: 'One', wordCount: 4, score: 6, online: true },
+    p2: { name: 'Two', wordCount: 5, score: 8, online: true },
+  },
+  purgeAfterAt: Date.now() + 3_600_000,
+  finishedAt: Date.now(),
+};
+
 beforeAll(async () => {
   testEnv = await initializeTestEnvironment({
     projectId: PROJECT_ID,
@@ -236,6 +257,42 @@ describe('players write', () => {
       authed('p1').database().ref('game_sessions/ABCDE/players/org/score').set(12),
     );
   });
+
+  it('allows stranger to join playing session roster', async () => {
+    await assertSucceeds(
+      authed('joiner')
+        .database()
+        .ref('game_sessions/ABCDE/players/joiner')
+        .set({ name: 'Late', wordCount: 0, score: 0, online: true, avatarColorIndex: 2 }),
+    );
+  });
+
+  it('allows joiner to patch picker order after mid-round roster add', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .database()
+        .ref('game_sessions/ABCDE/players/joiner')
+        .set({ name: 'Late', wordCount: 0, score: 0, online: true, avatarColorIndex: 2 });
+    });
+    await assertSucceeds(
+      authed('joiner')
+        .database()
+        .ref('game_sessions/ABCDE')
+        .update({ baseWordPickerOrder: ['org', 'p1', 'joiner'] }),
+    );
+  });
+
+  it('denies joiner from changing settings mid-round', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .database()
+        .ref('game_sessions/ABCDE/players/joiner')
+        .set({ name: 'Late', wordCount: 0, score: 0, online: true, avatarColorIndex: 2 });
+    });
+    await assertFails(
+      authed('joiner').database().ref('game_sessions/ABCDE/settings/uniqueBonusEnabled').set(true),
+    );
+  });
 });
 
 describe('session_word_maps', () => {
@@ -276,6 +333,95 @@ describe('session_word_maps', () => {
   it('denies second writer on wordFirst', async () => {
     await assertSucceeds(wordMaps('ABCDE').child('wordFirst/slovo').set('p1'));
     await assertFails(wordMaps('ABCDE').child('wordFirst/slovo').set('org'));
+  });
+});
+
+describe('rematch finished → waiting', () => {
+  beforeEach(async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.database().ref('game_sessions/ABCDE').set(finishedSession);
+    });
+  });
+
+  it('allows non-organizer roster member to reopen room for rematch', async () => {
+    await assertSucceeds(
+      authed('p1')
+        .database()
+        .ref('game_sessions/ABCDE')
+        .transaction((current) => {
+          if (current == null || current.status !== 'finished') {
+            return undefined;
+          }
+          const players: Record<string, unknown> = {};
+          for (const [uid, player] of Object.entries(
+            current.players as Record<string, Record<string, unknown>>,
+          )) {
+            players[uid] = { ...player, score: 0, wordCount: 0, online: true, hasLeft: false };
+          }
+          return {
+            ...current,
+            status: 'waiting',
+            settings: {
+              ...current.settings,
+              uniqueBonusEnabled: true,
+            },
+            timerEndsAt: null,
+            roundStartedAt: null,
+            roundTimerBudgetSeconds: null,
+            roundPlayedSeconds: null,
+            baseWord: '',
+            baseWordRound: 1,
+            players,
+            earlyFinishVote: null,
+            pauseVote: null,
+            pauseState: null,
+            resumeVote: null,
+            purgeAfterAt: null,
+            finishedAt: null,
+            resultsExitedBy: null,
+            isPublic: false,
+            publicPublishedAt: null,
+          };
+        }),
+    );
+  });
+
+  it('allows non-organizer rematch via session update and peer score reset', async () => {
+    await assertSucceeds(
+      authed('p1')
+        .database()
+        .ref('game_sessions/ABCDE')
+        .update({
+          status: 'waiting',
+          settings: { ...finishedSession.settings, uniqueBonusEnabled: true },
+          timerEndsAt: null,
+          baseWord: '',
+          baseWordRound: 1,
+          purgeAfterAt: null,
+          finishedAt: null,
+          resultsExitedBy: null,
+        }),
+    );
+    await assertSucceeds(
+      authed('p1').database().ref('game_sessions/ABCDE/players/org').update({
+        score: 0,
+        wordCount: 0,
+      }),
+    );
+    await assertSucceeds(
+      authed('p1').database().ref('game_sessions/ABCDE/players/p1').update({
+        score: 0,
+        wordCount: 0,
+        online: true,
+        hasLeft: false,
+      }),
+    );
+  });
+
+  it('denies stranger from reopening finished room', async () => {
+    await assertFails(
+      authed('stranger').database().ref('game_sessions/ABCDE').update({ status: 'waiting' }),
+    );
   });
 });
 

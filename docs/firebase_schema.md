@@ -24,7 +24,7 @@ Core session document for a room.
 
 - **Roster members** — full read on `game_sessions/{gameId}` for any `status`.
 - **Non-members** — read only when `status === 'waiting'` (browse / lobby peek).
-- **Invite into `playing` room** — no pre-read; client uses blind join (`players/{self}` + session transaction), then reads as roster.
+- **Invite into `playing` room** — no pre-read; client uses blind join (`players/{self}` + session metadata patch), then reads as roster. RTDB `settings` are not writable while `status === 'playing'`, but clients derive `uniqueBonusEnabled` from `uniqueBonusMode` + **current** roster size (mid-round join to 3+ turns on auto x2 in UI and score sync).
 
 `players/{uid}.joinedVia`:
 
@@ -94,7 +94,7 @@ sequenceDiagram
 
 ## Security (RTDB rules + App Check)
 
-- Rules: [`firebase/database.rules.json`](../firebase/database.rules.json) — roster-scoped writes, score caps, status transitions, waiting-only peek for strangers.
+- Rules: [`firebase/database.rules.json`](../firebase/database.rules.json) — roster-scoped writes, score caps, status transitions, waiting-only peek for strangers. **Rematch** (`finished` → `waiting`): any roster member may commit the reset transaction (clears scores, reopens lobby); rules allow roster-wide player reset only in that transition.
 - **App Check:** native via `@react-native-firebase/app-check` ([`lib/firebase/app-check.ts`](../lib/firebase/app-check.ts)). **Production** release builds (`APP_VARIANT=production`): Play Integrity (Android) + App Attest (iOS). **Dev / Metro:** debug provider + `EXPO_PUBLIC_FIREBASE_APP_CHECK_DEBUG_TOKEN` (register in Console on Android + iOS apps). Config files at repo root: `google-services.json`, `GoogleService-Info.plist` (gitignored). Enable RTDB enforcement in Console only after TestFlight / Play closed testing validates tokens.
 - **Room codes:** new rooms default to **5 characters** (`lib/firebase/room-code.ts`); existing 4–6 codes remain valid.
 - **Rules tests:** `npm run test:rules` (Firebase emulator + Vitest).

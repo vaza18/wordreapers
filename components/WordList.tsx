@@ -12,6 +12,7 @@ import { WordOverlapAvatars } from '@/components/WordOverlapAvatars';
 import { useNotebookRowHeight } from '@/hooks/useNotebookRowHeight';
 import { useNotebookRowLineStyle } from '@/hooks/useNotebookRowLineStyle';
 import { useScrollablePanelMetrics } from '@/hooks/useScrollablePanelMetrics';
+import { useVirtualWordListProps } from '@/hooks/useVirtualWordListProps';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { normalizeUk, toDisplayUpper } from '@/lib/dictionary/normalize';
@@ -184,6 +185,7 @@ export function WordList({
   const styles = useThemedStyles(createStyles);
   const notebookRow = useNotebookRowLineStyle();
   const rowHeight = useNotebookRowHeight();
+  const virtualList = useVirtualWordListProps();
   const prefix = normalizeUk(draftPrefix);
   const listRef = useRef<FlatList<WordRow>>(null);
   const rowsRef = useRef<readonly WordRow[]>([]);
@@ -345,6 +347,11 @@ export function WordList({
           }}
           onContentSizeChange={handleContentSizeChange}
           scrollEventThrottle={panelScroll.scrollEventThrottle}
+          getItemLayout={virtualList.getItemLayout}
+          initialNumToRender={virtualList.initialNumToRender}
+          maxToRenderPerBatch={virtualList.maxToRenderPerBatch}
+          windowSize={virtualList.windowSize}
+          updateCellsBatchingPeriod={virtualList.updateCellsBatchingPeriod}
           onScrollToIndexFailed={(info) => {
             listRef.current?.scrollToOffset({
               offset: rowScrollOffset(info.index, rowHeight),

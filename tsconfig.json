@@ -21,6 +21,7 @@
     "i18n/**/*.ts",
     "lib/dictionary/dictionary-index.ts",
     "lib/dictionary/normalize.ts",
+    "lib/dictionary/round-playable-lexicon.ts",
     "lib/dictionary/validate-word.ts",
     "lib/dictionary/vesum-tags.ts",
     "lib/game/*.ts",

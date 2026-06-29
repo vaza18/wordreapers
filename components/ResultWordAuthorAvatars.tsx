@@ -16,6 +16,7 @@ import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { PlayerAvatar } from '@/components/PlayerAvatar';
 import { playerAvatarColors, playerAvatarSwatch } from '@/constants/player-avatars';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useCompactAvatarLayout } from '@/hooks/useCompactAvatarLayout';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import type { GlobalWordAuthor } from '@/lib/game/results-view';
 import { splitResultWordAuthors } from '@/lib/ui/result-word-authors';
@@ -80,6 +81,7 @@ export function ResultWordAuthorAvatars({
   showUniqueBadge = false,
 }: ResultWordAuthorAvatarsProps) {
   const styles = useThemedStyles(createStyles);
+  const avatarLayout = useCompactAvatarLayout(AVATAR_SIZE);
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [reveal, setReveal] = useState<RevealState>(null);
@@ -122,22 +124,30 @@ export function ResultWordAuthorAvatars({
   }
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, { gap: avatarLayout.gap }]}>
       {visible.map((author) => {
         const anchorRef = getAnchorRef(anchorRefs.current, author.playerId);
         const palette = playerAvatarColors(author.avatarColorIndex);
         const isVisible = reveal?.kind === 'author' && reveal.playerId === author.playerId;
+        const slotSize = avatarLayout.diameter;
 
         return (
-          <View key={author.playerId} style={styles.avatarSlot}>
-            <View ref={anchorRef} collapsable={false} style={styles.avatarAnchor}>
+          <View
+            key={author.playerId}
+            style={[styles.avatarSlot, { width: slotSize, height: slotSize }]}
+          >
+            <View
+              ref={anchorRef}
+              collapsable={false}
+              style={[styles.avatarAnchor, { width: slotSize, height: slotSize }]}
+            >
               <FeedbackPressable
                 accessibilityRole="button"
                 accessibilityLabel={author.playerName}
                 onPress={() => {
                   openAuthor(author.playerId);
                 }}
-                style={styles.avatarButton}
+                style={[styles.avatarButton, { borderRadius: slotSize / 2 }]}
               >
                 <PlayerAvatar
                   name={author.playerName}
@@ -180,7 +190,7 @@ export function ResultWordAuthorAvatars({
       })}
 
       {overflow.length > 0 ? (
-        <View style={styles.overflowSlot}>
+        <View style={[styles.overflowSlot, { height: avatarLayout.diameter }]}>
           <View
             ref={overflowAnchorRef}
             collapsable={false}
@@ -190,7 +200,14 @@ export function ResultWordAuthorAvatars({
               accessibilityRole="button"
               accessibilityLabel={t('game.resultsAuthorsOverflow', { count: overflow.length })}
               onPress={openOverflow}
-              style={styles.overflowButton}
+              style={[
+                styles.overflowButton,
+                {
+                  minWidth: avatarLayout.diameter,
+                  height: avatarLayout.diameter,
+                  borderRadius: avatarLayout.diameter / 2,
+                },
+              ]}
             >
               <Text style={styles.overflowLabel}>+{overflow.length}</Text>
             </FeedbackPressable>
@@ -239,21 +256,11 @@ function createStyles(colors: ThemeColors) {
     row: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 4,
     },
-    avatarSlot: {
-      width: AVATAR_SIZE,
-      height: AVATAR_SIZE,
-    },
-    avatarAnchor: {
-      width: AVATAR_SIZE,
-      height: AVATAR_SIZE,
-    },
-    avatarButton: {
-      borderRadius: AVATAR_SIZE / 2,
-    },
+    avatarSlot: {},
+    avatarAnchor: {},
+    avatarButton: {},
     overflowSlot: {
-      height: AVATAR_SIZE,
       justifyContent: 'center',
     },
     overflowAnchor: {
@@ -261,10 +268,7 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
     },
     overflowButton: {
-      minWidth: AVATAR_SIZE,
-      height: AVATAR_SIZE,
       paddingHorizontal: 4,
-      borderRadius: AVATAR_SIZE / 2,
       backgroundColor: colors.backgroundSecondary,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.borderTertiary,

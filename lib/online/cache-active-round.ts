@@ -60,13 +60,15 @@ export async function tryRestoreActiveRoundCache(
       return;
     }
 
-    if (firebaseWordCount > 0 && (session.players[uid]?.wordCount ?? 0) === 0) {
-      const words = await getOwnPlayerWords(gameId, uid);
-      await reconcileOwnPlayerWordsWithSession(gameId, uid, session, words);
+    const remoteWords = await getOwnPlayerWords(gameId, uid);
+    const remoteWordCount = remoteWords.size;
+
+    if (remoteWordCount > 0 && (session.players[uid]?.wordCount ?? 0) === 0) {
+      await reconcileOwnPlayerWordsWithSession(gameId, uid, session, remoteWords);
       return;
     }
 
-    if (firebaseWordCount > 0) {
+    if (remoteWordCount > 0 || firebaseWordCount > 0) {
       return;
     }
     const serverNow = getServerNow();

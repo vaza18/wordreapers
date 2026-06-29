@@ -12,6 +12,8 @@ export interface PlayableLexiconSnapshot {
 /** All dictionary words playable in one round for a given base word and settings. */
 export interface RoundPlayableLexicon {
   words: ReadonlySet<string>;
+  /** Alphabetical order (`uk`) — reuse for results lists instead of re-sorting the set. */
+  sortedWords: readonly string[];
   displays: ReadonlyMap<string, string>;
   maxCount: number;
 }
@@ -94,7 +96,8 @@ export function buildRoundPlayableLexicon(
     }
   }
 
-  return { words, displays, maxCount: words.size };
+  const sortedWords = [...words].sort((a, b) => a.localeCompare(b, 'uk'));
+  return { words, sortedWords, displays, maxCount: words.size };
 }
 
 /** Module cache key for a round lexicon. */
@@ -108,7 +111,7 @@ export function lexiconCacheKey(
 
 /** Serialize lexicon for local finished-round archives. */
 export function toPlayableLexiconSnapshot(lexicon: RoundPlayableLexicon): PlayableLexiconSnapshot {
-  const words = [...lexicon.words].sort((a, b) => a.localeCompare(b, 'uk'));
+  const words = [...lexicon.sortedWords];
   const displays = words.map((word) => lexicon.displays.get(word) ?? toDisplayUpper(word));
   return { maxCount: lexicon.maxCount, words, displays };
 }
@@ -124,6 +127,7 @@ export function fromPlayableLexiconSnapshot(
   });
   return {
     words,
+    sortedWords: snapshot.words,
     displays,
     maxCount: snapshot.maxCount,
   };

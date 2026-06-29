@@ -1,5 +1,11 @@
 import type { GlobalResultWordRow } from '@/lib/game/results-view';
-import type { RoundPlayableLexicon } from '@/lib/dictionary/round-playable-lexicon';
+import { toDisplayUpper } from '../dictionary/normalize.js';
+
+/** Lexicon fields used when merging found words with the full playable set. */
+interface ResultsWordListLexicon {
+  sortedWords: readonly string[];
+  displays: ReadonlyMap<string, string>;
+}
 
 /** One row in the results «Всі слова» list (found or missed). */
 export interface ResultsWordListRow {
@@ -15,7 +21,7 @@ export interface ResultsWordListRow {
  */
 export function buildResultsWordList(
   globalWords: readonly GlobalResultWordRow[],
-  lexicon: RoundPlayableLexicon | null,
+  lexicon: ResultsWordListLexicon | null,
   showMissing: boolean,
 ): ResultsWordListRow[] {
   if (!showMissing || !lexicon) {
@@ -31,7 +37,7 @@ export function buildResultsWordList(
   const foundByNormalized = new Map(globalWords.map((row) => [row.normalized, row]));
   const rows: ResultsWordListRow[] = [];
 
-  for (const normalized of [...lexicon.words].sort((a, b) => a.localeCompare(b, 'uk'))) {
+  for (const normalized of lexicon.sortedWords) {
     const found = foundByNormalized.get(normalized);
     if (found) {
       rows.push({
@@ -44,7 +50,7 @@ export function buildResultsWordList(
     } else {
       rows.push({
         normalized,
-        display: lexicon.displays.get(normalized) ?? normalized.toUpperCase(),
+        display: lexicon.displays.get(normalized) ?? toDisplayUpper(normalized),
         found: false,
       });
     }

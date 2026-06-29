@@ -38,7 +38,9 @@ export function playerCountForSession(session: Pick<GameSession, 'players'>): nu
 
 /** Apply roster-dependent fields (e.g. auto x2 for 3+ players) to stored settings. */
 export function resolveGameSessionSettingsForSession(
-  session: Pick<GameSession, 'settings' | 'players' | 'identityMasked' | 'isPublic'>,
+  session: Pick<GameSession, 'settings' | 'players' | 'identityMasked' | 'isPublic'> & {
+    status?: GameSession['status'];
+  },
 ): GameSessionSettings {
   const resolved = resolveGameSessionSettings(session.settings, playerCountForSession(session));
   return applyPublicContentSafety(resolved, session);

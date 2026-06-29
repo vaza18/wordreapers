@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatPlayStatsAccessible,
   formatPlayStatsCompact,
+  formatPlayStatsCompactSegments,
   formatStandingRowMeta,
 } from '@/lib/game/format-play-stats';
 
@@ -26,6 +27,27 @@ describe('formatPlayStatsCompact', () => {
         score: 5,
       }),
     ).toBe('1м · 3сл · 5оч');
+  });
+});
+
+describe('formatPlayStatsCompactSegments', () => {
+  it('marks max word count as de-emphasized', () => {
+    expect(
+      formatPlayStatsCompactSegments({
+        rank: 1,
+        wordCount: 102,
+        maxWordCount: 1460,
+        score: 160,
+      }),
+    ).toEqual([
+      { text: '1м', variant: 'normal' },
+      { text: ' · ', variant: 'normal' },
+      { text: '102', variant: 'normal' },
+      { text: '/1460', variant: 'deemphasized' },
+      { text: 'сл', variant: 'normal' },
+      { text: ' · ', variant: 'normal' },
+      { text: '160оч', variant: 'normal' },
+    ]);
   });
 });
 

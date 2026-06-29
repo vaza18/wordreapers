@@ -1,7 +1,7 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
@@ -31,7 +31,7 @@ import { toDisplayUpper } from '@/lib/dictionary/normalize';
 import { playWordAcceptedFeedback } from '@/lib/feedback/game-feedback';
 import { ensureFirebaseReady } from '@/lib/firebase/ensure-firebase-ready';
 import { joinErrorMessage } from '@/lib/firebase/join-error-message';
-import { buildLetterKeys, computeLetterKeySize } from '@/lib/game/letter-keyboard';
+import { buildLetterKeys } from '@/lib/game/letter-keyboard';
 import { acceptWord } from '@/lib/game/play-word';
 import {
   playWordErrorMessage,
@@ -71,8 +71,6 @@ export default function OrganizerSoloPlayScreen() {
   const { t } = useTranslation();
   const { gameId: rawGameId } = useLocalSearchParams<{ gameId: string }>();
   const gameId = rawGameId ?? '';
-  const { width: screenWidth } = useWindowDimensions();
-  const composeKeySize = computeLetterKeySize(screenWidth);
   const wordAcceptedFeedback = useSettingsStore((state) => state.wordAcceptedFeedback);
   const timerAlertMode = useSettingsStore((state) => state.timerAlertMode);
   const myName = useProfileStore((state) => state.name) || t('profile.namePlaceholder');
@@ -469,7 +467,6 @@ export default function OrganizerSoloPlayScreen() {
               draft={draft}
               draftKeyIndices={draftKeyIndices}
               letterKeys={letterKeys}
-              composeKeySize={composeKeySize}
               onPressKey={pressKey}
               onClearDraft={clearDraft}
               onBackspaceDraft={backspaceDraft}

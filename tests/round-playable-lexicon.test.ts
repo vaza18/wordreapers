@@ -50,10 +50,14 @@ describe('buildRoundPlayableLexicon', () => {
       { main: MAIN },
       { allowProperNouns: false, allowSlang: false },
     );
+    expect([...lexicon.sortedWords]).toEqual(
+      [...lexicon.words].sort((a, b) => a.localeCompare(b, 'uk')),
+    );
     const restored = fromPlayableLexiconSnapshot(toPlayableLexiconSnapshot(lexicon));
     expect(restored.maxCount).toBe(lexicon.maxCount);
     expect(restored.words.has('порт')).toBe(true);
     expect(restored.displays.get('порт')).toBe('ПОРТ');
+    expect(restored.sortedWords).toEqual(lexicon.sortedWords);
   });
 });
 
