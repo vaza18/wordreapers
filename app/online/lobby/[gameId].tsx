@@ -16,7 +16,6 @@ import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { formatRoomCodeDisplay } from '@/lib/firebase/format-room-code';
 import { loadBundledDictionary, loadBundledSupplements } from '@/services/dictionary-service';
 import {
-  markPlayerOnline,
   readGameSessionSnapshot,
   rejoinExistingPlayer,
   startGameSession,
@@ -253,7 +252,6 @@ export default function LobbyScreen() {
       await restartRematchOnlineRound(gameId, myUid, rematchArchive.baseWordRound);
       const { name, gender, avatarColorIndex } = useProfileStore.getState();
       await rejoinExistingPlayer(gameId, myUid, { name, gender, avatarColorIndex });
-      await markPlayerOnline(gameId, myUid);
     } catch (err) {
       const message = err instanceof Error ? err.message : '';
       if (message === 'NO_FINISHED_ARCHIVE') {
@@ -275,7 +273,6 @@ export default function LobbyScreen() {
     try {
       await Promise.all([loadBundledDictionary(), loadBundledSupplements()]);
       await startGameSession(gameId, myUid);
-      await markPlayerOnline(gameId, myUid);
       const snapshot = await readGameSessionSnapshot(gameId);
       if (claimPlayRouteNavigation(gameId, snapshot)) {
         seedPlaySessionBootstrap(snapshot);

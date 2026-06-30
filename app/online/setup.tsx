@@ -92,6 +92,8 @@ export default function OnlineSetupScreen() {
   const [playerCount, setPlayerCount] = useState(1);
   const [lobbySession, setLobbySession] = useState<GameSessionSnapshot | null>(null);
   const setupHydratedRef = useRef(false);
+  const dictionaryRef = useRef(dictionary);
+  dictionaryRef.current = dictionary;
   const { hydrated: trainingHydrated, hasCompletedTrainingRound } = useTrainingMilestone();
   const multiplayerLocked = trainingHydrated && !hasCompletedTrainingRound;
 
@@ -137,7 +139,8 @@ export default function OnlineSetupScreen() {
         setupHydratedRef.current = true;
         if (session.baseWord) {
           setBaseWordInput(
-            dictionary?.lookupDisplayUpper(session.baseWord) ?? session.baseWord.toUpperCase(),
+            dictionaryRef.current?.lookupDisplayUpper(session.baseWord) ??
+              session.baseWord.toUpperCase(),
           );
         }
         setGameSetupDuration(Math.round(resolved.durationSeconds / 60));
@@ -153,7 +156,6 @@ export default function OnlineSetupScreen() {
       }
     });
   }, [
-    dictionary,
     fromLobby,
     gameId,
     setGameSetupAllowProperNouns,

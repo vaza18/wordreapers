@@ -39,4 +39,3 @@ export {
   notebookListScrollHeight,
 } from './NotebookLineFiller';
 export { createNotebookRowLineStyle } from '@/lib/notebook/row-line-style';
-export { notebookPaperHeight } from './notebookPaperHeight';

@@ -30,12 +30,12 @@ import { ensureAnonymousAuth } from './auth.js';
 import { isFirebasePermissionDenied } from './rtdb-errors.js';
 import { getFirebaseDatabase } from './init.js';
 import {
-  gameSessionPath,
   gameSessionPlayerPath,
   gameSessionPlayersPath,
   playerWordLeafPath,
   playerWordsPath,
 } from './paths.js';
+import { sessionRef } from './session-ref.js';
 import { normalizeRoomCode } from './room-code.js';
 import { globalWordCount } from './session-word-maps.js';
 import type { GameSession, SessionWordMaps } from './types.js';
@@ -61,10 +61,6 @@ function playerWordsRootRef(gameId: string, uid: string): DatabaseReference {
 function roomPlayerWordsRef(gameId: string): DatabaseReference {
   const roomId = normalizeRoomCode(gameId);
   return ref(getFirebaseDatabase(), `player_words/${roomId}`);
-}
-
-function sessionRef(gameId: string): DatabaseReference {
-  return ref(getFirebaseDatabase(), gameSessionPath(gameId));
 }
 
 function sessionPlayersRef(gameId: string): DatabaseReference {

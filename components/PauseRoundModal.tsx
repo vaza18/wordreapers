@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '@/components/PrimaryButton';
@@ -8,6 +8,7 @@ import { SettingsIconButton } from '@/components/SettingsIconButton';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useServerNowWhen } from '@/hooks/useServerNow';
+import { ConditionalModal } from '@/lib/ui/conditional-modal';
 import { modalCardChrome, modalOverlayBackground } from '@/lib/ui/modal-chrome';
 import { tGendered, type PlayerGender } from '@/lib/game/grammar';
 import type { GameSession, SessionVote } from '@/lib/firebase/types';
@@ -344,11 +345,11 @@ export function PauseRoundModal({
   const tickNow = useServerNowWhen(visible, 250);
   const serverNow = serverNowProp ?? tickNow;
   return (
-    <Modal transparent visible={visible} animationType="fade">
+    <ConditionalModal transparent visible={visible} animationType="fade">
       <SafeAreaProvider>
         <PauseBody {...rest} serverNow={serverNow} />
       </SafeAreaProvider>
-    </Modal>
+    </ConditionalModal>
   );
 }
 

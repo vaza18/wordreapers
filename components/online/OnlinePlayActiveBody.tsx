@@ -25,6 +25,10 @@ export type OnlinePlayActiveBodyProps = {
   backgroundSyncing: boolean;
   showScoreBadges: boolean;
   showOverlapPeers: boolean;
+  /** Hide play-rules row when label is empty (solo setup). */
+  hideEmptyPlayRules?: boolean;
+  /** Shown under the word list when solo publish fails. */
+  publishError?: string | null;
   onPressKey: (index: number) => void;
   onClearDraft: () => void;
   onBackspaceDraft: () => void;
@@ -48,6 +52,8 @@ export const OnlinePlayActiveBody = memo(function OnlinePlayActiveBody({
   backgroundSyncing,
   showScoreBadges,
   showOverlapPeers,
+  hideEmptyPlayRules = false,
+  publishError = null,
   onPressKey,
   onClearDraft,
   onBackspaceDraft,
@@ -60,23 +66,28 @@ export const OnlinePlayActiveBody = memo(function OnlinePlayActiveBody({
         <Text style={styles.playerName} numberOfLines={1}>
           {myName}
         </Text>
-        <Text style={styles.playRules} numberOfLines={2}>
-          {playRulesLabel}
-        </Text>
+        {!hideEmptyPlayRules || playRulesLabel ? (
+          <Text style={styles.playRules} numberOfLines={2}>
+            {playRulesLabel}
+          </Text>
+        ) : null}
       </View>
 
-      <OnlinePlayWordListSection
-        entries={entries}
-        displays={displays}
-        draftPrefix={draft}
-        scrollToNormalized={scrollToNormalized}
-        scrollToRequestId={scrollToRequestId}
-        feedback={feedback}
-        feedbackVariant={feedbackVariant}
-        backgroundSyncing={backgroundSyncing}
-        showScoreBadges={showScoreBadges}
-        showOverlapPeers={showOverlapPeers}
-      />
+      <View style={styles.wordListOuter}>
+        <OnlinePlayWordListSection
+          entries={entries}
+          displays={displays}
+          draftPrefix={draft}
+          scrollToNormalized={scrollToNormalized}
+          scrollToRequestId={scrollToRequestId}
+          feedback={feedback}
+          feedbackVariant={feedbackVariant}
+          backgroundSyncing={backgroundSyncing}
+          showScoreBadges={showScoreBadges}
+          showOverlapPeers={showOverlapPeers}
+        />
+        {publishError ? <Text style={styles.publishError}>{publishError}</Text> : null}
+      </View>
 
       <OnlinePlayComposePanel
         draft={draft}
@@ -109,6 +120,16 @@ function createStyles(colors: ThemeColors) {
       fontSize: 12,
       color: colors.textSecondary,
       textAlign: 'right',
+    },
+    wordListOuter: {
+      flex: 1,
+      minHeight: 0,
+    },
+    publishError: {
+      fontSize: 13,
+      color: '#E24B4A',
+      marginTop: spacing.xs,
+      textAlign: 'center',
     },
   });
 }

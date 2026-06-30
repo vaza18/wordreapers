@@ -3,7 +3,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { loadDictionaryUk } from '../../lib/dictionary/index.js';
-import { ukDictionaryPaths } from '../../lib/dictionary/paths.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const OUTPUT = path.join(ROOT, 'docs', 'dictionary_review_sample.md');
@@ -31,10 +30,7 @@ function pickRandom<T>(items: T[], count: number, rng: () => number): T[] {
 
 async function main(): Promise<void> {
   const dict = loadDictionaryUk(ROOT);
-  const { readFileSync } = await import('node:fs');
-  const words = readFileSync(ukDictionaryPaths(ROOT).dictionary, 'utf8')
-    .split('\n')
-    .filter(Boolean);
+  const words = [...dict.readonlyWords()];
 
   const rng = mulberry32(42);
   const sample = pickRandom(words, Math.min(SAMPLE_SIZE, words.length), rng).sort((a, b) =>

@@ -15,6 +15,7 @@ import { spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import i18n, { initI18n } from '@/i18n';
 import { LOCAL_BOOTSTRAP_TIMEOUT_MS, withBootstrapTimeout } from '@/lib/app/bootstrap-timeout';
+import { scheduleIdleWork } from '@/lib/app/schedule-idle-work';
 import { warmUpFeedbackModules } from '@/lib/feedback/game-feedback';
 import { enableAccessibleTypography } from '@/lib/typography/enable-accessible-typography';
 import { subscribeImmersiveStatusBar } from '@/lib/system-ui';
@@ -23,6 +24,7 @@ enableAccessibleTypography();
 import { useRoundFinishedNotificationRouting } from '@/hooks/useRoundFinishedNotificationRouting';
 import { useOnlineSyncCoordinator } from '@/hooks/useOnlineSyncCoordinator';
 import { purgeStaleActiveRoundCaches } from '@/lib/online/cache-active-round';
+import { ensureDictionaryDiskCache } from '@/services/dictionary-service';
 import { usePlayerStatsStore } from '@/store/player-stats-store';
 import { useProfileStore } from '@/store/profile-store';
 import { useSettingsStore } from '@/store/settings-store';
@@ -183,6 +185,13 @@ export default function RootLayout() {
         LOCAL_BOOTSTRAP_TIMEOUT_MS,
         'purgeCaches',
       );
+      scheduleIdleWork(() => {
+        void ensureDictionaryDiskCache().catch((error) => {
+          if (__DEV__) {
+            console.warn('Dictionary disk cache warmup failed:', error);
+          }
+        });
+      });
     })();
   }, [
     hydrateAppearancePreference,

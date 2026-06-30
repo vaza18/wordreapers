@@ -17,14 +17,14 @@ npm run lint              # ESLint (lib/ exports require JSDoc)
 
 Each locale is one folder (BCP 47 tag). Example for Ukrainian:
 
-| Path                                | Purpose                                                                                                                                                     |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `uk-uk/dictionary.txt`              | Sorted normalized words (no apostrophes)                                                                                                                    |
-| `uk-uk/base_words.txt`              | Autocomplete / ↺: one normalized word per line (main dictionary + geographical proper nouns `:geo` ≥8). Display via `displayForm(word, normalization.json)` |
-| `uk-uk/meta.json`                   | VESUM version, counts, build timestamp                                                                                                                      |
-| `uk-uk/normalization.json`          | `normalized → canonical` **only where forms differ** (≈1700 apostrophe entries)                                                                             |
-| `uk-uk/supplement_proper_nouns.txt` | Optional lookup when `allowProperNouns` is enabled (~58k)                                                                                                   |
-| `uk-uk/supplement_slang.txt`        | Optional lookup when `allowSlang` is enabled (~1.8k)                                                                                                        |
+| Path                                   | Purpose                                                                                      |
+| -------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `uk-uk/dictionary.txt.gz`              | Sorted normalized words (gzip; plain `.txt` not kept in output)                              |
+| `uk-uk/base_words.txt.gz`              | Autocomplete / ↺: normalized strings (main dictionary + geographical proper nouns `:geo` ≥8) |
+| `uk-uk/meta.json`                      | VESUM version, `dictBuildId`, counts, build timestamp                                        |
+| `uk-uk/normalization.json`             | `normalized → canonical` **only where forms differ** (≈1700 apostrophe entries)              |
+| `uk-uk/supplement_proper_nouns.txt.gz` | Optional lookup when `allowProperNouns` is enabled                                           |
+| `uk-uk/supplement_slang.txt.gz`        | Optional lookup when `allowSlang` is enabled                                                 |
 
 **Runtime lookup (Tier 1):** main dictionary always; supplements only when the matching round option is on (both default **off**).
 

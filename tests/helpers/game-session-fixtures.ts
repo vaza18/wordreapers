@@ -1,11 +1,27 @@
 import type { GameSession } from '../../lib/firebase/types.js';
 
-const DEFAULT_SETTINGS: GameSession['settings'] = {
+/** Default uk session settings for most unit tests. */
+export const DEFAULT_SESSION_SETTINGS: GameSession['settings'] = {
   durationSeconds: 300,
   uniqueBonusEnabled: false,
   language: 'uk',
   allowProperNouns: false,
   allowSlang: false,
+};
+
+/** Public lobby / uk-uk locale settings (10 min, proper nouns and slang on). */
+export const PUBLIC_LOBBY_SESSION_SETTINGS: GameSession['settings'] = {
+  durationSeconds: 600,
+  uniqueBonusEnabled: false,
+  language: 'uk-uk',
+  allowProperNouns: true,
+  allowSlang: true,
+};
+
+/** Organizer plus one guest — common post-join / lobby roster. */
+export const ORG_AND_GUEST_PLAYERS: GameSession['players'] = {
+  org: { name: 'Org', wordCount: 0, score: 0 },
+  a: { name: 'A', wordCount: 0, score: 0 },
 };
 
 /** Minimal playing session for live-round membership tests. */
@@ -16,13 +32,42 @@ export function playingSession(
   return {
     baseWord: 'тест',
     status: 'playing',
-    settings: DEFAULT_SETTINGS,
+    settings: DEFAULT_SESSION_SETTINGS,
     timerEndsAt: Date.now() + 60_000,
     organizerId: 'org',
-    baseWordRound: 2,
-    liveRoundPlayerUids: ['org', 'p2'],
     players,
     ...extra,
+  };
+}
+
+/** Waiting lobby session (public-lobby defaults; override freely). */
+export function waitingSession(overrides: Partial<GameSession> = {}): GameSession {
+  return {
+    baseWord: 'портрет',
+    status: 'waiting',
+    settings: PUBLIC_LOBBY_SESSION_SETTINGS,
+    timerEndsAt: Date.now() + 60_000,
+    organizerId: 'org',
+    players: {
+      org: { name: 'Org', wordCount: 0, score: 0, avatarColorIndex: 0 },
+    },
+    ...overrides,
+  };
+}
+
+/** Waiting session with an explicit player roster (post-join / route tests). */
+export function sessionWithPlayers(
+  players: GameSession['players'] = ORG_AND_GUEST_PLAYERS,
+  overrides: Partial<GameSession> = {},
+): GameSession {
+  return {
+    baseWord: 'тестове',
+    status: 'waiting',
+    settings: DEFAULT_SESSION_SETTINGS,
+    timerEndsAt: null,
+    organizerId: 'org',
+    players,
+    ...overrides,
   };
 }
 
@@ -31,7 +76,7 @@ export function gameSession(overrides: Partial<GameSession> = {}): GameSession {
   return {
     baseWord: 'тест',
     status: 'playing',
-    settings: DEFAULT_SETTINGS,
+    settings: DEFAULT_SESSION_SETTINGS,
     timerEndsAt: Date.now() + 60_000,
     organizerId: 'org',
     players: {
@@ -48,7 +93,7 @@ export function finishedSession(resultsExitedBy?: Record<string, boolean>): Game
     baseWord: 'тест',
     status: 'finished',
     baseWordRound: 0,
-    settings: DEFAULT_SETTINGS,
+    settings: DEFAULT_SESSION_SETTINGS,
     timerEndsAt: null,
     organizerId: 'org',
     players: {
@@ -69,7 +114,7 @@ export function sessionWithRound(
     baseWord: 'тест',
     status,
     baseWordRound,
-    settings: DEFAULT_SETTINGS,
+    settings: DEFAULT_SESSION_SETTINGS,
     timerEndsAt: null,
     organizerId: 'org',
     players: {

@@ -6,7 +6,6 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { RoundResultsView } from '@/components/RoundResultsView';
 import { spacing, type ThemeColors } from '@/constants/theme';
-import { useArchiveRoundLexicon } from '@/hooks/useArchiveRoundLexicon';
 import { useLiveRosterPlayerWords } from '@/hooks/useLiveRosterPlayerWords';
 import { useOnlineViewerUid } from '@/hooks/useOnlineViewerUid';
 import { useResultsRoundLexicon } from '@/hooks/useResultsRoundLexicon';
@@ -131,10 +130,12 @@ export default function OnlineLeftRoundScreen() {
     return liveWords;
   }, [leftAtBaseWordRound, leftRoundPlayingSnapshot, liveWords, pinnedFrozenRound, session]);
 
-  const archiveLexicon = useArchiveRoundLexicon(gameId, displaySession?.baseWordRound);
   const { lexicon: roundLexicon, loading: lexiconLoading } = useResultsRoundLexicon(
     displaySession,
-    archiveLexicon,
+    {
+      gameId,
+      baseWordRound: displaySession?.baseWordRound,
+    },
   );
 
   useEffect(() => {

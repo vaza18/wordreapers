@@ -2,13 +2,10 @@ import { get, ref, set } from 'firebase/database';
 
 import { getFirebaseDatabase } from './init.js';
 import { gameSessionPath } from './paths.js';
+import { sessionRef } from './session-ref.js';
 import { isFirebasePermissionDenied } from './rtdb-errors.js';
 import { normalizeRoomCode } from './room-code.js';
 import type { GameSession } from './types.js';
-
-function sessionRef(gameId: string) {
-  return ref(getFirebaseDatabase(), gameSessionPath(normalizeRoomCode(gameId)));
-}
 
 function resultsExitedRef(gameId: string, uid: string) {
   const normalized = normalizeRoomCode(gameId);

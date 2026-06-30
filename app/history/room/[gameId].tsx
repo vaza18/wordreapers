@@ -10,7 +10,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { spacing, type ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
-import { ensureAnonymousAuth } from '@/lib/firebase/auth';
+import { useOnlineViewerUid } from '@/hooks/useOnlineViewerUid';
 import { normalizeRoomCode } from '@/lib/firebase/room-code';
 import { stackHeaderWithBackAndSettings } from '@/lib/navigation/stack-header-options';
 import { archiveRouteKey, listFinishedRoundArchives } from '@/lib/online/online-session-archive';
@@ -18,7 +18,6 @@ import {
   computeRoomHistoryAggregate,
   filterMultiplayerArchivesForGame,
 } from '@/lib/online/room-history-aggregate';
-import { useFirebaseStore } from '@/store/firebase-store';
 
 /**
  * Round list for one room (multi-round rematch history).
@@ -29,9 +28,7 @@ export default function RoomHistoryScreen() {
   const { t } = useTranslation();
   const { gameId: rawGameId } = useLocalSearchParams<{ gameId: string }>();
   const gameId = normalizeRoomCode(rawGameId ?? '');
-  const storeUid = useFirebaseStore((state) => state.uid);
-  const [resolvedUid, setResolvedUid] = useState(storeUid ?? '');
-  const myUid = resolvedUid || storeUid || '';
+  const myUid = useOnlineViewerUid();
   const [loading, setLoading] = useState(true);
   const [roundArchives, setRoundArchives] = useState<ReturnType<
     typeof filterMultiplayerArchivesForGame
@@ -52,12 +49,6 @@ export default function RoomHistoryScreen() {
   useEffect(() => {
     void loadArchives();
   }, [loadArchives]);
-
-  useEffect(() => {
-    void ensureAnonymousAuth().then((user) => {
-      setResolvedUid(user.uid);
-    });
-  }, []);
 
   const roomAggregate = useMemo(() => {
     if (!roundArchives || roundArchives.length === 0) {

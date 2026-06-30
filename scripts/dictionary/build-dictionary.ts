@@ -1,12 +1,20 @@
 import { createReadStream } from 'node:fs';
+import { readdirSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { letterCount, normalizeUk } from '../../lib/dictionary/normalize.js';
+import {
+  assertNoPlainTxtWordLists,
+  dictBuildIdFromGz,
+  removeStaleTxtArtifacts,
+  wordListBody,
+  writeGzText,
+} from '../../lib/dictionary/gzip-artifacts.js';
 import { ensureDictionaryDirs, UK_LOCALE } from '../../lib/dictionary/index.js';
-import { ukDictionaryPaths } from '../../lib/dictionary/paths.js';
+import { ukDictionaryPaths } from '../../lib/dictionary/paths-node.js';
 import {
   isBaseWordGeographicalEntry,
   isMainDictionaryEntry,
@@ -178,8 +186,8 @@ function buildBaseWords(
   return [...entries].sort((a, b) => a.localeCompare(b, 'uk'));
 }
 
-async function writeWordList(filePath: string, words: string[]): Promise<void> {
-  await writeFile(filePath, words.length ? `${words.join('\n')}\n` : '', 'utf8');
+async function writeGzWordList(filePath: string, words: string[]): Promise<Buffer> {
+  return writeGzText(filePath, wordListBody(words));
 }
 
 async function main(): Promise<void> {
@@ -209,11 +217,12 @@ async function main(): Promise<void> {
       !main.has(normalized),
   ).length;
 
-  await writeWordList(paths.dictionary, mainWords);
-  await writeWordList(paths.supplementProperNouns, sortedKeys(supplementProperNouns));
-  await writeWordList(paths.supplementSlang, sortedKeys(supplementSlang));
+  const mainGz = await writeGzWordList(paths.dictionary, mainWords);
+  await writeGzWordList(paths.supplementProperNouns, sortedKeys(supplementProperNouns));
+  await writeGzWordList(paths.supplementSlang, sortedKeys(supplementSlang));
   await writeFile(paths.normalization, `${JSON.stringify(normalization, null, 2)}\n`, 'utf8');
-  await writeWordList(paths.baseWords, baseWords);
+  await writeGzWordList(paths.baseWords, baseWords);
+  removeStaleTxtArtifacts(paths);
 
   let manifest: Record<string, unknown> = {};
   try {
@@ -226,6 +235,7 @@ async function main(): Promise<void> {
     ...manifest,
     locale: UK_LOCALE,
     builtAt: new Date().toISOString(),
+    dictBuildId: dictBuildIdFromGz(mainGz),
     wordCount: mainWords.length,
     supplementProperNounCount: supplementProperNouns.size,
     supplementSlangCount: supplementSlang.size,
@@ -238,6 +248,8 @@ async function main(): Promise<void> {
     sourceFile: VESUM_TXT,
   };
   await writeFile(paths.meta, `${JSON.stringify(meta, null, 2)}\n`, 'utf8');
+
+  assertNoPlainTxtWordLists(paths.dir, readdirSync(paths.dir));
 
   console.log(`Lines read: ${stats.linesRead.toLocaleString()}`);
   console.log(`Accepted entries: ${stats.entriesAccepted.toLocaleString()}`);

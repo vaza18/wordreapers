@@ -1,66 +1,12 @@
-import { Asset } from 'expo-asset';
-import { File } from 'expo-file-system';
-
 import {
   createDictionaryIndex,
   DictionaryIndex,
   parseBaseWords,
   type BaseWord,
 } from '@/lib/dictionary/dictionary-index';
+import { DICTIONARY_CACHE_PLAIN_FILES } from '@/lib/dictionary/paths';
+import { readCachedDictionaryText } from '@/lib/dictionary/dictionary-disk-cache';
 import normalizationMap from '../assets/generated/dictionaries/uk-uk/normalization.json';
-
-/** Metro-bundled text assets under `assets/generated/dictionaries/uk-uk/` (`.txt` only — not `.json`). */
-const TEXT_ASSET_MODULES = {
-  dictionary: require('../assets/generated/dictionaries/uk-uk/dictionary.txt'),
-  baseWords: require('../assets/generated/dictionaries/uk-uk/base_words.txt'),
-  supplementProperNouns: require('../assets/generated/dictionaries/uk-uk/supplement_proper_nouns.txt'),
-  supplementSlang: require('../assets/generated/dictionaries/uk-uk/supplement_slang.txt'),
-} as const;
-
-/**
- * Normalize Metro `require()` result for expo-asset (number or `{ uri }`, not raw objects).
- */
-function coerceAssetModule(
-  moduleRef: unknown,
-): number | { uri: string; width: number; height: number } {
-  if (typeof moduleRef === 'number') {
-    return moduleRef;
-  }
-  if (moduleRef && typeof moduleRef === 'object') {
-    if ('default' in moduleRef) {
-      return coerceAssetModule((moduleRef as { default: unknown }).default);
-    }
-    if ('uri' in moduleRef && typeof (moduleRef as { uri: unknown }).uri === 'string') {
-      const candidate = moduleRef as { uri: string; width?: number; height?: number };
-      return {
-        uri: candidate.uri,
-        width: candidate.width ?? 0,
-        height: candidate.height ?? 0,
-      };
-    }
-  }
-  throw new Error(`Invalid asset module: ${String(moduleRef)}`);
-}
-
-async function readAssetText(moduleRef: unknown): Promise<string> {
-  const asset = Asset.fromModule(coerceAssetModule(moduleRef));
-  await asset.downloadAsync();
-  const uri = asset.localUri ?? asset.uri;
-  if (!uri) {
-    throw new Error('Asset URI missing after download');
-  }
-
-  try {
-    const response = await fetch(uri);
-    if (response.ok) {
-      return await response.text();
-    }
-  } catch {
-    // Fall back to expo-file-system on Android
-  }
-
-  return new File(uri).text();
-}
 
 let cachedMain: DictionaryIndex | null = null;
 let cachedBaseWords: BaseWord[] | null = null;
@@ -68,25 +14,25 @@ let cachedSupplementProper: string[] | null = null;
 let cachedSupplementSlang: string[] | null = null;
 
 /**
- * Load the main dictionary index from bundled assets.
+ * Load the main dictionary index from the on-device cache (populated from bundled `.gz` once per version).
  */
 export async function loadBundledDictionary(): Promise<DictionaryIndex> {
   if (cachedMain) {
     return cachedMain;
   }
-  const dictionaryText = await readAssetText(TEXT_ASSET_MODULES.dictionary);
+  const dictionaryText = await readCachedDictionaryText(DICTIONARY_CACHE_PLAIN_FILES.dictionary);
   cachedMain = createDictionaryIndex(dictionaryText, normalizationMap);
   return cachedMain;
 }
 
 /**
- * Load base words for autocomplete / shuffle from bundled assets.
+ * Load base words for autocomplete / shuffle from the on-device cache.
  */
 export async function loadBundledBaseWords(): Promise<BaseWord[]> {
   if (cachedBaseWords) {
     return cachedBaseWords;
   }
-  const text = await readAssetText(TEXT_ASSET_MODULES.baseWords);
+  const text = await readCachedDictionaryText(DICTIONARY_CACHE_PLAIN_FILES.baseWords);
   cachedBaseWords = parseBaseWords(text);
   return cachedBaseWords;
 }
@@ -102,13 +48,18 @@ export async function loadBundledSupplements(): Promise<{
     return { properNouns: cachedSupplementProper, slang: cachedSupplementSlang };
   }
   const [properText, slangText] = await Promise.all([
-    readAssetText(TEXT_ASSET_MODULES.supplementProperNouns),
-    readAssetText(TEXT_ASSET_MODULES.supplementSlang),
+    readCachedDictionaryText(DICTIONARY_CACHE_PLAIN_FILES.supplementProperNouns),
+    readCachedDictionaryText(DICTIONARY_CACHE_PLAIN_FILES.supplementSlang),
   ]);
   cachedSupplementProper = parseBaseWords(properText);
   cachedSupplementSlang = parseBaseWords(slangText);
   return { properNouns: cachedSupplementProper, slang: cachedSupplementSlang };
 }
+
+/**
+ * Warm dictionary disk cache during app bootstrap (non-blocking; deferred via scheduleIdleWork).
+ */
+export { ensureDictionaryDiskCache } from '@/lib/dictionary/dictionary-disk-cache';
 
 /**
  * Drop in-memory dictionary lists (e.g. after round lexicon is built on play screen).

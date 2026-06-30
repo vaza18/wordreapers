@@ -1,18 +1,13 @@
-import { get, ref } from 'firebase/database';
+import { get } from 'firebase/database';
 
 import { rematchFinishedSessionToWaiting } from '../firebase/game-session-service.js';
-import { getFirebaseDatabase } from '../firebase/init.js';
-import { gameSessionPath } from '../firebase/paths.js';
+import { sessionRef } from '../firebase/session-ref.js';
 import { isFirebasePermissionDenied } from '../firebase/rtdb-errors.js';
 import { normalizeRoomCode } from '../firebase/room-code.js';
 
 import { bootstrapRematchWaitingFromArchive } from './bootstrap-rematch-waiting-from-archive.js';
 import { planRematchAction } from './plan-rematch-action.js';
 import { resolveRematchRtdbPresence } from './orphan-game-session.js';
-
-function sessionRef(gameId: string) {
-  return ref(getFirebaseDatabase(), gameSessionPath(normalizeRoomCode(gameId)));
-}
 
 /**
  * Start rematch. Any rostered participant can reopen the room from local archive or a live `finished` session.

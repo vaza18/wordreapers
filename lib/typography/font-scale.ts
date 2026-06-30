@@ -7,9 +7,6 @@ export const MAX_PLAYABLE_FONT_SCALE_PHONE = 1.4;
 /** Max OS font scale on tablets. */
 export const MAX_PLAYABLE_FONT_SCALE_TABLET = 2.5;
 
-/** @deprecated Use {@link getMaxPlayableFontScale} or device-specific constants. */
-export const MAX_PLAYABLE_FONT_SCALE = MAX_PLAYABLE_FONT_SCALE_PHONE;
-
 /** True when layout width is at or above the tablet breakpoint (any OS). */
 export function isTabletLayoutWidth(screenWidth: number): boolean {
   return screenWidth >= TABLET_LAYOUT_MIN_WIDTH;

@@ -4,8 +4,6 @@ import { normalizeUk, toDisplayUpper } from '../dictionary/normalize.js';
 
 /** Max letter keys per row on phones (tablets use fixed key size + natural wrap). */
 export const LETTER_KEYBOARD_PHONE_COLUMNS = 6;
-/** @deprecated Use {@link LETTER_KEYBOARD_PHONE_COLUMNS}. */
-export const LETTER_KEYBOARD_COLUMNS = LETTER_KEYBOARD_PHONE_COLUMNS;
 /** Horizontal padding on play screen (matches play container). */
 export const LETTER_KEYBOARD_HORIZONTAL_PADDING = spacing.md * 2;
 /** Use laptop-like key sizing from this width (points). */

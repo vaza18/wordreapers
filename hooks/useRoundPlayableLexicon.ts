@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { InteractionManager } from 'react-native';
+
+import { scheduleIdleWork } from '@/lib/app/schedule-idle-work';
 
 import {
   buildRoundPlayableLexiconFromDictionary,
@@ -88,7 +89,7 @@ export function useRoundPlayableLexicon({
     let cancelled = false;
     setLoading(true);
 
-    const task = InteractionManager.runAfterInteractions(() => {
+    const cancelIdleWork = scheduleIdleWork(() => {
       void (async () => {
         try {
           const [dictionary, supplements] = await Promise.all([
@@ -123,7 +124,7 @@ export function useRoundPlayableLexicon({
 
     return () => {
       cancelled = true;
-      task.cancel();
+      cancelIdleWork();
     };
   }, [
     allowProperNouns,

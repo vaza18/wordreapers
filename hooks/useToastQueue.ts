@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export const PLAY_TOAST_VISIBLE_MS = 3800;
 export const PLAY_TOAST_FADE_OUT_MS = 400;
@@ -42,39 +42,42 @@ export function useToastQueue(): {
     timersRef.current.delete(id);
   };
 
-  const removeToast = (id: string) => {
+  const removeToast = useCallback((id: string) => {
     clearTimers(id);
     setToasts((current) => current.filter((toast) => toast.id !== id));
-  };
+  }, []);
 
-  const enqueueToasts = (items: readonly PlayToastEnqueueInput[]) => {
-    if (items.length === 0) {
-      return;
-    }
+  const enqueueToasts = useCallback(
+    (items: readonly PlayToastEnqueueInput[]) => {
+      if (items.length === 0) {
+        return;
+      }
 
-    const newItems: PlayToastItem[] = items.map(({ message, variant = 'default' }) => ({
-      id: String(++nextIdRef.current),
-      message,
-      variant,
-      fading: false,
-    }));
+      const newItems: PlayToastItem[] = items.map(({ message, variant = 'default' }) => ({
+        id: String(++nextIdRef.current),
+        message,
+        variant,
+        fading: false,
+      }));
 
-    setToasts((current) => [...current, ...newItems]);
+      setToasts((current) => [...current, ...newItems]);
 
-    for (const item of newItems) {
-      const fadeTimer = setTimeout(() => {
-        setToasts((current) =>
-          current.map((toast) => (toast.id === item.id ? { ...toast, fading: true } : toast)),
-        );
-      }, PLAY_TOAST_FADE_START_MS);
+      for (const item of newItems) {
+        const fadeTimer = setTimeout(() => {
+          setToasts((current) =>
+            current.map((toast) => (toast.id === item.id ? { ...toast, fading: true } : toast)),
+          );
+        }, PLAY_TOAST_FADE_START_MS);
 
-      const removeTimer = setTimeout(() => {
-        removeToast(item.id);
-      }, PLAY_TOAST_VISIBLE_MS);
+        const removeTimer = setTimeout(() => {
+          removeToast(item.id);
+        }, PLAY_TOAST_VISIBLE_MS);
 
-      timersRef.current.set(item.id, [fadeTimer, removeTimer]);
-    }
-  };
+        timersRef.current.set(item.id, [fadeTimer, removeTimer]);
+      }
+    },
+    [removeToast],
+  );
 
   useEffect(
     () => () => {

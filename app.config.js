@@ -19,12 +19,14 @@ module.exports = ({ config }) => {
   }
 
   const plugins = [
-    ...(config.plugins ?? []).map((plugin) => {
-      if (!isProductionBuild && plugin === 'expo-dev-client') {
-        return ['expo-dev-client', { launchMode: 'launcher' }];
-      }
-      return plugin;
-    }),
+    ...(config.plugins ?? [])
+      .filter((plugin) => !(isProductionBuild && plugin === 'expo-dev-client'))
+      .map((plugin) => {
+        if (!isProductionBuild && plugin === 'expo-dev-client') {
+          return ['expo-dev-client', { launchMode: 'launcher' }];
+        }
+        return plugin;
+      }),
     './plugins/with-automatic-ui-style.cjs',
     './plugins/with-firebase-extra.cjs',
     './plugins/without-ios-push-entitlement.cjs',

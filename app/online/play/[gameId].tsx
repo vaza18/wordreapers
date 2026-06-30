@@ -7,13 +7,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useLiveRoundPlayScreen } from '@/hooks/useLiveRoundPlayScreen';
 import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
-import {
-  getBundledDictionaryIfLoaded,
-  getBundledSupplementsIfLoaded,
-  hasWordInSortedList,
-  loadBundledDictionary,
-  loadBundledSupplements,
-} from '@/services/dictionary-service';
 import { BottomSheetModal } from '@/components/BottomSheetModal';
 import { GameMenuModal } from '@/components/GameMenuModal';
 import { OnlinePlayActiveBody } from '@/components/online/OnlinePlayActiveBody';
@@ -31,11 +24,9 @@ import { usePlaySessionSubscriptions } from '@/hooks/usePlaySessionSubscriptions
 import { usePlaySessionToasts } from '@/hooks/usePlaySessionToasts';
 import { useResultsRematchToast } from '@/hooks/useResultsRematchToast';
 import { useVoteExpiryResolver } from '@/hooks/useVoteExpiryResolver';
-import { useRoundTimeUpModal } from '@/hooks/useRoundTimeUpModal';
 import { useTrainingMilestone } from '@/hooks/useTrainingMilestone';
-import { DictionaryIndex } from '@/lib/dictionary/dictionary-index';
-import { getCachedRoundPlayableLexicon } from '@/lib/dictionary/round-playable-lexicon-cache';
 import { toDisplayUpper } from '@/lib/dictionary/normalize';
+import { getCachedRoundPlayableLexicon } from '@/lib/dictionary/round-playable-lexicon-cache';
 import { playWordAcceptedFeedback } from '@/lib/feedback/game-feedback';
 import { ensureAnonymousAuth } from '@/lib/firebase/auth';
 import { getServerNow } from '@/lib/firebase/server-clock';
@@ -58,6 +49,7 @@ import {
 } from '@/lib/online/cache-active-round';
 import { hasOnlineOpponent, onlineActiveOpponentNames } from '@/lib/online/session-presence';
 import { onlineResultsRoute } from '@/lib/online/online-results-route';
+import { isReviewingPriorRoundOnPlayScreen } from '@/lib/online/is-reviewing-prior-round-on-play';
 import { resolveRoundEndSessionSnapshot } from '@/lib/online/resolve-round-end-session-snapshot';
 import { shouldKeepFrozenResultsOverLiveFinished } from '@/lib/online/frozen-round-view';
 import { consumePlaySessionBootstrap } from '@/lib/online/play-session-bootstrap';
@@ -151,15 +143,6 @@ export default function OnlinePlayScreen() {
   const [myWords, setMyWords] = useState<Map<string, StoredPlayerWord>>(new Map());
   const [loading, setLoading] = useState(playInit.loading);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const initialSupplements = getBundledSupplementsIfLoaded();
-  const [dictionary, setDictionary] = useState<DictionaryIndex | null>(() =>
-    getBundledDictionaryIfLoaded(),
-  );
-  const [properNouns, setProperNouns] = useState<string[]>(
-    () => initialSupplements?.properNouns ?? [],
-  );
-  const [slang, setSlang] = useState<string[]>(() => initialSupplements?.slang ?? []);
-  const [supplementsReady, setSupplementsReady] = useState(() => initialSupplements !== null);
   const [draft, setDraft] = useState('');
   const [draftKeyIndices, setDraftKeyIndices] = useState<number[]>([]);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -183,7 +166,7 @@ export default function OnlinePlayScreen() {
   const [roundEndSessionSnapshot, setRoundEndSessionSnapshot] =
     useState<GameSessionSnapshot | null>(null);
   const roundEnded = session?.status === 'finished' || roundOverPendingResults;
-  const { timeUpModalVisible } = useRoundTimeUpModal(roundEnded);
+  const timeUpModalVisible = roundEnded;
   const skipRematchToastRef = useRef(false);
   const rematchToasts = useResultsRematchToast(sessionCore, myUid, skipRematchToastRef);
   const playToasts = usePlaySessionToasts(session, myUid, !roundEnded);
@@ -405,13 +388,16 @@ export default function OnlinePlayScreen() {
       return;
     }
     resultsNavigatedRef.current = true;
-    setRoundOverPendingResults(false);
+    // Keep roundOverPendingResults true until unmount — clearing it switches displaySession to
+    // the live rematch round (e.g. paused round 2) and opens PauseRoundModal, which can leave
+    // an iOS ghost overlay blocking touches on the results screen after replace.
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
       debounceRef.current = null;
     }
     const archiveSession = roundEndSessionSnapshot ?? session;
     const viewingRound = archiveSession.baseWordRound ?? null;
+    router.replace(onlineResultsRoute(gameId, viewingRound));
     try {
       if (archiveSession.status === 'finished') {
         await archiveFinishedRoundFromFirebase(gameId, archiveSession);
@@ -421,22 +407,7 @@ export default function OnlinePlayScreen() {
         console.warn('archiveFinishedRoundFromFirebase', error);
       }
     }
-    router.replace(onlineResultsRoute(gameId, viewingRound));
   }, [gameId, roundEndSessionSnapshot, roundOverPendingResults, session]);
-
-  useEffect(() => {
-    void Promise.all([loadBundledDictionary(), loadBundledSupplements()]).then(
-      ([dict, supplements]) => {
-        setDictionary(dict);
-        setProperNouns(supplements.properNouns);
-        setSlang(supplements.slang);
-        setSupplementsReady(true);
-      },
-    );
-    return () => {
-      void Promise.all([loadBundledDictionary(), loadBundledSupplements()]);
-    };
-  }, []);
 
   const endsAt = displaySession?.timerEndsAt ?? null;
   const resolvedSessionSettings = displaySession
@@ -455,6 +426,12 @@ export default function OnlinePlayScreen() {
   const showPointUi = shouldShowPointUi(uniqueBonusEnabled);
 
   const isPaused = displaySession?.pauseState?.active === true;
+  const reviewingPriorRound = isReviewingPriorRoundOnPlayScreen(
+    roundEnded,
+    roundEndSessionSnapshot?.baseWordRound ?? null,
+    session?.baseWordRound ?? null,
+  );
+  const showLivePauseModal = isPaused && !reviewingPriorRound;
 
   useVoteExpiryResolver({
     gameId,
@@ -671,8 +648,7 @@ export default function OnlinePlayScreen() {
         !session ||
         session.status !== 'playing' ||
         resultsNavigatedRef.current ||
-        !dictionary ||
-        !supplementsReady ||
+        !roundLexicon ||
         !myUid ||
         draftValue.length === 0
       ) {
@@ -700,15 +676,9 @@ export default function OnlinePlayScreen() {
           roundLexicon: roundLexicon?.words,
         },
         deps: {
-          hasInDictionary: (word) =>
-            dictionary.hasWord(word) ||
-            (allowProperNouns && hasWordInSortedList(properNouns, word)) ||
-            (allowSlang && hasWordInSortedList(slang, word)),
+          hasInDictionary: () => false,
         },
-        lookupDisplayUpper: (word) =>
-          roundLexicon?.displays.get(word) ??
-          dictionary.lookupDisplayUpper(word) ??
-          toDisplayUpper(word),
+        lookupDisplayUpper: (word) => roundLexicon.displays.get(word) ?? toDisplayUpper(word),
       });
       profile?.mark('acceptWord');
 
@@ -783,18 +753,12 @@ export default function OnlinePlayScreen() {
       });
     },
     [
-      allowProperNouns,
-      allowSlang,
-      dictionary,
       draftKeyIndices,
       finishBackgroundSync,
       gameId,
       myUid,
-      properNouns,
       roundLexicon,
       session,
-      slang,
-      supplementsReady,
       t,
       uniqueBonusEnabled,
       wordAcceptedFeedback,
@@ -1227,7 +1191,7 @@ export default function OnlinePlayScreen() {
         }}
       />
 
-      {isPaused ? (
+      {showLivePauseModal ? (
         <PauseRoundModal
           visible={isPlayScreenFocused && !pauseUiObscured}
           session={session}

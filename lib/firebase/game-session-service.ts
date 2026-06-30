@@ -61,6 +61,7 @@ import type { SessionWordMaps } from './session-word-maps.js';
 import { clearSessionWordMaps, fetchSessionWordMaps } from './session-word-maps-service.js';
 import { getFirebaseDatabase } from './init.js';
 import { gameSessionPath, GAME_SESSIONS_PATH } from './paths.js';
+import { sessionRef } from './session-ref.js';
 import { isValidRoomCode, normalizeRoomCode } from './room-code.js';
 import type { GameSession, GameSessionPlayer, GameSessionSettings } from './types.js';
 import type { BaseWord } from '../dictionary/dictionary-index.js';
@@ -87,10 +88,6 @@ async function assertSessionBaseWordAllowed(baseWord: string, session: GameSessi
 export { resolveGameSessionSettings } from './session-settings.js';
 
 export type GameSessionSnapshot = GameSession & { id: string };
-
-function sessionRef(gameId: string): DatabaseReference {
-  return ref(getFirebaseDatabase(), gameSessionPath(gameId));
-}
 
 function playersRef(gameId: string): DatabaseReference {
   return ref(getFirebaseDatabase(), `${gameSessionPath(gameId)}/players`);

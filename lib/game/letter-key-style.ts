@@ -1,9 +1,5 @@
 /**
- * Shared letter-key geometry for app icons and (eventually) the play screen.
- *
- * TODO: Wire `LetterKeyboard` to this module so gap, radius, and fontSize scale from
- * `letterKeyProportions(screenWidth)` instead of duplicating theme tokens inline.
- * Until then, keep `LETTER_KEY_*` constants in sync with `components/LetterKeyboard.tsx`.
+ * Shared letter-key geometry for app icons and the play screen keyboard.
  */
 import { radii } from '../../constants/theme.js';
 

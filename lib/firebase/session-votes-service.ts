@@ -1,4 +1,4 @@
-import { get, ref } from 'firebase/database';
+import { get } from 'firebase/database';
 
 import { runRtdbTransaction } from './rtdb-transaction.js';
 
@@ -16,7 +16,6 @@ import {
 } from '../online/add-time-vote.js';
 import { shouldActivatePauseFromVote } from '../online/pause-vote.js';
 import { resumeVoteRequiredIds, shouldResumeFromVote } from '../online/resume-vote.js';
-import { getFirebaseDatabase } from './init.js';
 import { isFirebaseIgnorableRtdbError } from './rtdb-errors.js';
 import { computePurgeAfterAt } from './session-purge.js';
 import { getServerNow } from './server-clock.js';
@@ -24,16 +23,12 @@ import {
   computeRoundPlayedSecondsAtFinish,
   resolveRoundTimerBudgetSeconds,
 } from '../game/round-duration.js';
-import { gameSessionPath } from './paths.js';
 import { normalizeRoomCode } from './room-code.js';
+import { sessionRef } from './session-ref.js';
 import type { GameSession, GameSessionPlayer } from './types.js';
 import { displayPlayerName } from '../online/public-lobby/display-player-name.js';
 
 export type VoteChoice = 'yes' | 'no';
-
-function sessionRef(gameId: string) {
-  return ref(getFirebaseDatabase(), gameSessionPath(normalizeRoomCode(gameId)));
-}
 
 async function runSessionVoteTransaction(
   gameId: string,
