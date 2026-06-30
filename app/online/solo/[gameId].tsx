@@ -39,6 +39,7 @@ import {
   type PlayWordFeedbackVariant,
 } from '@/lib/game/play-word-feedback';
 import { formatPlayRulesLabel } from '@/lib/online/play-rules-label';
+import { formatTimerMs } from '@/lib/game/timer-label';
 import { gameSessionSettingsFromSetup } from '@/lib/firebase/session-settings';
 import type { GameSession } from '@/lib/firebase/types';
 import { computePlayerScore } from '@/lib/game/scoring';
@@ -54,13 +55,6 @@ import { useSettingsStore } from '@/store/settings-store';
 
 const VALIDATION_DEBOUNCE_MS = 1000;
 const FEEDBACK_DISMISS_MS = 2200;
-
-function formatTimer(ms: number): string {
-  const totalSeconds = Math.ceil(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-}
 
 /**
  * Organizer solo round — local only until invite publishes to Firebase.
@@ -178,7 +172,7 @@ export default function OrganizerSoloPlayScreen() {
   const playerScore = computePlayerScore(scoredWords);
   const isPaused = status === 'paused';
   const remainingMs = getRemainingMs(now);
-  const remainingLabel = formatTimer(remainingMs);
+  const remainingLabel = formatTimerMs(remainingMs);
   const timerUrgent = remainingMs > 0 && remainingMs <= 60_000;
 
   useTimerAlerts(remainingMs, isPaused, timerAlertMode, status === 'playing');

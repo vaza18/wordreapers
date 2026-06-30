@@ -7,6 +7,7 @@ function session(
   players: GameSession['players'],
   status: GameSession['status'] = 'playing',
   settings?: Partial<GameSession['settings']>,
+  extra: Partial<GameSession> = {},
 ): GameSession {
   return {
     baseWord: 'тест',
@@ -23,6 +24,7 @@ function session(
     timerEndsAt: Date.now() + 60_000,
     organizerId: 'org',
     players,
+    ...extra,
   };
 }
 
@@ -94,28 +96,38 @@ describe('detectPlayToastEvents', () => {
   });
 
   it('detects a player rejoining after leaving the round', () => {
-    const prev = session({
-      org: { name: 'Org', wordCount: 2, score: 3, online: true },
-      a: {
-        name: 'Василь',
-        gender: 'm',
-        wordCount: 1,
-        score: 1,
-        online: false,
-        hasLeft: true,
+    const prev = session(
+      {
+        org: { name: 'Org', wordCount: 2, score: 3, online: true },
+        a: {
+          name: 'Василь',
+          gender: 'm',
+          wordCount: 0,
+          score: 0,
+          online: false,
+          hasLeft: true,
+        },
       },
-    });
-    const curr = session({
-      org: { name: 'Org', wordCount: 2, score: 3, online: true },
-      a: {
-        name: 'Василь',
-        gender: 'm',
-        wordCount: 1,
-        score: 1,
-        online: true,
-        hasLeft: false,
+      'playing',
+      undefined,
+      { baseWordRound: 1, liveRoundPlayerUids: ['org', 'a'] },
+    );
+    const curr = session(
+      {
+        org: { name: 'Org', wordCount: 2, score: 3, online: true },
+        a: {
+          name: 'Василь',
+          gender: 'm',
+          wordCount: 0,
+          score: 0,
+          online: true,
+          hasLeft: false,
+        },
       },
-    });
+      'playing',
+      undefined,
+      { baseWordRound: 1, liveRoundPlayerUids: ['org', 'a'] },
+    );
 
     expect(detectPlayToastEvents(prev, curr, 'org')).toEqual([
       {
@@ -128,30 +140,43 @@ describe('detectPlayToastEvents', () => {
   });
 
   it('detects rejoin when only online flips before hasLeft is cleared in RTDB', () => {
-    const prev = session({
-      org: { name: 'Org', wordCount: 2, score: 3, online: true },
-      a: {
-        name: 'Василь',
-        gender: 'm',
-        wordCount: 1,
-        score: 1,
-        online: false,
-        hasLeft: true,
+    const liveRound = { baseWordRound: 1, liveRoundPlayerUids: ['org', 'a'] as string[] };
+    const prev = session(
+      {
+        org: { name: 'Org', wordCount: 2, score: 3, online: true },
+        a: {
+          name: 'Василь',
+          gender: 'm',
+          wordCount: 1,
+          score: 1,
+          online: false,
+          hasLeft: true,
+        },
       },
-    });
-    const curr = session({
-      org: { name: 'Org', wordCount: 2, score: 3, online: true },
-      a: {
-        name: 'Василь',
-        gender: 'm',
-        wordCount: 1,
-        score: 1,
-        online: true,
-        hasLeft: true,
+      'playing',
+      undefined,
+      liveRound,
+    );
+    const curr = session(
+      {
+        org: { name: 'Org', wordCount: 2, score: 3, online: true },
+        a: {
+          name: 'Василь',
+          gender: 'm',
+          wordCount: 1,
+          score: 1,
+          online: true,
+          hasLeft: true,
+        },
       },
-    });
+      'playing',
+      undefined,
+      liveRound,
+    );
 
-    expect(detectPlayToastEvents(prev, curr, 'org')).toEqual([
+    expect(
+      detectPlayToastEvents(prev, curr, 'org').filter((event) => event.type === 'player_joined'),
+    ).toEqual([
       {
         type: 'player_joined',
         playerId: 'a',
@@ -217,6 +242,29 @@ describe('detectPlayToastEvents', () => {
       },
       { type: 'alone_in_game' },
     ]);
+  });
+
+  it('does not toast alone when another live-round participant is briefly offline', () => {
+    const prev = session(
+      {
+        p1: { name: 'iPad', gender: 'm', wordCount: 0, score: 0, online: true },
+        p2: { name: 'Василь', gender: 'm', wordCount: 0, score: 0, online: true },
+      },
+      'playing',
+      undefined,
+      { baseWordRound: 1, liveRoundPlayerUids: ['p1', 'p2'] },
+    );
+    const curr = session(
+      {
+        p1: { name: 'iPad', gender: 'm', wordCount: 0, score: 0, online: true },
+        p2: { name: 'Василь', gender: 'm', wordCount: 0, score: 0, online: false },
+      },
+      'playing',
+      undefined,
+      { baseWordRound: 1, liveRoundPlayerUids: ['p1', 'p2'] },
+    );
+
+    expect(detectPlayToastEvents(prev, curr, 'p1')).toEqual([]);
   });
 
   it('detects overtakes after a tied start', () => {
@@ -433,33 +481,193 @@ describe('detectPlayToastEvents', () => {
     ]);
   });
 
-  it('does not treat first word with stale hasLeft as player_joined', () => {
-    const prev = session({
-      org: { name: 'Org', wordCount: 0, score: 0, online: true },
-      a: {
-        name: 'Василь',
-        gender: 'm',
-        wordCount: 0,
-        score: 0,
-        online: false,
-        hasLeft: true,
+  it('does not treat first word with stale hasLeft as player_joined when not in live round', () => {
+    const liveRound = { baseWordRound: 1, liveRoundPlayerUids: ['org'] as string[] };
+    const prev = session(
+      {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        a: {
+          name: 'Василь',
+          gender: 'm',
+          wordCount: 0,
+          score: 0,
+          online: false,
+          hasLeft: true,
+        },
       },
-    });
-    const curr = session({
-      org: { name: 'Org', wordCount: 0, score: 0, online: true },
-      a: {
-        name: 'Василь',
-        gender: 'm',
-        wordCount: 1,
-        score: 1,
-        online: true,
-        hasLeft: true,
+      'playing',
+      undefined,
+      liveRound,
+    );
+    const curr = session(
+      {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        a: {
+          name: 'Василь',
+          gender: 'm',
+          wordCount: 1,
+          score: 1,
+          online: true,
+          hasLeft: true,
+        },
       },
-    });
+      'playing',
+      undefined,
+      liveRound,
+    );
 
     expect(
       detectPlayToastEvents(prev, curr, 'org').filter((event) => event.type === 'player_joined'),
     ).toEqual([]);
+  });
+
+  it('does not treat roster presence drift as player_joined without live-round opt-in', () => {
+    const liveRound = { baseWordRound: 1, liveRoundPlayerUids: ['org'] as string[] };
+    const prev = session(
+      {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        a: {
+          name: 'Василь',
+          gender: 'm',
+          wordCount: 2,
+          score: 4,
+          online: false,
+          hasLeft: true,
+        },
+      },
+      'playing',
+      undefined,
+      liveRound,
+    );
+    const curr = session(
+      {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        a: {
+          name: 'Василь',
+          gender: 'm',
+          wordCount: 2,
+          score: 4,
+          online: true,
+          hasLeft: false,
+        },
+      },
+      'playing',
+      undefined,
+      liveRound,
+    );
+
+    expect(
+      detectPlayToastEvents(prev, curr, 'org').filter((event) => event.type === 'player_joined'),
+    ).toEqual([]);
+  });
+
+  it('suppresses join toasts when non-participant clears hasLeft offline', () => {
+    const liveRound = { baseWordRound: 1, liveRoundPlayerUids: ['org'] as string[] };
+    const prev = session(
+      {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        a: {
+          name: 'Василь',
+          gender: 'm',
+          wordCount: 0,
+          score: 0,
+          online: false,
+          hasLeft: true,
+        },
+      },
+      'playing',
+      undefined,
+      liveRound,
+    );
+    const curr = session(
+      {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        a: {
+          name: 'Василь',
+          gender: 'm',
+          wordCount: 0,
+          score: 0,
+          online: false,
+          hasLeft: false,
+        },
+      },
+      'playing',
+      undefined,
+      liveRound,
+    );
+
+    expect(
+      detectPlayToastEvents(prev, curr, 'org').filter((event) => event.type === 'player_joined'),
+    ).toEqual([]);
+  });
+
+  it('does not toast join when non-participant clears hasLeft on prior-round results', () => {
+    const prev = session(
+      {
+        p1: { name: 'iPad', gender: 'm', wordCount: 0, score: 0, online: true },
+        p3: {
+          name: 'Василь 7',
+          gender: 'm',
+          wordCount: 0,
+          score: 0,
+          online: false,
+          hasLeft: true,
+        },
+      },
+      'playing',
+      undefined,
+      { baseWordRound: 1, liveRoundPlayerUids: ['p1', 'org'] },
+    );
+    const curr = session(
+      {
+        p1: { name: 'iPad', gender: 'm', wordCount: 0, score: 0, online: true },
+        p3: {
+          name: 'Василь 7',
+          gender: 'm',
+          wordCount: 0,
+          score: 0,
+          online: false,
+          hasLeft: false,
+        },
+      },
+      'playing',
+      undefined,
+      { baseWordRound: 1, liveRoundPlayerUids: ['p1', 'org'] },
+    );
+
+    expect(detectPlayToastEvents(prev, curr, 'p1')).toEqual([]);
+  });
+
+  it('detects late organizer join instead of alone when stale non-participant drops off', () => {
+    const prev = session(
+      {
+        p1: { name: 'iPad 13 Pro', gender: 'm', wordCount: 0, score: 0, online: true },
+        org: { name: 'Василь', gender: 'm', wordCount: 0, score: 0, online: false },
+        p3: { name: 'Василь 7', gender: 'm', wordCount: 8, score: 8, online: false },
+      },
+      'playing',
+      undefined,
+      { baseWordRound: 1, liveRoundPlayerUids: ['p1'] },
+    );
+    const curr = session(
+      {
+        p1: { name: 'iPad 13 Pro', gender: 'm', wordCount: 0, score: 0, online: true },
+        org: { name: 'Василь', gender: 'm', wordCount: 0, score: 0, online: true },
+        p3: { name: 'Василь 7', gender: 'm', wordCount: 0, score: 0, online: false },
+      },
+      'playing',
+      undefined,
+      { baseWordRound: 1, liveRoundPlayerUids: ['p1', 'org'] },
+    );
+
+    expect(detectPlayToastEvents(prev, curr, 'p1')).toEqual([
+      {
+        type: 'player_joined',
+        playerId: 'org',
+        name: 'Василь',
+        gender: 'm',
+      },
+    ]);
   });
 
   it('returns nothing outside playing status', () => {
@@ -472,5 +680,20 @@ describe('detectPlayToastEvents', () => {
       'waiting',
     );
     expect(detectPlayToastEvents(prev, curr, 'org')).toEqual([]);
+  });
+
+  it('suppresses toasts for offline viewers not in the active round', () => {
+    const prev = scoringSession({
+      p1: { name: 'One', wordCount: 1, score: 1, online: true },
+      p2: { name: 'Two', wordCount: 1, score: 1, online: true },
+      p3: { name: 'Three', wordCount: 0, score: 0, online: false },
+    });
+    const curr = scoringSession({
+      p1: { name: 'One', wordCount: 2, score: 2, online: true },
+      p2: { name: 'Two', wordCount: 1, score: 1, online: true },
+      p3: { name: 'Three', wordCount: 0, score: 0, online: false },
+    });
+
+    expect(detectPlayToastEvents(prev, curr, 'p3')).toEqual([]);
   });
 });

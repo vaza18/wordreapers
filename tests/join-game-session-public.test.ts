@@ -133,6 +133,7 @@ describe('joinGameSession public rooms', () => {
       .mockResolvedValueOnce(snapshot(session))
       .mockResolvedValueOnce(snapshot({ ...session, players: joined.players }))
       .mockResolvedValueOnce(snapshot(joined))
+      .mockResolvedValueOnce(snapshot(joined))
       .mockResolvedValueOnce(snapshot(joined));
 
     const result = await joinGameSession(
@@ -164,6 +165,7 @@ describe('joinGameSession public rooms', () => {
     getMock
       .mockResolvedValueOnce(snapshot(session))
       .mockResolvedValueOnce(snapshot({ ...session, players: joined.players }))
+      .mockResolvedValueOnce(snapshot(joined))
       .mockResolvedValueOnce(snapshot(joined))
       .mockResolvedValueOnce(snapshot(joined));
 
@@ -197,6 +199,7 @@ describe('joinGameSession public rooms', () => {
     getMock
       .mockResolvedValueOnce(snapshot(session))
       .mockResolvedValueOnce(snapshot({ ...session, players: joined.players }))
+      .mockResolvedValueOnce(snapshot(joined))
       .mockResolvedValueOnce(snapshot(joined))
       .mockResolvedValueOnce(snapshot(joined));
 

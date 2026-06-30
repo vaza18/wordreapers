@@ -1,4 +1,5 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -50,8 +51,10 @@ export default function OnlinePickWordScreen() {
   const { t } = useTranslation();
   const { gameId: rawGameId } = useLocalSearchParams<{ gameId: string }>();
   const gameId = rawGameId ?? '';
+  const isFocused = useIsFocused();
 
   const [loading, setLoading] = useState(true);
+  const [sessionLoaded, setSessionLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [session, setSession] = useState<GameSessionSnapshot | null>(null);
@@ -86,13 +89,16 @@ export default function OnlinePickWordScreen() {
     void ensureAnonymousAuth().then((user) => {
       setMyUid(user.uid);
     });
-    return subscribeGameSession(gameId, setSession);
+    return subscribeGameSession(gameId, (next) => {
+      setSession(next);
+      setSessionLoaded(true);
+    });
   }, [gameId]);
 
   usePlayerOnlinePresence(gameId, myUid ?? undefined, Boolean(gameId && myUid));
 
   useEffect(() => {
-    if (!session || !myUid) {
+    if (!isFocused || !session || !myUid) {
       return;
     }
     if (session.status !== 'waiting') {
@@ -102,7 +108,7 @@ export default function OnlinePickWordScreen() {
     if (!isCurrentBaseWordPicker(session, myUid)) {
       router.replace({ pathname: '/online/lobby/[gameId]', params: { gameId } });
     }
-  }, [gameId, myUid, session]);
+  }, [gameId, isFocused, myUid, session]);
 
   useEffect(() => {
     if (!session || !dictionary || sessionPrefilledRef.current) {
@@ -202,6 +208,30 @@ export default function OnlinePickWordScreen() {
   };
 
   const turn = session ? baseWordPickerTurnNumber(session) : 1;
+
+  if (!loading && sessionLoaded && !session) {
+    return (
+      <>
+        <Stack.Screen options={screenOptions} />
+        <Screen>
+          <Text style={styles.error}>{t('online.errorRoomNotFound')}</Text>
+          <PrimaryButton
+            label={t('online.roomRematchRetry')}
+            onPress={() => {
+              router.replace({ pathname: '/online/lobby/[gameId]', params: { gameId } });
+            }}
+          />
+          <PrimaryButton
+            label={t('nav.home')}
+            variant="secondary"
+            onPress={() => {
+              router.replace('/');
+            }}
+          />
+        </Screen>
+      </>
+    );
+  }
 
   if (loading || !session || !myUid) {
     return (

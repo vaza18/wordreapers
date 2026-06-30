@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
@@ -51,7 +52,7 @@ function createStyles(colors: ThemeColors) {
 }
 
 /** Interactive keyboard built from the base word letters. */
-export function LetterKeyboard({
+export const LetterKeyboard = memo(function LetterKeyboard({
   keys,
   usedKeyIndices,
   onPressKey,
@@ -110,4 +111,4 @@ export function LetterKeyboard({
       })}
     </View>
   );
-}
+});

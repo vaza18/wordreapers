@@ -16,9 +16,6 @@ export const HEADER_ICON_SHUFFLE_GLYPH_SIZE = 20;
 /** Max fill for text glyphs (↺) whose ink extends past the em box. */
 export const HEADER_ICON_TEXT_GLYPH_MAX_FILL = 0.58;
 
-/** @deprecated Use {@link HEADER_ICON_BUTTON_SIZE} */
-export const headerIconButtonSize = HEADER_ICON_BUTTON_SIZE;
-
 /** Button edge length at capped OS font scale. */
 export function scaledHeaderIconButtonSize(systemFontScale: number, screenWidth: number): number {
   return playableLayoutSize(HEADER_ICON_BUTTON_SIZE, systemFontScale, screenWidth);

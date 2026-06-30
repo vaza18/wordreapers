@@ -6,49 +6,52 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { RoundResultsView } from '@/components/RoundResultsView';
 import { spacing, type ThemeColors } from '@/constants/theme';
+import { useArchiveRoundLexicon } from '@/hooks/useArchiveRoundLexicon';
+import { useLiveRosterPlayerWords } from '@/hooks/useLiveRosterPlayerWords';
+import { useOnlineViewerUid } from '@/hooks/useOnlineViewerUid';
+import { useResultsRoundLexicon } from '@/hooks/useResultsRoundLexicon';
+import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
-import { ensureAnonymousAuth } from '@/lib/firebase/auth';
 import {
   leaveGameSession,
   subscribeGameSession,
   type GameSessionSnapshot,
 } from '@/lib/firebase/game-session-service';
 import {
-  fetchSessionPlayerWords,
-  subscribeSessionPlayerWords,
-  type StoredPlayerWord,
-} from '@/lib/firebase/player-words-service';
-import { stillPlayingPlayerNames } from '@/lib/online/active-round-players';
-import { mergeAllPlayerWords, type AllPlayerWords } from '@/lib/online/clone-player-words';
-import {
   persistFinishedRoundForPlayer,
   persistFinishedRoundFromFirebase,
 } from '@/lib/online/complete-pending-round-archive';
 import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
 import {
-  loadLatestFrozenFinishedRoundFromArchive,
+  freezeFinishedRound,
+  loadFrozenFinishedRoundFromArchive,
   type FrozenFinishedRound,
 } from '@/lib/online/frozen-finished-round';
 import { markPendingRoundArchive } from '@/lib/online/pending-round-archive';
 import { maskResultsForEarlyExit } from '@/lib/online/mask-results-for-viewer';
 import { buildOnlineResultsView } from '@/lib/online/online-results-data';
-import { getFinishedRoundArchive } from '@/lib/online/online-session-archive';
+import { onlineResultsRoute } from '@/lib/online/online-results-route';
+import {
+  isLiveSessionForLeftRound,
+  resolveLeftRoundDisplaySession,
+  resolveLeftRoundResultsBaseWordRound,
+  shouldAcceptLeftRoundFrozenArchive,
+  shouldLoadLeftRoundFinishedArchive,
+  shouldPersistLeftRoundFinishedArchive,
+  shouldShowLeftRoundViewResults,
+} from '@/lib/online/left-round-screen-actions';
 import { resolvePostJoinRoute } from '@/lib/online/post-join-route';
 import { rejoinOnlineRound } from '@/lib/online/rejoin-online-round';
+import { stillPlayingPlayerNames } from '@/lib/online/active-round-players';
 import {
   notifyRoundFinishedOnce,
   isRoundFinishedNotified,
 } from '@/lib/online/round-finished-notification-once';
-import { useFirebaseStore } from '@/store/firebase-store';
-import { useResultsRoundLexicon } from '@/hooks/useResultsRoundLexicon';
-import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
-import type { PlayableLexiconSnapshot } from '@/lib/dictionary/round-playable-lexicon';
 import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
 import { tGendered } from '@/lib/game/grammar';
 import { useProfileStore } from '@/store/profile-store';
-
-const EMPTY_WORDS: AllPlayerWords = new Map();
+import type { StoredPlayerWord } from '@/lib/firebase/player-words-service';
 
 /**
  * Summary after leaving an active online round — live RTDB while playing, local snapshot when finished.
@@ -59,70 +62,122 @@ export default function OnlineLeftRoundScreen() {
   const { t } = useTranslation();
   const { gameId: rawGameId } = useLocalSearchParams<{ gameId: string }>();
   const gameId = rawGameId ?? '';
-  const storeUid = useFirebaseStore((state) => state.uid);
+  const myUid = useOnlineViewerUid();
   const viewerGender = useProfileStore((state) => state.gender);
-  const [resolvedUid, setResolvedUid] = useState(storeUid ?? '');
-  const myUid = resolvedUid || storeUid || '';
 
   const [session, setSession] = useState<GameSessionSnapshot | null>(null);
-  const [liveWords, setLiveWords] = useState(EMPTY_WORDS);
   const [frozenRound, setFrozenRound] = useState<FrozenFinishedRound | null>(null);
+  const [leftAtBaseWordRound, setLeftAtBaseWordRound] = useState<number | null>(null);
+  const [leftRoundPlayingSnapshot, setLeftRoundPlayingSnapshot] =
+    useState<FrozenFinishedRound | null>(null);
   const [sessionLoaded, setSessionLoaded] = useState(false);
-  const [wordsBootstrapComplete, setWordsBootstrapComplete] = useState(false);
   const [rejoinLoading, setRejoinLoading] = useState(false);
   const [rejoinError, setRejoinError] = useState<string | null>(null);
+  const [viewResultsUnlocked, setViewResultsUnlocked] = useState(false);
   const skipAutoLeaveRef = useRef(false);
+  const leaveAttemptedRef = useRef(false);
   const finishedArchiveRef = useRef(false);
   const finishedNotifyRef = useRef(false);
   const freezeAttemptedRef = useRef(false);
   const pendingMarkedRoundRef = useRef<number | null>(null);
-  const [archiveLexicon, setArchiveLexicon] = useState<PlayableLexiconSnapshot | null>(null);
 
-  const roundStillActive = session?.status === 'playing';
-  const displaySession = frozenRound?.session ?? session;
-  const wordsSnapshot = frozenRound?.words ?? liveWords;
+  const pinnedFrozenRound =
+    frozenRound &&
+    shouldAcceptLeftRoundFrozenArchive(frozenRound.session.baseWordRound, leftAtBaseWordRound)
+      ? frozenRound
+      : null;
+  const displaySession = useMemo(
+    () =>
+      resolveLeftRoundDisplaySession({
+        leftAtBaseWordRound,
+        liveSession: session,
+        pinnedFrozenSession: pinnedFrozenRound?.session ?? null,
+        playingSnapshotSession: leftRoundPlayingSnapshot?.session ?? null,
+      }),
+    [leftAtBaseWordRound, leftRoundPlayingSnapshot, pinnedFrozenRound, session],
+  );
+  const roundStillActive =
+    isLiveSessionForLeftRound(leftAtBaseWordRound, session) && session?.status === 'playing';
+
+  const rosterPlayerIds = useMemo(() => {
+    if (pinnedFrozenRound || !session || !isLiveSessionForLeftRound(leftAtBaseWordRound, session)) {
+      return [];
+    }
+    return Object.keys(session.players).sort();
+  }, [leftAtBaseWordRound, pinnedFrozenRound, session]);
+
+  const { liveWords, wordsBootstrapComplete } = useLiveRosterPlayerWords({
+    gameId,
+    rosterPlayerIds,
+    enabled: Boolean(
+      gameId && !pinnedFrozenRound && rosterPlayerIds.length > 0 && session?.status === 'playing',
+    ),
+  });
+
+  const wordsSnapshot = useMemo(() => {
+    if (pinnedFrozenRound) {
+      return pinnedFrozenRound.words;
+    }
+    if (isLiveSessionForLeftRound(leftAtBaseWordRound, session)) {
+      return liveWords;
+    }
+    if (
+      leftAtBaseWordRound != null &&
+      leftRoundPlayingSnapshot &&
+      (leftRoundPlayingSnapshot.session.baseWordRound ?? 0) === leftAtBaseWordRound
+    ) {
+      return leftRoundPlayingSnapshot.words;
+    }
+    return liveWords;
+  }, [leftAtBaseWordRound, leftRoundPlayingSnapshot, liveWords, pinnedFrozenRound, session]);
+
+  const archiveLexicon = useArchiveRoundLexicon(gameId, displaySession?.baseWordRound);
   const { lexicon: roundLexicon, loading: lexiconLoading } = useResultsRoundLexicon(
     displaySession,
     archiveLexicon,
   );
 
   useEffect(() => {
-    if (!gameId || displaySession?.baseWordRound == null) {
+    if (
+      skipAutoLeaveRef.current ||
+      rejoinLoading ||
+      !gameId ||
+      !myUid ||
+      session?.status !== 'playing'
+    ) {
       return;
     }
-    void getFinishedRoundArchive(gameId, displaySession.baseWordRound).then((archive) => {
-      setArchiveLexicon(archive?.playableLexicon ?? null);
+    const round = session.baseWordRound ?? 0;
+    setLeftAtBaseWordRound((prev) => {
+      if (prev != null) {
+        return prev;
+      }
+      pendingMarkedRoundRef.current = round;
+      void markPendingRoundArchive(gameId, round, myUid);
+      return round;
     });
-  }, [displaySession?.baseWordRound, gameId]);
+  }, [gameId, myUid, rejoinLoading, session?.baseWordRound, session?.status]);
 
-  const rosterPlayerIds = useMemo(() => {
-    if (frozenRound || !session) {
-      return [];
+  const liveWordsSignature = useMemo(() => {
+    const parts: string[] = [];
+    for (const [uid, words] of [...liveWords.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+      parts.push(`${uid}:${words.size}`);
     }
-    return Object.keys(session.players).sort();
-  }, [frozenRound, session]);
-
-  const mergeWords = useCallback((incoming: AllPlayerWords) => {
-    setLiveWords((prev) => mergeAllPlayerWords(prev, incoming));
-  }, []);
+    return parts.join('|');
+  }, [liveWords]);
 
   useEffect(() => {
-    void ensureAnonymousAuth().then((user) => {
-      setResolvedUid(user.uid);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (skipAutoLeaveRef.current || rejoinLoading || !gameId || !myUid) {
+    if (
+      !gameId ||
+      leftAtBaseWordRound == null ||
+      !session ||
+      session.status !== 'playing' ||
+      session.baseWordRound !== leftAtBaseWordRound
+    ) {
       return;
     }
-    const round = session?.baseWordRound ?? 0;
-    if (pendingMarkedRoundRef.current === round) {
-      return;
-    }
-    pendingMarkedRoundRef.current = round;
-    void markPendingRoundArchive(gameId, round, myUid);
-  }, [gameId, myUid, rejoinLoading, session?.baseWordRound]);
+    setLeftRoundPlayingSnapshot(freezeFinishedRound(gameId, session, liveWords));
+  }, [gameId, leftAtBaseWordRound, liveWords, liveWordsSignature, session]);
 
   useEffect(() => {
     if (
@@ -135,18 +190,20 @@ export default function OnlineLeftRoundScreen() {
       return;
     }
     const me = session?.players[myUid];
-    if (me && me.hasLeft !== true) {
-      void (async () => {
-        try {
-          await leaveGameSession(gameId, myUid);
-          await markPendingRoundArchive(gameId, session.baseWordRound ?? 0, myUid);
-        } catch (error) {
-          if (__DEV__) {
-            console.warn('left screen leaveGameSession', error);
-          }
-        }
-      })();
+    if (!me || me.hasLeft === true || leaveAttemptedRef.current) {
+      return;
     }
+    leaveAttemptedRef.current = true;
+    void (async () => {
+      try {
+        await leaveGameSession(gameId, myUid);
+        await markPendingRoundArchive(gameId, session.baseWordRound ?? 0, myUid);
+      } catch (error) {
+        if (__DEV__) {
+          console.warn('left screen leaveGameSession', error);
+        }
+      }
+    })();
   }, [gameId, myUid, rejoinLoading, session]);
 
   useEffect(() => {
@@ -162,74 +219,88 @@ export default function OnlineLeftRoundScreen() {
   }, [gameId]);
 
   useEffect(() => {
-    if (!gameId || frozenRound || rosterPlayerIds.length === 0 || session?.status !== 'playing') {
-      return undefined;
+    if (
+      !gameId ||
+      !myUid ||
+      leftAtBaseWordRound == null ||
+      !session ||
+      !shouldLoadLeftRoundFinishedArchive(leftAtBaseWordRound, session, pinnedFrozenRound != null)
+    ) {
+      return;
     }
-
-    let cancelled = false;
-    void fetchSessionPlayerWords(gameId, rosterPlayerIds).then((words) => {
-      if (!cancelled) {
-        mergeWords(words);
-        setWordsBootstrapComplete(true);
-      }
-    });
-
-    const unsubWords = subscribeSessionPlayerWords(gameId, rosterPlayerIds, mergeWords);
-    return () => {
-      cancelled = true;
-      unsubWords();
-    };
-  }, [frozenRound, gameId, mergeWords, rosterPlayerIds, session?.status]);
-
-  useEffect(() => {
-    if (!gameId || freezeAttemptedRef.current || session?.status !== 'finished') {
+    if (freezeAttemptedRef.current) {
       return;
     }
     freezeAttemptedRef.current = true;
+    let cancelled = false;
     void (async () => {
-      const archived = await loadLatestFrozenFinishedRoundFromArchive(gameId);
-      if (archived) {
-        setFrozenRound(archived);
-        setWordsBootstrapComplete(true);
+      const archived = await loadFrozenFinishedRoundFromArchive(gameId, leftAtBaseWordRound);
+      if (cancelled) {
         return;
       }
-      if (!session || !myUid) {
+      if (
+        archived &&
+        shouldAcceptLeftRoundFrozenArchive(archived.session.baseWordRound, leftAtBaseWordRound)
+      ) {
+        setFrozenRound(archived);
+        return;
+      }
+      if (!shouldPersistLeftRoundFinishedArchive(leftAtBaseWordRound, session)) {
+        freezeAttemptedRef.current = false;
         return;
       }
       try {
         await persistFinishedRoundFromFirebase(gameId, myUid, session);
-        const refreshed = await loadLatestFrozenFinishedRoundFromArchive(gameId);
-        if (refreshed) {
+        if (cancelled) {
+          return;
+        }
+        const refreshed = await loadFrozenFinishedRoundFromArchive(gameId, leftAtBaseWordRound);
+        if (
+          refreshed &&
+          shouldAcceptLeftRoundFrozenArchive(refreshed.session.baseWordRound, leftAtBaseWordRound)
+        ) {
           setFrozenRound(refreshed);
-          setWordsBootstrapComplete(true);
           finishedArchiveRef.current = true;
         }
       } catch {
         freezeAttemptedRef.current = false;
       }
     })();
-  }, [gameId, myUid, session]);
+    return () => {
+      cancelled = true;
+    };
+  }, [gameId, leftAtBaseWordRound, myUid, pinnedFrozenRound, session]);
 
   useEffect(() => {
     if (
       !gameId ||
       !myUid ||
-      !frozenRound ||
+      !pinnedFrozenRound ||
       finishedArchiveRef.current ||
-      session?.status !== 'finished'
+      !shouldPersistLeftRoundFinishedArchive(leftAtBaseWordRound, session)
     ) {
       return;
     }
     finishedArchiveRef.current = true;
-    void persistFinishedRoundForPlayer(gameId, myUid, frozenRound.session, frozenRound.words).catch(
-      () => {
-        finishedArchiveRef.current = false;
-      },
-    );
-  }, [frozenRound, gameId, myUid, session?.status]);
+    void persistFinishedRoundForPlayer(
+      gameId,
+      myUid,
+      pinnedFrozenRound.session,
+      pinnedFrozenRound.words,
+    ).catch(() => {
+      finishedArchiveRef.current = false;
+    });
+  }, [gameId, leftAtBaseWordRound, myUid, pinnedFrozenRound, session]);
 
   useEffect(() => {
-    if (!gameId || !session || session.status !== 'finished' || finishedNotifyRef.current) {
+    if (
+      !gameId ||
+      !session ||
+      !leftAtBaseWordRound ||
+      session.status !== 'finished' ||
+      session.baseWordRound !== leftAtBaseWordRound ||
+      finishedNotifyRef.current
+    ) {
       return;
     }
     const round = session.baseWordRound ?? 0;
@@ -239,7 +310,7 @@ export default function OnlineLeftRoundScreen() {
         finishedNotifyRef.current = true;
       }
     })();
-  }, [gameId, session]);
+  }, [gameId, leftAtBaseWordRound, session]);
 
   const viewData = useMemo(() => {
     if (!displaySession || !myUid) {
@@ -250,11 +321,30 @@ export default function OnlineLeftRoundScreen() {
   }, [displaySession, myUid, t, wordsSnapshot]);
 
   const stillPlaying = useMemo(() => {
-    if (!session || !myUid || session.status !== 'playing') {
+    if (!session || !myUid || !roundStillActive) {
       return [];
     }
     return stillPlayingPlayerNames(session, myUid);
-  }, [myUid, session]);
+  }, [myUid, roundStillActive, session]);
+
+  const canViewResultsNow = shouldShowLeftRoundViewResults({
+    roundStillActive,
+    displaySessionStatus: displaySession?.status,
+    leftAtBaseWordRound,
+    liveSession: session,
+  });
+
+  useEffect(() => {
+    if (canViewResultsNow) {
+      setViewResultsUnlocked(true);
+    }
+  }, [canViewResultsNow]);
+
+  const canViewResults = viewResultsUnlocked || canViewResultsNow;
+  const resultsBaseWordRound = resolveLeftRoundResultsBaseWordRound(
+    displaySession?.baseWordRound,
+    leftAtBaseWordRound,
+  );
 
   const handleRejoin = useCallback(async () => {
     if (!gameId || !myUid) {
@@ -270,7 +360,7 @@ export default function OnlineLeftRoundScreen() {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (message === 'ROUND_ALREADY_FINISHED') {
-        router.replace({ pathname: '/online/results/[gameId]', params: { gameId } });
+        router.replace(onlineResultsRoute(gameId, leftAtBaseWordRound ?? undefined));
         return;
       }
       if (message === 'NO_RESTORABLE_LOCAL_CACHE') {
@@ -281,15 +371,20 @@ export default function OnlineLeftRoundScreen() {
     } finally {
       setRejoinLoading(false);
     }
-  }, [gameId, myUid, t]);
+  }, [gameId, leftAtBaseWordRound, myUid, t]);
 
   const handleHome = useCallback(async () => {
     const myWords = wordsSnapshot.get(myUid) ?? new Map<string, StoredPlayerWord>();
-    if (session?.status === 'playing') {
+    if (roundStillActive && session) {
       void markPendingRoundArchive(gameId, session.baseWordRound ?? 0, myUid);
-    } else if (frozenRound && !finishedArchiveRef.current) {
+    } else if (pinnedFrozenRound && !finishedArchiveRef.current) {
       try {
-        await persistFinishedRoundForPlayer(gameId, myUid, frozenRound.session, frozenRound.words);
+        await persistFinishedRoundForPlayer(
+          gameId,
+          myUid,
+          pinnedFrozenRound.session,
+          pinnedFrozenRound.words,
+        );
         finishedArchiveRef.current = true;
       } catch (error) {
         if (__DEV__) {
@@ -304,9 +399,21 @@ export default function OnlineLeftRoundScreen() {
       sessionStatus: session?.status ?? 'playing',
       session: displaySession ?? session,
       myWords,
-      exitedResults: session?.status === 'finished' && session.players[myUid]?.hasLeft !== true,
+      exitedResults:
+        session?.status === 'finished' &&
+        session.baseWordRound === leftAtBaseWordRound &&
+        session.players[myUid]?.hasLeft !== true,
     });
-  }, [displaySession, frozenRound, gameId, myUid, session, wordsSnapshot]);
+  }, [
+    displaySession,
+    gameId,
+    leftAtBaseWordRound,
+    myUid,
+    pinnedFrozenRound,
+    roundStillActive,
+    session,
+    wordsSnapshot,
+  ]);
 
   const onBack = useSyncedStackBack(handleHome);
 
@@ -334,7 +441,11 @@ export default function OnlineLeftRoundScreen() {
     );
   }
 
-  if (!displaySession || !viewData || (!wordsBootstrapComplete && !frozenRound)) {
+  if (
+    !displaySession ||
+    !viewData ||
+    (!wordsBootstrapComplete && !pinnedFrozenRound && roundStillActive)
+  ) {
     return (
       <>
         <Stack.Screen options={screenOptions} />
@@ -382,11 +493,11 @@ export default function OnlineLeftRoundScreen() {
                 }}
               />
             ) : null}
-            {session?.status === 'finished' ? (
+            {canViewResults ? (
               <PrimaryButton
                 label={t('game.viewResults')}
                 onPress={() => {
-                  router.replace({ pathname: '/online/results/[gameId]', params: { gameId } });
+                  router.replace(onlineResultsRoute(gameId, resultsBaseWordRound));
                 }}
               />
             ) : null}

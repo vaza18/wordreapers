@@ -11,6 +11,7 @@ const libFiles = ['lib/**/*.ts'];
 const appFiles = [
   'app/**/*.{ts,tsx}',
   'components/**/*.{ts,tsx}',
+  'hooks/**/*.{ts,tsx}',
   'constants/**/*.ts',
   'store/**/*.ts',
   'i18n/**/*.ts',
@@ -125,7 +126,6 @@ export default defineConfig(
     rules: {
       '@typescript-eslint/no-require-imports': 'off',
       'jsdoc/require-jsdoc': 'off',
-      'no-restricted-imports': 'off',
     },
   },
   {

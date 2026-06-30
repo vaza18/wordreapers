@@ -79,14 +79,14 @@ describe('resume vote', () => {
     ).toBe(false);
   });
 
-  it('excludes players who left from required resume voters', () => {
+  it('excludes players who voluntarily left from required resume voters', () => {
     const s = session({
       org: { name: 'Org', wordCount: 0, score: 0, online: true },
       a: {
         name: 'A',
         wordCount: 0,
         score: 0,
-        online: true,
+        online: false,
         hasLeft: true,
       },
     });

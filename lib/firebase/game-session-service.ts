@@ -22,6 +22,13 @@ import {
   resolveGameSessionSettingsForSession,
 } from './session-settings.js';
 import { recomputeSessionPlayerScores } from '../game/scoring.js';
+import { buildPlayersPatchForRoundStart } from '../online/players-patch-for-round-start.js';
+import { appendLiveRoundPlayerUid } from './live-round-player-uids.js';
+import {
+  rematchWaitingPlayerPatch,
+  waitingLobbyOptInUids,
+} from '../online/live-round-membership.js';
+import { shouldOrganizerAbandonWaitingRoom } from '../online/should-organizer-abandon-waiting-room.js';
 import { computeRoundPlayedSecondsAtFinish } from '../game/round-duration.js';
 import {
   resolveEarlyFinishVoteIfExpired,
@@ -80,17 +87,6 @@ async function assertSessionBaseWordAllowed(baseWord: string, session: GameSessi
 export { resolveGameSessionSettings } from './session-settings.js';
 
 export type GameSessionSnapshot = GameSession & { id: string };
-
-/** Reset per-player totals and presence when a new round or rematch lobby opens. */
-function playerForFreshRound(player: GameSessionPlayer): GameSessionPlayer {
-  return {
-    ...player,
-    score: 0,
-    wordCount: 0,
-    hasLeft: false,
-    online: true,
-  };
-}
 
 function sessionRef(gameId: string): DatabaseReference {
   return ref(getFirebaseDatabase(), gameSessionPath(gameId));
@@ -158,6 +154,53 @@ async function setPlayerOnlinePresence(gameId: string, uid: string): Promise<voi
     await onDisconnect(node).cancel();
     await update(node, { online: true });
     await onDisconnect(node).update({ online: false });
+    await reconcileLobbyPickerState(normalized);
+  } catch (error) {
+    if (isFirebasePermissionDenied(error)) {
+      return;
+    }
+    throw error;
+  }
+}
+
+/** Keep lobby picker uid and base word aligned with who is online in waiting. */
+export async function syncLobbyPickerState(gameId: string): Promise<void> {
+  await reconcileLobbyPickerState(gameId);
+}
+
+async function reconcileLobbyPickerState(gameId: string): Promise<void> {
+  const snapshot = await get(sessionRef(gameId));
+  if (!snapshot.exists()) {
+    return;
+  }
+  const session = snapshot.val() as GameSession;
+  if (session.status !== 'waiting') {
+    return;
+  }
+
+  const pickerUid = currentBaseWordPickerUid(session);
+  const updates: Record<string, string | null> = {};
+
+  if (session.baseWordPickerUid !== pickerUid) {
+    updates.baseWordPickerUid = pickerUid;
+  }
+
+  if (
+    session.baseWord &&
+    session.baseWord.length >= 2 &&
+    session.baseWordChosenBy &&
+    session.baseWordChosenBy !== pickerUid
+  ) {
+    updates.baseWord = '';
+    updates.baseWordChosenBy = null;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return;
+  }
+
+  try {
+    await update(sessionRef(gameId), updates);
   } catch (error) {
     if (isFirebasePermissionDenied(error)) {
       return;
@@ -247,6 +290,28 @@ async function readSessionSnapshot(gameId: string): Promise<GameSessionSnapshot>
   return { id: normalized, ...(snapshot.val() as GameSession) };
 }
 
+/** Fresh RTDB session read for routing after rematch / rejoin. */
+export async function readGameSessionSnapshot(gameId: string): Promise<GameSessionSnapshot> {
+  return readSessionSnapshot(gameId);
+}
+
+/** Like `readGameSessionSnapshot`, but returns null when the room root is absent. */
+export async function tryReadGameSessionSnapshot(
+  gameId: string,
+): Promise<GameSessionSnapshot | null> {
+  try {
+    return await readSessionSnapshot(gameId);
+  } catch (error) {
+    if (error instanceof Error && error.message === 'ROOM_NOT_FOUND') {
+      return null;
+    }
+    if (isFirebasePermissionDenied(error)) {
+      return null;
+    }
+    throw error;
+  }
+}
+
 /**
  * Rejoin a rostered player who left or went offline (clears `hasLeft`, restores presence).
  */
@@ -263,6 +328,16 @@ export async function rejoinExistingPlayer(
     hasLeft: false,
   });
   await setPlayerOnlinePresence(normalized, uid);
+  const sessionSnapshot = await get(sessionRef(normalized));
+  if (sessionSnapshot.exists()) {
+    const session = sessionSnapshot.val() as GameSession;
+    if (session.status === 'playing') {
+      const liveUids: string[] | null | undefined = session.liveRoundPlayerUids;
+      await update(sessionRef(normalized), {
+        liveRoundPlayerUids: appendLiveRoundPlayerUid(liveUids, uid),
+      });
+    }
+  }
 }
 
 /**
@@ -401,13 +476,19 @@ function buildJoinCommitPatch(
     }
   }
 
-  const hasWords = Object.keys(context.wordMaps.wordPlayers ?? {}).length > 0;
-  if (next.status === 'playing' && hasWords) {
-    recomputeSessionPlayerScores(
-      { ...next, wordPlayers: context.wordMaps.wordPlayers },
-      resolvedSettings.uniqueBonusEnabled,
-    );
-    patch.players = next.players;
+  if (next.status === 'playing') {
+    // Round 2+ requires liveRoundPlayerUids; round 1 treats all roster members as opted in.
+    const liveUids: string[] | null | undefined = next.liveRoundPlayerUids;
+    patch.liveRoundPlayerUids = appendLiveRoundPlayerUid(liveUids, uid);
+
+    const hasWords = Object.keys(context.wordMaps.wordPlayers ?? {}).length > 0;
+    if (hasWords) {
+      recomputeSessionPlayerScores(
+        { ...next, wordPlayers: context.wordMaps.wordPlayers },
+        resolvedSettings.uniqueBonusEnabled,
+      );
+      patch.players = next.players;
+    }
   }
 
   return { patch, roomFull: false };
@@ -667,8 +748,11 @@ export async function markPlayerOnline(gameId: string, uid: string): Promise<voi
       return;
     }
     const player = snapshot.val() as GameSessionPlayer;
-    if (player.hasLeft === true) {
+    if (player.hasLeft === true && player.online !== true) {
       return;
+    }
+    if (player.hasLeft === true) {
+      await update(node, { hasLeft: false });
     }
     await setPlayerOnlinePresence(normalized, uid);
   } catch (error) {
@@ -717,7 +801,11 @@ export async function updateGameSessionSetup(
     throw new Error('ROOM_NOT_WAITING');
   }
 
-  const updates: { settings: GameSessionSettings; baseWord?: string } = {
+  const updates: {
+    settings: GameSessionSettings;
+    baseWord?: string;
+    baseWordChosenBy?: string;
+  } = {
     settings: applyPublicContentSafety(payload.settings, session),
   };
   if (payload.baseWord !== undefined) {
@@ -726,6 +814,7 @@ export async function updateGameSessionSetup(
     }
     await assertSessionBaseWordAllowed(payload.baseWord, session);
     updates.baseWord = payload.baseWord;
+    updates.baseWordChosenBy = actorUid;
   }
 
   await update(sessionRef(normalized), updates);
@@ -756,7 +845,7 @@ export async function updateGameSessionBaseWord(
   }
   await assertSessionBaseWordAllowed(baseWord, session);
 
-  await update(sessionRef(normalized), { baseWord });
+  await update(sessionRef(normalized), { baseWord, baseWordChosenBy: uid });
 }
 
 /** Fix parking from uniqueBonusMode - updateGameSessionSetup receives uniqueBonusEnabled boolean already */
@@ -790,10 +879,6 @@ export async function startGameSession(gameId: string, actorUid: string): Promis
 
   const now = getServerNow();
   const endsAt = now + settings.durationSeconds * 1000;
-  const players: Record<string, GameSessionPlayer> = {};
-  for (const [uid, player] of Object.entries(session.players)) {
-    players[uid] = playerForFreshRound(player);
-  }
 
   setOrganizerWaitingRoom(null);
 
@@ -814,21 +899,36 @@ export async function startGameSession(gameId: string, actorUid: string): Promis
     await unpublishPublicLobby(normalized, actorUid, { force: true });
   }
 
-  await update(sessionRef(normalized), {
+  const playersPatch = buildPlayersPatchForRoundStart(session);
+  const sessionStartPatch: Record<string, unknown> = {
     status: 'playing',
     timerEndsAt: endsAt,
     roundStartedAt: now,
     roundTimerBudgetSeconds: settings.durationSeconds,
     roundPlayedSeconds: null,
     settings,
-    players,
     earlyFinishVote: null,
     pauseVote: null,
     resumeVote: null,
     pauseState: null,
     isPublic: false,
     publicPublishedAt: null,
-  });
+    liveRoundPlayerUids: waitingLobbyOptInUids(session),
+    resultsExitedBy: null,
+  };
+
+  const rootRef = ref(getFirebaseDatabase());
+  const basePath = gameSessionPath(normalized);
+  const multiPath: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(sessionStartPatch)) {
+    multiPath[`${basePath}/${key}`] = value;
+  }
+  for (const [uid, patch] of Object.entries(playersPatch)) {
+    for (const [field, value] of Object.entries(patch)) {
+      multiPath[`${basePath}/players/${uid}/${field}`] = value;
+    }
+  }
+  await update(rootRef, multiPath);
 }
 
 /**
@@ -1037,6 +1137,23 @@ export async function rematchFinishedSessionToWaiting(
   const playerIds = Object.keys(preSession.players);
   const resolvedSettings = resolveGameSessionSettings(preSession.settings, playerIds.length);
   const nextBaseWordRound = (preSession.baseWordRound ?? 0) + 1;
+  const players: Record<string, GameSessionPlayer> = {};
+  for (const uid of playerIds) {
+    players[uid] = {
+      ...preSession.players[uid],
+      ...rematchWaitingPlayerPatch(preSession, uid, actorUid),
+    };
+  }
+
+  const waitingSession: GameSession = {
+    ...preSession,
+    status: 'waiting',
+    baseWord: '',
+    baseWordChosenBy: null,
+    baseWordRound: nextBaseWordRound,
+    players,
+  };
+  const baseWordPickerUid = currentBaseWordPickerUid(waitingSession);
 
   try {
     await update(sessionRef(normalized), {
@@ -1047,7 +1164,9 @@ export async function rematchFinishedSessionToWaiting(
       roundTimerBudgetSeconds: null,
       roundPlayedSeconds: null,
       baseWord: '',
+      baseWordChosenBy: null,
       baseWordRound: nextBaseWordRound,
+      baseWordPickerUid,
       earlyFinishVote: null,
       pauseVote: null,
       pauseState: null,
@@ -1055,8 +1174,10 @@ export async function rematchFinishedSessionToWaiting(
       purgeAfterAt: null,
       finishedAt: null,
       resultsExitedBy: null,
+      liveRoundPlayerUids: null,
       isPublic: false,
       publicPublishedAt: null,
+      players,
     });
   } catch (error) {
     if (isFirebasePermissionDenied(error)) {
@@ -1068,23 +1189,6 @@ export async function rematchFinishedSessionToWaiting(
     throw error;
   }
 
-  await Promise.all(
-    playerIds.map(async (uid) => {
-      const patch =
-        uid === actorUid
-          ? { score: 0, wordCount: 0, online: true, hasLeft: false }
-          : { score: 0, wordCount: 0 };
-      try {
-        await update(playerRef(normalized, uid), patch);
-      } catch (error) {
-        if (isFirebasePermissionDenied(error)) {
-          return;
-        }
-        throw error;
-      }
-    }),
-  );
-
   const after = await get(sessionRef(normalized));
   if (!after.exists() || (after.val() as GameSession).status !== 'waiting') {
     throw new Error('REMATCH_FAILED');
@@ -1093,6 +1197,22 @@ export async function rematchFinishedSessionToWaiting(
   if (actorUid === preSession.organizerId) {
     setOrganizerWaitingRoom(normalized);
   }
+}
+
+/**
+ * Organizer leaves waiting lobby — delete the room only when nobody else can continue.
+ */
+export async function organizerLeaveWaitingLobby(
+  gameId: string,
+  organizerUid: string,
+  session: GameSession,
+): Promise<void> {
+  await markPlayerOffline(gameId, organizerUid);
+  if (shouldOrganizerAbandonWaitingRoom(session, organizerUid)) {
+    await abandonWaitingGameSession(gameId, organizerUid);
+    return;
+  }
+  await leaveGameSession(gameId, organizerUid);
 }
 
 /**

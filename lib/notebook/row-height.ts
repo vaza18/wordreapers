@@ -6,8 +6,3 @@ export function scaledNotebookRowHeight(systemFontScale: number, screenWidth: nu
   const scale = clampPlayableFontScale(systemFontScale, screenWidth);
   return Math.round(NOTEBOOK_ROW_HEIGHT * scale);
 }
-
-/** @deprecated Use {@link scaledNotebookRowHeight} */
-export function notebookRowMinHeight(): number {
-  return NOTEBOOK_ROW_HEIGHT;
-}

@@ -45,12 +45,24 @@ describe('hasActiveOpponent', () => {
     ).toBe(false);
   });
 
-  it('is true when another player is still in the round, even if offline', () => {
+  it('is false when another player is offline without joining the live round', () => {
     expect(
       hasActiveOpponent(
         session({
           me: { name: 'Me', wordCount: 0, score: 0, online: true },
           a: { name: 'A', wordCount: 0, score: 0, online: false },
+        }),
+        'me',
+      ),
+    ).toBe(false);
+  });
+
+  it('is true when another live-round participant is offline but has scored', () => {
+    expect(
+      hasActiveOpponent(
+        session({
+          me: { name: 'Me', wordCount: 0, score: 0, online: true },
+          a: { name: 'A', wordCount: 2, score: 2, online: false },
         }),
         'me',
       ),
@@ -66,6 +78,18 @@ describe('hasOnlineOpponent', () => {
           me: { name: 'Me', wordCount: 0, score: 0, online: true },
           a: { name: 'A', wordCount: 0, score: 0, online: false },
           b: { name: 'B', wordCount: 0, score: 0, hasLeft: true },
+        }),
+        'me',
+      ),
+    ).toBe(false);
+  });
+
+  it('is false when an offline roster member has stale counters cleared (not in round)', () => {
+    expect(
+      hasOnlineOpponent(
+        session({
+          me: { name: 'Me', wordCount: 0, score: 0, online: true },
+          a: { name: 'A', wordCount: 0, score: 0, online: false },
         }),
         'me',
       ),
@@ -90,6 +114,18 @@ describe('hasOnlineOpponent', () => {
         session({
           me: { name: 'Me', wordCount: 0, score: 0, online: true },
           a: { name: 'A', wordCount: 0, score: 0, online: true },
+        }),
+        'me',
+      ),
+    ).toBe(true);
+  });
+
+  it('is true when opponent has stale hasLeft but is still online', () => {
+    expect(
+      hasOnlineOpponent(
+        session({
+          me: { name: 'Me', wordCount: 0, score: 0, online: true },
+          a: { name: 'A', wordCount: 0, score: 0, online: true, hasLeft: true },
         }),
         'me',
       ),

@@ -1,6 +1,6 @@
 import type { GameSession, SessionVote } from '../firebase/types.js';
-import { isPlayerConnectedInSession } from './session-presence.js';
 import { displayPlayerName } from '../online/public-lobby/display-player-name.js';
+import { isActiveLivePlayer } from './live-round-membership.js';
 import { playerGenderForDisplay } from '../online/public-lobby/session-identity.js';
 import { playerGenderFromSession } from '../game/vote-status-label.js';
 
@@ -17,11 +17,7 @@ export interface EarlyFinishParticipantRow {
   voteStatus: EarlyFinishVoteStatus;
 }
 
-function isPlayerOnline(session: GameSession, playerId: string): boolean {
-  return isPlayerConnectedInSession(session.players[playerId]);
-}
-
-/** Must vote: still in the round, connected, not the proposer. */
+/** Must vote: active in the current live `playing` round, not the proposer. */
 export function isEarlyFinishVoteRequired(
   session: GameSession,
   playerId: string,
@@ -30,11 +26,7 @@ export function isEarlyFinishVoteRequired(
   if (playerId === proposerId) {
     return false;
   }
-  const player = session.players[playerId];
-  if (!player || player.hasLeft === true) {
-    return false;
-  }
-  return isPlayerConnectedInSession(player);
+  return isActiveLivePlayer(session, playerId);
 }
 
 /**
@@ -95,18 +87,20 @@ export function buildEarlyFinishParticipantRows(
   viewerUid?: string,
 ): EarlyFinishParticipantRow[] {
   const required = new Set(earlyFinishRequiredVoterIds(session, vote.proposedBy));
+  const visibleIds = new Set([vote.proposedBy, ...required]);
 
-  return Object.keys(session.players)
+  return [...visibleIds]
     .sort((a, b) => session.players[a].name.localeCompare(session.players[b].name, 'uk'))
     .map((playerId) => {
       const player = session.players[playerId];
-      const online = isPlayerOnline(session, playerId);
+      const online = player.online === true;
       const hasLeft = player.hasLeft === true;
+      const voluntarilyLeft = hasLeft && !online;
       let voteStatus: EarlyFinishVoteStatus = 'not_required';
 
       if (playerId === vote.proposedBy) {
         voteStatus = 'yes';
-      } else if (hasLeft) {
+      } else if (voluntarilyLeft) {
         voteStatus = 'not_required';
       } else if (required.has(playerId)) {
         const choice = vote.votes[playerId];

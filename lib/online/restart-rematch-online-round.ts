@@ -3,6 +3,7 @@ import { get, ref } from 'firebase/database';
 import { rematchFinishedSessionToWaiting } from '../firebase/game-session-service.js';
 import { getFirebaseDatabase } from '../firebase/init.js';
 import { gameSessionPath } from '../firebase/paths.js';
+import { isFirebasePermissionDenied } from '../firebase/rtdb-errors.js';
 import { normalizeRoomCode } from '../firebase/room-code.js';
 
 import { bootstrapRematchWaitingFromArchive } from './bootstrap-rematch-waiting-from-archive.js';
@@ -22,8 +23,15 @@ export async function restartRematchOnlineRound(
   baseWordRound: number,
 ): Promise<void> {
   const normalized = normalizeRoomCode(gameId);
-  const snapshot = await get(sessionRef(normalized));
-  const raw = snapshot.exists() ? snapshot.val() : null;
+  let raw: unknown = null;
+  try {
+    const snapshot = await get(sessionRef(normalized));
+    raw = snapshot.exists() ? snapshot.val() : null;
+  } catch (error) {
+    if (!isFirebasePermissionDenied(error)) {
+      throw error;
+    }
+  }
   const presence = resolveRematchRtdbPresence(raw);
   const action = planRematchAction(presence);
 
@@ -32,7 +40,7 @@ export async function restartRematchOnlineRound(
     return;
   }
 
-  if (action === 'join_waiting') {
+  if (action === 'join_waiting' || action === 'join_live') {
     return;
   }
   if (action === 'failed') {

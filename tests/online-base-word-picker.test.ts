@@ -5,8 +5,10 @@ import {
   baseWordPickerTurnNumber,
   canActorStartWaitingRound,
   currentBaseWordPickerUid,
+  eligibleBaseWordPickerUids,
   isCurrentBaseWordPicker,
   isEligibleBaseWordPickerPlayer,
+  scheduledBaseWordPickerUid,
 } from '../lib/online/base-word-picker';
 
 function session(overrides: Partial<GameSession> = {}): GameSession {
@@ -100,6 +102,67 @@ describe('currentBaseWordPickerUid', () => {
       players: {
         org: { name: 'Org', wordCount: 0, score: 0, online: true },
         p2: { name: 'Two', wordCount: 0, score: 0, online: true },
+      },
+    });
+    expect(currentBaseWordPickerUid(s)).toBe('p2');
+  });
+
+  it('lets the previous picker repeat only when alone in a later-round lobby', () => {
+    const s = session({
+      baseWordRound: 1,
+      players: {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        p2: { name: 'Two', wordCount: 0, score: 0, online: false, hasLeft: true },
+        p3: { name: 'Three', wordCount: 0, score: 0, online: false, hasLeft: true },
+      },
+    });
+    expect(currentBaseWordPickerUid(s)).toBe('org');
+  });
+
+  it('prefers another eligible player when organizer and someone else are both online', () => {
+    const s = session({
+      baseWordRound: 1,
+      players: {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        p2: { name: 'Two', wordCount: 0, score: 0, online: true },
+        p3: { name: 'Three', wordCount: 0, score: 0, online: false },
+      },
+    });
+    expect(scheduledBaseWordPickerUid(s, 0)).toBe('org');
+    expect(currentBaseWordPickerUid(s)).toBe('p2');
+  });
+
+  it('does not depend on join order when multiple players are already online', () => {
+    const s = session({
+      baseWordRound: 1,
+      players: {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        p2: { name: 'Two', wordCount: 0, score: 0, online: true },
+      },
+    });
+    expect(currentBaseWordPickerUid(s)).toBe('p2');
+    expect(eligibleBaseWordPickerUids(s)).toEqual(['org', 'p2']);
+  });
+
+  it('keeps the sole rematch participant as picker when others have not opted in', () => {
+    const s = session({
+      baseWordRound: 1,
+      players: {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        p2: { name: 'Two', wordCount: 0, score: 0, online: false },
+        p3: { name: 'Three', wordCount: 0, score: 0, online: false },
+      },
+    });
+    expect(currentBaseWordPickerUid(s)).toBe('org');
+  });
+
+  it('skips players who permanently left the room', () => {
+    const s = session({
+      baseWordRound: 1,
+      players: {
+        org: { name: 'Org', wordCount: 0, score: 0, online: false, hasLeft: true },
+        p2: { name: 'Two', wordCount: 0, score: 0, online: true },
+        p3: { name: 'Three', wordCount: 0, score: 0, online: true },
       },
     });
     expect(currentBaseWordPickerUid(s)).toBe('p2');

@@ -9,8 +9,6 @@ export const FEEDBACK_MODES: readonly FeedbackMode[] = [
 ] as const;
 
 export const DEFAULT_BUTTON_FEEDBACK: FeedbackMode = 'vibration';
-/** @deprecated Use {@link DEFAULT_BUTTON_FEEDBACK}. */
-export const DEFAULT_KEY_PRESS_FEEDBACK = DEFAULT_BUTTON_FEEDBACK;
 export const DEFAULT_WORD_ACCEPTED_FEEDBACK: FeedbackMode = 'sound';
 export const DEFAULT_TIMER_ALERT_FEEDBACK: FeedbackMode = 'sound';
 

@@ -205,8 +205,6 @@ export function applyPlayerScorePlan(
     ...submitter,
     score: plan.nextScore,
     wordCount: plan.nextWordCount,
-    online: true,
-    hasLeft: false,
   };
   return next;
 }

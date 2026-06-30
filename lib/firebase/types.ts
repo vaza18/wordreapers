@@ -89,12 +89,18 @@ export interface GameSession {
   baseWordPickerOrder?: string[];
   /** Increments on rematch; indexes into baseWordPickerOrder. */
   baseWordRound?: number;
+  /** Active base-word picker in waiting lobby (mirrors client rotation; used by RTDB rules). */
+  baseWordPickerUid?: string | null;
+  /** Who set `baseWord` in the waiting lobby (cleared when picker changes). */
+  baseWordChosenBy?: string | null;
   /** Server clock ms when the round ended (`finished`); excludes post-finish modal wait. */
   finishedAt?: number | null;
   /** Unix ms; Cloud Function deletes the session after this time. */
   purgeAfterAt?: number | null;
   /** Uids that left the results screen for home (metadata only). */
   resultsExitedBy?: Record<string, boolean> | null;
+  /** Uids that started the current `playing` round from the waiting lobby; mid-round rejoin appends. */
+  liveRoundPlayerUids?: string[] | null;
   /** Public matchmaking lobby (v2). */
   isPublic?: boolean;
   /** Server ms when room was listed publicly. */

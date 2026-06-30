@@ -1,5 +1,5 @@
 import { Asset } from 'expo-asset';
-import * as FileSystem from 'expo-file-system/legacy';
+import { File } from 'expo-file-system';
 
 import {
   createDictionaryIndex,
@@ -59,7 +59,7 @@ async function readAssetText(moduleRef: unknown): Promise<string> {
     // Fall back to expo-file-system on Android
   }
 
-  return FileSystem.readAsStringAsync(uri);
+  return new File(uri).text();
 }
 
 let cachedMain: DictionaryIndex | null = null;
@@ -118,6 +118,22 @@ export function releaseBundledDictionaryCaches(): void {
   cachedBaseWords = null;
   cachedSupplementProper = null;
   cachedSupplementSlang = null;
+}
+
+/** Sync peek when assets were already loaded (e.g. lobby lexicon build). */
+export function getBundledDictionaryIfLoaded(): DictionaryIndex | null {
+  return cachedMain;
+}
+
+/** Sync peek for supplement lists when already in memory. */
+export function getBundledSupplementsIfLoaded(): {
+  properNouns: string[];
+  slang: string[];
+} | null {
+  if (!cachedSupplementProper || !cachedSupplementSlang) {
+    return null;
+  }
+  return { properNouns: cachedSupplementProper, slang: cachedSupplementSlang };
 }
 
 /**

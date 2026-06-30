@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -125,7 +126,7 @@ function createStyles(colors: ThemeColors) {
  * Play header: menu + timer (left), standings chip on the right (grows left only when cramped).
  * Pressable timer uses accent fill + border instead of a trailing "+" affordance.
  */
-export function GamePlayStatusBar({
+export const GamePlayStatusBar = memo(function GamePlayStatusBar({
   timerLabel,
   timerUrgent = false,
   rank,
@@ -256,4 +257,4 @@ export function GamePlayStatusBar({
       </View>
     </View>
   );
-}
+});

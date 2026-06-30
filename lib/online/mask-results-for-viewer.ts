@@ -1,10 +1,11 @@
-import type { GlobalResultWordRow, PlayerResultRankGroup } from '../game/results-view.js';
+import type { PlayerResultRankGroup } from '../game/results-view.js';
 import type { RoundResultsViewData } from './online-results-data.js';
 
 type TranslateFn = (key: string) => string;
 
 /**
- * Hide other players' words for someone who left the round early.
+ * Hide words the viewer did not find and mask other players' per-player lists.
+ * Co-authors on shared words stay visible — overlap is already shown during play.
  */
 export function maskResultsForEarlyExit(
   viewData: RoundResultsViewData,
@@ -13,15 +14,9 @@ export function maskResultsForEarlyExit(
 ): RoundResultsViewData {
   const hiddenWord = t('game.wordsHiddenPlaceholder');
 
-  const globalWords: GlobalResultWordRow[] = viewData.globalWords
-    .map((row) => {
-      const mineOnly = row.authors.every((author) => author.playerId === viewerId);
-      if (!mineOnly) {
-        return null;
-      }
-      return row;
-    })
-    .filter((row): row is GlobalResultWordRow => row != null);
+  const globalWords = viewData.globalWords.filter((row) =>
+    row.authors.some((author) => author.playerId === viewerId),
+  );
 
   const playerRankGroups: PlayerResultRankGroup[] = viewData.playerRankGroups.map((group) => ({
     ...group,

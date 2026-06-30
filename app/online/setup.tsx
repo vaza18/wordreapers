@@ -22,7 +22,11 @@ import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
 import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
 import { navigateHomeWithBackAnimation } from '@/lib/navigation/navigate-home';
 import { joinErrorMessage, firebaseBootstrapErrorMessage } from '@/lib/firebase/join-error-message';
-import { subscribeGameSession, updateGameSessionSetup } from '@/lib/firebase/game-session-service';
+import {
+  organizerLeaveWaitingLobby,
+  subscribeGameSession,
+  updateGameSessionSetup,
+} from '@/lib/firebase/game-session-service';
 import type { GameSessionSnapshot } from '@/lib/firebase/game-session-service';
 import {
   gameSessionSettingsFromSetup,
@@ -94,6 +98,15 @@ export default function OnlineSetupScreen() {
   const showInviteDisabledHint = () => {
     Alert.alert(t('app.name'), t('online.inviteOthersLockedHint'));
   };
+
+  useEffect(() => {
+    if (!fromLobby || !gameId || !lobbySession) {
+      return;
+    }
+    if (lobbySession.status === 'playing') {
+      router.replace({ pathname: '/online/lobby/[gameId]', params: { gameId } });
+    }
+  }, [fromLobby, gameId, lobbySession]);
 
   useEffect(() => {
     if (!fromLobby || !gameId) {
@@ -216,15 +229,26 @@ export default function OnlineSetupScreen() {
       removeLocalRoomDraft(gameId);
     }
     if (fromLobby) {
-      if (router.canDismiss()) {
-        router.dismissTo('/');
-      } else {
-        router.replace('/');
-      }
+      void (async () => {
+        if (gameId && organizerUid && lobbySession) {
+          try {
+            await organizerLeaveWaitingLobby(gameId, organizerUid, lobbySession);
+          } catch (error) {
+            if (__DEV__) {
+              console.warn('setup leave lobby to home', error);
+            }
+          }
+        }
+        if (router.canDismiss()) {
+          router.dismissTo('/');
+        } else {
+          router.replace('/');
+        }
+      })();
       return;
     }
     navigateHomeWithBackAnimation();
-  }, [fromLobby, gameId]);
+  }, [fromLobby, gameId, lobbySession, organizerUid]);
 
   const onBack = useSyncedStackBack(handleBack);
 

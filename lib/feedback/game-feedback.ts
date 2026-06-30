@@ -200,9 +200,6 @@ export function playButtonFeedback(mode: FeedbackMode = DEFAULT_BUTTON_FEEDBACK)
   }
 }
 
-/** @deprecated Use {@link playButtonFeedback}. */
-export const playKeyPressFeedback = playButtonFeedback;
-
 /**
  * Positive feedback when a word is accepted.
  */

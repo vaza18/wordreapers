@@ -19,3 +19,25 @@ export function useServerNow(tickMs = 250): number {
 
   return now;
 }
+
+/**
+ * Tick only while `enabled` — avoids re-rendering idle screens every 250ms.
+ * When disabled, returns a fresh `getServerNow()` snapshot without scheduling.
+ */
+export function useServerNowWhen(enabled: boolean, tickMs = 250): number {
+  const [now, setNow] = useState(() => getServerNow());
+
+  useEffect(() => {
+    if (!enabled) {
+      return undefined;
+    }
+    const id = setInterval(() => {
+      setNow(getServerNow());
+    }, tickMs);
+    return () => {
+      clearInterval(id);
+    };
+  }, [enabled, tickMs]);
+
+  return enabled ? now : getServerNow();
+}

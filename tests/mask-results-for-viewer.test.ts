@@ -78,11 +78,41 @@ function viewData(): RoundResultsViewData {
 }
 
 describe('maskResultsForEarlyExit', () => {
-  it('keeps only the viewer words in the global list', () => {
+  it('keeps viewer-only words in the global list', () => {
     const masked = maskResultsForEarlyExit(viewData(), 'p1', t);
     expect(masked.globalWords).toHaveLength(1);
     expect(masked.globalWords[0]?.authors[0]?.playerId).toBe('p1');
     expect(masked.totalDistinctWords).toBe(1);
+  });
+
+  it('keeps shared words with all co-authors visible', () => {
+    const shared: RoundResultsViewData = {
+      ...viewData(),
+      globalWords: [
+        {
+          normalized: 'рак',
+          display: 'РАК',
+          showX2: true,
+          authors: [
+            {
+              playerId: 'p1',
+              playerName: 'Аня',
+              avatarColorIndex: 0,
+              kind: 'normal',
+            },
+            {
+              playerId: 'p2',
+              playerName: 'Богдан',
+              avatarColorIndex: 1,
+              kind: 'unique',
+            },
+          ],
+        },
+      ],
+    };
+    const masked = maskResultsForEarlyExit(shared, 'p1', t);
+    expect(masked.globalWords).toHaveLength(1);
+    expect(masked.globalWords[0]).toEqual(shared.globalWords[0]);
   });
 
   it('hides other players word lists in rank groups', () => {

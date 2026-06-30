@@ -16,6 +16,6 @@ describe('planRematchAction', () => {
   });
 
   it('rejects rematch during an active round', () => {
-    expect(planRematchAction('playing')).toBe('failed');
+    expect(planRematchAction('playing')).toBe('join_live');
   });
 });
