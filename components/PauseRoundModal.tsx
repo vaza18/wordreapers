@@ -7,6 +7,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { SettingsIconButton } from '@/components/SettingsIconButton';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
+import { useServerNowWhen } from '@/hooks/useServerNow';
 import { modalCardChrome, modalOverlayBackground } from '@/lib/ui/modal-chrome';
 import { tGendered, type PlayerGender } from '@/lib/game/grammar';
 import type { GameSession, SessionVote } from '@/lib/firebase/types';
@@ -27,6 +28,7 @@ import {
 import { formatStandingRowMeta } from '@/lib/game/format-play-stats';
 import { formatPlayerLeftLabel, formatVoteStatusLabel } from '@/lib/game/vote-status-label';
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
+import { formatTimerMs } from '@/lib/game/timer-label';
 import { voteProposerName } from '@/lib/firebase/session-votes-service';
 
 interface PauseRoundModalProps {
@@ -34,7 +36,7 @@ interface PauseRoundModalProps {
   session: GameSession;
   myUid: string;
   viewerGender: PlayerGender;
-  serverNow: number;
+  serverNow?: number;
   resumeVote: SessionVote | null | undefined;
   earlyFinishVote: SessionVote | null | undefined;
   hasOnlineOpponent: boolean;
@@ -48,13 +50,6 @@ interface PauseRoundModalProps {
   onLeaveNowFromEarlyFinish?: () => void;
   onOpenMenu: () => void;
   onOpenSettings: () => void;
-}
-
-function formatTimer(ms: number): string {
-  const totalSeconds = Math.ceil(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
 function PauseBody({
@@ -75,7 +70,7 @@ function PauseBody({
   onLeaveNowFromEarlyFinish,
   onOpenMenu,
   onOpenSettings,
-}: Omit<PauseRoundModalProps, 'visible'>) {
+}: Omit<PauseRoundModalProps, 'visible' | 'serverNow'> & { serverNow: number }) {
   const styles = useThemedStyles(createStyles);
   const { t } = useTranslation();
   const { top, bottom } = useSafeAreaInsets();
@@ -165,7 +160,7 @@ function PauseBody({
         >
           <Text style={styles.title}>{t('game.pauseTitle')}</Text>
           <Text style={styles.timerLine}>
-            {t('game.pauseFrozenTimer', { time: formatTimer(frozenMs) })}
+            {t('game.pauseFrozenTimer', { time: formatTimerMs(frozenMs) })}
           </Text>
           <Text style={styles.body}>{tGendered(t, 'game.pauseBody', viewerGender)}</Text>
 
@@ -341,11 +336,17 @@ function PauseBody({
   );
 }
 
-export function PauseRoundModal(props: PauseRoundModalProps) {
+export function PauseRoundModal({
+  visible,
+  serverNow: serverNowProp,
+  ...rest
+}: PauseRoundModalProps) {
+  const tickNow = useServerNowWhen(visible, 250);
+  const serverNow = serverNowProp ?? tickNow;
   return (
-    <Modal transparent visible={props.visible} animationType="fade">
+    <Modal transparent visible={visible} animationType="fade">
       <SafeAreaProvider>
-        <PauseBody {...props} />
+        <PauseBody {...rest} serverNow={serverNow} />
       </SafeAreaProvider>
     </Modal>
   );

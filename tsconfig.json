@@ -25,6 +25,7 @@
     "lib/dictionary/validate-word.ts",
     "lib/dictionary/vesum-tags.ts",
     "lib/game/*.ts",
+    "lib/firebase/**/*.ts",
     "lib/online/**/*.ts",
     "lib/profile/**/*.ts",
     "lib/feedback/**/*.ts",

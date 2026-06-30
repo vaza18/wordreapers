@@ -59,6 +59,44 @@ describe('resolvePostJoinRoute', () => {
     ).toEqual({ pathname: '/online/results/[gameId]', params: { gameId: 'AB12' } });
   });
 
+  it('routes round 2+ mid-round invite joiner in liveRoundPlayerUids to play', () => {
+    expect(
+      resolvePostJoinRoute(
+        session({
+          status: 'playing',
+          baseWordRound: 1,
+          liveRoundPlayerUids: ['org', 'joiner'],
+          timerEndsAt: Date.now() + 60_000,
+          players: {
+            org: { name: 'Org', wordCount: 0, score: 0, online: true },
+            joiner: { name: 'New', wordCount: 0, score: 0, online: true },
+          },
+        }),
+        'joiner',
+        'AB12',
+      ),
+    ).toEqual({ pathname: '/online/play/[gameId]', params: { gameId: 'AB12' } });
+  });
+
+  it('routes round 2+ roster member not in liveRoundPlayerUids to results', () => {
+    expect(
+      resolvePostJoinRoute(
+        session({
+          status: 'playing',
+          baseWordRound: 1,
+          liveRoundPlayerUids: ['org'],
+          timerEndsAt: Date.now() + 60_000,
+          players: {
+            org: { name: 'Org', wordCount: 0, score: 0, online: true },
+            joiner: { name: 'New', wordCount: 0, score: 0, online: true },
+          },
+        }),
+        'joiner',
+        'AB12',
+      ),
+    ).toEqual({ pathname: '/online/results/[gameId]', params: { gameId: 'AB12' } });
+  });
+
   it('routes rejoin after voluntary leave to play', () => {
     expect(
       resolvePostJoinRoute(

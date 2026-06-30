@@ -1,5 +1,5 @@
 import { usePathname } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 
 import { ensureFirebaseReady } from '@/lib/firebase/ensure-firebase-ready';
@@ -76,7 +76,7 @@ export function useOnlineSyncCoordinator(enabled: boolean): void {
   const pathnameRef = useRef(pathname);
   pathnameRef.current = pathname;
 
-  const scheduleSync = () => {
+  const scheduleSync = useCallback(() => {
     if (!enabled) {
       return;
     }
@@ -87,7 +87,7 @@ export function useOnlineSyncCoordinator(enabled: boolean): void {
       timerRef.current = null;
       void runSync(pathnameRef.current, uid);
     }, DEBOUNCE_MS);
-  };
+  }, [enabled, uid]);
 
   useEffect(() => {
     scheduleSync();
@@ -96,7 +96,7 @@ export function useOnlineSyncCoordinator(enabled: boolean): void {
         clearTimeout(timerRef.current);
       }
     };
-  }, [enabled, pathname, uid]);
+  }, [scheduleSync]);
 
   useEffect(() => {
     if (!enabled) {
@@ -111,7 +111,7 @@ export function useOnlineSyncCoordinator(enabled: boolean): void {
     return () => {
       sub.remove();
     };
-  }, [enabled, uid]);
+  }, [enabled, scheduleSync]);
 }
 
 export { runSync as runOnlineSyncNow };

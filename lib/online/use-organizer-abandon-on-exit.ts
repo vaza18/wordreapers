@@ -1,5 +1,5 @@
 import { useNavigation } from '@react-navigation/native';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { organizerLeaveWaitingLobby } from '../firebase/game-session-service.js';
 import type { GameSession, GameSessionStatus } from '../firebase/types.js';
@@ -23,16 +23,22 @@ export function useOrganizerAbandonWaitingOnExit(
   enabled: boolean,
 ): void {
   const navigation = useNavigation();
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
 
   useEffect(() => {
-    if (!enabled || !organizerUid || !gameId || sessionStatus !== 'waiting' || !session) {
+    if (!enabled || !organizerUid || !gameId || sessionStatus !== 'waiting') {
       return undefined;
     }
 
     setOrganizerWaitingRoom(gameId);
 
     const runCleanup = () => {
-      void organizerLeaveWaitingLobby(gameId, organizerUid, session).then(() => {
+      const liveSession = sessionRef.current;
+      if (!liveSession) {
+        return;
+      }
+      void organizerLeaveWaitingLobby(gameId, organizerUid, liveSession).then(() => {
         setOrganizerWaitingRoom(null);
       });
     };
@@ -52,5 +58,5 @@ export function useOrganizerAbandonWaitingOnExit(
     return () => {
       onBack();
     };
-  }, [enabled, gameId, navigation, organizerUid, session, sessionStatus]);
+  }, [enabled, gameId, navigation, organizerUid, sessionStatus]);
 }

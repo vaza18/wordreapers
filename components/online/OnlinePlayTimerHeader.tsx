@@ -5,6 +5,7 @@ import { GamePlayStatusBar } from '@/components/GamePlayStatusBar';
 import { spacing } from '@/constants/theme';
 import { useServerNow } from '@/hooks/useServerNow';
 import { useTimerAlerts } from '@/hooks/useTimerAlerts';
+import { formatTimerMs } from '@/lib/game/timer-label';
 import type { FeedbackMode } from '@/lib/settings/feedback-mode';
 
 export type OnlinePlayTimerHeaderProps = {
@@ -26,13 +27,6 @@ export type OnlinePlayTimerHeaderProps = {
   onOpenAddTimeModal: () => void;
   onOpenStandings: () => void;
 };
-
-function formatTimer(ms: number): string {
-  const totalSeconds = Math.ceil(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-}
 
 /**
  * Status bar + ticking round timer — isolated so the word list does not re-render every 250ms.
@@ -69,7 +63,7 @@ export const OnlinePlayTimerHeader = memo(function OnlinePlayTimerHeader({
     return Math.max(0, timerEndsAt - serverNow);
   }, [isPaused, pauseFrozenRemainingMs, serverNow, timerEndsAt]);
 
-  const remainingLabel = formatTimer(remainingMs);
+  const remainingLabel = formatTimerMs(remainingMs);
   const timerUrgent = remainingMs > 0 && remainingMs <= 60_000;
 
   useTimerAlerts(remainingMs, isPaused, timerAlertMode, roundActive);

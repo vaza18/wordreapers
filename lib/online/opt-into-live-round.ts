@@ -2,13 +2,13 @@ import { markResultsExited } from '../firebase/results-coordination-service.js';
 import {
   readGameSessionSnapshot,
   tryReadGameSessionSnapshot,
-  markPlayerOnline,
-  rejoinExistingPlayer,
+  type GameSessionSnapshot,
 } from '../firebase/game-session-service.js';
 import type { PlayerProfile } from '../profile/player-profile.js';
 
 import { resolvePostJoinRoute } from './post-join-route.js';
 import { seedPlaySessionBootstrap } from './play-session-bootstrap.js';
+import { reconcilePlayerPresence } from './reconcile-player-presence.js';
 import { restartRematchOnlineRound } from './restart-rematch-online-round.js';
 
 export type OptIntoLiveRoundRoute = ReturnType<typeof resolvePostJoinRoute>;
@@ -24,21 +24,22 @@ export async function optIntoLiveRound(
   finishedBaseWordRound: number,
 ): Promise<OptIntoLiveRoundRoute> {
   await markResultsExited(gameId, myUid);
-  let session = await tryReadGameSessionSnapshot(gameId);
-
-  if (!session || session.status === 'finished') {
+  const initial = await tryReadGameSessionSnapshot(gameId);
+  let session: GameSessionSnapshot;
+  if (!initial || initial.status === 'finished') {
     await restartRematchOnlineRound(gameId, myUid, finishedBaseWordRound);
     session = await readGameSessionSnapshot(gameId);
+  } else {
+    session = initial;
   }
   if (session.status === 'waiting' || session.status === 'playing') {
-    await rejoinExistingPlayer(gameId, myUid, profile);
-    await markPlayerOnline(gameId, myUid);
+    await reconcilePlayerPresence(gameId, myUid, profile);
     session = await readGameSessionSnapshot(gameId);
   }
 
   const route = resolvePostJoinRoute(session, myUid, gameId);
   if (route.pathname === '/online/play/[gameId]') {
-    seedPlaySessionBootstrap({ ...session, id: gameId });
+    seedPlaySessionBootstrap(session);
   }
   return route;
 }

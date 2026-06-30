@@ -23,8 +23,8 @@ import {
 } from './session-settings.js';
 import { recomputeSessionPlayerScores } from '../game/scoring.js';
 import { buildPlayersPatchForRoundStart } from '../online/players-patch-for-round-start.js';
+import { appendLiveRoundPlayerUid } from './live-round-player-uids.js';
 import {
-  appendLiveRoundPlayerUid,
   rematchWaitingPlayerPatch,
   waitingLobbyOptInUids,
 } from '../online/live-round-membership.js';
@@ -332,8 +332,9 @@ export async function rejoinExistingPlayer(
   if (sessionSnapshot.exists()) {
     const session = sessionSnapshot.val() as GameSession;
     if (session.status === 'playing') {
+      const liveUids: string[] | null | undefined = session.liveRoundPlayerUids;
       await update(sessionRef(normalized), {
-        liveRoundPlayerUids: appendLiveRoundPlayerUid(session.liveRoundPlayerUids, uid),
+        liveRoundPlayerUids: appendLiveRoundPlayerUid(liveUids, uid),
       });
     }
   }
@@ -475,13 +476,19 @@ function buildJoinCommitPatch(
     }
   }
 
-  const hasWords = Object.keys(context.wordMaps.wordPlayers ?? {}).length > 0;
-  if (next.status === 'playing' && hasWords) {
-    recomputeSessionPlayerScores(
-      { ...next, wordPlayers: context.wordMaps.wordPlayers },
-      resolvedSettings.uniqueBonusEnabled,
-    );
-    patch.players = next.players;
+  if (next.status === 'playing') {
+    // Round 2+ requires liveRoundPlayerUids; round 1 treats all roster members as opted in.
+    const liveUids: string[] | null | undefined = next.liveRoundPlayerUids;
+    patch.liveRoundPlayerUids = appendLiveRoundPlayerUid(liveUids, uid);
+
+    const hasWords = Object.keys(context.wordMaps.wordPlayers ?? {}).length > 0;
+    if (hasWords) {
+      recomputeSessionPlayerScores(
+        { ...next, wordPlayers: context.wordMaps.wordPlayers },
+        resolvedSettings.uniqueBonusEnabled,
+      );
+      patch.players = next.players;
+    }
   }
 
   return { patch, roomFull: false };

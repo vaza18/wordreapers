@@ -112,12 +112,18 @@ export default function LobbyScreen() {
     };
   }, [gameId]);
 
+  const shouldReconcilePublicAliases = session ? needsPublicAliasReconcile(session) : false;
+  const publicAliasRound = session?.baseWordRound ?? 0;
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+
   useEffect(() => {
-    if (!gameId || !session || !needsPublicAliasReconcile(session)) {
+    const liveSession = sessionRef.current;
+    if (!gameId || !liveSession || !shouldReconcilePublicAliases) {
       return;
     }
-    void syncPublicRosterAliases(gameId, session);
-  }, [gameId, session]);
+    void syncPublicRosterAliases(gameId, liveSession);
+  }, [gameId, publicAliasRound, shouldReconcilePublicAliases]);
 
   useEffect(() => {
     if (loading || session) {

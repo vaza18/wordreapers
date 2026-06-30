@@ -12,8 +12,6 @@ import { persistLocalArchive } from './coordinated-session-cleanup.js';
 import { finalizeOnlineRoundForPlayer } from './finalize-online-round.js';
 import { clearPendingRoundArchive } from './pending-round-archive.js';
 
-export { tryCompletePendingRoundArchives } from './sync-coordinator.js';
-
 async function readFinishedSession(gameId: string): Promise<GameSession | null> {
   const normalized = normalizeRoomCode(gameId);
   const snapshot = await get(ref(getFirebaseDatabase(), gameSessionPath(normalized)));

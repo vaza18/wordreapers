@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { GameSessionSnapshot } from '@/lib/firebase/game-session-service';
 import { detectPlayToastEvents } from '@/lib/online/play-toast-events';
+import { playToastSessionSignature } from '@/lib/online/play-toast-session-signature';
 import { formatPlayToastEvents } from '@/lib/online/format-play-toast';
 import { useProfileStore } from '@/store/profile-store';
 
@@ -29,23 +30,31 @@ export function usePlaySessionToasts(
   const viewerGender = useProfileStore((state) => state.gender);
   const { toasts, enqueueToasts } = useToastQueue();
   const prevSessionRef = useRef<GameSessionSnapshot | null>(null);
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+
+  const sessionSignature =
+    enabled && session && session.status === 'playing' && myUid
+      ? playToastSessionSignature(session)
+      : null;
 
   useEffect(() => {
-    if (!enabled || !session || session.status !== 'playing' || !myUid) {
-      prevSessionRef.current = session;
+    const current = sessionRef.current;
+    if (!enabled || !current || current.status !== 'playing' || !myUid) {
+      prevSessionRef.current = current;
       return;
     }
 
     const prev = prevSessionRef.current;
-    prevSessionRef.current = session;
-    if (!prev || prev.id !== session.id || prev.status !== 'playing') {
+    prevSessionRef.current = current;
+    if (!prev || prev.id !== current.id || prev.status !== 'playing') {
       return;
     }
 
-    const events = detectPlayToastEvents(prev, session, myUid);
-    const items = formatPlayToastEvents(t, events, viewerGender, session, myUid);
+    const events = detectPlayToastEvents(prev, current, myUid);
+    const items = formatPlayToastEvents(t, events, viewerGender, current, myUid);
     enqueueToasts(items);
-  }, [enabled, enqueueToasts, myUid, session, t, viewerGender]);
+  }, [enabled, enqueueToasts, myUid, sessionSignature, t, viewerGender]);
 
   return toasts;
 }

@@ -20,16 +20,7 @@ export function isInLiveRound(
   return uids.includes(playerId);
 }
 
-export function appendLiveRoundPlayerUid(
-  uids: string[] | null | undefined,
-  playerId: string,
-): string[] {
-  const next = uids ? [...uids] : [];
-  if (!next.includes(playerId)) {
-    next.push(playerId);
-  }
-  return next;
-}
+export { appendLiveRoundPlayerUid } from '../firebase/live-round-player-uids.js';
 
 /** True when this player explicitly opted into the next round (Play again / results exit). */
 export function hasOptedIntoNextRound(

@@ -3,13 +3,10 @@ import { useEffect, useRef, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { GameSessionSnapshot } from '@/lib/firebase/game-session-service';
-import {
-  markPlayerOffline,
-  markPlayerOnline,
-  rejoinExistingPlayer,
-} from '@/lib/firebase/game-session-service';
+import { markPlayerOffline } from '@/lib/firebase/game-session-service';
 import { resolvePlayScreenActions } from '@/lib/online/live-round-screen-actions';
 import { onlineResultsRoute } from '@/lib/online/online-results-route';
+import { reconcilePlayerPresence } from '@/lib/online/reconcile-player-presence';
 import { usePlayerOnlinePresence } from '@/lib/online/use-player-online-presence';
 import { useProfileStore } from '@/store/profile-store';
 
@@ -69,8 +66,7 @@ export function useLiveRoundPlayScreen({
     }
     const { name, gender, avatarColorIndex } = useProfileStore.getState();
     presenceReconcileInFlightRef.current = true;
-    void rejoinExistingPlayer(gameId, myUid, { name, gender, avatarColorIndex })
-      .then(() => markPlayerOnline(gameId, myUid))
+    void reconcilePlayerPresence(gameId, myUid, { name, gender, avatarColorIndex })
       .then(() => {
         stalePresenceReconcileRef.current = roundKey;
       })

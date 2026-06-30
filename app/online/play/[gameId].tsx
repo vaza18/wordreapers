@@ -14,28 +14,23 @@ import {
   loadBundledDictionary,
   loadBundledSupplements,
 } from '@/services/dictionary-service';
-import { AddTimeModal } from '@/components/AddTimeModal';
-import { AddTimeVoteModal } from '@/components/AddTimeVoteModal';
 import { BottomSheetModal } from '@/components/BottomSheetModal';
-import { CenterDialogModal } from '@/components/CenterDialogModal';
 import { GameMenuModal } from '@/components/GameMenuModal';
-import { GameTimeUpModal } from '@/components/GameTimeUpModal';
-import { HowToPlayDialog } from '@/components/HowToPlayDialog';
-import { EarlyFinishVoteModal } from '@/components/EarlyFinishVoteModal';
 import { OnlinePlayActiveBody } from '@/components/online/OnlinePlayActiveBody';
 import { OnlinePlayTimerHeader } from '@/components/online/OnlinePlayTimerHeader';
-import { PlaySessionToastStack } from '@/components/PlaySessionToast';
+import { PlayDialogsStack } from '@/components/online/PlayDialogsStack';
+import { PlayVoteLayer } from '@/components/online/PlayVoteLayer';
 import { PauseRoundModal } from '@/components/PauseRoundModal';
-import { PauseVoteModal } from '@/components/PauseVoteModal';
 import { RoomInviteModal } from '@/components/RoomInviteModal';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { spacing, type ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useAutoPauseOnAppBackground } from '@/hooks/useAutoPauseOnAppBackground';
+import { usePlaySessionSubscriptions } from '@/hooks/usePlaySessionSubscriptions';
 import { usePlaySessionToasts } from '@/hooks/usePlaySessionToasts';
 import { useResultsRematchToast } from '@/hooks/useResultsRematchToast';
-import { useServerNowWhen } from '@/hooks/useServerNow';
+import { useVoteExpiryResolver } from '@/hooks/useVoteExpiryResolver';
 import { useRoundTimeUpModal } from '@/hooks/useRoundTimeUpModal';
 import { useTrainingMilestone } from '@/hooks/useTrainingMilestone';
 import { DictionaryIndex } from '@/lib/dictionary/dictionary-index';
@@ -48,12 +43,10 @@ import {
   finishGameSession,
   finishGameSessionIfExpired,
   leaveGameSession,
-  subscribeGameSession,
   syncSessionPlayerScores,
   type GameSessionSnapshot,
 } from '@/lib/firebase/game-session-service';
 import { mergeSessionWithWordMaps } from '@/lib/firebase/session-word-maps';
-import { subscribeSessionWordMaps } from '@/lib/firebase/session-word-maps-service';
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import type { SessionWordMaps } from '@/lib/firebase/types';
 import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
@@ -67,13 +60,9 @@ import { hasOnlineOpponent, onlineActiveOpponentNames } from '@/lib/online/sessi
 import { onlineResultsRoute } from '@/lib/online/online-results-route';
 import { resolveRoundEndSessionSnapshot } from '@/lib/online/resolve-round-end-session-snapshot';
 import { shouldKeepFrozenResultsOverLiveFinished } from '@/lib/online/frozen-round-view';
-import {
-  consumePlaySessionBootstrap,
-  mergePlaySessionSubscription,
-} from '@/lib/online/play-session-bootstrap';
+import { consumePlaySessionBootstrap } from '@/lib/online/play-session-bootstrap';
 import {
   submitOnlineWord,
-  subscribePlayerWords,
   reconcileOwnPlayerWordsWithSession,
   type StoredPlayerWord,
 } from '@/lib/firebase/player-words-service';
@@ -87,19 +76,12 @@ import {
   proposeEarlyFinish,
   proposePause,
   proposeResume,
-  resolveAddTimeVoteIfExpired,
-  resolveEarlyFinishVoteIfExpired,
-  resolveResumeVoteIfExpired,
   voteAddTime,
   voteEarlyFinish,
   votePause,
   voteResume,
 } from '@/lib/firebase/session-votes-service';
 import { buildOnlineWordListDisplay } from '@/lib/online/online-word-display';
-import { viewerNeedsAddTimeVote } from '@/lib/online/add-time-vote';
-import { viewerNeedsEarlyFinishVote } from '@/lib/online/early-finish-vote';
-import { viewerNeedsPauseVote } from '@/lib/online/pause-vote';
-import { shouldShowInvitePlayVoteBanner } from '@/lib/online/play-vote-banner';
 import { displayPlayerName } from '@/lib/online/public-lobby/display-player-name';
 import {
   buildLiveStandingsFromSession,
@@ -274,6 +256,17 @@ export default function OnlinePlayScreen() {
     });
   }, []);
 
+  usePlaySessionSubscriptions({
+    gameId,
+    myUid,
+    t,
+    setSessionCore,
+    setLoading,
+    setLoadError,
+    setWordMaps,
+    setMyWords,
+  });
+
   useLiveRoundPlayScreen({
     gameId,
     myUid,
@@ -285,44 +278,6 @@ export default function OnlinePlayScreen() {
     leavingIntentionallyRef,
     onJoinFailed: setLoadError,
   });
-
-  useEffect(() => {
-    if (!gameId || !myUid) {
-      return undefined;
-    }
-    let cancelled = false;
-    let unsubSession: (() => void) | undefined;
-    let unsubMaps: (() => void) | undefined;
-    let unsubWords: (() => void) | undefined;
-
-    void ensureAnonymousAuth().then(() => {
-      if (cancelled) {
-        return;
-      }
-      unsubSession = subscribeGameSession(gameId, (next) => {
-        setSessionCore((prev) => mergePlaySessionSubscription(prev, next));
-        setLoading(false);
-        if (!next) {
-          setLoadError(t('online.errorRoomNotFound'));
-        }
-      });
-      unsubMaps = subscribeSessionWordMaps(gameId, (maps) => {
-        queueMicrotask(() => {
-          if (!cancelled) {
-            setWordMaps(maps);
-          }
-        });
-      });
-      unsubWords = subscribePlayerWords(gameId, myUid, setMyWords);
-    });
-
-    return () => {
-      cancelled = true;
-      unsubSession?.();
-      unsubMaps?.();
-      unsubWords?.();
-    };
-  }, [gameId, myUid, t]);
 
   useEffect(() => {
     if (resultsNavigatedRef.current || !session || session.status !== 'playing' || !myUid) {
@@ -500,16 +455,16 @@ export default function OnlinePlayScreen() {
   const showPointUi = shouldShowPointUi(uniqueBonusEnabled);
 
   const isPaused = displaySession?.pauseState?.active === true;
-  const serverNow = useServerNowWhen(
-    Boolean(
-      isPaused ||
-      session?.earlyFinishVote ||
-      session?.pauseVote ||
-      session?.addTimeVote ||
-      session?.resumeVote,
-    ),
-    250,
-  );
+
+  useVoteExpiryResolver({
+    gameId,
+    enabled: !resultsNavigatedRef.current,
+    earlyFinishVote: session?.earlyFinishVote,
+    addTimeVote: session?.addTimeVote,
+    resumeVote: session?.resumeVote,
+    pauseActive: isPaused,
+    playing: session?.status === 'playing',
+  });
 
   useEffect(() => {
     if (
@@ -972,6 +927,36 @@ export default function OnlinePlayScreen() {
     })();
   };
 
+  const onVoteEarlyFinish = useCallback(
+    (choice: 'yes' | 'no') => {
+      if (!myUid) {
+        return;
+      }
+      void voteEarlyFinish(gameId, myUid, choice);
+    },
+    [gameId, myUid],
+  );
+
+  const onVotePause = useCallback(
+    (choice: 'yes' | 'no') => {
+      if (!myUid) {
+        return;
+      }
+      void votePause(gameId, myUid, choice);
+    },
+    [gameId, myUid],
+  );
+
+  const onVoteAddTime = useCallback(
+    (choice: 'yes' | 'no') => {
+      if (!myUid) {
+        return;
+      }
+      void voteAddTime(gameId, myUid, choice);
+    },
+    [gameId, myUid],
+  );
+
   const hasOnlineOpponentInRound = useMemo(
     () => (session && myUid ? hasOnlineOpponent(session, myUid) : false),
     [myUid, session],
@@ -1011,61 +996,6 @@ export default function OnlinePlayScreen() {
     }
     void finishGameSession(gameId, wordMaps ?? undefined);
   };
-
-  useEffect(() => {
-    if (
-      resultsNavigatedRef.current ||
-      !session?.earlyFinishVote ||
-      session.status !== 'playing' ||
-      !gameId
-    ) {
-      return undefined;
-    }
-    void resolveEarlyFinishVoteIfExpired(gameId);
-    const timer = setInterval(() => {
-      void resolveEarlyFinishVoteIfExpired(gameId);
-    }, 1000);
-    return () => {
-      clearInterval(timer);
-    };
-  }, [gameId, session?.earlyFinishVote, session?.players, session?.status]);
-
-  useEffect(() => {
-    if (
-      resultsNavigatedRef.current ||
-      !session?.addTimeVote ||
-      session.status !== 'playing' ||
-      !gameId
-    ) {
-      return undefined;
-    }
-    void resolveAddTimeVoteIfExpired(gameId);
-    const timer = setInterval(() => {
-      void resolveAddTimeVoteIfExpired(gameId);
-    }, 1000);
-    return () => {
-      clearInterval(timer);
-    };
-  }, [gameId, session?.addTimeVote, session?.players, session?.status]);
-
-  useEffect(() => {
-    if (
-      resultsNavigatedRef.current ||
-      !session?.resumeVote ||
-      !session.pauseState?.active ||
-      session.status !== 'playing' ||
-      !gameId
-    ) {
-      return undefined;
-    }
-    void resolveResumeVoteIfExpired(gameId);
-    const timer = setInterval(() => {
-      void resolveResumeVoteIfExpired(gameId);
-    }, 1000);
-    return () => {
-      clearInterval(timer);
-    };
-  }, [gameId, session?.pauseState?.active, session?.players, session?.resumeVote, session?.status]);
 
   useEffect(() => {
     if (session?.status !== 'playing') {
@@ -1141,91 +1071,6 @@ export default function OnlinePlayScreen() {
     showExitConfirm ||
     (showEndEarlyConfirm && !hasOnlineOpponentInRound);
   const canProposeAddTime = !isPaused && !earlyVote && !pauseVote && !addTimeVote;
-
-  const renderActivePlayVote = (layout: 'modal' | 'banner') => {
-    if (isPaused) {
-      return null;
-    }
-    if (earlyVote) {
-      const needsVote = viewerNeedsEarlyFinishVote(session, earlyVote, myUid);
-      if (
-        layout === 'banner' &&
-        !shouldShowInvitePlayVoteBanner(earlyVote.proposedBy, myUid, needsVote)
-      ) {
-        return null;
-      }
-      return (
-        <EarlyFinishVoteModal
-          visible
-          layout={layout}
-          session={session}
-          vote={earlyVote}
-          myUid={myUid}
-          serverNow={serverNow}
-          onYes={() => {
-            void voteEarlyFinish(gameId, myUid, 'yes');
-          }}
-          onNo={() => {
-            void voteEarlyFinish(gameId, myUid, 'no');
-          }}
-          onCancelProposal={earlyVote.proposedBy === myUid ? cancelEarlyFinishProposal : undefined}
-          onLeaveNow={earlyVote.proposedBy === myUid ? leaveNowFromEarlyFinish : undefined}
-        />
-      );
-    }
-    if (pauseVote && !addTimeVote) {
-      const needsVote = viewerNeedsPauseVote(session, pauseVote, myUid);
-      if (
-        layout === 'banner' &&
-        !shouldShowInvitePlayVoteBanner(pauseVote.proposedBy, myUid, needsVote)
-      ) {
-        return null;
-      }
-      return (
-        <PauseVoteModal
-          visible
-          layout={layout}
-          session={session}
-          vote={pauseVote}
-          myUid={myUid}
-          onYes={() => {
-            void votePause(gameId, myUid, 'yes');
-          }}
-          onNo={() => {
-            void votePause(gameId, myUid, 'no');
-          }}
-          onCancelProposal={pauseVote.proposedBy === myUid ? cancelPauseProposal : undefined}
-        />
-      );
-    }
-    if (addTimeVote && session.status === 'playing' && !pauseVote) {
-      const needsVote = viewerNeedsAddTimeVote(session, addTimeVote, myUid);
-      if (
-        layout === 'banner' &&
-        !shouldShowInvitePlayVoteBanner(addTimeVote.proposedBy, myUid, needsVote)
-      ) {
-        return null;
-      }
-      return (
-        <AddTimeVoteModal
-          visible
-          layout={layout}
-          session={session}
-          vote={addTimeVote}
-          myUid={myUid}
-          serverNow={serverNow}
-          onYes={() => {
-            void voteAddTime(gameId, myUid, 'yes');
-          }}
-          onNo={() => {
-            void voteAddTime(gameId, myUid, 'no');
-          }}
-          onCancelProposal={addTimeVote.proposedBy === myUid ? cancelAddTimeProposal : undefined}
-        />
-      );
-    }
-    return null;
-  };
 
   return (
     <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
@@ -1357,7 +1202,26 @@ export default function OnlinePlayScreen() {
         roomCode={gameId}
         invitedByUid={myUid}
         roundInProgress={session.status === 'playing'}
-        topContent={showInviteModal ? renderActivePlayVote('banner') : undefined}
+        topContent={
+          showInviteModal ? (
+            <PlayVoteLayer
+              layout="banner"
+              isPaused={isPaused}
+              session={session}
+              myUid={myUid}
+              earlyVote={earlyVote}
+              pauseVote={pauseVote}
+              addTimeVote={addTimeVote}
+              onVoteEarlyFinish={onVoteEarlyFinish}
+              onCancelEarlyFinishProposal={cancelEarlyFinishProposal}
+              onLeaveNowFromEarlyFinish={leaveNowFromEarlyFinish}
+              onVotePause={onVotePause}
+              onCancelPauseProposal={cancelPauseProposal}
+              onVoteAddTime={onVoteAddTime}
+              onCancelAddTimeProposal={cancelAddTimeProposal}
+            />
+          ) : undefined
+        }
         onClose={() => {
           setShowInviteModal(false);
         }}
@@ -1369,7 +1233,6 @@ export default function OnlinePlayScreen() {
           session={session}
           myUid={myUid}
           viewerGender={viewerGender}
-          serverNow={serverNow}
           resumeVote={resumeVote}
           earlyFinishVote={earlyVote}
           hasOnlineOpponent={hasOnlineOpponentInRound}
@@ -1406,56 +1269,55 @@ export default function OnlinePlayScreen() {
         />
       ) : null}
 
-      {!showInviteModal ? renderActivePlayVote('modal') : null}
+      {!showInviteModal ? (
+        <PlayVoteLayer
+          layout="modal"
+          isPaused={isPaused}
+          session={session}
+          myUid={myUid}
+          earlyVote={earlyVote}
+          pauseVote={pauseVote}
+          addTimeVote={addTimeVote}
+          onVoteEarlyFinish={onVoteEarlyFinish}
+          onCancelEarlyFinishProposal={cancelEarlyFinishProposal}
+          onLeaveNowFromEarlyFinish={leaveNowFromEarlyFinish}
+          onVotePause={onVotePause}
+          onCancelPauseProposal={cancelPauseProposal}
+          onVoteAddTime={onVoteAddTime}
+          onCancelAddTimeProposal={cancelAddTimeProposal}
+        />
+      ) : null}
 
-      <AddTimeModal
-        visible={showAddTimeModal && canProposeAddTime && !roundEnded}
-        remainingMs={showAddTimeModal && endsAt != null ? Math.max(0, endsAt - getServerNow()) : 0}
-        requiresConsensus={hasOpponent}
-        onClose={() => {
+      <PlayDialogsStack
+        t={t}
+        roundEnded={roundEnded}
+        isPaused={isPaused}
+        sessionPlaying={session.status === 'playing'}
+        canProposeAddTime={canProposeAddTime}
+        showAddTimeModal={showAddTimeModal}
+        addTimeRemainingMs={
+          showAddTimeModal && endsAt != null ? Math.max(0, endsAt - getServerNow()) : 0
+        }
+        hasOpponent={hasOpponent}
+        onCloseAddTime={() => {
           setShowAddTimeModal(false);
         }}
-        onSelect={(minutes) => {
+        onSelectAddTime={(minutes) => {
           void proposeAddTime(gameId, myUid, minutes);
         }}
-      />
-
-      <CenterDialogModal
-        visible={showEndEarlyConfirm && !hasOnlineOpponentInRound && !roundEnded}
-        title={t('game.endEarlyConfirmTitle')}
-        body={t('game.endEarlyConfirmBody')}
-        primaryLabel={t('game.endEarlyConfirmAction')}
-        onPrimary={handleEndEarlyConfirm}
-        secondaryLabel={t('common.cancel')}
-        onSecondary={() => {
+        showEndEarlyConfirm={showEndEarlyConfirm}
+        hasOnlineOpponentInRound={hasOnlineOpponentInRound}
+        onEndEarlyConfirm={handleEndEarlyConfirm}
+        onDismissEndEarlyConfirm={() => {
           setShowEndEarlyConfirm(false);
         }}
-        onRequestClose={() => {
-          setShowEndEarlyConfirm(false);
-        }}
-      />
-
-      <CenterDialogModal
-        visible={showExitConfirm && !roundEnded}
-        title={t('online.exitConfirmTitle')}
-        body={t('online.exitConfirmBody')}
-        primaryLabel={t('online.exitConfirmAction')}
-        onPrimary={leaveToHome}
-        secondaryLabel={t('common.cancel')}
-        onSecondary={() => {
+        showExitConfirm={showExitConfirm}
+        onLeaveToHome={leaveToHome}
+        onDismissExitConfirm={() => {
           setShowExitConfirm(false);
         }}
-        onRequestClose={() => {
-          setShowExitConfirm(false);
-        }}
-      />
-
-      <PlaySessionToastStack toasts={sessionToasts} />
-
-      <HowToPlayDialog enabled={session.status === 'playing' && !isPaused} />
-
-      <GameTimeUpModal
-        visible={timeUpModalVisible}
+        sessionToasts={sessionToasts}
+        timeUpModalVisible={timeUpModalVisible}
         onViewResults={() => {
           void navigateToResults();
         }}

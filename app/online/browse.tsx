@@ -51,7 +51,9 @@ export default function BrowsePublicLobbiesScreen() {
   const { colors } = useTheme();
   const { refreshIconSize } = useHeaderIconButtonLayout();
   const { t } = useTranslation();
-  const { name, gender, avatarColorIndex } = useProfileStore();
+  const name = useProfileStore((state) => state.name);
+  const gender = useProfileStore((state) => state.gender);
+  const avatarColorIndex = useProfileStore((state) => state.avatarColorIndex);
   const firebaseUid = useFirebaseStore((state) => state.uid);
   const gameLanguage = playerLanguageForBrowse({ language: UK_LOCALE });
   const serverNow = useServerNow(30_000);

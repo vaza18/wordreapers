@@ -1,14 +1,10 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { radii, spacing, type ThemeColors } from '@/constants/theme';
-import { useThemedStyles } from '@/hooks/useThemedStyles';
-import { modalCardChrome, modalOverlayBackground } from '@/lib/ui/modal-chrome';
+import { VoteParticipantModal } from '@/components/VoteParticipantCard';
+import { useServerNowWhen } from '@/hooks/useServerNow';
 import type { GameSession, SessionVote } from '@/lib/firebase/types';
-import { formatPlayerLeftLabel, formatVoteStatusLabel } from '@/lib/game/vote-status-label';
 import {
   buildEarlyFinishParticipantRows,
   EARLY_FINISH_VOTE_TIMEOUT_MS,
@@ -22,28 +18,31 @@ interface EarlyFinishVoteModalProps {
   session: GameSession;
   vote: SessionVote;
   myUid: string;
-  serverNow: number;
+  serverNow?: number;
   onYes: () => void;
   onNo: () => void;
   onLeaveNow?: () => void;
   onCancelProposal?: () => void;
 }
 
-function VoteCard({
+/**
+ * Early-finish vote dialog with roster, online markers, and per-player vote status.
+ */
+export function EarlyFinishVoteModal({
+  visible,
   layout = 'modal',
   session,
   vote,
   myUid,
-  serverNow,
+  serverNow: serverNowProp,
   onYes,
   onNo,
   onLeaveNow,
   onCancelProposal,
-}: Omit<EarlyFinishVoteModalProps, 'visible'>) {
-  const styles = useThemedStyles(createStyles);
+}: EarlyFinishVoteModalProps) {
   const { t } = useTranslation();
-  const { bottom } = useSafeAreaInsets();
-  const isBanner = layout === 'banner';
+  const tickNow = useServerNowWhen(visible, 250);
+  const serverNow = serverNowProp ?? tickNow;
   const isProposer = vote.proposedBy === myUid;
   const needsVote = viewerNeedsEarlyFinishVote(session, vote, myUid);
   const participants = buildEarlyFinishParticipantRows(session, vote, myUid);
@@ -58,192 +57,32 @@ function VoteCard({
     ? t('game.voteEarlyFinishSent')
     : t('game.voteEarlyFinish', { name: voteProposerName(session, vote.proposedBy, myUid) });
 
+  const subheadline =
+    secondsLeft > 0 ? t('game.voteEarlyFinishTimer', { seconds: secondsLeft }) : null;
+
   return (
-    <View
-      style={
-        isBanner ? styles.bannerWrap : [styles.overlay, { paddingBottom: spacing.lg + bottom }]
-      }
-    >
-      <View style={isBanner ? styles.bannerCard : styles.card}>
-        <Text style={styles.message}>{headline}</Text>
-        {secondsLeft > 0 ? (
-          <Text style={styles.timer}>
-            {t('game.voteEarlyFinishTimer', { seconds: secondsLeft })}
-          </Text>
-        ) : null}
-
-        <View style={styles.participantList}>
-          {participants.map((row) => (
-            <View key={row.playerId} style={styles.participantRow}>
-              <View style={styles.participantMain}>
-                <Text style={styles.participantName} numberOfLines={1}>
-                  {row.name}
-                  {row.playerId === myUid ? ` ${t('game.resultsYou')}` : ''}
-                </Text>
-                <Text style={styles.participantPresence}>
-                  {row.online
-                    ? t('game.playerOnline')
-                    : row.hasLeft
-                      ? formatPlayerLeftLabel(t, row.gender)
-                      : t('game.playerOffline')}
-                </Text>
-              </View>
-              <Text style={styles.participantVote}>
-                {formatVoteStatusLabel(t, row.voteStatus, !row.online && row.hasLeft, row.gender)}
-              </Text>
-            </View>
-          ))}
-        </View>
-
-        {needsVote ? (
-          <View style={styles.row}>
-            <PrimaryButton label={t('game.voteYes')} style={styles.btn} onPress={onYes} />
-            <PrimaryButton
-              label={t('game.voteNo')}
-              variant="secondary"
-              style={styles.btn}
-              onPress={onNo}
-            />
-          </View>
-        ) : null}
-
-        {isProposer && onCancelProposal ? (
-          <PrimaryButton label={t('game.voteEarlyFinishCancel')} onPress={onCancelProposal} />
-        ) : null}
-        {isProposer && onLeaveNow ? (
+    <VoteParticipantModal
+      visible={visible}
+      layout={layout}
+      headline={headline}
+      subheadline={subheadline}
+      participants={participants}
+      myUid={myUid}
+      needsVote={needsVote}
+      isProposer={isProposer}
+      onYes={onYes}
+      onNo={onNo}
+      cancelLabel={t('game.voteEarlyFinishCancel')}
+      onCancelProposal={onCancelProposal}
+      extraActions={
+        isProposer && onLeaveNow ? (
           <PrimaryButton
             label={t('game.voteEarlyFinishLeaveNow')}
             variant="secondary"
             onPress={onLeaveNow}
           />
-        ) : null}
-      </View>
-    </View>
-  );
-}
-
-/**
- * Early-finish vote dialog with roster, online markers, and per-player vote status.
- */
-export function EarlyFinishVoteModal({
-  visible,
-  layout = 'modal',
-  session,
-  vote,
-  myUid,
-  serverNow,
-  onYes,
-  onNo,
-  onLeaveNow,
-  onCancelProposal,
-}: EarlyFinishVoteModalProps) {
-  if (!visible) {
-    return null;
-  }
-
-  const body = (
-    <VoteCard
-      layout={layout}
-      session={session}
-      vote={vote}
-      myUid={myUid}
-      serverNow={serverNow}
-      onYes={onYes}
-      onNo={onNo}
-      onLeaveNow={onLeaveNow}
-      onCancelProposal={onCancelProposal}
+        ) : null
+      }
     />
   );
-
-  if (layout === 'banner') {
-    return body;
-  }
-
-  return (
-    <Modal transparent visible animationType="fade" accessibilityViewIsModal>
-      <SafeAreaProvider>{body}</SafeAreaProvider>
-    </Modal>
-  );
-}
-
-function createStyles(colors: ThemeColors) {
-  return StyleSheet.create({
-    overlay: {
-      flex: 1,
-      justifyContent: 'center',
-      paddingHorizontal: spacing.lg,
-      paddingTop: spacing.lg,
-      backgroundColor: modalOverlayBackground(colors),
-    },
-    bannerWrap: {
-      width: '100%',
-    },
-    bannerCard: {
-      ...modalCardChrome(colors),
-      borderRadius: radii.md,
-      padding: spacing.md,
-      gap: spacing.sm,
-      alignItems: 'stretch',
-      maxHeight: 240,
-    },
-    card: {
-      ...modalCardChrome(colors),
-      borderRadius: radii.md,
-      padding: spacing.lg,
-      gap: spacing.md,
-      alignItems: 'stretch',
-      maxHeight: '85%',
-    },
-    message: {
-      fontSize: 15,
-      lineHeight: 22,
-      color: colors.textPrimary,
-      textAlign: 'center',
-    },
-    timer: {
-      fontSize: 13,
-      color: colors.textSecondary,
-      textAlign: 'center',
-    },
-    participantList: {
-      gap: spacing.xs,
-    },
-    participantRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: spacing.sm,
-      paddingVertical: spacing.xs,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.borderTertiary,
-    },
-    participantMain: {
-      flex: 1,
-      minWidth: 0,
-      gap: 2,
-    },
-    participantName: {
-      fontSize: 14,
-      fontWeight: '500',
-      color: colors.textPrimary,
-    },
-    participantPresence: {
-      fontSize: 12,
-      color: colors.textSecondary,
-    },
-    participantVote: {
-      flexShrink: 0,
-      fontSize: 12,
-      fontWeight: '500',
-      color: colors.accent,
-      textAlign: 'right',
-    },
-    row: {
-      flexDirection: 'row',
-      gap: spacing.sm,
-    },
-    btn: {
-      flex: 1,
-    },
-  });
 }

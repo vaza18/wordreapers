@@ -6,21 +6,18 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { RoundResultsView } from '@/components/RoundResultsView';
 import { spacing, type ThemeColors } from '@/constants/theme';
+import { useArchiveRoundLexicon } from '@/hooks/useArchiveRoundLexicon';
+import { useLiveRosterPlayerWords } from '@/hooks/useLiveRosterPlayerWords';
+import { useOnlineViewerUid } from '@/hooks/useOnlineViewerUid';
+import { useResultsRoundLexicon } from '@/hooks/useResultsRoundLexicon';
+import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
-import { ensureAnonymousAuth } from '@/lib/firebase/auth';
 import {
   leaveGameSession,
   subscribeGameSession,
   type GameSessionSnapshot,
 } from '@/lib/firebase/game-session-service';
-import {
-  fetchSessionPlayerWords,
-  subscribeSessionPlayerWords,
-  type StoredPlayerWord,
-} from '@/lib/firebase/player-words-service';
-import { stillPlayingPlayerNames } from '@/lib/online/active-round-players';
-import { mergeAllPlayerWords, type AllPlayerWords } from '@/lib/online/clone-player-words';
 import {
   persistFinishedRoundForPlayer,
   persistFinishedRoundFromFirebase,
@@ -34,7 +31,6 @@ import {
 import { markPendingRoundArchive } from '@/lib/online/pending-round-archive';
 import { maskResultsForEarlyExit } from '@/lib/online/mask-results-for-viewer';
 import { buildOnlineResultsView } from '@/lib/online/online-results-data';
-import { getFinishedRoundArchive } from '@/lib/online/online-session-archive';
 import { onlineResultsRoute } from '@/lib/online/online-results-route';
 import {
   isLiveSessionForLeftRound,
@@ -47,19 +43,15 @@ import {
 } from '@/lib/online/left-round-screen-actions';
 import { resolvePostJoinRoute } from '@/lib/online/post-join-route';
 import { rejoinOnlineRound } from '@/lib/online/rejoin-online-round';
+import { stillPlayingPlayerNames } from '@/lib/online/active-round-players';
 import {
   notifyRoundFinishedOnce,
   isRoundFinishedNotified,
 } from '@/lib/online/round-finished-notification-once';
-import { useFirebaseStore } from '@/store/firebase-store';
-import { useResultsRoundLexicon } from '@/hooks/useResultsRoundLexicon';
-import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
-import type { PlayableLexiconSnapshot } from '@/lib/dictionary/round-playable-lexicon';
 import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
 import { tGendered } from '@/lib/game/grammar';
 import { useProfileStore } from '@/store/profile-store';
-
-const EMPTY_WORDS: AllPlayerWords = new Map();
+import type { StoredPlayerWord } from '@/lib/firebase/player-words-service';
 
 /**
  * Summary after leaving an active online round — live RTDB while playing, local snapshot when finished.
@@ -70,19 +62,15 @@ export default function OnlineLeftRoundScreen() {
   const { t } = useTranslation();
   const { gameId: rawGameId } = useLocalSearchParams<{ gameId: string }>();
   const gameId = rawGameId ?? '';
-  const storeUid = useFirebaseStore((state) => state.uid);
+  const myUid = useOnlineViewerUid();
   const viewerGender = useProfileStore((state) => state.gender);
-  const [resolvedUid, setResolvedUid] = useState(storeUid ?? '');
-  const myUid = resolvedUid || storeUid || '';
 
   const [session, setSession] = useState<GameSessionSnapshot | null>(null);
-  const [liveWords, setLiveWords] = useState(EMPTY_WORDS);
   const [frozenRound, setFrozenRound] = useState<FrozenFinishedRound | null>(null);
   const [leftAtBaseWordRound, setLeftAtBaseWordRound] = useState<number | null>(null);
   const [leftRoundPlayingSnapshot, setLeftRoundPlayingSnapshot] =
     useState<FrozenFinishedRound | null>(null);
   const [sessionLoaded, setSessionLoaded] = useState(false);
-  const [wordsBootstrapComplete, setWordsBootstrapComplete] = useState(false);
   const [rejoinLoading, setRejoinLoading] = useState(false);
   const [rejoinError, setRejoinError] = useState<string | null>(null);
   const [viewResultsUnlocked, setViewResultsUnlocked] = useState(false);
@@ -92,7 +80,6 @@ export default function OnlineLeftRoundScreen() {
   const finishedNotifyRef = useRef(false);
   const freezeAttemptedRef = useRef(false);
   const pendingMarkedRoundRef = useRef<number | null>(null);
-  const [archiveLexicon, setArchiveLexicon] = useState<PlayableLexiconSnapshot | null>(null);
 
   const pinnedFrozenRound =
     frozenRound &&
@@ -109,6 +96,24 @@ export default function OnlineLeftRoundScreen() {
       }),
     [leftAtBaseWordRound, leftRoundPlayingSnapshot, pinnedFrozenRound, session],
   );
+  const roundStillActive =
+    isLiveSessionForLeftRound(leftAtBaseWordRound, session) && session?.status === 'playing';
+
+  const rosterPlayerIds = useMemo(() => {
+    if (pinnedFrozenRound || !session || !isLiveSessionForLeftRound(leftAtBaseWordRound, session)) {
+      return [];
+    }
+    return Object.keys(session.players).sort();
+  }, [leftAtBaseWordRound, pinnedFrozenRound, session]);
+
+  const { liveWords, wordsBootstrapComplete } = useLiveRosterPlayerWords({
+    gameId,
+    rosterPlayerIds,
+    enabled: Boolean(
+      gameId && !pinnedFrozenRound && rosterPlayerIds.length > 0 && session?.status === 'playing',
+    ),
+  });
+
   const wordsSnapshot = useMemo(() => {
     if (pinnedFrozenRound) {
       return pinnedFrozenRound.words;
@@ -125,38 +130,12 @@ export default function OnlineLeftRoundScreen() {
     }
     return liveWords;
   }, [leftAtBaseWordRound, leftRoundPlayingSnapshot, liveWords, pinnedFrozenRound, session]);
-  const roundStillActive =
-    isLiveSessionForLeftRound(leftAtBaseWordRound, session) && session?.status === 'playing';
+
+  const archiveLexicon = useArchiveRoundLexicon(gameId, displaySession?.baseWordRound);
   const { lexicon: roundLexicon, loading: lexiconLoading } = useResultsRoundLexicon(
     displaySession,
     archiveLexicon,
   );
-
-  useEffect(() => {
-    if (!gameId || displaySession?.baseWordRound == null) {
-      return;
-    }
-    void getFinishedRoundArchive(gameId, displaySession.baseWordRound).then((archive) => {
-      setArchiveLexicon(archive?.playableLexicon ?? null);
-    });
-  }, [displaySession?.baseWordRound, gameId]);
-
-  const rosterPlayerIds = useMemo(() => {
-    if (pinnedFrozenRound || !session || !isLiveSessionForLeftRound(leftAtBaseWordRound, session)) {
-      return [];
-    }
-    return Object.keys(session.players).sort();
-  }, [leftAtBaseWordRound, pinnedFrozenRound, session]);
-
-  const mergeWords = useCallback((incoming: AllPlayerWords) => {
-    setLiveWords((prev) => mergeAllPlayerWords(prev, incoming));
-  }, []);
-
-  useEffect(() => {
-    void ensureAnonymousAuth().then((user) => {
-      setResolvedUid(user.uid);
-    });
-  }, []);
 
   useEffect(() => {
     if (
@@ -179,6 +158,14 @@ export default function OnlineLeftRoundScreen() {
     });
   }, [gameId, myUid, rejoinLoading, session?.baseWordRound, session?.status]);
 
+  const liveWordsSignature = useMemo(() => {
+    const parts: string[] = [];
+    for (const [uid, words] of [...liveWords.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+      parts.push(`${uid}:${words.size}`);
+    }
+    return parts.join('|');
+  }, [liveWords]);
+
   useEffect(() => {
     if (
       !gameId ||
@@ -190,7 +177,7 @@ export default function OnlineLeftRoundScreen() {
       return;
     }
     setLeftRoundPlayingSnapshot(freezeFinishedRound(gameId, session, liveWords));
-  }, [gameId, leftAtBaseWordRound, liveWords, session]);
+  }, [gameId, leftAtBaseWordRound, liveWords, liveWordsSignature, session]);
 
   useEffect(() => {
     if (
@@ -234,31 +221,6 @@ export default function OnlineLeftRoundScreen() {
   useEffect(() => {
     if (
       !gameId ||
-      pinnedFrozenRound ||
-      rosterPlayerIds.length === 0 ||
-      session?.status !== 'playing'
-    ) {
-      return undefined;
-    }
-
-    let cancelled = false;
-    void fetchSessionPlayerWords(gameId, rosterPlayerIds).then((words) => {
-      if (!cancelled) {
-        mergeWords(words);
-        setWordsBootstrapComplete(true);
-      }
-    });
-
-    const unsubWords = subscribeSessionPlayerWords(gameId, rosterPlayerIds, mergeWords);
-    return () => {
-      cancelled = true;
-      unsubWords();
-    };
-  }, [gameId, mergeWords, pinnedFrozenRound, rosterPlayerIds, session?.status]);
-
-  useEffect(() => {
-    if (
-      !gameId ||
       !myUid ||
       leftAtBaseWordRound == null ||
       !session ||
@@ -281,7 +243,6 @@ export default function OnlineLeftRoundScreen() {
         shouldAcceptLeftRoundFrozenArchive(archived.session.baseWordRound, leftAtBaseWordRound)
       ) {
         setFrozenRound(archived);
-        setWordsBootstrapComplete(true);
         return;
       }
       if (!shouldPersistLeftRoundFinishedArchive(leftAtBaseWordRound, session)) {
@@ -299,7 +260,6 @@ export default function OnlineLeftRoundScreen() {
           shouldAcceptLeftRoundFrozenArchive(refreshed.session.baseWordRound, leftAtBaseWordRound)
         ) {
           setFrozenRound(refreshed);
-          setWordsBootstrapComplete(true);
           finishedArchiveRef.current = true;
         }
       } catch {

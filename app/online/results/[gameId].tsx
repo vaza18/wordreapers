@@ -7,26 +7,22 @@ import { PlaySessionToastStack } from '@/components/PlaySessionToast';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { RoundResultsView } from '@/components/RoundResultsView';
 import { useResultsRematchToast } from '@/hooks/useResultsRematchToast';
+import { useArchiveRoundLexicon } from '@/hooks/useArchiveRoundLexicon';
+import { useLiveRosterPlayerWords } from '@/hooks/useLiveRosterPlayerWords';
+import { useOnlineViewerUid } from '@/hooks/useOnlineViewerUid';
 import { useResultsRoundLexicon } from '@/hooks/useResultsRoundLexicon';
-import type { PlayableLexiconSnapshot } from '@/lib/dictionary/round-playable-lexicon';
 import { StackHeaderTitle } from '@/components/StackHeaderTitle';
 import { spacing, type ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
-import { ensureAnonymousAuth } from '@/lib/firebase/auth';
 import {
   markPlayerOffline,
   removeOrphanGameSessionShell,
   subscribeGameSession,
   type GameSessionSnapshot,
 } from '@/lib/firebase/game-session-service';
-import {
-  fetchSessionPlayerWords,
-  subscribeSessionPlayerWords,
-} from '@/lib/firebase/player-words-service';
 import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
 import { persistLocalArchive } from '@/lib/online/coordinated-session-cleanup';
-import { mergeAllPlayerWords, type AllPlayerWords } from '@/lib/online/clone-player-words';
 import { isSessionWordsSnapshotReady } from '@/lib/online/session-words-bootstrap';
 import {
   freezeFinishedRound,
@@ -47,6 +43,7 @@ import {
   shouldRecoverFinishedRoundFromArchive,
 } from '@/lib/online/frozen-round-view';
 import { optIntoLiveRound } from '@/lib/online/opt-into-live-round';
+import { loadFrozenRoundWithRetry } from '@/lib/online/load-frozen-round-with-retry';
 import { resolveResultsPresence } from '@/lib/online/live-round-screen-actions';
 import { parseViewingBaseWordRoundParam } from '@/lib/online/parse-viewing-base-word-round-param';
 import { mergeSessionWithWordMaps } from '@/lib/firebase/session-word-maps';
@@ -54,11 +51,9 @@ import { subscribeSessionWordMaps } from '@/lib/firebase/session-word-maps-servi
 import type { SessionWordMaps } from '@/lib/firebase/types';
 import type { RoundResultsViewData } from '@/lib/online/online-results-data';
 import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
-import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
-import { useFirebaseStore } from '@/store/firebase-store';
-import { useProfileStore } from '@/store/profile-store';
 
-const EMPTY_WORDS: AllPlayerWords = new Map();
+import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
+import { useProfileStore } from '@/store/profile-store';
 
 /**
  * Online round results — local archive first, Firebase only for rematch routing and cleanup.
@@ -76,9 +71,7 @@ export default function OnlineResultsScreen() {
     () => parseViewingBaseWordRoundParam(rawViewingRound),
     [rawViewingRound],
   );
-  const storeUid = useFirebaseStore((state) => state.uid);
-  const [resolvedUid, setResolvedUid] = useState(storeUid ?? '');
-  const myUid = resolvedUid || storeUid || '';
+  const myUid = useOnlineViewerUid();
 
   const [liveSessionCore, setLiveSessionCore] = useState<GameSessionSnapshot | null>(null);
   const [liveWordMaps, setLiveWordMaps] = useState<SessionWordMaps | null>(null);
@@ -86,15 +79,12 @@ export default function OnlineResultsScreen() {
     () => (liveSessionCore ? mergeSessionWithWordMaps(liveSessionCore, liveWordMaps) : null),
     [liveSessionCore, liveWordMaps],
   );
-  const [liveWords, setLiveWords] = useState(EMPTY_WORDS);
   const [frozenRound, setFrozenRound] = useState<FrozenFinishedRound | null>(null);
   const [localLoadComplete, setLocalLoadComplete] = useState(false);
   const [sessionLoaded, setSessionLoaded] = useState(false);
-  const [wordsBootstrapComplete, setWordsBootstrapComplete] = useState(false);
   const [rematchLoading, setRematchLoading] = useState(false);
   const [rematchError, setRematchError] = useState<string | null>(null);
   const [archiveRecoveryPending, setArchiveRecoveryPending] = useState(false);
-  const [archiveLexicon, setArchiveLexicon] = useState<PlayableLexiconSnapshot | null>(null);
   const statsRecordedRef = useRef(false);
   const archivedRef = useRef(false);
   const archivePromiseRef = useRef<Promise<void> | null>(null);
@@ -103,21 +93,26 @@ export default function OnlineResultsScreen() {
   const skipResultsOfflineRef = useRef(false);
   const rematchToasts = useResultsRematchToast(liveSession, myUid, skipRematchToastRef);
 
+  const rosterPlayerIds = useMemo(() => {
+    if (frozenRound || !liveSession || liveSession.status !== 'finished') {
+      return [];
+    }
+    return Object.keys(liveSession.players).sort();
+  }, [frozenRound, liveSession]);
+
+  const { liveWords, wordsBootstrapComplete } = useLiveRosterPlayerWords({
+    gameId,
+    rosterPlayerIds,
+    enabled: Boolean(gameId && !frozenRound && rosterPlayerIds.length > 0),
+  });
+
   const session = frozenRound?.session ?? liveSession;
   const wordsSnapshot = frozenRound?.words ?? liveWords;
+  const archiveLexicon = useArchiveRoundLexicon(gameId, session?.baseWordRound);
   const { lexicon: roundLexicon, loading: lexiconLoading } = useResultsRoundLexicon(
     session,
     archiveLexicon,
   );
-
-  useEffect(() => {
-    if (!gameId || session?.baseWordRound == null) {
-      return;
-    }
-    void getFinishedRoundArchive(gameId, session.baseWordRound).then((archive) => {
-      setArchiveLexicon(archive?.playableLexicon ?? null);
-    });
-  }, [gameId, session?.baseWordRound]);
 
   const ensureArchived = useCallback(async (): Promise<void> => {
     if (archivedRef.current) {
@@ -145,23 +140,6 @@ export default function OnlineResultsScreen() {
     await archivePromiseRef.current;
   }, [frozenRound, gameId, myUid, session, wordsSnapshot]);
 
-  const rosterPlayerIds = useMemo(() => {
-    if (frozenRound || !liveSession || liveSession.status !== 'finished') {
-      return [];
-    }
-    return Object.keys(liveSession.players).sort();
-  }, [frozenRound, liveSession]);
-
-  const mergeWords = useCallback((incoming: AllPlayerWords) => {
-    setLiveWords((prev) => mergeAllPlayerWords(prev, incoming));
-  }, []);
-
-  useEffect(() => {
-    void ensureAnonymousAuth().then((user) => {
-      setResolvedUid(user.uid);
-    });
-  }, []);
-
   useEffect(() => {
     setLocalLoadComplete(true);
   }, [gameId]);
@@ -176,26 +154,18 @@ export default function OnlineResultsScreen() {
     let cancelled = false;
     setArchiveRecoveryPending(true);
     void (async () => {
-      for (let attempt = 0; attempt < 8; attempt += 1) {
-        const archived = await loadFrozenFinishedRoundFromArchive(gameId, viewingBaseWordRound);
-        if (cancelled) {
-          return;
-        }
-        if (archived) {
-          freezeAttemptedRef.current = true;
-          setFrozenRound(archived);
-          setWordsBootstrapComplete(true);
-          const entry = await getFinishedRoundArchive(gameId, viewingBaseWordRound);
-          if (entry?.ackSent === true) {
-            archivedRef.current = true;
-          }
-          setArchiveRecoveryPending(false);
-          return;
-        }
-        if (attempt < 7) {
-          await new Promise((resolve) => {
-            setTimeout(resolve, 200);
-          });
+      const archived = await loadFrozenRoundWithRetry(() =>
+        loadFrozenFinishedRoundFromArchive(gameId, viewingBaseWordRound),
+      );
+      if (cancelled) {
+        return;
+      }
+      if (archived) {
+        freezeAttemptedRef.current = true;
+        setFrozenRound(archived);
+        const entry = await getFinishedRoundArchive(gameId, viewingBaseWordRound);
+        if (entry?.ackSent === true) {
+          archivedRef.current = true;
         }
       }
       if (!cancelled) {
@@ -220,29 +190,21 @@ export default function OnlineResultsScreen() {
     let cancelled = false;
     setArchiveRecoveryPending(true);
     void (async () => {
-      for (let attempt = 0; attempt < 8; attempt += 1) {
-        const archived = liveSession
-          ? await loadFrozenFinishedRoundBeforeLive(gameId, liveSession.baseWordRound ?? 0)
-          : await loadLatestFrozenFinishedRoundFromArchive(gameId);
-        if (cancelled) {
-          return;
-        }
-        if (archived) {
-          freezeAttemptedRef.current = true;
-          setFrozenRound(archived);
-          setWordsBootstrapComplete(true);
-          const round = archived.session.baseWordRound ?? 0;
-          const entry = await getFinishedRoundArchive(gameId, round);
-          if (entry?.ackSent === true) {
-            archivedRef.current = true;
-          }
-          setArchiveRecoveryPending(false);
-          return;
-        }
-        if (attempt < 7) {
-          await new Promise((resolve) => {
-            setTimeout(resolve, 200);
-          });
+      const archived = await loadFrozenRoundWithRetry(async () =>
+        liveSession
+          ? loadFrozenFinishedRoundBeforeLive(gameId, liveSession.baseWordRound ?? 0)
+          : loadLatestFrozenFinishedRoundFromArchive(gameId),
+      );
+      if (cancelled) {
+        return;
+      }
+      if (archived) {
+        freezeAttemptedRef.current = true;
+        setFrozenRound(archived);
+        const round = archived.session.baseWordRound ?? 0;
+        const entry = await getFinishedRoundArchive(gameId, round);
+        if (entry?.ackSent === true) {
+          archivedRef.current = true;
         }
       }
       if (!cancelled) {
@@ -276,31 +238,10 @@ export default function OnlineResultsScreen() {
     if (!sessionLoaded || liveSession || archiveRecoveryPending || frozenRound) {
       return;
     }
-    const uid = resolvedUid || useFirebaseStore.getState().uid;
-    if (uid) {
-      void markPlayerOffline(gameId, uid).then(() => removeOrphanGameSessionShell(gameId, uid));
+    if (myUid) {
+      void markPlayerOffline(gameId, myUid).then(() => removeOrphanGameSessionShell(gameId, myUid));
     }
-  }, [archiveRecoveryPending, frozenRound, gameId, liveSession, resolvedUid, sessionLoaded]);
-
-  useEffect(() => {
-    if (!gameId || frozenRound || rosterPlayerIds.length === 0) {
-      return undefined;
-    }
-
-    let cancelled = false;
-    void fetchSessionPlayerWords(gameId, rosterPlayerIds).then((words) => {
-      if (!cancelled) {
-        mergeWords(words);
-        setWordsBootstrapComplete(true);
-      }
-    });
-
-    const unsubWords = subscribeSessionPlayerWords(gameId, rosterPlayerIds, mergeWords);
-    return () => {
-      cancelled = true;
-      unsubWords();
-    };
-  }, [frozenRound, gameId, mergeWords, rosterPlayerIds]);
+  }, [archiveRecoveryPending, frozenRound, gameId, liveSession, myUid, sessionLoaded]);
 
   useEffect(() => {
     if (

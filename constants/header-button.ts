@@ -1,9 +1,9 @@
 import { StyleSheet } from 'react-native';
 
 import { radii, type ThemeColors } from '@/constants/theme';
-import { HEADER_ICON_BUTTON_SIZE, headerIconButtonSize } from '@/lib/ui/header-icon-button-layout';
+import { HEADER_ICON_BUTTON_SIZE } from '@/lib/ui/header-icon-button-layout';
 
-export { HEADER_ICON_BUTTON_SIZE, headerIconButtonSize };
+export { HEADER_ICON_BUTTON_SIZE };
 
 export function createHeaderIconButtonStyles(colors: ThemeColors) {
   return StyleSheet.create({

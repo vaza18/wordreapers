@@ -1,5 +1,5 @@
 import { Asset } from 'expo-asset';
-import * as FileSystem from 'expo-file-system/legacy';
+import { File } from 'expo-file-system';
 
 import {
   createDictionaryIndex,
@@ -59,7 +59,7 @@ async function readAssetText(moduleRef: unknown): Promise<string> {
     // Fall back to expo-file-system on Android
   }
 
-  return FileSystem.readAsStringAsync(uri);
+  return new File(uri).text();
 }
 
 let cachedMain: DictionaryIndex | null = null;
