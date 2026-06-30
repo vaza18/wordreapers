@@ -114,5 +114,5 @@
     "js-yaml": "4.2.0"
   },
   "packageManager": "npm@11.6.2",
-  "version": "1.2.2"
+  "version": "1.2.3"
 }
