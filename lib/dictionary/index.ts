@@ -11,11 +11,11 @@ export {
   loadDictionary,
   loadDictionaryFromPaths,
   loadDictionaryUk,
-  UK_LOCALE,
 } from './node-load.js';
 export type { DictionaryLoadOptions } from './node-load.js';
-export { ukDictionaryPaths, DICTIONARIES_DIR } from './paths.js';
+export { ukDictionaryPaths } from './paths-node.js';
 export type { DictionaryPaths } from './paths.js';
+export { DICTIONARIES_DIR, DICTIONARY_CACHE_PLAIN_FILES, UK_LOCALE } from './paths.js';
 export {
   canonicalForm,
   displayForm,

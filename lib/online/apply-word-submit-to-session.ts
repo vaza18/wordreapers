@@ -96,7 +96,7 @@ export function buildPartialWordMaps(
 
 /**
  * Update shared word maps (RTDB `session_word_maps/{gameId}` transaction body).
- * @deprecated Prefer applyWordSubmitToWordPlayersShard for per-word shard writes.
+ * Used by tests simulating full-tree map updates.
  */
 export function applyWordSubmitToWordMaps(
   maps: SessionWordMaps,
@@ -232,52 +232,5 @@ export function applyPlayerScoreFromWordSubmit(
       ...session,
       players: applyPlayerScorePlan(session.players, planned.plan),
     },
-  };
-}
-
-/** @deprecated Use applyWordSubmitToWordMaps + applyPlayerScoreFromWordSubmit. */
-export function applyWordSubmitToSession(
-  session: GameSession,
-  uid: string,
-  normalized: string,
-  uniqueBonusEnabled: boolean,
-): ApplyPlayerScoreResult {
-  if (session.status !== 'playing') {
-    return { ok: false, error: 'NOT_PLAYING' };
-  }
-  const player = session.players[uid];
-  if (!player) {
-    return { ok: false, error: 'NOT_PLAYING' };
-  }
-
-  const maps: SessionWordMaps = {
-    wordFirst: session.wordFirst,
-    wordPlayers: session.wordPlayers,
-  };
-  const mapsResult = applyWordSubmitToWordMaps(maps, uid, normalized, uniqueBonusEnabled);
-  if (!mapsResult.ok) {
-    return mapsResult;
-  }
-
-  const scoreResult = applyPlayerScoreFromWordSubmit(
-    session,
-    mapsResult.maps,
-    uid,
-    normalized,
-    mapsResult.entry,
-    uniqueBonusEnabled,
-  );
-  if (!scoreResult.ok) {
-    return scoreResult;
-  }
-
-  return {
-    ok: true,
-    session: {
-      ...scoreResult.session,
-      wordFirst: mapsResult.maps.wordFirst,
-      wordPlayers: mapsResult.maps.wordPlayers,
-    },
-    entry: mapsResult.entry,
   };
 }

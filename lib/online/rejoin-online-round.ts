@@ -1,9 +1,8 @@
-import { get, ref, set } from 'firebase/database';
+import { get, set } from 'firebase/database';
 
 import { ensureAnonymousAuth } from '../firebase/auth.js';
 import { joinGameSession, type GameSessionSnapshot } from '../firebase/game-session-service.js';
-import { getFirebaseDatabase } from '../firebase/init.js';
-import { gameSessionPath } from '../firebase/paths.js';
+import { sessionRef } from '../firebase/session-ref.js';
 import { getServerNow } from '../firebase/server-clock.js';
 import { restorePlayerWordsToFirebase } from '../firebase/player-words-service.js';
 import { normalizeRoomCode } from '../firebase/room-code.js';
@@ -20,10 +19,6 @@ import {
 import { isOrphanGameSessionShell } from './orphan-game-session.js';
 import type { PlayingRoundSnapshot } from './online-session-archive.js';
 import { removeOrphanGameSessionShell } from '../firebase/game-session-service.js';
-
-function sessionRef(gameId: string) {
-  return ref(getFirebaseDatabase(), gameSessionPath(normalizeRoomCode(gameId)));
-}
 
 async function readSessionSnapshot(gameId: string): Promise<GameSessionSnapshot> {
   const normalized = normalizeRoomCode(gameId);

@@ -34,13 +34,15 @@ After that, restart Metro: `npm start -- --clear`.
 ```
 assets/generated/dictionaries/
   uk-uk/
-    dictionary.txt         # normalized words, one per line (~125k)
-    base_words.txt         # autocomplete / shuffle: sorted normalized strings (8+); UI display via displayForm()
-    meta.json              # VESUM version, counts, build timestamp
-    normalization.json     # no apostrophe → canonical form (~1,700 entries)
-    supplement_proper_nouns.txt  # optional when allowProperNouns is enabled
-    supplement_slang.txt         # optional when slang is enabled
+    dictionary.txt.gz         # gzip word list (~125k normalized words)
+    base_words.txt.gz         # autocomplete / shuffle (8+ letters)
+    meta.json                 # VESUM version, dictBuildId, counts, build timestamp
+    normalization.json        # no apostrophe → canonical form (~1,700 entries)
+    supplement_proper_nouns.txt.gz
+    supplement_slang.txt.gz
 ```
+
+At runtime the app extracts plain `.txt` files once per app version into the device cache; the bundle ships gzip only (~1.2 MB vs ~5.7 MB uncompressed).
 
 Future locales get their own subdirectories, e.g. `assets/generated/dictionaries/en-us/`.
 

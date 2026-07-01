@@ -3,6 +3,7 @@ import { displayPlayerName } from '../online/public-lobby/display-player-name.js
 import { isActiveLivePlayer } from './live-round-membership.js';
 import { playerGenderForDisplay } from '../online/public-lobby/session-identity.js';
 import { playerGenderFromSession } from '../game/vote-status-label.js';
+import { viewerNeedsSessionVote } from './viewer-needs-session-vote.js';
 
 export const EARLY_FINISH_VOTE_TIMEOUT_MS = 30_000;
 
@@ -74,11 +75,7 @@ export function viewerNeedsEarlyFinishVote(
   vote: SessionVote,
   viewerId: string,
 ): boolean {
-  if (viewerId === vote.proposedBy) {
-    return false;
-  }
-  const required = earlyFinishRequiredVoterIds(session, vote.proposedBy);
-  return required.includes(viewerId) && vote.votes[viewerId] === undefined;
+  return viewerNeedsSessionVote(session, vote, viewerId, earlyFinishRequiredVoterIds);
 }
 
 export function buildEarlyFinishParticipantRows(

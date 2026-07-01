@@ -10,7 +10,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { spacing, type ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
-import { ensureAnonymousAuth } from '@/lib/firebase/auth';
+import { useOnlineViewerUid } from '@/hooks/useOnlineViewerUid';
 import { formatProfileStatsSummary } from '@/lib/profile/format-profile-stats';
 import { stackHeaderWithBackAndSettings } from '@/lib/navigation/stack-header-options';
 import { computeArchivedPlayerStats } from '@/lib/online/compute-archived-player-stats';
@@ -22,7 +22,6 @@ import {
 import { buildHistoryListEntries } from '@/lib/online/room-history-aggregate';
 import { usePlayerStatsStore } from '@/store/player-stats-store';
 import { useProfileStore } from '@/store/profile-store';
-import { useFirebaseStore } from '@/store/firebase-store';
 
 /**
  * Browse locally archived finished online rounds.
@@ -40,9 +39,7 @@ export default function RoundHistoryScreen() {
   const profileHydrated = useProfileStore((state) => state.hydrated);
   const profileName = useProfileStore((state) => state.name);
   const isProfileComplete = useProfileStore((state) => state.isComplete());
-  const storeUid = useFirebaseStore((state) => state.uid);
-  const [resolvedUid, setResolvedUid] = useState(storeUid ?? '');
-  const myUid = resolvedUid || storeUid || '';
+  const myUid = useOnlineViewerUid();
 
   const loadArchives = useCallback(async () => {
     setArchives(await listFinishedRoundArchives());
@@ -51,12 +48,6 @@ export default function RoundHistoryScreen() {
   useEffect(() => {
     void loadArchives();
   }, [loadArchives]);
-
-  useEffect(() => {
-    void ensureAnonymousAuth().then((user) => {
-      setResolvedUid(user.uid);
-    });
-  }, []);
 
   useEffect(() => {
     if (!statsHydrated) {

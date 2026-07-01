@@ -1,11 +1,10 @@
-import { get, ref, set } from 'firebase/database';
+import { get, set } from 'firebase/database';
 
 import {
   clearSessionRootForRecreate,
   rematchFinishedSessionToWaiting,
 } from '../firebase/game-session-service.js';
-import { getFirebaseDatabase } from '../firebase/init.js';
-import { gameSessionPath } from '../firebase/paths.js';
+import { sessionRef } from '../firebase/session-ref.js';
 import { isFirebasePermissionDenied } from '../firebase/rtdb-errors.js';
 import { normalizeRoomCode } from '../firebase/room-code.js';
 import type { GameSession } from '../firebase/types.js';
@@ -15,10 +14,6 @@ import { clearAllActiveRoundCachesForGame } from './active-round-cache.js';
 import { isOrphanGameSessionShell } from './orphan-game-session.js';
 import { getFinishedRoundArchive } from './online-session-archive.js';
 import { setOrganizerWaitingRoom } from './organizer-waiting-room.js';
-
-function sessionRef(gameId: string) {
-  return ref(getFirebaseDatabase(), gameSessionPath(normalizeRoomCode(gameId)));
-}
 
 async function readWaitingSessionIfPresent(gameId: string): Promise<GameSession | null> {
   const normalized = normalizeRoomCode(gameId);

@@ -1,11 +1,6 @@
-import { LegalDocumentView } from '@/components/LegalDocumentView';
-import { Screen } from '@/components/Screen';
+import { LegalDocumentScreen } from '@/components/LegalDocumentScreen';
 
 /** Privacy policy (from docs/legal/uk-uk/privacy_policy.md). */
 export default function PrivacyScreen() {
-  return (
-    <Screen scroll={false} style={{ padding: 0 }}>
-      <LegalDocumentView documentKey="privacy" />
-    </Screen>
-  );
+  return <LegalDocumentScreen documentKey="privacy" />;
 }

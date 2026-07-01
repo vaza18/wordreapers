@@ -7,6 +7,8 @@ import { getFirebaseAuth } from './init.js';
  * Ensure the user has a Firebase Auth session (anonymous sign-in).
  */
 export async function ensureAnonymousAuth(): Promise<User> {
+  const { ensureFirebaseAppCheck } = await import('./app-check.js');
+  await ensureFirebaseAppCheck();
   const auth = getFirebaseAuth();
   if (auth.currentUser) {
     return auth.currentUser;

@@ -1,5 +1,5 @@
 import { Stack, router } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -46,6 +46,49 @@ function minutesLeft(expiresAt: number, now: number): number {
   return Math.max(0, Math.ceil((expiresAt - now) / 60_000));
 }
 
+const BrowseLobbyRow = memo(function BrowseLobbyRow({
+  row,
+  joiningId,
+  onJoin,
+  styles,
+  t,
+}: {
+  row: PublicLobbyRow;
+  joiningId: string | null;
+  onJoin: (gameId: string) => void;
+  styles: ReturnType<typeof createStyles>;
+  t: ReturnType<typeof useTranslation>['t'];
+}) {
+  const now = useServerNow(30_000);
+  const full = row.playerCount >= row.maxPlayers;
+  const mins = minutesLeft(row.expiresAt, now);
+
+  return (
+    <FeedbackPressable
+      accessibilityRole="button"
+      disabled={full || joiningId !== null}
+      onPress={() => {
+        onJoin(row.gameId);
+      }}
+      style={[styles.card, full && styles.cardDisabled]}
+    >
+      <Text style={styles.cardWord}>{row.baseWord.toUpperCase()}</Text>
+      <Text style={styles.cardMeta}>
+        {full
+          ? t('online.browseRoomFull', {
+              count: row.playerCount,
+              max: row.maxPlayers,
+            })
+          : t('online.browseRoomSlots', {
+              count: row.playerCount,
+              max: row.maxPlayers,
+              minutes: mins,
+            })}
+      </Text>
+    </FeedbackPressable>
+  );
+});
+
 export default function BrowsePublicLobbiesScreen() {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
@@ -56,7 +99,6 @@ export default function BrowsePublicLobbiesScreen() {
   const avatarColorIndex = useProfileStore((state) => state.avatarColorIndex);
   const firebaseUid = useFirebaseStore((state) => state.uid);
   const gameLanguage = playerLanguageForBrowse({ language: UK_LOCALE });
-  const serverNow = useServerNow(30_000);
   const { hydrated: trainingHydrated, hasCompletedTrainingRound } = useTrainingMilestone();
 
   useEffect(() => {
@@ -171,31 +213,32 @@ export default function BrowsePublicLobbiesScreen() {
     });
   };
 
-  const handleJoin = async (gameId: string) => {
-    if (!firebaseUid) {
-      return;
-    }
-    setJoiningId(gameId);
-    setError(null);
-    try {
-      const session = await joinGameSession(
-        gameId,
-        { name, gender, avatarColorIndex },
-        {
-          joinSource: 'browse',
-          playerLanguage: gameLanguage,
-        },
-      );
-      const route = resolvePostJoinRoute(session, firebaseUid, gameId);
-      router.replace(route);
-    } catch (err) {
-      setError(joinErrorMessage(err, t));
-    } finally {
-      setJoiningId(null);
-    }
-  };
-
-  const now = serverNow;
+  const handleJoin = useCallback(
+    async (gameId: string) => {
+      if (!firebaseUid) {
+        return;
+      }
+      setJoiningId(gameId);
+      setError(null);
+      try {
+        const session = await joinGameSession(
+          gameId,
+          { name, gender, avatarColorIndex },
+          {
+            joinSource: 'browse',
+            playerLanguage: gameLanguage,
+          },
+        );
+        const route = resolvePostJoinRoute(session, firebaseUid, gameId);
+        router.replace(route);
+      } catch (err) {
+        setError(joinErrorMessage(err, t));
+      } finally {
+        setJoiningId(null);
+      }
+    },
+    [avatarColorIndex, firebaseUid, gameLanguage, gender, name, t],
+  );
 
   return (
     <>
@@ -256,35 +299,18 @@ export default function BrowsePublicLobbiesScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
           contentContainerStyle={styles.list}
         >
-          {rows.map((row) => {
-            const full = row.playerCount >= row.maxPlayers;
-            const mins = minutesLeft(row.expiresAt, now);
-            return (
-              <FeedbackPressable
-                key={row.gameId}
-                accessibilityRole="button"
-                disabled={full || joiningId !== null}
-                onPress={() => {
-                  void handleJoin(row.gameId);
-                }}
-                style={[styles.card, full && styles.cardDisabled]}
-              >
-                <Text style={styles.cardWord}>{row.baseWord.toUpperCase()}</Text>
-                <Text style={styles.cardMeta}>
-                  {full
-                    ? t('online.browseRoomFull', {
-                        count: row.playerCount,
-                        max: row.maxPlayers,
-                      })
-                    : t('online.browseRoomSlots', {
-                        count: row.playerCount,
-                        max: row.maxPlayers,
-                        minutes: mins,
-                      })}
-                </Text>
-              </FeedbackPressable>
-            );
-          })}
+          {rows.map((row) => (
+            <BrowseLobbyRow
+              key={row.gameId}
+              row={row}
+              joiningId={joiningId}
+              onJoin={(gameId) => {
+                void handleJoin(gameId);
+              }}
+              styles={styles}
+              t={t}
+            />
+          ))}
           {!loading && rows.length === 0 ? (
             <Text style={styles.empty}>{t('online.browseEmpty')}</Text>
           ) : null}

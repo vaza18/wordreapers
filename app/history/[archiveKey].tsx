@@ -9,7 +9,7 @@ import { StackHeaderTitle } from '@/components/StackHeaderTitle';
 import { type ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
-import { ensureAnonymousAuth } from '@/lib/firebase/auth';
+import { useOnlineViewerUid } from '@/hooks/useOnlineViewerUid';
 import type { GameSession } from '@/lib/firebase/types';
 import { stackHeaderWithBackAndSettings } from '@/lib/navigation/stack-header-options';
 import { loadFrozenFinishedRoundFromArchive } from '@/lib/online/frozen-finished-round';
@@ -17,7 +17,6 @@ import { buildOnlineResultsView } from '@/lib/online/online-results-data';
 import { getFinishedRoundArchive, parseArchiveRouteKey } from '@/lib/online/online-session-archive';
 import { useResultsRoundLexicon } from '@/hooks/useResultsRoundLexicon';
 import type { PlayableLexiconSnapshot } from '@/lib/dictionary/round-playable-lexicon';
-import { useFirebaseStore } from '@/store/firebase-store';
 
 /**
  * Archived online round results (offline snapshot).
@@ -28,9 +27,7 @@ export default function ArchivedRoundResultsScreen() {
   const { t } = useTranslation();
   const { archiveKey: rawArchiveKey } = useLocalSearchParams<{ archiveKey: string }>();
   const archiveKey = rawArchiveKey ?? '';
-  const storeUid = useFirebaseStore((state) => state.uid);
-  const [resolvedUid, setResolvedUid] = useState(storeUid ?? '');
-  const myUid = resolvedUid || storeUid || '';
+  const myUid = useOnlineViewerUid();
 
   const parsed = useMemo(() => parseArchiveRouteKey(archiveKey), [archiveKey]);
   const [loading, setLoading] = useState(true);
@@ -41,14 +38,8 @@ export default function ArchivedRoundResultsScreen() {
   const [archiveLexicon, setArchiveLexicon] = useState<PlayableLexiconSnapshot | null>(null);
   const { lexicon: roundLexicon, loading: lexiconLoading } = useResultsRoundLexicon(
     archiveSession,
-    archiveLexicon,
+    { archiveSnapshot: archiveLexicon },
   );
-
-  useEffect(() => {
-    void ensureAnonymousAuth().then((user) => {
-      setResolvedUid(user.uid);
-    });
-  }, []);
 
   useEffect(() => {
     if (!parsed) {

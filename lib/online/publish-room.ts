@@ -1,5 +1,3 @@
-import { ref, set } from 'firebase/database';
-
 import { runRtdbTransaction } from '../firebase/rtdb-transaction.js';
 
 import type { OrganizerSoloWord } from '@/store/organizer-solo-store';
@@ -7,15 +5,13 @@ import type { OrganizerSoloWord } from '@/store/organizer-solo-store';
 import type { PlayerProfile } from '../profile/player-profile.js';
 import { ensureAnonymousAuth } from '../firebase/auth.js';
 import { markPlayerOnline } from '../firebase/game-session-service.js';
-import { getFirebaseDatabase } from '../firebase/init.js';
-import { gameSessionPath, playerWordsPath } from '../firebase/paths.js';
+import { sessionRef } from '../firebase/session-ref.js';
 import { reserveUniqueRoomCode } from '../firebase/reserve-room-code.js';
 import { getServerNow } from '../firebase/server-clock.js';
 import {
   defaultGameSessionSettings,
   resolveGameSessionSettings,
 } from '../firebase/session-settings.js';
-import { writeSessionWordMapsShards } from '../firebase/session-word-maps-service.js';
 import type { StoredPlayerWord } from '../firebase/player-words-service.js';
 import type {
   GameSession,
@@ -33,10 +29,7 @@ import {
 } from './local-room-draft.js';
 import { buildPlayingSoloTimerFields } from './publish-playing-solo-fields.js';
 import { setOrganizerWaitingRoom } from './organizer-waiting-room.js';
-
-function sessionRef(gameId: string) {
-  return ref(getFirebaseDatabase(), gameSessionPath(gameId));
-}
+import { restoreSessionWordsToRtdb } from './restore-session-words-to-rtdb.js';
 
 function profileToPlayer(profile: PlayerProfile): GameSessionPlayer {
   const player: GameSessionPlayer = {
@@ -198,7 +191,6 @@ export async function publishPlayingSoloRound(input: PublishPlayingSoloInput): P
   await writeSession(normalized, session, input.organizerUid);
 
   if (input.words.length > 0) {
-    await writeSessionWordMapsShards(normalized, wordMaps);
     const record: Record<string, StoredPlayerWord> = {};
     for (const word of input.words) {
       record[word.normalized] = {
@@ -206,7 +198,9 @@ export async function publishPlayingSoloRound(input: PublishPlayingSoloInput): P
         at: word.at,
       };
     }
-    await set(ref(getFirebaseDatabase(), playerWordsPath(normalized, input.organizerUid)), record);
+    await restoreSessionWordsToRtdb(normalized, wordMaps, {
+      [input.organizerUid]: record,
+    });
   }
 
   await markPlayerOnline(normalized, input.organizerUid);

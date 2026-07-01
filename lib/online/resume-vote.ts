@@ -5,6 +5,7 @@ import {
   earlyFinishRequiredVoterIds,
   earlyFinishVoteExpired,
 } from './early-finish-vote.js';
+import { viewerNeedsSessionVote } from './viewer-needs-session-vote.js';
 
 export { EARLY_FINISH_VOTE_TIMEOUT_MS as RESUME_VOTE_TIMEOUT_MS } from './early-finish-vote.js';
 
@@ -17,11 +18,7 @@ export function viewerNeedsResumeVote(
   vote: SessionVote,
   viewerId: string,
 ): boolean {
-  if (viewerId === vote.proposedBy) {
-    return false;
-  }
-  const required = resumeVoteRequiredIds(session, vote.proposedBy);
-  return required.includes(viewerId) && vote.votes[viewerId] === undefined;
+  return viewerNeedsSessionVote(session, vote, viewerId, resumeVoteRequiredIds);
 }
 
 export function shouldResumeFromVote(

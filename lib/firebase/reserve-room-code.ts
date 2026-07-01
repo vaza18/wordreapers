@@ -1,13 +1,8 @@
-import { get, ref } from 'firebase/database';
+import { get } from 'firebase/database';
 
 import { generateRoomCode } from './room-code.js';
-import { gameSessionPath } from './paths.js';
-import { getFirebaseDatabase } from './init.js';
+import { sessionRef } from './session-ref.js';
 import type { GameSession } from './types.js';
-
-function sessionRef(gameId: string) {
-  return ref(getFirebaseDatabase(), gameSessionPath(gameId));
-}
 
 /**
  * Pick a free room code at publish time. Reuses `preferredCode` when empty or owned by the same organizer.

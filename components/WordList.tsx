@@ -1,5 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { FlatList, InteractionManager, StyleSheet, Text, View } from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
+
+import { scheduleIdleWork } from '@/lib/app/schedule-idle-work';
 
 import { ScrollableWordPanel } from '@/components/ScrollableWordPanel';
 import {
@@ -93,7 +95,7 @@ function scrollFlatListToRow(
     listRef.current.scrollToOffset({ offset, animated: true });
   };
 
-  InteractionManager.runAfterInteractions(() => {
+  scheduleIdleWork(() => {
     requestAnimationFrame(() => {
       run();
       setTimeout(run, 50);
@@ -172,7 +174,7 @@ const MemoWordListRow = memo(WordListRow);
 /**
  * Alphabetically sorted accepted words with x2/x0 badges, draft prefix highlight, auto-scroll.
  */
-export function WordList({
+export const WordList = memo(function WordList({
   entries,
   displays,
   draftPrefix = '',
@@ -310,11 +312,25 @@ export function WordList({
     flushPendingScroll();
   }, [flushPendingScroll, rowSignature]);
 
+  const renderItem = useCallback(
+    ({ item: row }: { item: WordRow }) => (
+      <MemoWordListRow
+        row={row}
+        prefix={prefix}
+        showScoreBadges={showScoreBadges}
+        showOverlapPeers={showOverlapPeers}
+        styles={styles}
+        notebookRow={notebookRow}
+      />
+    ),
+    [notebookRow, prefix, showOverlapPeers, showScoreBadges, styles],
+  );
+
   if (!scrollable) {
     return (
       <View style={styles.staticList}>
         {rows.map((row) => (
-          <WordListRow
+          <MemoWordListRow
             key={row.key}
             row={row}
             prefix={prefix}
@@ -358,21 +374,12 @@ export function WordList({
               animated: true,
             });
           }}
-          renderItem={({ item: row }) => (
-            <MemoWordListRow
-              row={row}
-              prefix={prefix}
-              showScoreBadges={showScoreBadges}
-              showOverlapPeers={showOverlapPeers}
-              styles={styles}
-              notebookRow={notebookRow}
-            />
-          )}
+          renderItem={renderItem}
         />
       </View>
     </ScrollableWordPanel>
   );
-}
+});
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({

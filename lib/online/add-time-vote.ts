@@ -5,6 +5,7 @@ import {
   earlyFinishRequiredVoterIds,
   earlyFinishVoteExpired,
 } from './early-finish-vote.js';
+import { viewerNeedsSessionVote } from './viewer-needs-session-vote.js';
 
 export const ADD_TIME_MINUTE_OPTIONS = [1, 3, 5, 10, 20] as const;
 
@@ -39,11 +40,7 @@ export function viewerNeedsAddTimeVote(
   vote: AddTimeVote,
   viewerId: string,
 ): boolean {
-  if (viewerId === vote.proposedBy) {
-    return false;
-  }
-  const required = addTimeVoteRequiredIds(session, vote.proposedBy);
-  return required.includes(viewerId) && vote.votes[viewerId] === undefined;
+  return viewerNeedsSessionVote(session, vote, viewerId, addTimeVoteRequiredIds);
 }
 
 export function shouldApplyAddTimeFromVote(session: GameSession, vote: AddTimeVote): boolean {

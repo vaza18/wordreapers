@@ -157,11 +157,3 @@ export async function syncFinishedRoundsCoordinator(
     }
   }
 }
-
-/**
- * Finish archives for rounds this player left early once RTDB reports `finished`.
- * @deprecated Prefer {@link syncFinishedRoundsCoordinator}.
- */
-export async function tryCompletePendingRoundArchives(uid?: string): Promise<void> {
-  await syncFinishedRoundsCoordinator({ uid });
-}

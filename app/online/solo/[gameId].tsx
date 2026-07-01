@@ -1,7 +1,7 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
@@ -12,11 +12,10 @@ import {
 } from '@/services/dictionary-service';
 import { AddTimeModal } from '@/components/AddTimeModal';
 import { GameMenuModal } from '@/components/GameMenuModal';
-import { GamePlayStatusBar } from '@/components/GamePlayStatusBar';
 import { GameTimeUpModal } from '@/components/GameTimeUpModal';
 import { HowToPlayDialog } from '@/components/HowToPlayDialog';
-import { OnlinePlayComposePanel } from '@/components/online/OnlinePlayComposePanel';
-import { OnlinePlayWordListSection } from '@/components/online/OnlinePlayWordListSection';
+import { OnlinePlayActiveBody } from '@/components/online/OnlinePlayActiveBody';
+import { OrganizerSoloTimerHeader } from '@/components/online/OrganizerSoloTimerHeader';
 import { PauseRoundModal } from '@/components/PauseRoundModal';
 import { spacing, type ThemeColors } from '@/constants/theme';
 import { modalOverlayBackground } from '@/lib/ui/modal-chrome';
@@ -24,8 +23,6 @@ import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useAutoPauseOnAppBackground } from '@/hooks/useAutoPauseOnAppBackground';
 import { useTrainingMilestone } from '@/hooks/useTrainingMilestone';
-import { useTimerAlerts } from '@/hooks/useTimerAlerts';
-import { useRoundTimeUpModal } from '@/hooks/useRoundTimeUpModal';
 import { DictionaryIndex } from '@/lib/dictionary/dictionary-index';
 import { toDisplayUpper } from '@/lib/dictionary/normalize';
 import { playWordAcceptedFeedback } from '@/lib/feedback/game-feedback';
@@ -39,7 +36,6 @@ import {
   type PlayWordFeedbackVariant,
 } from '@/lib/game/play-word-feedback';
 import { formatPlayRulesLabel } from '@/lib/online/play-rules-label';
-import { formatTimerMs } from '@/lib/game/timer-label';
 import { gameSessionSettingsFromSetup } from '@/lib/firebase/session-settings';
 import type { GameSession } from '@/lib/firebase/types';
 import { computePlayerScore } from '@/lib/game/scoring';
@@ -101,11 +97,9 @@ export default function OrganizerSoloPlayScreen() {
   const [showAddTimeModal, setShowAddTimeModal] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
-  const [now, setNow] = useState(Date.now());
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastValidatedDraft = useRef('');
-  const timeUpHandledRef = useRef(false);
 
   useEffect(() => {
     if (!gameId) {
@@ -139,19 +133,7 @@ export default function OrganizerSoloPlayScreen() {
     enabled: Boolean(setup?.baseWord && status === 'playing'),
   });
 
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    if (status === 'playing' && endsAt !== null && now >= endsAt && !timeUpHandledRef.current) {
-      timeUpHandledRef.current = true;
-      finishRound();
-    }
-  }, [endsAt, finishRound, now, status]);
-
-  const { timeUpModalVisible } = useRoundTimeUpModal(status === 'finished');
+  const timeUpModalVisible = status === 'finished';
 
   useEffect(() => {
     if (!feedback) {
@@ -171,11 +153,8 @@ export default function OrganizerSoloPlayScreen() {
   const displays = words.map((word) => word.display);
   const playerScore = computePlayerScore(scoredWords);
   const isPaused = status === 'paused';
-  const remainingMs = getRemainingMs(now);
-  const remainingLabel = formatTimerMs(remainingMs);
-  const timerUrgent = remainingMs > 0 && remainingMs <= 60_000;
+  const addTimeRemainingMs = getRemainingMs(Date.now());
 
-  useTimerAlerts(remainingMs, isPaused, timerAlertMode, status === 'playing');
   useAutoPauseOnAppBackground(status === 'playing', pauseRound);
   const playRulesLabel = formatPlayRulesLabel(
     t,
@@ -194,6 +173,7 @@ export default function OrganizerSoloPlayScreen() {
     if (!setup || !isPaused) {
       return null;
     }
+    const frozenRemainingMs = getRemainingMs(Date.now());
     return {
       baseWord: setup.baseWord,
       status: 'playing',
@@ -217,8 +197,8 @@ export default function OrganizerSoloPlayScreen() {
       },
       pauseState: {
         active: true,
-        frozenRemainingMs: remainingMs,
-        frozenAt: now,
+        frozenRemainingMs,
+        frozenAt: Date.now(),
       },
     };
   }, [
@@ -229,8 +209,7 @@ export default function OrganizerSoloPlayScreen() {
     viewerGender,
     scoredWords.length,
     playerScore,
-    remainingMs,
-    now,
+    getRemainingMs,
   ]);
 
   const pauseUiObscured = showGameMenu;
@@ -408,59 +387,41 @@ export default function OrganizerSoloPlayScreen() {
       <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
         {!isPaused ? (
           <>
-            <GamePlayStatusBar
-              timerLabel={remainingLabel}
-              timerUrgent={timerUrgent}
-              rank={1}
-              showRank={false}
-              showScore={false}
+            <OrganizerSoloTimerHeader
+              endsAt={endsAt}
+              isPaused={isPaused}
+              roundActive={status === 'playing'}
+              getRemainingMs={getRemainingMs}
               wordCount={scoredWords.length}
               maxWordCount={roundLexicon?.maxCount ?? null}
               score={playerScore}
-              wordsShort={t('game.wordsShort')}
-              pointsShort={t('game.pointsShort')}
-              menuLabel={t('game.menu')}
-              onMenuPress={() => {
+              timerAlertMode={timerAlertMode}
+              onTimeUp={finishRound}
+              onOpenGameMenu={() => {
                 setShowGameMenu(true);
               }}
-              onAddTimePress={() => {
+              onOpenAddTimeModal={() => {
                 setShowAddTimeModal(true);
               }}
-              addTimeAccessibilityLabel={t('game.addTimeTitle')}
-              style={{ marginHorizontal: -spacing.md }}
             />
 
-            <View style={styles.playerHeader}>
-              <Text style={styles.playerName} numberOfLines={1}>
-                {myName}
-              </Text>
-              {playRulesLabel ? (
-                <Text style={styles.playRules} numberOfLines={2}>
-                  {playRulesLabel}
-                </Text>
-              ) : null}
-            </View>
-
-            <View style={styles.wordListSection}>
-              <OnlinePlayWordListSection
-                entries={scoredWords}
-                displays={displays}
-                draftPrefix={draft}
-                scrollToNormalized={scrollRequest?.normalized ?? null}
-                scrollToRequestId={scrollRequest?.id}
-                feedback={feedback}
-                feedbackVariant={feedbackVariant}
-                backgroundSyncing={false}
-                showScoreBadges={false}
-                showOverlapPeers={false}
-              />
-              {publishError ? <Text style={styles.publishError}>{publishError}</Text> : null}
-            </View>
-
-            <OnlinePlayComposePanel
+            <OnlinePlayActiveBody
+              myName={myName}
+              playRulesLabel={playRulesLabel}
+              hideEmptyPlayRules
+              entries={scoredWords}
+              displays={displays}
               draft={draft}
               draftKeyIndices={draftKeyIndices}
               letterKeys={letterKeys}
+              scrollToNormalized={scrollRequest?.normalized ?? null}
+              scrollToRequestId={scrollRequest?.id}
+              feedback={feedback}
+              feedbackVariant={feedbackVariant}
+              backgroundSyncing={false}
+              showScoreBadges={false}
+              showOverlapPeers={false}
+              publishError={publishError}
               onPressKey={pressKey}
               onClearDraft={clearDraft}
               onBackspaceDraft={backspaceDraft}
@@ -475,7 +436,6 @@ export default function OrganizerSoloPlayScreen() {
           session={pauseSession}
           myUid={myUid}
           viewerGender={viewerGender}
-          serverNow={now}
           resumeVote={null}
           earlyFinishVote={null}
           hasOnlineOpponent={false}
@@ -529,7 +489,7 @@ export default function OrganizerSoloPlayScreen() {
 
       <AddTimeModal
         visible={showAddTimeModal}
-        remainingMs={remainingMs}
+        remainingMs={addTimeRemainingMs}
         requiresConsensus={false}
         onClose={() => {
           setShowAddTimeModal(false);
@@ -566,33 +526,6 @@ function createStyles(colors: ThemeColors) {
       paddingBottom: spacing.md,
       paddingTop: spacing.xs,
       gap: spacing.sm,
-    },
-    playerHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: spacing.sm,
-    },
-    playerName: {
-      flexShrink: 1,
-      fontSize: 16,
-      fontWeight: '600',
-      color: colors.textPrimary,
-    },
-    playRules: {
-      flex: 1,
-      fontSize: 12,
-      color: colors.textSecondary,
-      textAlign: 'right',
-    },
-    wordListSection: {
-      flex: 1,
-      minHeight: 0,
-    },
-    publishError: {
-      fontSize: 13,
-      color: '#E24B4A',
-      textAlign: 'center',
     },
     publishingOverlay: {
       ...StyleSheet.absoluteFillObject,

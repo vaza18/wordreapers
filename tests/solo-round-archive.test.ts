@@ -1,27 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const storage = new Map<string, string>();
+vi.mock('@react-native-async-storage/async-storage', async () => {
+  const { asyncStorageMockFactory } = await import('./helpers/mock-async-storage.js');
+  return asyncStorageMockFactory();
+});
 
-vi.mock('@react-native-async-storage/async-storage', () => ({
-  default: {
-    getItem: (key: string) => Promise.resolve(storage.get(key) ?? null),
-    setItem: (key: string, value: string) => {
-      storage.set(key, value);
-      return Promise.resolve();
-    },
-    removeItem: (key: string) => {
-      storage.delete(key);
-      return Promise.resolve();
-    },
-  },
-}));
-
+import { resetAsyncStorageMock } from './helpers/mock-async-storage.js';
 import { getFinishedRoundArchive } from '../lib/online/online-session-archive.js';
 import { saveSoloFinishedRoundArchive } from '../lib/online/solo-round-archive.js';
 
 describe('saveSoloFinishedRoundArchive', () => {
   beforeEach(() => {
-    storage.clear();
+    resetAsyncStorageMock();
   });
 
   it('stores a finished solo round in local history', async () => {
