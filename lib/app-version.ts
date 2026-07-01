@@ -16,11 +16,16 @@ function readVersionString(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-/** User-facing app version and native build number from the installed binary. */
+/**
+ * User-facing app version and native build number.
+ * Version comes from app config so local dev clients stay in sync with app.json
+ * without rebuilding the native binary; store builds still match native metadata.
+ */
 export function getAppVersionInfo(): AppVersionInfo {
   const version =
-    readVersionString(nativeApplicationVersion) ?? readVersionString(Constants.expoConfig?.version);
-  const build = readVersionString(nativeBuildVersion);
+    readVersionString(Constants.expoConfig?.version) ?? readVersionString(nativeApplicationVersion);
+  const build =
+    typeof __DEV__ !== 'undefined' && __DEV__ ? null : readVersionString(nativeBuildVersion);
 
   return { version, build };
 }
