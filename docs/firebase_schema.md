@@ -102,7 +102,7 @@ sequenceDiagram
 ## Security (RTDB rules + App Check)
 
 - Rules: [`firebase/database.rules.json`](../firebase/database.rules.json) — roster-scoped writes, score caps, status transitions, waiting-only peek for strangers. **Rematch** (`finished` → `waiting`): any roster member may commit the reset transaction (clears scores, reopens lobby); rules allow roster-wide player reset only in that transition.
-- **App Check:** native via `@react-native-firebase/app-check` ([`lib/firebase/app-check.ts`](../lib/firebase/app-check.ts)). **Production** release builds (`APP_VARIANT=production`): Play Integrity (Android) + App Attest (iOS). **Dev / Metro:** debug provider + `EXPO_PUBLIC_FIREBASE_APP_CHECK_DEBUG_TOKEN` (register in Console on Android + iOS apps). Config files at repo root: `google-services.json`, `GoogleService-Info.plist` (gitignored). Enable RTDB enforcement in Console only after TestFlight / Play closed testing validates tokens.
+- **App Check:** native attestation via `@react-native-firebase/app-check` (Play Integrity / App Attest in production; debug token in dev). Tokens are **bridged into the JS SDK** (`firebase/app-check` `CustomProvider`) so `firebase/database` and `firebase/auth` attach `X-Firebase-AppCheck` on every request — see [`lib/firebase/app-check.ts`](../lib/firebase/app-check.ts). Enable RTDB enforcement in Console only after store builds show **Verified** metrics (not 100% outdated client).
 - **Room codes:** new rooms default to **5 characters** (`lib/firebase/room-code.ts`); existing 4–6 codes remain valid.
 - **Rules tests:** `npm run test:rules` (Firebase emulator + Vitest).
 

@@ -704,32 +704,47 @@ export function subscribeGameSession(
   listener: (session: GameSessionSnapshot | null) => void,
 ): Unsubscribe {
   const normalized = normalizeRoomCode(gameId);
-  return onValue(
-    sessionRef(normalized),
-    (snapshot) => {
-      if (!snapshot.exists()) {
-        listener(null);
+  let unsub: Unsubscribe | null = null;
+  let cancelled = false;
+
+  void import('./app-check.js')
+    .then(({ ensureFirebaseAppCheck }) => ensureFirebaseAppCheck())
+    .then(() => {
+      if (cancelled) {
         return;
       }
-      const raw = snapshot.val();
-      if (isOrphanGameSessionShell(raw)) {
-        const uid = getFirebaseUid();
-        if (uid && orphanShellHasPlayer(raw, uid)) {
-          void removeOrphanGameSessionShell(normalized, uid);
-        }
-        listener(null);
-        return;
-      }
-      const session = raw as GameSession;
-      listener({ id: normalized, ...stripWordMapsFromSession(session) });
-    },
-    (error) => {
-      if (__DEV__) {
-        console.warn('subscribeGameSession', error);
-      }
-      listener(null);
-    },
-  );
+      unsub = onValue(
+        sessionRef(normalized),
+        (snapshot) => {
+          if (!snapshot.exists()) {
+            listener(null);
+            return;
+          }
+          const raw = snapshot.val();
+          if (isOrphanGameSessionShell(raw)) {
+            const uid = getFirebaseUid();
+            if (uid && orphanShellHasPlayer(raw, uid)) {
+              void removeOrphanGameSessionShell(normalized, uid);
+            }
+            listener(null);
+            return;
+          }
+          const session = raw as GameSession;
+          listener({ id: normalized, ...stripWordMapsFromSession(session) });
+        },
+        (error) => {
+          if (__DEV__) {
+            console.warn('subscribeGameSession', error);
+          }
+          listener(null);
+        },
+      );
+    });
+
+  return () => {
+    cancelled = true;
+    unsub?.();
+  };
 }
 
 /**

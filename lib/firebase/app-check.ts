@@ -2,14 +2,16 @@ import { Platform } from 'react-native';
 
 import { isFirebaseConfigured } from './config.js';
 import { getFirebaseApp } from './init.js';
-import { useProductionAppCheckProviders } from './app-check-mode.js';
+import { expireTimeMillisFromAppCheckJwt } from './app-check-token-expiry.js';
 import { hasNativeFirebaseAppModule } from './has-native-firebase-app-module.js';
+import type { NativeAppCheckTokenGetter } from './native-app-check-native.js';
 
 let initPromise: Promise<void> | null = null;
+let jsSdkAppCheckAttached = false;
 
 /**
- * Native App Check (Play Integrity / App Attest in production; debug token in dev).
- * Requires `google-services.json` + `GoogleService-Info.plist` and a native rebuild.
+ * Native attestation (Play Integrity / App Attest) plus JS SDK bridge so RTDB + Auth
+ * attach App Check tokens on every request.
  */
 export async function ensureFirebaseAppCheck(): Promise<void> {
   if (initPromise) {
@@ -38,27 +40,38 @@ async function initNativeAppCheck(): Promise<void> {
 
   getFirebaseApp();
 
-  const { getApp } = await import('@react-native-firebase/app');
-  const { initializeAppCheck, ReactNativeFirebaseAppCheckProvider } =
-    await import('@react-native-firebase/app-check');
+  const { createNativeAppCheckSession } = await import('./native-app-check-native.js');
+  const { nativeAppCheck, getNativeAppCheckToken } = await createNativeAppCheckSession();
 
-  const debugToken = process.env.EXPO_PUBLIC_FIREBASE_APP_CHECK_DEBUG_TOKEN?.trim();
-  const production = useProductionAppCheckProviders();
+  await attachJsSdkAppCheck(nativeAppCheck, getNativeAppCheckToken);
+}
 
-  const provider = new ReactNativeFirebaseAppCheckProvider();
-  provider.configure({
-    android: {
-      provider: production ? 'playIntegrity' : 'debug',
-      ...(debugToken ? { debugToken } : {}),
-    },
-    apple: {
-      provider: production ? 'appAttestWithDeviceCheckFallback' : 'debug',
-      ...(debugToken ? { debugToken } : {}),
-    },
-  });
+async function attachJsSdkAppCheck(
+  nativeAppCheck: unknown,
+  getNativeAppCheckToken: NativeAppCheckTokenGetter,
+): Promise<void> {
+  if (jsSdkAppCheckAttached) {
+    return;
+  }
 
-  await initializeAppCheck(getApp(), {
-    provider,
+  const { CustomProvider, initializeAppCheck } = await import('firebase/app-check');
+  const firebaseApp = getFirebaseApp();
+
+  initializeAppCheck(firebaseApp, {
+    provider: new CustomProvider({
+      getToken: async () => {
+        let result = await getNativeAppCheckToken(nativeAppCheck, false);
+        if (!result.token) {
+          result = await getNativeAppCheckToken(nativeAppCheck, true);
+        }
+        return {
+          token: result.token,
+          expireTimeMillis: expireTimeMillisFromAppCheckJwt(result.token),
+        };
+      },
+    }),
     isTokenAutoRefreshEnabled: true,
   });
+
+  jsSdkAppCheckAttached = true;
 }
