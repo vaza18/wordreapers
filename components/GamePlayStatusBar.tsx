@@ -1,5 +1,5 @@
-import { memo } from 'react';
-import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { memo, useEffect, useRef } from 'react';
+import { Animated, Easing, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
@@ -11,6 +11,7 @@ import {
   formatPlayStatsAccessible,
   formatPlayStatsCompactSegments,
 } from '@/lib/game/format-play-stats';
+import { useSettingsStore } from '@/store/settings-store';
 
 /** Matches timer line box + chrome so menu and stats buttons align with the timer chip. */
 const ACTION_BUTTON_HEIGHT = 44;
@@ -21,6 +22,7 @@ const RANK_FIRST_STAR_COLOR = '#FAC775';
 interface GamePlayStatusBarProps {
   timerLabel: string;
   timerUrgent?: boolean;
+  timerCritical?: boolean;
   rank: number;
   wordCount: number;
   /** When set, shows `found/max` (e.g. 12/571сл). */
@@ -36,6 +38,8 @@ interface GamePlayStatusBarProps {
   addTimeAccessibilityLabel?: string;
   onStandingsPress?: () => void;
   standingsAccessibilityLabel?: string;
+  onStatsPress?: () => void;
+  statsAccessibilityLabel?: string;
   style?: ViewStyle;
 }
 
@@ -129,6 +133,7 @@ function createStyles(colors: ThemeColors) {
 export const GamePlayStatusBar = memo(function GamePlayStatusBar({
   timerLabel,
   timerUrgent = false,
+  timerCritical = false,
   rank,
   wordCount,
   maxWordCount = null,
@@ -143,12 +148,47 @@ export const GamePlayStatusBar = memo(function GamePlayStatusBar({
   addTimeAccessibilityLabel,
   onStandingsPress,
   standingsAccessibilityLabel,
+  onStatsPress,
+  statsAccessibilityLabel,
   style,
 }: GamePlayStatusBarProps) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const timerVisualCountdown = useSettingsStore((state) => state.timerVisualCountdown);
+  const timerPulse = useRef(new Animated.Value(1)).current;
   const horizontal = Math.max(insets.left, insets.right, spacing.md);
+
+  const shouldPulseTimer = timerCritical && timerVisualCountdown;
+
+  useEffect(() => {
+    if (!shouldPulseTimer) {
+      timerPulse.stopAnimation();
+      timerPulse.setValue(1);
+      return undefined;
+    }
+
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(timerPulse, {
+          toValue: 1.08,
+          duration: 420,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(timerPulse, {
+          toValue: 1,
+          duration: 420,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+    };
+  }, [shouldPulseTimer, timerPulse]);
 
   const statsInput = {
     rank,
@@ -190,7 +230,15 @@ export const GamePlayStatusBar = memo(function GamePlayStatusBar({
   );
 
   const timerText = (
-    <Text style={[styles.timer, timerUrgent ? styles.timerUrgent : null]}>{timerLabel}</Text>
+    <Animated.Text
+      style={[
+        styles.timer,
+        timerUrgent ? styles.timerUrgent : null,
+        shouldPulseTimer ? { transform: [{ scale: timerPulse }] } : null,
+      ]}
+    >
+      {timerLabel}
+    </Animated.Text>
   );
 
   const timerChrome = timerPressable
@@ -249,6 +297,15 @@ export const GamePlayStatusBar = memo(function GamePlayStatusBar({
             style={[styles.actionButton, styles.statsButton]}
           >
             <StarIcon size={16} color={starColor} />
+            {renderStatsLabel(styles.stats)}
+          </FeedbackPressable>
+        ) : onStatsPress ? (
+          <FeedbackPressable
+            accessibilityRole="button"
+            accessibilityLabel={statsAccessibilityLabel ?? statsAccessibleText}
+            onPress={onStatsPress}
+            style={[styles.actionButton, styles.statsButton]}
+          >
             {renderStatsLabel(styles.stats)}
           </FeedbackPressable>
         ) : (

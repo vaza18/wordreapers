@@ -1,4 +1,5 @@
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,8 +25,20 @@ const appIcon = require('../assets/icons/app-icon.png');
 export default function HomeScreen() {
   const styles = useThemedStyles(createStyles);
   const { t } = useTranslation();
-  const { hydrated: trainingHydrated, hasCompletedTrainingRound } = useTrainingMilestone();
+  const {
+    hydrated: trainingHydrated,
+    hasCompletedTrainingRound,
+    refresh: refreshTrainingMilestone,
+  } = useTrainingMilestone();
   const joinLocked = trainingHydrated && !hasCompletedTrainingRound;
+
+  // Re-read the device gate on focus so clearing local data (or finishing
+  // training) updates the CTA without a remount.
+  useFocusEffect(
+    useCallback(() => {
+      refreshTrainingMilestone();
+    }, [refreshTrainingMilestone]),
+  );
 
   const handleCreateOnline = () => {
     if (!continueWithProfileOrRedirect('create')) {
@@ -68,8 +81,13 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.actions}>
-          <PrimaryButton label={t('nav.newGame')} onPress={handleCreateOnline} />
-          <Text style={styles.description}>{t('nav.newGameDescription')}</Text>
+          <PrimaryButton
+            label={joinLocked ? t('nav.startTraining') : t('nav.newGame')}
+            onPress={handleCreateOnline}
+          />
+          <Text style={styles.description}>
+            {joinLocked ? t('nav.startTrainingDescription') : t('nav.newGameDescription')}
+          </Text>
           <PrimaryButton
             label={t('nav.join')}
             onPress={handleJoinOnline}

@@ -56,4 +56,32 @@ describe('resolveLobbyScreenActions auto-join', () => {
     );
     expect(shouldLobbyAutoJoinLiveRound(session, 'p2')).toBe(true);
   });
+
+  it('auto-joins a round-0 lobby member whose presence dropped before start', () => {
+    const session: GameSession = {
+      ...playingSession(
+        {
+          org: { name: 'Org', wordCount: 1, score: 1, online: true },
+          p2: { name: 'Two', wordCount: 0, score: 0, online: false },
+        },
+        ['org'],
+      ),
+      baseWordRound: 0,
+    };
+    expect(shouldLobbyAutoJoinLiveRound(session, 'p2')).toBe(true);
+  });
+
+  it('does not drag back a round-0 member who intentionally left', () => {
+    const session: GameSession = {
+      ...playingSession(
+        {
+          org: { name: 'Org', wordCount: 1, score: 1, online: true },
+          p2: { name: 'Two', wordCount: 0, score: 0, online: false, hasLeft: true },
+        },
+        ['org'],
+      ),
+      baseWordRound: 0,
+    };
+    expect(shouldLobbyAutoJoinLiveRound(session, 'p2')).toBe(false);
+  });
 });

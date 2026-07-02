@@ -30,6 +30,8 @@ export type PlayTimerHeaderServerProps = PlayTimerHeaderBaseProps & {
   canProposeAddTime: boolean;
   hasOpponent: boolean;
   onOpenStandings: () => void;
+  /** Solo-style stats explainer, shown until an opponent joins (matches training). */
+  onOpenStatsExplain?: () => void;
 };
 
 export type PlayTimerHeaderLocalProps = PlayTimerHeaderBaseProps & {
@@ -37,6 +39,7 @@ export type PlayTimerHeaderLocalProps = PlayTimerHeaderBaseProps & {
   endsAt: number | null;
   getRemainingMs: (now: number) => number;
   onTimeUp: () => void;
+  onOpenStatsExplain?: () => void;
 };
 
 export type PlayTimerHeaderProps = PlayTimerHeaderServerProps | PlayTimerHeaderLocalProps;
@@ -81,6 +84,7 @@ export const PlayTimerHeader = memo(function PlayTimerHeader(props: PlayTimerHea
 
   const remainingLabel = formatTimerMs(remainingMs);
   const timerUrgent = remainingMs > 0 && remainingMs <= 60_000;
+  const timerCritical = remainingMs > 0 && remainingMs <= 10_000;
 
   useTimerAlerts(remainingMs, props.isPaused, props.timerAlertMode, props.roundActive);
 
@@ -102,6 +106,7 @@ export const PlayTimerHeader = memo(function PlayTimerHeader(props: PlayTimerHea
     <GamePlayStatusBar
       timerLabel={remainingLabel}
       timerUrgent={timerUrgent && !props.isPaused}
+      timerCritical={timerCritical && !props.isPaused}
       rank={props.clock === 'server' ? props.rank : 1}
       wordCount={props.wordCount}
       maxWordCount={props.maxWordCount}
@@ -126,6 +131,15 @@ export const PlayTimerHeader = memo(function PlayTimerHeader(props: PlayTimerHea
           : undefined
       }
       standingsAccessibilityLabel={t('game.standings')}
+      onStatsPress={
+        props.clock === 'local'
+          ? props.onOpenStatsExplain
+          : // Multiplayer before anyone joins mirrors solo: tap the stats to explain them.
+            !props.hasOpponent && !props.roundEnded
+            ? props.onOpenStatsExplain
+            : undefined
+      }
+      statsAccessibilityLabel={t('game.statsExplainTitle')}
       style={{ marginHorizontal: -spacing.md }}
     />
   );

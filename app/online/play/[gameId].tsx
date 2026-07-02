@@ -5,13 +5,15 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useConnectivity } from '@/contexts/ConnectivityContext';
 import { useLiveRoundPlayScreen } from '@/hooks/useLiveRoundPlayScreen';
 import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
-import { BottomSheetModal } from '@/components/BottomSheetModal';
 import { GameMenuModal } from '@/components/GameMenuModal';
 import { OnlinePlayActiveBody } from '@/components/online/OnlinePlayActiveBody';
 import { OnlinePlayTimerHeader } from '@/components/online/OnlinePlayTimerHeader';
 import { PlayDialogsStack } from '@/components/online/PlayDialogsStack';
+import { PlayStandingsSheet } from '@/components/online/PlayStandingsSheet';
+import { PlayStatsExplainModal } from '@/components/online/PlayStatsExplainModal';
 import { PlayVoteLayer } from '@/components/online/PlayVoteLayer';
 import { PauseRoundModal } from '@/components/PauseRoundModal';
 import { RoomInviteModal } from '@/components/RoomInviteModal';
@@ -19,91 +21,54 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { spacing, type ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
-import { useAutoPauseOnAppBackground } from '@/hooks/useAutoPauseOnAppBackground';
 import { usePlaySessionSubscriptions } from '@/hooks/usePlaySessionSubscriptions';
 import { usePlaySessionToasts } from '@/hooks/usePlaySessionToasts';
 import { useResultsRematchToast } from '@/hooks/useResultsRematchToast';
 import { useVoteExpiryResolver } from '@/hooks/useVoteExpiryResolver';
 import { useTrainingMilestone } from '@/hooks/useTrainingMilestone';
-import { toDisplayUpper } from '@/lib/dictionary/normalize';
+import { useOnlineWordSubmit } from '@/hooks/useOnlineWordSubmit';
+import { usePlayLeaveFlow } from '@/hooks/usePlayLeaveFlow';
+import { usePlayVoteActions } from '@/hooks/usePlayVoteActions';
+import { usePlayWordFeedbackDismiss } from '@/hooks/usePlayWordFeedback';
+import { useRoundEndFlow } from '@/hooks/useRoundEndFlow';
+import { useSessionScoresSync } from '@/hooks/useSessionScoresSync';
 import { getCachedRoundPlayableLexicon } from '@/lib/dictionary/round-playable-lexicon-cache';
-import { playWordAcceptedFeedback } from '@/lib/feedback/game-feedback';
 import { ensureAnonymousAuth } from '@/lib/firebase/auth';
 import { getServerNow } from '@/lib/firebase/server-clock';
-import {
-  finishGameSession,
-  finishGameSessionIfExpired,
-  leaveGameSession,
-  syncSessionPlayerScores,
-  type GameSessionSnapshot,
-} from '@/lib/firebase/game-session-service';
+import { type GameSessionSnapshot } from '@/lib/firebase/game-session-service';
 import { mergeSessionWithWordMaps } from '@/lib/firebase/session-word-maps';
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import type { SessionWordMaps } from '@/lib/firebase/types';
 import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
-import { markPendingRoundArchive } from '@/lib/online/pending-round-archive';
 import {
   cacheActiveRoundProgress,
   purgeStaleActiveRoundCaches,
   tryRestoreActiveRoundCache,
 } from '@/lib/online/cache-active-round';
-import { hasOnlineOpponent, onlineActiveOpponentNames } from '@/lib/online/session-presence';
-import { onlineResultsRoute } from '@/lib/online/online-results-route';
 import { isReviewingPriorRoundOnPlayScreen } from '@/lib/online/is-reviewing-prior-round-on-play';
-import { resolveRoundEndSessionSnapshot } from '@/lib/online/resolve-round-end-session-snapshot';
-import { shouldKeepFrozenResultsOverLiveFinished } from '@/lib/online/frozen-round-view';
 import { consumePlaySessionBootstrap } from '@/lib/online/play-session-bootstrap';
 import {
-  submitOnlineWord,
   reconcileOwnPlayerWordsWithSession,
   type StoredPlayerWord,
 } from '@/lib/firebase/player-words-service';
-import { archiveFinishedRoundFromFirebase } from '@/lib/online/archive-finished-round-from-firebase';
 import {
-  cancelAddTimeVote,
-  cancelEarlyFinishVote,
-  cancelPauseVote,
-  cancelResumeVote,
   proposeAddTime,
   proposeEarlyFinish,
   proposePause,
   proposeResume,
-  voteAddTime,
   voteEarlyFinish,
-  votePause,
   voteResume,
 } from '@/lib/firebase/session-votes-service';
 import { buildOnlineWordListDisplay } from '@/lib/online/online-word-display';
-import { displayPlayerName } from '@/lib/online/public-lobby/display-player-name';
-import {
-  buildLiveStandingsFromSession,
-  sessionPlayerScoresMatchWordMaps,
-} from '@/lib/online/live-standings';
+import { buildLiveStandingsFromSession } from '@/lib/online/live-standings';
 import { formatPlayRulesLabel } from '@/lib/online/play-rules-label';
-import {
-  createSubmitWordProfile,
-  flushSubmitLatencySummary,
-} from '@/lib/online/submit-word-profile';
+import { flushSubmitLatencySummary } from '@/lib/online/submit-word-profile';
 import { buildLetterKeys } from '@/lib/game/letter-keyboard';
-import { formatStandingRowMeta } from '@/lib/game/format-play-stats';
-import { acceptWord } from '@/lib/game/play-word';
-import {
-  playWordErrorMessage,
-  playWordFeedbackVariant,
-  type PlayWordFeedbackVariant,
-} from '@/lib/game/play-word-feedback';
-import {
-  assignDisplayRanks,
-  displayRankForPlayer,
-  shouldShowPointUi,
-  type PlayerStandings,
-} from '@/lib/game/scoring';
+import { type PlayWordFeedbackVariant } from '@/lib/game/play-word-feedback';
+import { displayRankForPlayer, shouldShowPointUi, type PlayerStandings } from '@/lib/game/scoring';
 import { useFirebaseStore } from '@/store/firebase-store';
 import { useProfileStore } from '@/store/profile-store';
 import { useSettingsStore } from '@/store/settings-store';
-
-const VALIDATION_DEBOUNCE_MS = 1000;
-const FEEDBACK_DISMISS_MS = 2200;
 
 const EMPTY_WORD_LIST_ENTRIES: never[] = [];
 const EMPTY_WORD_LIST_DISPLAYS: string[] = [];
@@ -129,6 +94,7 @@ export default function OnlinePlayScreen() {
   const viewerGender = useProfileStore((state) => state.gender);
   const { hydrated: trainingHydrated, hasCompletedTrainingRound } = useTrainingMilestone();
   const canInviteOthers = trainingHydrated && hasCompletedTrainingRound;
+  const { isOnline: isConnected } = useConnectivity();
 
   const [playInit] = useState(() => {
     const bootstrap = gameId ? consumePlaySessionBootstrap(gameId) : null;
@@ -148,7 +114,9 @@ export default function OnlinePlayScreen() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [feedbackVariant, setFeedbackVariant] = useState<PlayWordFeedbackVariant>('default');
   const [showStandings, setShowStandings] = useState(false);
+  const [showStatsExplain, setShowStatsExplain] = useState(false);
   const [showGameMenu, setShowGameMenu] = useState(false);
+  const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showEndEarlyConfirm, setShowEndEarlyConfirm] = useState(false);
@@ -175,53 +143,18 @@ export default function OnlinePlayScreen() {
     [playToasts, rematchToasts],
   );
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastValidatedDraft = useRef('');
-  const syncInFlightRef = useRef(0);
-  const pendingListenerWordRef = useRef<string | null>(null);
-  const activeSubmitProfileRef = useRef<ReturnType<typeof createSubmitWordProfile>>(null);
   const finishAttemptedRef = useRef(false);
   const resultsNavigatedRef = useRef(false);
   const leftNavigatedRef = useRef(false);
   const leavingIntentionallyRef = useRef(false);
   const playRoundKeyRef = useRef<number | null>(null);
   const staleWordsReconcileKeyRef = useRef<string | null>(null);
-  const scoresSyncInFlightRef = useRef(false);
-  const scoresSyncDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const finishedArchiveRoundRef = useRef<number | null>(null);
   const wordMapsRef = useRef(wordMaps);
   wordMapsRef.current = wordMaps;
   const myWordsRef = useRef(myWords);
   myWordsRef.current = myWords;
   const draftKeyIndicesRef = useRef(draftKeyIndices);
   draftKeyIndicesRef.current = draftKeyIndices;
-
-  const navigateAfterLeave = useCallback(() => {
-    if (!gameId || leftNavigatedRef.current) {
-      return;
-    }
-    leftNavigatedRef.current = true;
-    router.replace({ pathname: '/online/left/[gameId]', params: { gameId } });
-  }, [gameId]);
-
-  const runIntentionalLeave = useCallback(() => {
-    if (!myUid || !session || session.status !== 'playing') {
-      return;
-    }
-    leavingIntentionallyRef.current = true;
-    void markPendingRoundArchive(gameId, session.baseWordRound ?? 0, myUid);
-    navigateAfterLeave();
-    void (async () => {
-      try {
-        await cacheActiveRoundProgress(gameId, myUid, session, myWordsRef.current);
-        await leaveGameSession(gameId, myUid);
-      } catch (error) {
-        if (__DEV__) {
-          console.warn('runIntentionalLeave', error);
-        }
-      }
-    })();
-  }, [gameId, myUid, navigateAfterLeave, session]);
 
   useEffect(() => {
     if (rawOpenInvite === '1' && canInviteOthers) {
@@ -306,108 +239,12 @@ export default function OnlinePlayScreen() {
     };
   }, [gameId, myUid, session]);
 
-  useEffect(() => {
-    const round = session?.baseWordRound ?? null;
-    if (round == null) {
-      return;
-    }
-    if (playRoundKeyRef.current !== null && playRoundKeyRef.current !== round) {
-      resultsNavigatedRef.current = false;
-      leftNavigatedRef.current = false;
-      finishAttemptedRef.current = false;
-      leavingIntentionallyRef.current = false;
-      staleWordsReconcileKeyRef.current = null;
-    }
-    playRoundKeyRef.current = round;
-  }, [session?.baseWordRound]);
-
-  useEffect(() => {
-    if (session?.status === 'finished') {
-      setRoundOverPendingResults(true);
-    }
-  }, [session?.status]);
-
-  useEffect(() => {
-    if (!roundEnded) {
-      setRoundEndWordsSnapshot(null);
-      setRoundEndSessionSnapshot(null);
-      return;
-    }
-    setRoundEndWordsSnapshot((prev) => {
-      if (prev !== null) {
-        return prev;
-      }
-      if (myWords.size === 0) {
-        return null;
-      }
-      return new Map(myWords);
-    });
-  }, [myWords, roundEnded]);
-
-  useEffect(() => {
-    if (!gameId || session?.status !== 'finished') {
-      return;
-    }
-    setRoundEndSessionSnapshot((prev) =>
-      resolveRoundEndSessionSnapshot(prev, { ...session, id: gameId }),
-    );
-  }, [gameId, session]);
-
   const displaySession = useMemo(() => {
     if (roundEnded && roundEndSessionSnapshot) {
       return roundEndSessionSnapshot;
     }
     return session;
   }, [roundEnded, roundEndSessionSnapshot, session]);
-
-  useEffect(() => {
-    if (!gameId || !session || session.status !== 'finished') {
-      return;
-    }
-    const liveRound = session.baseWordRound ?? 0;
-    const frozenRound = roundEndSessionSnapshot?.baseWordRound;
-    if (frozenRound != null && shouldKeepFrozenResultsOverLiveFinished(frozenRound, liveRound)) {
-      return;
-    }
-    if (finishedArchiveRoundRef.current === liveRound) {
-      return;
-    }
-    finishedArchiveRoundRef.current = liveRound;
-    void archiveFinishedRoundFromFirebase(gameId, session).catch((error) => {
-      if (__DEV__) {
-        console.warn('archiveFinishedRoundFromFirebase', error);
-      }
-    });
-  }, [gameId, roundEndSessionSnapshot?.baseWordRound, session]);
-
-  const navigateToResults = useCallback(async () => {
-    if (!gameId || resultsNavigatedRef.current || !session) {
-      return;
-    }
-    if (session.status !== 'finished' && !roundOverPendingResults) {
-      return;
-    }
-    resultsNavigatedRef.current = true;
-    // Keep roundOverPendingResults true until unmount — clearing it switches displaySession to
-    // the live rematch round (e.g. paused round 2) and opens PauseRoundModal, which can leave
-    // an iOS ghost overlay blocking touches on the results screen after replace.
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-      debounceRef.current = null;
-    }
-    const archiveSession = roundEndSessionSnapshot ?? session;
-    const viewingRound = archiveSession.baseWordRound ?? null;
-    router.replace(onlineResultsRoute(gameId, viewingRound));
-    try {
-      if (archiveSession.status === 'finished') {
-        await archiveFinishedRoundFromFirebase(gameId, archiveSession);
-      }
-    } catch (error) {
-      if (__DEV__) {
-        console.warn('archiveFinishedRoundFromFirebase', error);
-      }
-    }
-  }, [gameId, roundEndSessionSnapshot, roundOverPendingResults, session]);
 
   const endsAt = displaySession?.timerEndsAt ?? null;
   const resolvedSessionSettings = displaySession
@@ -459,30 +296,6 @@ export default function OnlinePlayScreen() {
       finishAttemptedRef.current = false;
     }
   }, [session?.addTimeVote]);
-
-  useEffect(() => {
-    if (isPaused || session?.status !== 'playing' || endsAt === null || session?.addTimeVote) {
-      return undefined;
-    }
-    const tick = () => {
-      if (finishAttemptedRef.current || getServerNow() >= endsAt) {
-        if (!finishAttemptedRef.current) {
-          void finishGameSessionIfExpired(gameId, wordMapsRef.current ?? undefined).then(
-            (committed) => {
-              if (committed) {
-                finishAttemptedRef.current = true;
-              }
-            },
-          );
-        }
-      }
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => {
-      clearInterval(id);
-    };
-  }, [endsAt, gameId, isPaused, session?.addTimeVote, session?.status]);
 
   const deferredWordMaps = useDeferredValue(wordMaps);
   const sessionForWordList = useMemo(() => {
@@ -561,423 +374,127 @@ export default function OnlinePlayScreen() {
   const openStandings = useCallback(() => {
     setShowStandings(true);
   }, []);
+  const openStatsExplain = useCallback(() => {
+    setShowStatsExplain(true);
+  }, []);
+  const closeGameMenu = useCallback(() => {
+    setShowGameMenu(false);
+  }, []);
+  const closeExitConfirm = useCallback(() => {
+    setShowExitConfirm(false);
+  }, []);
 
-  useEffect(() => {
-    if (!gameId || !myUid || !session || session.status !== 'playing' || !wordMaps) {
-      return;
-    }
-    if (sessionPlayerScoresMatchWordMaps(session) || scoresSyncInFlightRef.current) {
-      return;
-    }
-    if (scoresSyncDebounceRef.current) {
-      clearTimeout(scoresSyncDebounceRef.current);
-    }
-    scoresSyncDebounceRef.current = setTimeout(() => {
-      scoresSyncDebounceRef.current = null;
-      if (scoresSyncInFlightRef.current) {
-        return;
-      }
-      const maps = wordMapsRef.current;
-      if (!maps) {
-        return;
-      }
-      scoresSyncInFlightRef.current = true;
-      void syncSessionPlayerScores(gameId, maps).finally(() => {
-        scoresSyncInFlightRef.current = false;
-      });
-    }, 400);
-    return () => {
-      if (scoresSyncDebounceRef.current) {
-        clearTimeout(scoresSyncDebounceRef.current);
-        scoresSyncDebounceRef.current = null;
-      }
-    };
-  }, [gameId, myUid, session, wordMaps]);
+  useSessionScoresSync({ gameId, myUid, session, wordMaps, wordMapsRef });
 
-  const displayRanks = useMemo(() => assignDisplayRanks(standings), [standings]);
   const playerRank = displayRankForPlayer(standings, myUid);
   const hasOpponent = standings.length >= 2;
   const playRulesLabel = formatPlayRulesLabel(t, displaySession?.settings);
 
-  useEffect(() => {
-    if (!feedback) {
-      return;
-    }
-    const timer = setTimeout(() => {
-      setFeedback(null);
-      setFeedbackVariant('default');
-    }, FEEDBACK_DISMISS_MS);
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [feedback]);
-
-  useEffect(() => {
-    setOptimisticWords((prev) => {
-      if (prev.size === 0) {
-        return prev;
-      }
-      let changed = false;
-      const next = new Map(prev);
-      for (const normalized of prev.keys()) {
-        if (myWords.has(normalized)) {
-          next.delete(normalized);
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
-
-    const pendingWord = pendingListenerWordRef.current;
-    if (pendingWord && myWords.has(pendingWord)) {
-      activeSubmitProfileRef.current?.mark('listener');
-      activeSubmitProfileRef.current?.finish();
-      activeSubmitProfileRef.current = null;
-      pendingListenerWordRef.current = null;
-    }
-  }, [myWords]);
-
-  const finishBackgroundSync = useCallback(() => {
-    syncInFlightRef.current = Math.max(0, syncInFlightRef.current - 1);
-    setBackgroundSyncing(syncInFlightRef.current > 0);
+  const clearFeedback = useCallback(() => {
+    setFeedback(null);
+    setFeedbackVariant('default');
   }, []);
+  usePlayWordFeedbackDismiss(feedback, feedbackVariant, clearFeedback);
 
-  const submitDraft = useCallback(
-    (draftValue: string) => {
-      if (
-        !session ||
-        session.status !== 'playing' ||
-        resultsNavigatedRef.current ||
-        !roundLexicon ||
-        !myUid ||
-        draftValue.length === 0
-      ) {
-        return;
-      }
-      if (draftValue === lastValidatedDraft.current) {
-        return;
-      }
-
-      const profile = createSubmitWordProfile(draftValue);
-      profile?.mark('debounce');
-      activeSubmitProfileRef.current = profile;
-
-      const playerWordsMap = new Map<string, readonly string[]>([
-        [myUid, [...wordsForDisplay.keys()]],
-      ]);
-      const result = acceptWord({
-        input: draftValue,
-        baseWord: session.baseWord,
-        playerId: myUid,
-        uniqueBonusEnabled,
-        playerWords: playerWordsMap,
-        options: {
-          minWordLength: 2,
-          roundLexicon: roundLexicon?.words,
-        },
-        deps: {
-          hasInDictionary: () => false,
-        },
-        lookupDisplayUpper: (word) => roundLexicon.displays.get(word) ?? toDisplayUpper(word),
-      });
-      profile?.mark('acceptWord');
-
-      if (!result.accepted || !result.entry) {
-        activeSubmitProfileRef.current = null;
-        const message = playWordErrorMessage(t, result.error);
-        if (message) {
-          setFeedback(message);
-          setFeedbackVariant(playWordFeedbackVariant(false, result.error));
-        }
-        return;
-      }
-
-      lastValidatedDraft.current = draftValue;
-      const savedDraft = draftValue;
-      const savedKeyIndices = [...draftKeyIndices];
-      const display = result.display ?? toDisplayUpper(result.normalized);
-      const optimisticWord: StoredPlayerWord = {
-        display,
-        at: Date.now(),
-      };
-
-      setOptimisticWords((prev) => {
-        const next = new Map(prev);
-        next.set(result.normalized, optimisticWord);
-        return next;
-      });
-      setScrollRequest({ normalized: result.normalized, id: Date.now() });
-      setDraft('');
-      setDraftKeyIndices([]);
-      setFeedback(t('game.wordAccepted'));
-      setFeedbackVariant('success');
-      playWordAcceptedFeedback(wordAcceptedFeedback);
-      profile?.mark('optimisticUi');
-
-      syncInFlightRef.current += 1;
-      setBackgroundSyncing(true);
-      pendingListenerWordRef.current = result.normalized;
-
-      void submitOnlineWord(gameId, myUid, result.normalized, display, uniqueBonusEnabled, {
-        profile,
-      }).then((remote) => {
-        finishBackgroundSync();
-        profile?.mark('remoteDone');
-
-        if (!remote.ok) {
-          pendingListenerWordRef.current = null;
-          profile?.finish();
-          activeSubmitProfileRef.current = null;
-          setOptimisticWords((prev) => {
-            const next = new Map(prev);
-            next.delete(result.normalized);
-            return next;
-          });
-          setDraft(savedDraft);
-          setDraftKeyIndices(savedKeyIndices);
-          lastValidatedDraft.current = '';
-          if (remote.error === 'DUPLICATE') {
-            setFeedback(t('game.errorAlreadySubmitted'));
-            setFeedbackVariant('default');
-          }
-          return;
-        }
-
-        lastValidatedDraft.current = '';
-        if (myWordsRef.current.has(result.normalized)) {
-          profile?.mark('listener');
-          profile?.finish();
-          activeSubmitProfileRef.current = null;
-          pendingListenerWordRef.current = null;
-        }
-      });
-    },
-    [
-      draftKeyIndices,
-      finishBackgroundSync,
+  const { debounceRef, pressKey, clearDraft, backspaceDraft, onMyWordsUpdated } =
+    useOnlineWordSubmit({
       gameId,
       myUid,
+      session,
       roundLexicon,
-      session,
-      t,
       uniqueBonusEnabled,
-      wordAcceptedFeedback,
       wordsForDisplay,
-    ],
-  );
-
-  useEffect(() => {
-    if (session?.status !== 'playing') {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-        debounceRef.current = null;
-      }
-      lastValidatedDraft.current = '';
-      return;
-    }
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-    if (draft.length === 0) {
-      lastValidatedDraft.current = '';
-      return;
-    }
-    debounceRef.current = setTimeout(() => {
-      submitDraft(draft);
-    }, VALIDATION_DEBOUNCE_MS);
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-    };
-  }, [draft, session?.status, submitDraft]);
-
-  const pressKey = useCallback(
-    (index: number) => {
-      if (
-        roundEndedRef.current ||
-        isPausedRef.current ||
-        remainingMsRef.current <= 0 ||
-        draftKeyIndicesRef.current.includes(index)
-      ) {
-        return;
-      }
-      const key = letterKeys[index];
-      if (!key) {
-        return;
-      }
-      setDraft((prev) => prev + key.value);
-      setDraftKeyIndices((prev) => [...prev, index]);
-      setFeedback(null);
-    },
-    [letterKeys],
-  );
-
-  const clearDraft = useCallback(() => {
-    setDraft('');
-    setDraftKeyIndices([]);
-    setFeedback(null);
-    lastValidatedDraft.current = '';
-  }, []);
-
-  const backspaceDraft = useCallback(() => {
-    setDraft((prev) => prev.slice(0, -1));
-    setDraftKeyIndices((prev) => prev.slice(0, -1));
-    setFeedback(null);
-  }, []);
-
-  const leaveToHome = () => {
-    setShowExitConfirm(false);
-    setShowGameMenu(false);
-    if (!myUid || !session) {
-      router.replace('/');
-      return;
-    }
-    if (session.status === 'playing') {
-      runIntentionalLeave();
-      return;
-    }
-    void exitOnlineToHome({
-      gameId,
-      uid: myUid,
-      isOrganizer: session.organizerId === myUid,
-      sessionStatus: session.status,
-      session,
-      myWords,
+      myWordsRef,
+      resultsNavigatedRef,
+      roundEndedRef,
+      isPausedRef,
+      remainingMsRef,
+      draftKeyIndicesRef,
+      letterKeys,
+      wordAcceptedFeedback,
+      t,
+      isConnected,
+      draft,
+      setDraft,
+      setDraftKeyIndices,
+      setFeedback,
+      setFeedbackVariant,
+      setOptimisticWords,
+      setScrollRequest,
+      setBackgroundSyncing,
     });
-  };
-
-  const cancelEarlyFinishProposal = () => {
-    if (!myUid) {
-      return;
-    }
-    void cancelEarlyFinishVote(gameId, myUid);
-  };
-
-  const cancelPauseProposal = () => {
-    if (!myUid) {
-      return;
-    }
-    void cancelPauseVote(gameId, myUid);
-  };
-
-  const cancelAddTimeProposal = () => {
-    if (!myUid) {
-      return;
-    }
-    void cancelAddTimeVote(gameId, myUid);
-  };
-
-  const cancelResumeProposal = () => {
-    if (!myUid) {
-      return;
-    }
-    void cancelResumeVote(gameId, myUid);
-  };
-
-  const leaveNowFromEarlyFinish = () => {
-    if (!myUid || !session) {
-      return;
-    }
-    void (async () => {
-      try {
-        await cancelEarlyFinishVote(gameId, myUid);
-      } catch (error) {
-        if (__DEV__) {
-          console.warn('leaveNowFromEarlyFinish cancel vote', error);
-        }
-      }
-      runIntentionalLeave();
-    })();
-  };
-
-  const onVoteEarlyFinish = useCallback(
-    (choice: 'yes' | 'no') => {
-      if (!myUid) {
-        return;
-      }
-      void voteEarlyFinish(gameId, myUid, choice);
-    },
-    [gameId, myUid],
-  );
-
-  const onVotePause = useCallback(
-    (choice: 'yes' | 'no') => {
-      if (!myUid) {
-        return;
-      }
-      void votePause(gameId, myUid, choice);
-    },
-    [gameId, myUid],
-  );
-
-  const onVoteAddTime = useCallback(
-    (choice: 'yes' | 'no') => {
-      if (!myUid) {
-        return;
-      }
-      void voteAddTime(gameId, myUid, choice);
-    },
-    [gameId, myUid],
-  );
-
-  const hasOnlineOpponentInRound = useMemo(
-    () => (session && myUid ? hasOnlineOpponent(session, myUid) : false),
-    [myUid, session],
-  );
-
-  useAutoPauseOnAppBackground(
-    session?.status === 'playing' && !isPaused && !hasOnlineOpponentInRound,
-    () => {
-      void proposePause(gameId, myUid);
-    },
-  );
 
   useEffect(() => {
-    if (!hasOnlineOpponentInRound) {
-      return;
-    }
-    setShowEndEarlyConfirm((open) => {
-      if (open && session && myUid) {
-        const names = onlineActiveOpponentNames(session, myUid).join(', ');
-        setFeedback(t('game.endEarlyOpponentOnline', { names }));
-        if (debounceRef.current) {
-          clearTimeout(debounceRef.current);
-        }
-        debounceRef.current = setTimeout(() => {
-          setFeedback(null);
-        }, FEEDBACK_DISMISS_MS);
-      }
-      return false;
-    });
-  }, [hasOnlineOpponentInRound, myUid, session, t]);
+    onMyWordsUpdated(myWords);
+  }, [myWords, onMyWordsUpdated]);
 
-  const handleEndEarlyConfirm = () => {
-    setShowEndEarlyConfirm(false);
-    if (session && myUid && hasOnlineOpponent(session, myUid)) {
-      void proposeEarlyFinish(gameId, myUid);
-      return;
-    }
-    void finishGameSession(gameId, wordMaps ?? undefined);
-  };
+  const { runIntentionalLeave, leaveToHome } = usePlayLeaveFlow({
+    gameId,
+    myUid,
+    session,
+    myWords,
+    myWordsRef,
+    leavingIntentionallyRef,
+    leftNavigatedRef,
+    onCloseExitConfirm: closeExitConfirm,
+    onCloseGameMenu: closeGameMenu,
+  });
 
-  useEffect(() => {
-    if (session?.status !== 'playing') {
-      return;
-    }
-    const voteActive = Boolean(session.earlyFinishVote || session.pauseVote || session.addTimeVote);
-    if (!voteActive) {
-      return;
-    }
-    setShowAddTimeModal(false);
-    setShowStandings(false);
-  }, [session?.addTimeVote, session?.earlyFinishVote, session?.pauseVote, session?.status]);
+  const {
+    cancelEarlyFinishProposal,
+    cancelPauseProposal,
+    cancelAddTimeProposal,
+    cancelResumeProposal,
+    leaveNowFromEarlyFinish,
+    onVoteEarlyFinish,
+    onVotePause,
+    onVoteAddTime,
+    hasOnlineOpponentInRound,
+    handleEndEarlyConfirm,
+  } = usePlayVoteActions({
+    gameId,
+    myUid,
+    session,
+    isPaused,
+    debounceRef,
+    runIntentionalLeave,
+    setFeedback,
+    setShowEndEarlyConfirm,
+    setShowAddTimeModal,
+    setShowStandings,
+    t,
+  });
+
+  const { navigateToResults } = useRoundEndFlow({
+    gameId,
+    session,
+    myWords,
+    roundEnded,
+    roundOverPendingResults,
+    setRoundOverPendingResults,
+    roundEndWordsSnapshot,
+    setRoundEndWordsSnapshot,
+    roundEndSessionSnapshot,
+    setRoundEndSessionSnapshot,
+    playRoundKeyRef,
+    resultsNavigatedRef,
+    finishAttemptedRef,
+    leavingIntentionallyRef,
+    leftNavigatedRef,
+    staleWordsReconcileKeyRef,
+    wordMapsRef,
+    debounceRef,
+    endsAt,
+    isPaused,
+    hasAddTimeVote: Boolean(session?.addTimeVote),
+  });
 
   useEffect(() => {
     if (!roundEnded) {
       return;
     }
     setShowStandings(false);
+    setShowStatsExplain(false);
     setShowGameMenu(false);
     setShowInviteModal(false);
     setShowExitConfirm(false);
@@ -1050,7 +567,7 @@ export default function OnlinePlayScreen() {
             maxWordCount={maxWordCount}
             score={playerScore}
             showRank={hasOpponent}
-            showScore={showPointUi}
+            showScore={showPointUi && hasOpponent}
             roundEnded={roundEnded}
             canProposeAddTime={canProposeAddTime}
             hasOpponent={hasOpponent}
@@ -1058,6 +575,7 @@ export default function OnlinePlayScreen() {
             onOpenGameMenu={openGameMenu}
             onOpenAddTimeModal={openAddTimeModal}
             onOpenStandings={openStandings}
+            onOpenStatsExplain={openStatsExplain}
           />
 
           <OnlinePlayActiveBody
@@ -1082,40 +600,26 @@ export default function OnlinePlayScreen() {
         </>
       ) : null}
 
-      <BottomSheetModal
+      <PlayStandingsSheet
         visible={showStandings && !gameMenuBlockedByVote && !roundEnded}
+        session={session}
+        myUid={myUid}
+        standings={standings}
+        showPointUi={showPointUi}
         onClose={() => {
           setShowStandings(false);
         }}
-      >
-        <Text style={styles.modalTitle}>{t('game.standings')}</Text>
-        {standings.map((row, index) => {
-          const player = session.players[row.playerId];
-          const name = player
-            ? displayPlayerName(player, myUid, row.playerId, session)
-            : row.playerId;
-          const isMe = row.playerId === myUid;
-          return (
-            <View key={row.playerId} style={styles.standingRow}>
-              <Text style={styles.standingRank}>{displayRanks.get(row.playerId) ?? index + 1}</Text>
-              <Text style={styles.standingName}>
-                {name}
-                {isMe ? ` ${t('game.resultsYou')}` : ''}
-              </Text>
-              <Text style={styles.standingMeta}>
-                {formatStandingRowMeta(row.wordCount, showPointUi ? row.score : null)}
-              </Text>
-            </View>
-          );
-        })}
-        <PrimaryButton
-          label={t('common.close')}
-          variant="secondary"
-          onPress={() => {
-            setShowStandings(false);
-          }}
-        />
-      </BottomSheetModal>
+      />
+
+      <PlayStatsExplainModal
+        visible={showStatsExplain && !hasOpponent && !roundEnded}
+        wordCount={playerWordCount}
+        maxWordCount={maxWordCount}
+        showTrainingUnlockHint={false}
+        onClose={() => {
+          setShowStatsExplain(false);
+        }}
+      />
 
       {showGameMenu && !gameMenuBlockedByVote && !roundEnded ? (
         <GameMenuModal
@@ -1157,6 +661,10 @@ export default function OnlinePlayScreen() {
           onOpenSettings={() => {
             setShowGameMenu(false);
             router.push('/settings');
+          }}
+          onOpenHowToPlay={() => {
+            setShowGameMenu(false);
+            setShowHowToPlay(true);
           }}
         />
       ) : null}
@@ -1271,7 +779,9 @@ export default function OnlinePlayScreen() {
         }}
         showEndEarlyConfirm={showEndEarlyConfirm}
         hasOnlineOpponentInRound={hasOnlineOpponentInRound}
-        onEndEarlyConfirm={handleEndEarlyConfirm}
+        onEndEarlyConfirm={() => {
+          handleEndEarlyConfirm(wordMaps);
+        }}
         onDismissEndEarlyConfirm={() => {
           setShowEndEarlyConfirm(false);
         }}
@@ -1285,6 +795,8 @@ export default function OnlinePlayScreen() {
         onViewResults={() => {
           void navigateToResults();
         }}
+        showHowToPlay={showHowToPlay}
+        onDismissHowToPlay={() => setShowHowToPlay(false)}
       />
     </SafeAreaView>
   );
@@ -1313,33 +825,6 @@ function createStyles(colors: ThemeColors) {
       paddingBottom: spacing.md,
       paddingTop: spacing.xs,
       gap: spacing.sm,
-    },
-    modalTitle: {
-      fontSize: 18,
-      fontWeight: '600',
-      color: colors.textPrimary,
-    },
-    standingRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.sm,
-      paddingVertical: spacing.xs,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.borderTertiary,
-    },
-    standingRank: {
-      width: 20,
-      fontWeight: '700',
-      color: colors.accent,
-    },
-    standingName: {
-      flex: 1,
-      fontSize: 15,
-      color: colors.textPrimary,
-    },
-    standingMeta: {
-      fontSize: 13,
-      color: colors.textSecondary,
     },
   });
 }

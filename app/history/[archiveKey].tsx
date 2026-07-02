@@ -10,6 +10,7 @@ import { type ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useOnlineViewerUid } from '@/hooks/useOnlineViewerUid';
+import { isViewerWinner } from '@/lib/game/is-viewer-winner';
 import type { GameSession } from '@/lib/firebase/types';
 import { stackHeaderWithBackAndSettings } from '@/lib/navigation/stack-header-options';
 import { loadFrozenFinishedRoundFromArchive } from '@/lib/online/frozen-finished-round';
@@ -149,6 +150,9 @@ export default function ArchivedRoundResultsScreen() {
         showScores={viewData.uniqueBonusEnabled}
         showWordAuthors={!viewData.isSolo}
         roundDurationSeconds={viewData.roundDurationSeconds}
+        winnerOverride={
+          !viewData.isSolo && isViewerWinner(viewData.playerRankGroups, highlightPlayerId)
+        }
       />
     </>
   );

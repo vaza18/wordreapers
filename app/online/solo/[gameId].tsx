@@ -16,12 +16,16 @@ import { GameTimeUpModal } from '@/components/GameTimeUpModal';
 import { HowToPlayDialog } from '@/components/HowToPlayDialog';
 import { OnlinePlayActiveBody } from '@/components/online/OnlinePlayActiveBody';
 import { OrganizerSoloTimerHeader } from '@/components/online/OrganizerSoloTimerHeader';
+import { PlayStatsExplainModal } from '@/components/online/PlayStatsExplainModal';
+import { TrainingProgressBar } from '@/components/online/TrainingProgressBar';
 import { PauseRoundModal } from '@/components/PauseRoundModal';
 import { spacing, type ThemeColors } from '@/constants/theme';
 import { modalOverlayBackground } from '@/lib/ui/modal-chrome';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useAutoPauseOnAppBackground } from '@/hooks/useAutoPauseOnAppBackground';
+import { usePlayWordFeedbackDismiss } from '@/hooks/usePlayWordFeedback';
+import { useTrainingFirstWordHint } from '@/hooks/useTrainingFirstWordHint';
 import { useTrainingMilestone } from '@/hooks/useTrainingMilestone';
 import { DictionaryIndex } from '@/lib/dictionary/dictionary-index';
 import { toDisplayUpper } from '@/lib/dictionary/normalize';
@@ -50,7 +54,6 @@ import { useProfileStore } from '@/store/profile-store';
 import { useSettingsStore } from '@/store/settings-store';
 
 const VALIDATION_DEBOUNCE_MS = 1000;
-const FEEDBACK_DISMISS_MS = 2200;
 
 /**
  * Organizer solo round — local only until invite publishes to Firebase.
@@ -95,6 +98,8 @@ export default function OrganizerSoloPlayScreen() {
   );
   const [showGameMenu, setShowGameMenu] = useState(false);
   const [showAddTimeModal, setShowAddTimeModal] = useState(false);
+  const [showStatsExplain, setShowStatsExplain] = useState(false);
+  const [showHowToPlay, setShowHowToPlay] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
 
@@ -135,16 +140,17 @@ export default function OrganizerSoloPlayScreen() {
 
   const timeUpModalVisible = status === 'finished';
 
-  useEffect(() => {
-    if (!feedback) {
-      return;
-    }
-    const timer = setTimeout(() => {
-      setFeedback(null);
-      setFeedbackVariant('default');
-    }, FEEDBACK_DISMISS_MS);
-    return () => clearTimeout(timer);
-  }, [feedback]);
+  const clearFeedback = useCallback(() => {
+    setFeedback(null);
+    setFeedbackVariant('default');
+  }, []);
+
+  usePlayWordFeedbackDismiss(feedback, feedbackVariant, clearFeedback);
+
+  const showFirstWordHint = useCallback((message: string) => {
+    setFeedback(message);
+    setFeedbackVariant('default');
+  }, []);
 
   const baseWordDisplay = setup?.baseWordDisplay ?? '';
   const letterKeys = useMemo(() => buildLetterKeys(baseWordDisplay), [baseWordDisplay]);
@@ -154,6 +160,20 @@ export default function OrganizerSoloPlayScreen() {
   const playerScore = computePlayerScore(scoredWords);
   const isPaused = status === 'paused';
   const addTimeRemainingMs = getRemainingMs(Date.now());
+
+  const showTrainingProgress =
+    trainingHydrated && !hasCompletedTrainingRound && status === 'playing' && !isPaused;
+
+  useTrainingFirstWordHint({
+    enabled: showTrainingProgress && scoredWords.length === 0,
+    wordCount: scoredWords.length,
+    draftLength: draft.length,
+    sortedWords: roundLexicon?.sortedWords,
+    displays: roundLexicon?.displays,
+    t,
+    onHint: showFirstWordHint,
+    onClearHint: clearFeedback,
+  });
 
   useAutoPauseOnAppBackground(status === 'playing', pauseRound);
   const playRulesLabel = formatPlayRulesLabel(
@@ -403,7 +423,18 @@ export default function OrganizerSoloPlayScreen() {
               onOpenAddTimeModal={() => {
                 setShowAddTimeModal(true);
               }}
+              onOpenStatsExplain={() => {
+                setShowStatsExplain(true);
+              }}
             />
+
+            {showTrainingProgress && roundLexicon ? (
+              <TrainingProgressBar
+                wordCount={scoredWords.length}
+                lexiconMax={roundLexicon.maxCount}
+                wordsShort={t('game.wordsShort')}
+              />
+            ) : null}
 
             <OnlinePlayActiveBody
               myName={myName}
@@ -478,6 +509,26 @@ export default function OrganizerSoloPlayScreen() {
           setShowGameMenu(false);
           router.push('/settings');
         }}
+        onOpenHowToPlay={() => {
+          setShowGameMenu(false);
+          setShowHowToPlay(true);
+        }}
+      />
+
+      <PlayStatsExplainModal
+        visible={showStatsExplain}
+        wordCount={scoredWords.length}
+        maxWordCount={roundLexicon?.maxCount ?? null}
+        showTrainingUnlockHint={trainingHydrated && !hasCompletedTrainingRound}
+        onClose={() => {
+          setShowStatsExplain(false);
+        }}
+      />
+
+      <HowToPlayDialog
+        enabled={status === 'playing' || showHowToPlay}
+        forceOpen={showHowToPlay}
+        onForceDismiss={() => setShowHowToPlay(false)}
       />
 
       <GameTimeUpModal
@@ -498,8 +549,6 @@ export default function OrganizerSoloPlayScreen() {
           addTime(minutes);
         }}
       />
-
-      <HowToPlayDialog enabled={status === 'playing'} />
 
       {publishing ? (
         <View style={styles.publishingOverlay}>

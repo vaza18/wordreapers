@@ -6,6 +6,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { PlaySessionToastStack } from '@/components/PlaySessionToast';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { RoundResultsView } from '@/components/RoundResultsView';
+import { isViewerWinner } from '@/lib/game/is-viewer-winner';
 import { useResultsRematchToast } from '@/hooks/useResultsRematchToast';
 import { useLiveRosterPlayerWords } from '@/hooks/useLiveRosterPlayerWords';
 import { useOnlineViewerUid } from '@/hooks/useOnlineViewerUid';
@@ -373,6 +374,7 @@ export default function OnlineResultsScreen() {
         showScores={viewData.uniqueBonusEnabled}
         showWordAuthors={!viewData.isSolo}
         roundDurationSeconds={viewData.roundDurationSeconds}
+        winnerOverride={!viewData.isSolo && isViewerWinner(viewData.playerRankGroups, myUid)}
         footer={
           <>
             {rematchError ? <Text style={styles.error}>{rematchError}</Text> : null}

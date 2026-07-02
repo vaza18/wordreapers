@@ -27,6 +27,18 @@ const BUTTON_FEEDBACK_STORAGE_KEY = 'wordreapers.buttonFeedback';
 const LEGACY_KEY_PRESS_FEEDBACK_STORAGE_KEY = 'wordreapers.keyPressFeedback';
 const WORD_ACCEPTED_FEEDBACK_STORAGE_KEY = 'wordreapers.wordAcceptedFeedback';
 const TIMER_ALERT_FEEDBACK_STORAGE_KEY = 'wordreapers.timerAlertFeedback';
+const TIMER_VISUAL_COUNTDOWN_STORAGE_KEY = 'wordreapers.timerVisualCountdown';
+const VICTORY_EFFECTS_STORAGE_KEY = 'wordreapers.victoryEffects';
+
+export const DEFAULT_TIMER_VISUAL_COUNTDOWN = true;
+export const DEFAULT_VICTORY_EFFECTS = true;
+
+function parseStoredBoolean(raw: string | null, defaultValue: boolean): boolean {
+  if (raw === null) {
+    return defaultValue;
+  }
+  return raw === 'true';
+}
 
 async function loadFeedbackPreferences(): Promise<{
   buttonFeedback: FeedbackMode;
@@ -73,18 +85,23 @@ export interface SettingsState {
   buttonFeedback: FeedbackMode;
   wordAcceptedFeedback: FeedbackMode;
   timerAlertMode: FeedbackMode;
+  timerVisualCountdown: boolean;
+  victoryEffects: boolean;
   gameSetup: GameSetupPreferences;
   setLocale: (locale: AppLocale) => void;
   setAppearanceMode: (mode: AppearanceMode) => void;
   setButtonFeedback: (mode: FeedbackMode) => void;
   setWordAcceptedFeedback: (mode: FeedbackMode) => void;
   setTimerAlertMode: (mode: FeedbackMode) => void;
+  setTimerVisualCountdown: (enabled: boolean) => void;
+  setVictoryEffects: (enabled: boolean) => void;
   setGameSetupDuration: (durationMinutes: number) => void;
   setGameSetupUniqueBonusMode: (uniqueBonusMode: UniqueBonusMode) => void;
   setGameSetupAllowProperNouns: (allow: boolean) => void;
   setGameSetupAllowSlang: (allow: boolean) => void;
   hydrateAppearancePreference: () => Promise<void>;
   hydrateFeedbackPreferences: () => Promise<void>;
+  hydrateEffectsPreferences: () => Promise<void>;
   hydrateGameSetupPreferences: () => Promise<void>;
 }
 
@@ -94,6 +111,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   buttonFeedback: DEFAULT_BUTTON_FEEDBACK,
   wordAcceptedFeedback: DEFAULT_WORD_ACCEPTED_FEEDBACK,
   timerAlertMode: DEFAULT_TIMER_ALERT_FEEDBACK,
+  timerVisualCountdown: DEFAULT_TIMER_VISUAL_COUNTDOWN,
+  victoryEffects: DEFAULT_VICTORY_EFFECTS,
   gameSetup: DEFAULT_GAME_SETUP_PREFERENCES,
 
   setLocale: (locale) => {
@@ -118,6 +137,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setTimerAlertMode: (mode) => {
     set({ timerAlertMode: mode });
     void saveFeedbackPreference('timerAlert', mode);
+  },
+
+  setTimerVisualCountdown: (enabled) => {
+    set({ timerVisualCountdown: enabled });
+    void AsyncStorage.setItem(TIMER_VISUAL_COUNTDOWN_STORAGE_KEY, String(enabled));
+  },
+
+  setVictoryEffects: (enabled) => {
+    set({ victoryEffects: enabled });
+    void AsyncStorage.setItem(VICTORY_EFFECTS_STORAGE_KEY, String(enabled));
   },
 
   setGameSetupDuration: (durationMinutes) => {
@@ -155,6 +184,17 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       buttonFeedback: prefs.buttonFeedback,
       wordAcceptedFeedback: prefs.wordAcceptedFeedback,
       timerAlertMode: prefs.timerAlertMode,
+    });
+  },
+
+  hydrateEffectsPreferences: async () => {
+    const [timerVisualRaw, victoryEffectsRaw] = await Promise.all([
+      AsyncStorage.getItem(TIMER_VISUAL_COUNTDOWN_STORAGE_KEY),
+      AsyncStorage.getItem(VICTORY_EFFECTS_STORAGE_KEY),
+    ]);
+    set({
+      timerVisualCountdown: parseStoredBoolean(timerVisualRaw, DEFAULT_TIMER_VISUAL_COUNTDOWN),
+      victoryEffects: parseStoredBoolean(victoryEffectsRaw, DEFAULT_VICTORY_EFFECTS),
     });
   },
 

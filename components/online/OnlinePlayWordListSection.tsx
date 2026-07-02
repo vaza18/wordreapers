@@ -1,5 +1,5 @@
-import { memo } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { memo, useEffect, useRef } from 'react';
+import { ActivityIndicator, Animated, Easing, StyleSheet, Text, View } from 'react-native';
 
 import { WordList } from '@/components/WordList';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
@@ -77,6 +77,56 @@ function createStyles(colors: ThemeColors) {
   });
 }
 
+function FeedbackChip({
+  feedback,
+  chipColors,
+  styles,
+}: {
+  feedback: string;
+  chipColors: ReturnType<typeof feedbackChipStyle>;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(6)).current;
+
+  useEffect(() => {
+    opacity.setValue(0);
+    translateY.setValue(6);
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [feedback, opacity, translateY]);
+
+  return (
+    <Animated.Text
+      accessibilityLiveRegion="polite"
+      style={[
+        styles.feedbackToast,
+        {
+          backgroundColor: chipColors.backgroundColor,
+          color: chipColors.color,
+          borderColor: chipColors.borderColor,
+          opacity,
+          transform: [{ translateY }],
+        },
+      ]}
+    >
+      {feedback}
+    </Animated.Text>
+  );
+}
+
 /**
  * Accepted words + draft prefix navigation — memoized apart from compose panel.
  */
@@ -109,19 +159,23 @@ export const OnlinePlayWordListSection = memo(function OnlinePlayWordListSection
       />
       <View style={styles.feedbackSlot}>
         {feedback ? (
-          <Text
-            accessibilityLiveRegion="polite"
-            style={[
-              styles.feedbackToast,
-              {
-                backgroundColor: chipColors.backgroundColor,
-                color: chipColors.color,
-                borderColor: chipColors.borderColor,
-              },
-            ]}
-          >
-            {feedback}
-          </Text>
+          feedbackVariant === 'success' ? (
+            <FeedbackChip feedback={feedback} chipColors={chipColors} styles={styles} />
+          ) : (
+            <Text
+              accessibilityLiveRegion="polite"
+              style={[
+                styles.feedbackToast,
+                {
+                  backgroundColor: chipColors.backgroundColor,
+                  color: chipColors.color,
+                  borderColor: chipColors.borderColor,
+                },
+              ]}
+            >
+              {feedback}
+            </Text>
+          )
         ) : null}
         {backgroundSyncing ? (
           <ActivityIndicator size="small" color={colors.accent} style={styles.syncIndicator} />

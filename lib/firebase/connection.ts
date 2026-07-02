@@ -1,4 +1,4 @@
-import { onValue, ref } from 'firebase/database';
+import { onValue, ref, type Unsubscribe } from 'firebase/database';
 
 import { ensureAnonymousAuth } from './auth.js';
 import { ensureFirebaseAppCheck } from './app-check.js';
@@ -24,17 +24,23 @@ export function waitForRtdbConnected(timeoutMs = RTDB_CONNECT_TIMEOUT_MS): Promi
     const db = getFirebaseDatabase();
     const connectedRef = ref(db, '.info/connected');
     let settled = false;
+    // onValue can fire synchronously (already connected) before the listener
+    // handle is assigned, so hold it in a container and guard the call.
+    const handle: { unsub?: Unsubscribe } = {};
+    const cleanup = () => {
+      handle.unsub?.();
+    };
 
     const timer = setTimeout(() => {
       if (settled) {
         return;
       }
       settled = true;
-      unsub();
+      cleanup();
       reject(new Error('RTDB connection timed out'));
     }, timeoutMs);
 
-    const unsub = onValue(
+    handle.unsub = onValue(
       connectedRef,
       (snapshot) => {
         if (snapshot.val() !== true || settled) {
@@ -42,7 +48,7 @@ export function waitForRtdbConnected(timeoutMs = RTDB_CONNECT_TIMEOUT_MS): Promi
         }
         settled = true;
         clearTimeout(timer);
-        unsub();
+        cleanup();
         resolve();
       },
       (error) => {
@@ -51,10 +57,16 @@ export function waitForRtdbConnected(timeoutMs = RTDB_CONNECT_TIMEOUT_MS): Promi
         }
         settled = true;
         clearTimeout(timer);
-        unsub();
+        cleanup();
         reject(error);
       },
     );
+
+    // If the callback already settled synchronously above, `unsub` was assigned
+    // after the listener fired — tear it down now.
+    if (settled) {
+      cleanup();
+    }
   });
 }
 
