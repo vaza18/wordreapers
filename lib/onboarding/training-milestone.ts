@@ -12,6 +12,22 @@ export function meetsTrainingMilestone(wordCount: number, lexiconMaxCount: numbe
   return wordCount > lexiconMaxCount * TRAINING_MILESTONE_LEXICON_RATIO;
 }
 
+/**
+ * Words required to pass the training milestone — the smallest integer strictly
+ * greater than 5% of the lexicon, so this matches `meetsTrainingMilestone`.
+ */
+export function trainingWordsRequired(lexiconMaxCount: number): number {
+  if (lexiconMaxCount <= 0) {
+    return 1;
+  }
+  return Math.floor(lexiconMaxCount * TRAINING_MILESTONE_LEXICON_RATIO) + 1;
+}
+
+/** Words still needed to unlock multiplayer during training. */
+export function wordsUntilTrainingUnlock(wordCount: number, lexiconMaxCount: number): number {
+  return Math.max(0, trainingWordsRequired(lexiconMaxCount) - wordCount);
+}
+
 /** Whether solo training milestone was completed on this device. */
 export async function getHasCompletedTrainingRound(): Promise<boolean> {
   const raw = await AsyncStorage.getItem(TRAINING_MILESTONE_KEY);

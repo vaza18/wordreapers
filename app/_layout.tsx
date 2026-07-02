@@ -5,6 +5,9 @@ import { I18nextProvider } from 'react-i18next';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { ConnectivityProvider } from '@/contexts/ConnectivityContext';
+import { ConnectivityBanner } from '@/components/ConnectivityBanner';
+import { VictoryConfettiHost } from '@/components/VictoryConfetti';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { stackScreenOptions } from '@/constants/stack-screen-options';
 import {
@@ -43,7 +46,7 @@ function BootstrapLoading() {
       }}
     >
       <ActivityIndicator color={colors.accent} size="large" />
-      <Text style={{ fontSize: 15, color: colors.textSecondary }}>Завантаження…</Text>
+      <Text style={{ fontSize: 15, color: colors.textSecondary }}>{i18n.t('app.loading')}</Text>
     </View>
   );
 }
@@ -54,6 +57,7 @@ function RootStack() {
   return (
     <I18nextProvider i18n={i18n}>
       <StatusBar hidden translucent />
+      <ConnectivityBanner />
       <Stack
         screenOptions={{
           ...stackScreenOptions,
@@ -118,6 +122,7 @@ function RootStack() {
           }}
         />
       </Stack>
+      <VictoryConfettiHost />
     </I18nextProvider>
   );
 }
@@ -134,6 +139,7 @@ export default function RootLayout() {
     (state) => state.hydrateAppearancePreference,
   );
   const hydrateFeedbackPreferences = useSettingsStore((state) => state.hydrateFeedbackPreferences);
+  const hydrateEffectsPreferences = useSettingsStore((state) => state.hydrateEffectsPreferences);
   const hydrateGameSetupPreferences = useSettingsStore(
     (state) => state.hydrateGameSetupPreferences,
   );
@@ -163,6 +169,7 @@ export default function RootLayout() {
             LOCAL_BOOTSTRAP_TIMEOUT_MS,
             'feedback',
           ),
+          withBootstrapTimeout(hydrateEffectsPreferences(), LOCAL_BOOTSTRAP_TIMEOUT_MS, 'effects'),
           withBootstrapTimeout(
             hydrateGameSetupPreferences(),
             LOCAL_BOOTSTRAP_TIMEOUT_MS,
@@ -196,6 +203,7 @@ export default function RootLayout() {
   }, [
     hydrateAppearancePreference,
     hydrateFeedbackPreferences,
+    hydrateEffectsPreferences,
     hydrateGameSetupPreferences,
     hydrateProfile,
     hydratePlayerStats,
@@ -209,7 +217,9 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <ThemeProvider>{ready ? <RootStack /> : <BootstrapLoading />}</ThemeProvider>
+      <ConnectivityProvider>
+        <ThemeProvider>{ready ? <RootStack /> : <BootstrapLoading />}</ThemeProvider>
+      </ConnectivityProvider>
     </SafeAreaProvider>
   );
 }

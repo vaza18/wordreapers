@@ -1,5 +1,5 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,8 +16,11 @@ import { stackHeaderWithBackAndSettings } from '@/lib/navigation/stack-header-op
 import { archiveRouteKey, listFinishedRoundArchives } from '@/lib/online/online-session-archive';
 import {
   computeRoomHistoryAggregate,
+  didPlayerLeadRoomAggregate,
   filterMultiplayerArchivesForGame,
 } from '@/lib/online/room-history-aggregate';
+import { useSettingsStore } from '@/store/settings-store';
+import { useVictoryConfettiStore } from '@/store/victory-confetti-store';
 
 /**
  * Round list for one room (multi-round rematch history).
@@ -56,6 +59,29 @@ export default function RoomHistoryScreen() {
     }
     return computeRoomHistoryAggregate(gameId, roundArchives, myUid);
   }, [gameId, myUid, roundArchives]);
+
+  const victoryEffects = useSettingsStore((state) => state.victoryEffects);
+  const celebrate = useVictoryConfettiStore((state) => state.celebrate);
+  const hasCelebratedRef = useRef(false);
+
+  const showVictoryConfetti = Boolean(
+    roomAggregate &&
+    roomAggregate.uniquePlayerCount >= 2 &&
+    myUid &&
+    didPlayerLeadRoomAggregate(myUid, roomAggregate),
+  );
+
+  useEffect(() => {
+    hasCelebratedRef.current = false;
+  }, [gameId]);
+
+  useEffect(() => {
+    if (loading || !showVictoryConfetti || !victoryEffects || hasCelebratedRef.current) {
+      return;
+    }
+    hasCelebratedRef.current = true;
+    celebrate();
+  }, [celebrate, loading, showVictoryConfetti, victoryEffects]);
 
   const screenOptions = useMemo(
     () => ({

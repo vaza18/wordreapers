@@ -16,6 +16,7 @@ interface GameMenuModalProps {
   onExit: () => void;
   onOpenSettings?: () => void;
   onInvite?: () => void;
+  onOpenHowToPlay?: () => void;
   showPause?: boolean;
   showEndGame?: boolean;
   pauseLabel?: string;
@@ -35,6 +36,7 @@ export function GameMenuModal({
   onExit,
   onOpenSettings,
   onInvite,
+  onOpenHowToPlay,
   showPause = true,
   showEndGame = true,
   pauseLabel,
@@ -72,6 +74,14 @@ export function GameMenuModal({
 
           {showEndGame ? (
             <PrimaryButton label={endGameLabel} variant="secondary" onPress={onProposeEnd} />
+          ) : null}
+
+          {onOpenHowToPlay ? (
+            <PrimaryButton
+              label={t('game.menuHowToPlay')}
+              variant="secondary"
+              onPress={onOpenHowToPlay}
+            />
           ) : null}
 
           {onOpenSettings ? (

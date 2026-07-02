@@ -1,8 +1,9 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, View } from 'react-native';
 
+import { CenterDialogModal } from '@/components/CenterDialogModal';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
 import { RoundResultsView } from '@/components/RoundResultsView';
@@ -11,9 +12,12 @@ import { formatResultsHeadline } from '@/lib/game/results-headline';
 import { createSoloResultsDirectory } from '@/lib/game/results-directory';
 import { buildGlobalResultWords, buildPlayerResultRankGroups } from '@/lib/game/results-view';
 import { computeRoundDurationSeconds } from '@/lib/game/round-duration';
+import { useTrainingMilestone } from '@/hooks/useTrainingMilestone';
+import { ukWordForm } from '@/lib/i18n/uk-plural';
 import {
   meetsTrainingMilestone,
   markTrainingRoundCompleted,
+  trainingWordsRequired,
 } from '@/lib/onboarding/training-milestone';
 import {
   buildSoloFinishedArchiveWords,
@@ -36,6 +40,13 @@ export default function OrganizerSoloResultsScreen() {
   const statsRecordedRef = useRef(false);
   const archiveRecordedRef = useRef(false);
   const milestoneMarkedRef = useRef(false);
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
+  const [showRetryModal, setShowRetryModal] = useState(false);
+  const {
+    hydrated: milestoneHydrated,
+    hasCompletedTrainingRound,
+    refresh: refreshTrainingMilestone,
+  } = useTrainingMilestone();
 
   const setup = useOrganizerSoloStore((state) => state.setup);
   const status = useOrganizerSoloStore((state) => state.status);
@@ -163,21 +174,71 @@ export default function OrganizerSoloResultsScreen() {
     enabled: Boolean(setup?.baseWord),
   });
 
+  const soloRoundMeetsMilestone = useMemo(() => {
+    const lexiconMaxCount = roundLexicon?.maxCount ?? 0;
+    if (lexiconMaxCount <= 0) {
+      return false;
+    }
+    return meetsTrainingMilestone(words.length, lexiconMaxCount);
+  }, [roundLexicon?.maxCount, words]);
+
   useEffect(() => {
-    if (status !== 'finished' || !setup || lexiconLoading || milestoneMarkedRef.current) {
+    if (
+      status !== 'finished' ||
+      !setup ||
+      lexiconLoading ||
+      !milestoneHydrated ||
+      milestoneMarkedRef.current
+    ) {
       return;
     }
     const lexiconMaxCount = roundLexicon?.maxCount ?? 0;
     if (lexiconMaxCount <= 0) {
       return;
     }
-    const standings = organizerSoloStandings(useOrganizerSoloStore.getState());
-    const wordsCollected = standings[0]?.wordCount ?? 0;
-    if (meetsTrainingMilestone(wordsCollected, lexiconMaxCount)) {
-      milestoneMarkedRef.current = true;
-      void markTrainingRoundCompleted();
+    milestoneMarkedRef.current = true;
+    // Once multiplayer is unlocked (gate passed at least once), neither the
+    // unlock nor the retry modal should ever appear again.
+    if (hasCompletedTrainingRound) {
+      return;
     }
-  }, [lexiconLoading, roundLexicon?.maxCount, setup, status]);
+    if (soloRoundMeetsMilestone) {
+      // First time crossing the 5% gate — unlock multiplayer and celebrate.
+      void markTrainingRoundCompleted().then(() => {
+        refreshTrainingMilestone();
+        setShowUnlockModal(true);
+      });
+    } else {
+      // Multiplayer still locked and this round missed the gate — explain what to do.
+      setShowRetryModal(true);
+    }
+  }, [
+    hasCompletedTrainingRound,
+    lexiconLoading,
+    milestoneHydrated,
+    refreshTrainingMilestone,
+    roundLexicon?.maxCount,
+    setup,
+    soloRoundMeetsMilestone,
+    status,
+  ]);
+
+  const handleRetryTraining = () => {
+    if (!setup) {
+      return;
+    }
+    setShowRetryModal(false);
+    const store = useOrganizerSoloStore.getState();
+    store.initFromSetup(gameId, setup);
+    store.startRound();
+    router.replace({ pathname: '/online/solo/[gameId]', params: { gameId } });
+  };
+
+  const goHome = () => {
+    clear();
+    removeLocalRoomDraft(gameId);
+    router.replace('/');
+  };
 
   if (!setup || !viewData) {
     return (
@@ -197,6 +258,46 @@ export default function OrganizerSoloResultsScreen() {
   return (
     <>
       <Stack.Screen options={{ title: t('game.resultsTitle') }} />
+      <CenterDialogModal
+        visible={showUnlockModal}
+        title={t('training.unlockedTitle')}
+        body={t('training.unlockedBody')}
+        primaryLabel={t('training.unlockedCtaJoin')}
+        onPrimary={() => {
+          setShowUnlockModal(false);
+          router.replace('/online/join');
+        }}
+        secondaryLabel={t('training.unlockedCtaHome')}
+        onSecondary={() => {
+          setShowUnlockModal(false);
+          goHome();
+        }}
+        tertiaryLabel={t('training.unlockedCtaResults')}
+        onTertiary={() => {
+          setShowUnlockModal(false);
+        }}
+      />
+      <CenterDialogModal
+        visible={showRetryModal}
+        title={t('training.retryTitle')}
+        body={t('training.retryBody', {
+          found: words.length,
+          foundForm: ukWordForm(words.length),
+          required: trainingWordsRequired(roundLexicon?.maxCount ?? 0),
+          requiredForm: ukWordForm(trainingWordsRequired(roundLexicon?.maxCount ?? 0)),
+        })}
+        primaryLabel={t('training.retryCtaAgain')}
+        onPrimary={handleRetryTraining}
+        secondaryLabel={t('training.unlockedCtaResults')}
+        onSecondary={() => {
+          setShowRetryModal(false);
+        }}
+        tertiaryLabel={t('training.unlockedCtaHome')}
+        onTertiary={() => {
+          setShowRetryModal(false);
+          goHome();
+        }}
+      />
       <RoundResultsView
         headline={viewData.headline}
         baseWordDisplay={setup.baseWordDisplay}
@@ -208,19 +309,11 @@ export default function OrganizerSoloResultsScreen() {
         playerRankGroups={viewData.playerRankGroups}
         highlightPlayerId="solo"
         defaultExpandedPlayerId="solo"
+        winnerOverride={showUnlockModal}
         showScores={false}
         showWordAuthors={false}
         roundDurationSeconds={viewData.roundDurationSeconds}
-        footer={
-          <PrimaryButton
-            label={t('nav.home')}
-            onPress={() => {
-              clear();
-              removeLocalRoomDraft(gameId);
-              router.replace('/');
-            }}
-          />
-        }
+        footer={<PrimaryButton label={t('nav.home')} onPress={goHome} />}
       />
     </>
   );

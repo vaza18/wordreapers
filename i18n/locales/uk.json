@@ -3,7 +3,8 @@
     "name": "Словозбирачі",
     "tagline": "Збирай слова з літер базового слова швидше за інших",
     "versionOnly": "Версія {{version}}",
-    "versionWithBuild": "Версія {{version}} • збірка {{build}}"
+    "versionWithBuild": "Версія {{version}} • збірка {{build}}",
+    "loading": "Завантаження…"
   },
   "nav": {
     "home": "Головна",
@@ -15,8 +16,10 @@
     "or": "або",
     "join": "Приєднатись",
     "joinDescription": "Приєднайся до гри, організованої іншим гравцем.",
-    "joinLockedDescription": "Спочатку пройди тренування в «Новій грі».",
-    "joinLockedHint": "Спочатку пройди тренування: «Нова гра» → «Тренування»."
+    "joinLockedDescription": "Спочатку пройди тренування, щоб грати з іншими.",
+    "joinLockedHint": "Спочатку пройди тренування: натисни «Пройти тренування».",
+    "startTraining": "Пройти тренування",
+    "startTrainingDescription": "Знайди кілька слів у сольній грі, щоб відкрити мультиплеєр."
   },
   "onboarding": {
     "howToPlayTitle": "Як грати",
@@ -25,6 +28,20 @@
     "howToPlayStep3": "3. Збери якомога більше слів до кінця таймера.",
     "howToPlayStep4": "4. Не всі слова підходять: зараховуються лише іменники однини в називному відмінку.",
     "howToPlayDismiss": "Зрозуміло"
+  },
+  "training": {
+    "unlockRemaining": "Знайди ще {{count}} {{wordForm}}, щоб розблокувати гру з іншими гравцями.",
+    "unlockedTitle": "Мультиплеєр відкрито!",
+    "unlockedBody": "Тепер можна запрошувати друзів і приєднуватись до ігор інших.",
+    "unlockedCtaJoin": "Приєднатись до гри",
+    "unlockedCtaHome": "На головну",
+    "unlockedCtaResults": "До результатів тренування",
+    "progressRemaining": "До розблокування гри з іншими залишилось {{count}} {{wordForm}}",
+    "progressUnlocked": "Режим гри з іншими гравцями розблоковано!",
+    "retryTitle": "Спробуй ще раз",
+    "retryBody": "Цього разу ти знайшов {{found}} {{foundForm}}. Щоб розблокувати гру з іншими гравцями, знайди щонайменше {{required}} {{requiredForm}} за один раунд.",
+    "retryCtaAgain": "Спробувати ще раз",
+    "firstWordHint": "Підказка: набери «{{letters}}»"
   },
   "profile": {
     "title": "Профіль",
@@ -118,6 +135,9 @@
     "errorFirebasePermission": "Немає доступу до бази даних. Зверніться до розробника.",
     "errorFirebaseApiKey": "Додаток не може підключитись до сервера. Зверніться до розробника.",
     "errorFirebaseNetwork": "Немає зʼєднання з базою даних в хмарі. Потрібен Інтернет (Wi‑Fi або LTE), не локальна мережа.",
+    "waitingForNetwork": "Немає зʼєднання. Слово буде надіслано, коли відновиться Інтернет.",
+    "offlineBanner": "Немає інтернету",
+    "reconnectingBanner": "Підключення до сервера…",
     "errorFirebaseNativeInit": "Не вдалося запустити онлайн-режим. Перезапустіть додаток або зверніться до розробника.",
     "errorFirebaseAnonymousDisabled": "Не вдалося увійти в гру. Зверніться до розробника.",
     "cloudConnecting": "Підключення до сервера…",
@@ -191,6 +211,9 @@
     "buttonFeedback": "Натискання кнопок",
     "wordAcceptedFeedback": "Слово зараховано",
     "timerAlertFeedback": "Сповіщення таймера",
+    "effectsSection": "Візуальні ефекти",
+    "timerVisualCountdown": "Пульсація таймера (останні 10 с)",
+    "victoryEffects": "Святкування перемоги",
     "feedbackMode": {
       "none": "Без відгуку",
       "vibration": "Вібрація",
@@ -313,7 +336,7 @@
     "leftRoundWaitingEnd": "Раунд ще триває. Повний список слів буде доступний після завершення гри всіма гравцями.",
     "leftRoundWordsHidden": "Слова інших гравців приховані, доки раунд не завершиться.",
     "rejoinRound": "Повернутись до гри",
-    "rejoinExpired": "Час раунду вийшов. Перегляньте результати з локальної копії.",
+    "rejoinExpired": "Час раунду вийшов. Переглянь результати з локальної копії.",
     "roundFinishedNotificationTitle": "Раунд завершено",
     "roundFinishedNotificationBody": "Раунд зі словом «{{word}}» завершився. Переглянь результати.",
     "wordsHiddenPlaceholder": "••••••",
@@ -375,6 +398,9 @@
     "pauseResumeNow": "Продовжити гру",
     "pauseResume": "Продовжити гру",
     "standings": "Рейтинг",
+    "statsExplainTitle": "Статистика раунду",
+    "statsExplainFound": "Знайдено {{found}} {{foundForm}}, можна знайти {{max}} {{maxForm}}.",
+    "menuHowToPlay": "Як грати",
     "timeUpTitle": "Гру завершено!",
     "timeUpBody": "Раунд завершено. Перегляньте результати, коли будете готові.",
     "viewResults": "Переглянути результати",

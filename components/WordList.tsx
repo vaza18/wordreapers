@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, FlatList, StyleSheet, Text, View } from 'react-native';
 
 import { scheduleIdleWork } from '@/lib/app/schedule-idle-work';
 
@@ -132,6 +132,12 @@ function splitDisplayByNormalizedPrefix(
   return { prefix: display.slice(0, cutIndex), rest: display.slice(cutIndex) };
 }
 
+const ROW_ENTRANCE_OFFSET = 12;
+const ROW_ENTRANCE_MS = 220;
+const ROW_HIGHLIGHT_PEAK = 0.75;
+const ROW_HIGHLIGHT_DELAY_MS = 120;
+const ROW_HIGHLIGHT_MS = 4000;
+
 function WordListRow({
   row,
   prefix,
@@ -139,6 +145,7 @@ function WordListRow({
   showOverlapPeers,
   styles,
   notebookRow,
+  animateEntrance,
 }: {
   row: WordRow;
   prefix: string;
@@ -146,11 +153,70 @@ function WordListRow({
   showOverlapPeers: boolean;
   styles: ReturnType<typeof createStyles>;
   notebookRow: ReturnType<typeof createNotebookRowLineStyle>;
+  animateEntrance: boolean;
 }) {
   const split = splitDisplayByNormalizedPrefix(row.display, prefix);
+  const showBadge = showScoreBadges && row.entry.badge === 'x2';
+  const opacity = useRef(new Animated.Value(animateEntrance ? 0 : 1)).current;
+  const translateX = useRef(new Animated.Value(animateEntrance ? -ROW_ENTRANCE_OFFSET : 0)).current;
+  const badgeScale = useRef(new Animated.Value(showBadge && animateEntrance ? 0 : 1)).current;
+  const highlightOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!animateEntrance) {
+      return;
+    }
+
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: ROW_ENTRANCE_MS,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateX, {
+        toValue: 0,
+        duration: ROW_ENTRANCE_MS,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    highlightOpacity.setValue(ROW_HIGHLIGHT_PEAK);
+    Animated.sequence([
+      Animated.delay(ROW_HIGHLIGHT_DELAY_MS),
+      Animated.timing(highlightOpacity, {
+        toValue: 0,
+        duration: ROW_HIGHLIGHT_MS,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    if (showBadge) {
+      Animated.spring(badgeScale, {
+        toValue: 1,
+        friction: 5,
+        tension: 180,
+        delay: ROW_ENTRANCE_MS * 0.35,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [animateEntrance, badgeScale, highlightOpacity, opacity, showBadge, translateX]);
 
   return (
-    <View style={[notebookRow.row, styles.row, split ? styles.rowPrefixMatch : null]}>
+    <Animated.View
+      style={[
+        notebookRow.row,
+        styles.row,
+        split ? styles.rowPrefixMatch : null,
+        { opacity, transform: [{ translateX }] },
+      ]}
+    >
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.rowHighlight, { opacity: highlightOpacity }]}
+      />
       {split ? (
         <Text style={styles.word}>
           <Text style={styles.wordPrefixStrong}>{split.prefix}</Text>
@@ -159,13 +225,15 @@ function WordListRow({
       ) : (
         <Text style={styles.word}>{row.display}</Text>
       )}
-      {showScoreBadges && row.entry.badge === 'x2' ? (
-        <Text style={styles.badgeX2}>{row.entry.badge}</Text>
+      {showBadge ? (
+        <Animated.Text style={[styles.badgeX2, { transform: [{ scale: badgeScale }] }]}>
+          {row.entry.badge}
+        </Animated.Text>
       ) : null}
       {showOverlapPeers && row.entry.overlapPeers && row.entry.overlapPeers.length > 0 ? (
         <WordOverlapAvatars peers={row.entry.overlapPeers} />
       ) : null}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -197,6 +265,9 @@ export const WordList = memo(function WordList({
   const scrollGenerationRef = useRef(0);
   const lastScrollRequestIdRef = useRef(0);
   const [pendingAcceptedScroll, setPendingAcceptedScroll] = useState(false);
+  const [entranceNormalizes, setEntranceNormalizes] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
 
   const rows = useMemo(
     () =>
@@ -219,6 +290,14 @@ export const WordList = memo(function WordList({
     scrollGenerationRef.current += 1;
     scrollTargetRef.current = normalized;
     setPendingAcceptedScroll(true);
+    setEntranceNormalizes((current) => {
+      if (current.has(normalized)) {
+        return current;
+      }
+      const next = new Set(current);
+      next.add(normalized);
+      return next;
+    });
   }, []);
 
   const flushPendingScroll = useCallback(() => {
@@ -321,9 +400,10 @@ export const WordList = memo(function WordList({
         showOverlapPeers={showOverlapPeers}
         styles={styles}
         notebookRow={notebookRow}
+        animateEntrance={entranceNormalizes.has(row.entry.normalized)}
       />
     ),
-    [notebookRow, prefix, showOverlapPeers, showScoreBadges, styles],
+    [entranceNormalizes, notebookRow, prefix, showOverlapPeers, showScoreBadges, styles],
   );
 
   if (!scrollable) {
@@ -338,6 +418,7 @@ export const WordList = memo(function WordList({
             showOverlapPeers={showOverlapPeers}
             styles={styles}
             notebookRow={notebookRow}
+            animateEntrance={entranceNormalizes.has(row.entry.normalized)}
           />
         ))}
       </View>
@@ -411,6 +492,11 @@ function createStyles(colors: ThemeColors) {
       borderRadius: radii.sm,
       marginHorizontal: -spacing.xs,
       paddingHorizontal: spacing.sm,
+    },
+    rowHighlight: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: colors.penBlueMuted,
+      borderRadius: radii.sm,
     },
     word: {
       flex: 1,

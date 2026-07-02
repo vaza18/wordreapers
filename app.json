@@ -26,7 +26,12 @@
     "android": {
       "package": "com.wordreapers.app",
       "googleServicesFile": "./google-services.json",
-      "blockedPermissions": ["android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"],
+      "blockedPermissions": [
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/icons/adaptive-icon-foreground.png",
         "backgroundColor": "#1579f1"
@@ -45,13 +50,15 @@
         "expo-audio",
         {
           "enableBackgroundPlayback": false,
-          "enableBackgroundRecording": false
+          "enableBackgroundRecording": false,
+          "recordAudioAndroid": false
         }
       ],
       [
         "expo-camera",
         {
-          "cameraPermission": "Дозвіл на камеру для сканування QR-коду кімнати."
+          "cameraPermission": "Дозвіл на камеру для сканування QR-коду кімнати.",
+          "recordAudioAndroid": false
         }
       ],
       "expo-notifications"

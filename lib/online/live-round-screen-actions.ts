@@ -124,9 +124,15 @@ export function resolveLobbyScreenActions(ctx: LobbyScreenContext): LobbyScreenA
       };
     }
     const player = session.players[myUid];
+    // Round 0 has no per-round opt-in roster: everyone in `players` who has not
+    // left belongs to the live round. A lobby member whose presence briefly
+    // dropped (offline) before the organizer pressed Start would otherwise be
+    // stranded — neither an active player nor a scoring reconnect — so pull them in.
+    const isRoundZeroRosterMember =
+      (session.baseWordRound ?? 0) === 0 && Boolean(player) && player?.hasLeft !== true;
     const shouldAutoJoinLiveRound =
-      isLiveParticipant(session, myUid) &&
-      Boolean(player && (player.online !== true || player.hasLeft === true));
+      Boolean(player && (player.online !== true || player.hasLeft === true)) &&
+      (isLiveParticipant(session, myUid) || isRoundZeroRosterMember);
     return {
       shouldNavigateToPlay: false,
       shouldAutoJoinLiveRound,

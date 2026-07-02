@@ -22,6 +22,7 @@ export function GameTimeUpModal({ visible, onViewResults }: GameTimeUpModalProps
       primaryLabel={t('game.viewResults')}
       onPrimary={onViewResults}
       dismissOnBackdrop={false}
+      animateEntrance
     />
   );
 }

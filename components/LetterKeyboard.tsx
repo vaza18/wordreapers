@@ -1,9 +1,10 @@
-import { memo } from 'react';
-import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { memo, useRef } from 'react';
+import { Animated, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { type ThemeColors } from '@/constants/theme';
+import { usePressScale } from '@/hooks/usePressScale';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { letterKeyProportions } from '@/lib/game/letter-key-style';
 import { letterKeyFontSizeForKeySize } from '@/lib/game/letter-key-style';
@@ -12,12 +13,89 @@ import { playableGlyphFontSize } from '@/lib/typography/font-scale';
 import { centeredSquareTextStyle } from '@/lib/ui/centered-square-text';
 
 const LETTER_KEY_HIT_SLOP = 6;
+const KEY_PRESS_SCALE = 0.9;
+
+export type KeyRect = { x: number; y: number; width: number; height: number };
+
+interface LetterKeyButtonProps {
+  label: string;
+  used: boolean;
+  index: number;
+  keySize: number;
+  borderRadius: number;
+  labelFontSize: number;
+  styles: ReturnType<typeof createStyles>;
+  onPressKey: (index: number) => void;
+  onKeyMeasure?: (index: number, rect: KeyRect) => void;
+  accessibilityLabel: string;
+}
+
+function LetterKeyButton({
+  label,
+  used,
+  index,
+  keySize,
+  borderRadius,
+  labelFontSize,
+  styles,
+  onPressKey,
+  onKeyMeasure,
+  accessibilityLabel,
+}: LetterKeyButtonProps) {
+  const { scale, onPressIn, onPressOut } = usePressScale(KEY_PRESS_SCALE);
+  const viewRef = useRef<View>(null);
+
+  return (
+    <Animated.View ref={viewRef} style={{ transform: [{ scale }] }}>
+      <FeedbackPressable
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        accessibilityState={{ disabled: used }}
+        disabled={used}
+        hitSlop={LETTER_KEY_HIT_SLOP}
+        onPressIn={() => {
+          if (!used) {
+            onPressIn();
+          }
+        }}
+        onPressOut={onPressOut}
+        onPress={() => {
+          if (!used && onKeyMeasure) {
+            viewRef.current?.measureInWindow((x, y, width, height) => {
+              onKeyMeasure(index, { x, y, width, height });
+            });
+          }
+          onPressKey(index);
+        }}
+        style={[
+          styles.key,
+          { width: keySize, height: keySize, borderRadius },
+          used ? styles.keyUsed : styles.keyAvailable,
+        ]}
+      >
+        <Text
+          allowFontScaling={false}
+          numberOfLines={1}
+          style={[
+            styles.keyLabel,
+            centeredSquareTextStyle(keySize, labelFontSize),
+            used ? styles.keyLabelUsed : styles.keyLabelAvailable,
+          ]}
+        >
+          {label}
+        </Text>
+      </FeedbackPressable>
+    </Animated.View>
+  );
+}
 
 interface LetterKeyboardProps {
   keys: readonly LetterKey[];
   /** Key indices already pressed for the current draft (each physical key toggles once). */
   usedKeyIndices: ReadonlySet<number>;
   onPressKey: (index: number) => void;
+  /** Reports the pressed key's window rect, for the ghost-letter fly animation. */
+  onKeyMeasure?: (index: number, rect: KeyRect) => void;
   keySize: number;
   gap: number;
 }
@@ -56,6 +134,7 @@ export const LetterKeyboard = memo(function LetterKeyboard({
   keys,
   usedKeyIndices,
   onPressKey,
+  onKeyMeasure,
   keySize,
   gap,
 }: LetterKeyboardProps) {
@@ -75,38 +154,23 @@ export const LetterKeyboard = memo(function LetterKeyboard({
       {keys.map((key, index) => {
         const used = usedKeyIndices.has(index);
         return (
-          <FeedbackPressable
+          <LetterKeyButton
             key={key.id}
-            accessibilityRole="button"
+            label={key.label}
+            used={used}
+            index={index}
+            keySize={keySize}
+            borderRadius={borderRadius}
+            labelFontSize={labelFontSize}
+            styles={styles}
+            onPressKey={onPressKey}
+            onKeyMeasure={onKeyMeasure}
             accessibilityLabel={
               used
                 ? t('game.letterKeyUsed', { letter: key.label })
                 : t('game.letterKey', { letter: key.label })
             }
-            accessibilityState={{ disabled: used }}
-            disabled={used}
-            hitSlop={LETTER_KEY_HIT_SLOP}
-            onPress={() => {
-              onPressKey(index);
-            }}
-            style={[
-              styles.key,
-              { width: keySize, height: keySize, borderRadius },
-              used ? styles.keyUsed : styles.keyAvailable,
-            ]}
-          >
-            <Text
-              allowFontScaling={false}
-              numberOfLines={1}
-              style={[
-                styles.keyLabel,
-                centeredSquareTextStyle(keySize, labelFontSize),
-                used ? styles.keyLabelUsed : styles.keyLabelAvailable,
-              ]}
-            >
-              {key.label}
-            </Text>
-          </FeedbackPressable>
+          />
         );
       })}
     </View>

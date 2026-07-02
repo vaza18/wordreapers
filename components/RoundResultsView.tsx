@@ -1,7 +1,15 @@
 import type { ReactNode } from 'react';
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Animated,
+  Easing,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import {
@@ -20,18 +28,52 @@ import { ResultsGlobalWordList } from '@/components/ResultsGlobalWordList';
 import { Screen } from '@/components/Screen';
 import { ScrollableWordPanel } from '@/components/ScrollableWordPanel';
 import { SettingSwitch } from '@/components/SettingSwitch';
+import { useVictoryConfettiStore } from '@/store/victory-confetti-store';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useNotebookRowHeight } from '@/hooks/useNotebookRowHeight';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import type { RoundPlayableLexicon } from '@/lib/dictionary/round-playable-lexicon';
 import type { GlobalResultWordRow, PlayerResultRankGroup } from '@/lib/game/results-view';
+import { isViewerWinner } from '@/lib/game/is-viewer-winner';
 import { buildResultsWordList } from '@/lib/game/results-missing-words';
 import { formatRoundDuration } from '@/lib/game/round-duration';
 import { formatUkWords, ukWordForm } from '@/lib/i18n/uk-plural';
 import { dismissWordOverlapTooltips } from '@/lib/ui/word-overlap-tooltip';
+import { useSettingsStore } from '@/store/settings-store';
 
 type ResultsTab = 'all' | 'players';
+
+const HEADLINE_ENTRANCE_MS = 320;
+
+function ResultsHeadline({ text }: { text: string }) {
+  const styles = useThemedStyles(createStyles);
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(10)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: HEADLINE_ENTRANCE_MS,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: HEADLINE_ENTRANCE_MS,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [opacity, text, translateY]);
+
+  return (
+    <Animated.Text style={[styles.headline, { opacity, transform: [{ translateY }] }]}>
+      {text}
+    </Animated.Text>
+  );
+}
 
 export interface RoundResultsViewProps {
   /** Optional green headline below the stack header; omit when the title lives in the header only. */
@@ -53,6 +95,11 @@ export interface RoundResultsViewProps {
   roundDurationSeconds?: number;
   /** When true, «Показати незнайдені слова» is visible but not interactive (e.g. early exit while round plays). */
   missingWordsToggleDisabled?: boolean;
+  /**
+   * Override the victory-confetti trigger. When omitted, confetti shows if the
+   * viewer is at rank 1 (multiplayer). Solo passes the training-milestone result.
+   */
+  winnerOverride?: boolean;
 }
 
 /**
@@ -75,9 +122,11 @@ export function RoundResultsView({
   showWordAuthors = true,
   roundDurationSeconds,
   missingWordsToggleDisabled = false,
+  winnerOverride,
 }: RoundResultsViewProps) {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
+  const victoryEffects = useSettingsStore((state) => state.victoryEffects);
   const rowHeight = useNotebookRowHeight();
   const { t } = useTranslation();
   const [tab, setTab] = useState<ResultsTab>('all');
@@ -151,12 +200,23 @@ export function RoundResultsView({
     const nextHeight = event.nativeEvent.layout.height;
     setFooterHeight((prev) => (prev === nextHeight ? prev : nextHeight));
   }, []);
+  const isWinner = winnerOverride ?? isViewerWinner(playerRankGroups, highlightPlayerId);
+  const showVictoryConfetti = victoryEffects && isWinner;
+  const celebrate = useVictoryConfettiStore((state) => state.celebrate);
+  const hasCelebratedRef = useRef(false);
+
+  useEffect(() => {
+    if (showVictoryConfetti && !hasCelebratedRef.current) {
+      hasCelebratedRef.current = true;
+      celebrate();
+    }
+  }, [celebrate, showVictoryConfetti]);
 
   return (
     <>
       <Screen scroll={false} style={styles.screen}>
         <View style={styles.header}>
-          {headline ? <Text style={styles.headline}>{headline}</Text> : null}
+          {headline ? <ResultsHeadline text={headline} /> : null}
 
           <View style={styles.tabs}>
             <TabButton

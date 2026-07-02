@@ -12,6 +12,7 @@ import {
   SunIcon,
   type HeaderIconProps,
 } from '@/components/HeaderIcons';
+import { SettingSwitch } from '@/components/SettingSwitch';
 import { Screen } from '@/components/Screen';
 import { SegmentedControl } from '@/components/SegmentedControl';
 import { SettingsProfileRow } from '@/components/SettingsProfileRow';
@@ -31,7 +32,11 @@ import { isFirebaseConfigured } from '@/lib/firebase/config';
 import { useFirebaseStore } from '@/store/firebase-store';
 import { usePlayerStatsStore } from '@/store/player-stats-store';
 import { useProfileStore } from '@/store/profile-store';
-import { useSettingsStore } from '@/store/settings-store';
+import {
+  DEFAULT_TIMER_VISUAL_COUNTDOWN,
+  DEFAULT_VICTORY_EFFECTS,
+  useSettingsStore,
+} from '@/store/settings-store';
 
 const APPEARANCE_OPTIONS: {
   value: AppearanceMode;
@@ -96,10 +101,14 @@ export default function SettingsScreen() {
   const buttonFeedback = useSettingsStore((state) => state.buttonFeedback);
   const wordAcceptedFeedback = useSettingsStore((state) => state.wordAcceptedFeedback);
   const timerAlertMode = useSettingsStore((state) => state.timerAlertMode);
+  const timerVisualCountdown = useSettingsStore((state) => state.timerVisualCountdown);
+  const victoryEffects = useSettingsStore((state) => state.victoryEffects);
   const setAppearanceMode = useSettingsStore((state) => state.setAppearanceMode);
   const setButtonFeedback = useSettingsStore((state) => state.setButtonFeedback);
   const setWordAcceptedFeedback = useSettingsStore((state) => state.setWordAcceptedFeedback);
   const setTimerAlertMode = useSettingsStore((state) => state.setTimerAlertMode);
+  const setTimerVisualCountdown = useSettingsStore((state) => state.setTimerVisualCountdown);
+  const setVictoryEffects = useSettingsStore((state) => state.setVictoryEffects);
 
   const [clearDialogVisible, setClearDialogVisible] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -116,6 +125,8 @@ export default function SettingsScreen() {
         buttonFeedback: DEFAULT_BUTTON_FEEDBACK,
         wordAcceptedFeedback: DEFAULT_WORD_ACCEPTED_FEEDBACK,
         timerAlertMode: DEFAULT_TIMER_ALERT_FEEDBACK,
+        timerVisualCountdown: DEFAULT_TIMER_VISUAL_COUNTDOWN,
+        victoryEffects: DEFAULT_VICTORY_EFFECTS,
         gameSetup: DEFAULT_GAME_SETUP_PREFERENCES,
       });
       useFirebaseStore.getState().setConnection({
@@ -171,6 +182,20 @@ export default function SettingsScreen() {
           label={t('settings.timerAlertFeedback')}
           value={timerAlertMode}
           onChange={setTimerAlertMode}
+        />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{t('settings.effectsSection')}</Text>
+        <SettingSwitch
+          label={t('settings.timerVisualCountdown')}
+          value={timerVisualCountdown}
+          onChange={setTimerVisualCountdown}
+        />
+        <SettingSwitch
+          label={t('settings.victoryEffects')}
+          value={victoryEffects}
+          onChange={setVictoryEffects}
         />
       </View>
 
