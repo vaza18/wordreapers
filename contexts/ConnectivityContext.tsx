@@ -16,6 +16,9 @@ const ConnectivityContext = createContext<ConnectivityState>({
   rtdbConnected: true,
 });
 
+/**
+ * Provide connectivity state to the app.
+ */
 export function ConnectivityProvider({ children }: { children: ReactNode }) {
   const { isConnected: deviceConnected } = useNetworkConnectivity();
   const rtdbConnected = useRtdbConnected();
@@ -31,6 +34,9 @@ export function ConnectivityProvider({ children }: { children: ReactNode }) {
   return <ConnectivityContext.Provider value={value}>{children}</ConnectivityContext.Provider>;
 }
 
+/**
+ * Hook to access connectivity state.
+ */
 export function useConnectivity(): ConnectivityState {
   return useContext(ConnectivityContext);
 }

@@ -133,7 +133,7 @@ export function SessionVoteModal(props: SessionVoteModalProps) {
         };
       }
     }
-  }, [isProposer, proposerName, props, serverNow, session.timerEndsAt, t, vote.proposedBy]);
+  }, [isProposer, proposerName, props, serverNow, session.timerEndsAt, t]);
 
   return (
     <VoteParticipantModal
