@@ -12,6 +12,7 @@ import {
 import { useNetworkConnectivity } from '@/hooks/useNetworkConnectivity';
 import { useRtdbConnected } from '@/hooks/useRtdbConnected';
 import {
+  resolveConnectivityMonitoringEnabled,
   routeRequiresConnectivityMonitoring,
   type ConnectivityRouteParams,
 } from '@/lib/online/connectivity-scope';
@@ -66,7 +67,7 @@ export function ConnectivityProvider({ children }: { children: ReactNode }) {
     pathname,
     connectivityRouteParams(searchParams),
   );
-  const monitoringEnabled = scopeOverride ?? routeMonitoring;
+  const monitoringEnabled = resolveConnectivityMonitoringEnabled(routeMonitoring, scopeOverride);
 
   const { isConnected: deviceConnected } = useNetworkConnectivity(monitoringEnabled);
   const rtdbConnected = useRtdbConnected(monitoringEnabled);
@@ -103,8 +104,9 @@ export function useConnectivity(): ConnectivityState {
 
 /**
  * Opt in to connectivity monitoring from screens that need it dynamically (e.g. play).
+ * Pass `null` to defer to route rules (e.g. setup lobby edits).
  */
-export function useRegisterConnectivityMonitoring(enabled: boolean): void {
+export function useRegisterConnectivityMonitoring(enabled: boolean | null): void {
   const { setOverride } = useContext(ConnectivityScopeOverrideContext);
   const setMonitoringOverride = useCallback(
     (next: boolean | null) => {

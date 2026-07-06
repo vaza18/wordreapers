@@ -60,7 +60,7 @@ export default function ProfileScreen() {
       await saveProfile();
       if (returnTo === 'create') {
         if (hasCompletedTrainingRound) {
-          await navigateToNewOnlineRoom(saved);
+          navigateToNewOnlineRoom(saved);
         } else {
           navigateToLocalRoomSetup(saved);
         }

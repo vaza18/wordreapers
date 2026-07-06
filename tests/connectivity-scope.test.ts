@@ -1,6 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
-import { routeRequiresConnectivityMonitoring } from '../lib/online/connectivity-scope.js';
+import {
+  routeRequiresConnectivityMonitoring,
+  resolveConnectivityMonitoringEnabled,
+} from '../lib/online/connectivity-scope.js';
+
+describe('resolveConnectivityMonitoringEnabled', () => {
+  it('defers to route when override is null', () => {
+    expect(resolveConnectivityMonitoringEnabled(true, null)).toBe(true);
+    expect(resolveConnectivityMonitoringEnabled(false, null)).toBe(false);
+  });
+
+  it('uses explicit override when set', () => {
+    expect(resolveConnectivityMonitoringEnabled(true, false)).toBe(false);
+    expect(resolveConnectivityMonitoringEnabled(false, true)).toBe(true);
+  });
+});
 
 describe('routeRequiresConnectivityMonitoring', () => {
   it('enables monitoring for join, browse, lobby, and online results flows', () => {

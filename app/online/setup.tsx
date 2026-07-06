@@ -14,6 +14,7 @@ import { Screen } from '@/components/Screen';
 import { GroupPlayersIcon, SoloPlayerIcon } from '@/components/PlayerModeIcons';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useConnectivity, useRegisterConnectivityMonitoring } from '@/contexts/ConnectivityContext';
 import { useHeaderIconButtonLayout } from '@/hooks/useHeaderIconButtonLayout';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
@@ -91,11 +92,15 @@ export default function OnlineSetupScreen() {
   const [organizerUid, setOrganizerUid] = useState<string | null>(null);
   const [playerCount, setPlayerCount] = useState(1);
   const [lobbySession, setLobbySession] = useState<GameSessionSnapshot | null>(null);
+  const [inviteConnectivityActive, setInviteConnectivityActive] = useState(false);
   const setupHydratedRef = useRef(false);
   const dictionaryRef = useRef(dictionary);
   dictionaryRef.current = dictionary;
   const { hydrated: trainingHydrated, hasCompletedTrainingRound } = useTrainingMilestone();
   const multiplayerLocked = trainingHydrated && !hasCompletedTrainingRound;
+  useRegisterConnectivityMonitoring(fromLobby ? null : inviteConnectivityActive);
+  const { isOnline: connectivityOnline } = useConnectivity();
+  const inviteBlockedByConnectivity = inviteConnectivityActive && !connectivityOnline;
 
   const showInviteDisabledHint = () => {
     Alert.alert(t('app.name'), t('online.inviteOthersLockedHint'));
@@ -443,10 +448,13 @@ export default function OnlineSetupScreen() {
                     : t('online.inviteOthersHint')
                 }
                 variant={multiplayerLocked ? 'secondary' : 'primary'}
-                disabled={!canContinue || saving || multiplayerLocked}
-                disabledHint={t('online.inviteOthersLockedHint')}
-                onDisabledPress={showInviteDisabledHint}
+                disabled={
+                  !canContinue || saving || multiplayerLocked || inviteBlockedByConnectivity
+                }
+                disabledHint={multiplayerLocked ? t('online.inviteOthersLockedHint') : undefined}
+                onDisabledPress={multiplayerLocked ? showInviteDisabledHint : undefined}
                 onPress={() => {
+                  setInviteConnectivityActive(true);
                   void handleInviteOthers();
                 }}
               />

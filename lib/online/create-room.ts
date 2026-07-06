@@ -21,18 +21,23 @@ export function navigateToLocalRoomSetup(profile: PlayerProfile): void {
 }
 
 /**
- * Bootstrap Firebase, then open local organizer setup (multiplayer create flow).
+ * Open local organizer setup immediately, then bootstrap Firebase in the background.
+ * Setup is offline-safe until the player invites others or publishes a room.
  */
-export async function navigateToNewOnlineRoom(profile: PlayerProfile): Promise<void> {
-  const firebase = await ensureFirebaseReady();
-  if (firebase?.uid) {
-    useFirebaseStore.getState().setConnection({
-      status: firebase.status,
-      uid: firebase.uid,
-      errorMessage: firebase.errorMessage ?? null,
-    });
-    await abandonTrackedOrganizerWaitingRoom(firebase.uid);
-  }
-
+export function navigateToNewOnlineRoom(profile: PlayerProfile): void {
   openLocalRoomSetup(profile);
+  void prepareFirebaseForOrganizerCreate();
+}
+
+async function prepareFirebaseForOrganizerCreate(): Promise<void> {
+  const firebase = await ensureFirebaseReady();
+  if (!firebase?.uid) {
+    return;
+  }
+  useFirebaseStore.getState().setConnection({
+    status: firebase.status,
+    uid: firebase.uid,
+    errorMessage: firebase.errorMessage ?? null,
+  });
+  await abandonTrackedOrganizerWaitingRoom(firebase.uid);
 }

@@ -3,7 +3,6 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
-  Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -204,12 +203,10 @@ export default function BrowsePublicLobbiesScreen() {
       return;
     }
     const profile = useProfileStore.getState();
-    void navigateToNewOnlineRoom({
+    navigateToNewOnlineRoom({
       name: profile.name,
       gender: profile.gender,
       avatarColorIndex: profile.avatarColorIndex,
-    }).catch((err) => {
-      Alert.alert(t('app.name'), joinErrorMessage(err, t));
     });
   };
 
