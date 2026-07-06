@@ -8,6 +8,11 @@ export type NetworkConnectivity = {
   isInternetReachable: boolean | null;
 };
 
+const ASSUMED_ONLINE: NetworkConnectivity = {
+  isConnected: true,
+  isInternetReachable: null,
+};
+
 function readConnectivity(state: NetInfoState): NetworkConnectivity {
   const connected = state.isConnected === true && state.isInternetReachable !== false;
   return {
@@ -18,28 +23,45 @@ function readConnectivity(state: NetInfoState): NetworkConnectivity {
 
 /**
  * Device network reachability via NetInfo.
- * Falls back to "connected" when the native module is unavailable.
+ * Falls back to "connected" when the native module is unavailable or monitoring is off.
  */
-export function useNetworkConnectivity(): NetworkConnectivity {
-  const [connectivity, setConnectivity] = useState<NetworkConnectivity>({
-    isConnected: true,
-    isInternetReachable: null,
-  });
+export function useNetworkConnectivity(enabled = true): NetworkConnectivity {
+  const [connectivity, setConnectivity] = useState<NetworkConnectivity>(ASSUMED_ONLINE);
 
   useEffect(() => {
+    if (!enabled) {
+      return undefined;
+    }
+
     const netInfo = loadNetInfoClient();
     if (!netInfo) {
       return undefined;
     }
 
-    const unsubscribe = netInfo.addEventListener((state) => {
-      setConnectivity(readConnectivity(state));
-    });
-    void netInfo.fetch().then((state) => {
-      setConnectivity(readConnectivity(state));
-    });
-    return unsubscribe;
-  }, []);
+    try {
+      const unsubscribe = netInfo.addEventListener((state) => {
+        setConnectivity(readConnectivity(state));
+      });
+      void netInfo.fetch().then(
+        (state) => {
+          setConnectivity(readConnectivity(state));
+        },
+        () => {
+          setConnectivity(ASSUMED_ONLINE);
+        },
+      );
+      return unsubscribe;
+    } catch (error) {
+      if (__DEV__) {
+        console.warn('[NetInfo] Listener setup failed; device connectivity assumed online.', error);
+      }
+      return undefined;
+    }
+  }, [enabled]);
+
+  if (!enabled) {
+    return ASSUMED_ONLINE;
+  }
 
   return connectivity;
 }

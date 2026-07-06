@@ -25,15 +25,15 @@ function createStyles(colors: ThemeColors) {
 }
 
 /**
- * Global banner when device or Firebase RTDB is disconnected.
+ * Connectivity banner when device or Firebase RTDB is disconnected on online screens.
  */
 export function ConnectivityBanner() {
   const styles = useThemedStyles(createStyles);
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { isOnline, deviceConnected, rtdbConnected } = useConnectivity();
+  const { isOnline, deviceConnected, rtdbConnected, monitoringEnabled } = useConnectivity();
 
-  if (isOnline) {
+  if (!monitoringEnabled || isOnline) {
     return null;
   }
 

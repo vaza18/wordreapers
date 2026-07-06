@@ -6,11 +6,15 @@ import { isFirebaseConfigured } from '@/lib/firebase/config';
 
 /**
  * Live RTDB `.info/connected` for UI offline handling.
+ * Returns true when monitoring is disabled so offline-safe screens are not blocked.
  */
-export function useRtdbConnected(): boolean {
-  const [connected, setConnected] = useState(isFirebaseConfigured());
+export function useRtdbConnected(enabled = true): boolean {
+  const [connected, setConnected] = useState(true);
 
   useEffect(() => {
+    if (!enabled) {
+      return undefined;
+    }
     if (!isFirebaseConfigured()) {
       setConnected(false);
       return undefined;
@@ -26,7 +30,11 @@ export function useRtdbConnected(): boolean {
       },
     );
     return unsubscribe;
-  }, []);
+  }, [enabled]);
+
+  if (!enabled) {
+    return true;
+  }
 
   return connected;
 }

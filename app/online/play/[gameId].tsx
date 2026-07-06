@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useConnectivity } from '@/contexts/ConnectivityContext';
+import { useConnectivity, useRegisterConnectivityMonitoring } from '@/contexts/ConnectivityContext';
 import { useLiveRoundPlayScreen } from '@/hooks/useLiveRoundPlayScreen';
 import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
 import { GameMenuModal } from '@/components/GameMenuModal';
@@ -46,6 +46,7 @@ import {
   tryRestoreActiveRoundCache,
 } from '@/lib/online/cache-active-round';
 import { isReviewingPriorRoundOnPlayScreen } from '@/lib/online/is-reviewing-prior-round-on-play';
+import { hasOnlineOpponent } from '@/lib/online/session-presence';
 import { consumePlaySessionBootstrap } from '@/lib/online/play-session-bootstrap';
 import {
   reconcileOwnPlayerWordsWithSession,
@@ -94,7 +95,7 @@ export default function OnlinePlayScreen() {
   const viewerGender = useProfileStore((state) => state.gender);
   const { hydrated: trainingHydrated, hasCompletedTrainingRound } = useTrainingMilestone();
   const canInviteOthers = trainingHydrated && hasCompletedTrainingRound;
-  const { isOnline: isConnected } = useConnectivity();
+  const { isOnline: connectivityOnline } = useConnectivity();
 
   const [playInit] = useState(() => {
     const bootstrap = gameId ? consumePlaySessionBootstrap(gameId) : null;
@@ -106,6 +107,12 @@ export default function OnlinePlayScreen() {
     () => (sessionCore ? mergeSessionWithWordMaps(sessionCore, wordMaps) : null),
     [sessionCore, wordMaps],
   );
+  const hasOnlineOpponentInRound = useMemo(
+    () => (session && myUid ? hasOnlineOpponent(session, myUid) : false),
+    [myUid, session],
+  );
+  useRegisterConnectivityMonitoring(hasOnlineOpponentInRound);
+  const isConnected = !hasOnlineOpponentInRound || connectivityOnline;
   const [myWords, setMyWords] = useState<Map<string, StoredPlayerWord>>(new Map());
   const [loading, setLoading] = useState(playInit.loading);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -449,7 +456,6 @@ export default function OnlinePlayScreen() {
     onVoteEarlyFinish,
     onVotePause,
     onVoteAddTime,
-    hasOnlineOpponentInRound,
     handleEndEarlyConfirm,
   } = usePlayVoteActions({
     gameId,

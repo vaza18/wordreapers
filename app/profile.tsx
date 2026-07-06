@@ -10,8 +10,9 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { Screen } from '@/components/Screen';
 import { spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
+import { useTrainingMilestone } from '@/hooks/useTrainingMilestone';
 import { joinErrorMessage } from '@/lib/firebase/join-error-message';
-import { navigateToNewOnlineRoom } from '@/lib/online/create-room';
+import { navigateToLocalRoomSetup, navigateToNewOnlineRoom } from '@/lib/online/create-room';
 import { useProfileStore } from '@/store/profile-store';
 
 /**
@@ -33,6 +34,7 @@ export default function ProfileScreen() {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { hasCompletedTrainingRound } = useTrainingMilestone();
 
   useEffect(() => {
     if (!hydrated) {
@@ -57,7 +59,11 @@ export default function ProfileScreen() {
       };
       await saveProfile();
       if (returnTo === 'create') {
-        await navigateToNewOnlineRoom(saved);
+        if (hasCompletedTrainingRound) {
+          await navigateToNewOnlineRoom(saved);
+        } else {
+          navigateToLocalRoomSetup(saved);
+        }
       } else if (returnTo === 'join') {
         router.replace('/online/join');
       } else if (returnTo) {
