@@ -1,4 +1,5 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -45,6 +46,7 @@ import {
   type LocalRoomSetup,
 } from '@/lib/online/local-room-draft';
 import { publishWaitingRoomForDraft } from '@/lib/online/publish-room';
+import { abandonOrganizerWaitingRoomForDraft } from '@/lib/online/abandon-tracked-waiting-room';
 import { useFirebaseStore } from '@/store/firebase-store';
 import type { UniqueBonusMode } from '@/lib/game/scoring';
 import { useOrganizerSoloStore } from '@/store/organizer-solo-store';
@@ -84,6 +86,7 @@ export default function OnlineSetupScreen() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [inviteInProgress, setInviteInProgress] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dictionary, setDictionary] = useState<DictionaryIndex | null>(null);
   const [baseWords, setBaseWords] = useState<string[]>([]);
@@ -98,7 +101,17 @@ export default function OnlineSetupScreen() {
   dictionaryRef.current = dictionary;
   const { hydrated: trainingHydrated, hasCompletedTrainingRound } = useTrainingMilestone();
   const multiplayerLocked = trainingHydrated && !hasCompletedTrainingRound;
-  useRegisterConnectivityMonitoring(fromLobby ? null : inviteConnectivityActive);
+  const isFocused = useIsFocused();
+  const setupMonitoringOverride = useMemo((): boolean | null => {
+    if (fromLobby) {
+      return null;
+    }
+    if (!isFocused) {
+      return null;
+    }
+    return inviteConnectivityActive;
+  }, [fromLobby, inviteConnectivityActive, isFocused]);
+  useRegisterConnectivityMonitoring(setupMonitoringOverride);
   const { isOnline: connectivityOnline } = useConnectivity();
   const inviteBlockedByConnectivity = inviteConnectivityActive && !connectivityOnline;
 
@@ -305,7 +318,7 @@ export default function OnlineSetupScreen() {
       setError(t('online.errorRoomNotFound'));
       return;
     }
-    setSaving(true);
+    setInviteInProgress(true);
     setError(null);
     try {
       const firebase = await ensureFirebaseReady();
@@ -325,7 +338,7 @@ export default function OnlineSetupScreen() {
     } catch (err) {
       setError(joinErrorMessage(err, t));
     } finally {
-      setSaving(false);
+      setInviteInProgress(false);
     }
   };
 
@@ -343,7 +356,13 @@ export default function OnlineSetupScreen() {
     const startRound = useOrganizerSoloStore.getState().startRound;
     initFromSetup(gameId, setup);
     startRound();
-    router.push({ pathname: '/online/solo/[gameId]', params: { gameId } });
+    setInviteConnectivityActive(false);
+    void abandonOrganizerWaitingRoomForDraft(gameId).catch((error) => {
+      if (__DEV__) {
+        console.warn('solo start abandon waiting room', error);
+      }
+    });
+    router.replace({ pathname: '/online/solo/[gameId]', params: { gameId } });
   };
 
   if (loading) {
@@ -449,12 +468,18 @@ export default function OnlineSetupScreen() {
                 }
                 variant={multiplayerLocked ? 'secondary' : 'primary'}
                 disabled={
-                  !canContinue || saving || multiplayerLocked || inviteBlockedByConnectivity
+                  !canContinue ||
+                  inviteInProgress ||
+                  multiplayerLocked ||
+                  inviteBlockedByConnectivity
                 }
                 disabledHint={multiplayerLocked ? t('online.inviteOthersLockedHint') : undefined}
                 onDisabledPress={multiplayerLocked ? showInviteDisabledHint : undefined}
                 onPress={() => {
                   setInviteConnectivityActive(true);
+                  if (!connectivityOnline) {
+                    return;
+                  }
                   void handleInviteOthers();
                 }}
               />
@@ -468,7 +493,7 @@ export default function OnlineSetupScreen() {
                 label={t('online.soloPlay')}
                 hint={t('online.soloPlayHint')}
                 variant={multiplayerLocked ? 'primary' : 'secondary'}
-                disabled={!canContinue || saving}
+                disabled={!canContinue}
                 onPress={handleSoloPlay}
               />
             </View>

@@ -12,7 +12,11 @@ import { toDisplayUpper } from '@/lib/dictionary/normalize';
 import type { RoundPlayableLexicon } from '@/lib/dictionary/round-playable-lexicon';
 import { playWordAcceptedFeedback } from '@/lib/feedback/game-feedback';
 import type { GameSessionSnapshot } from '@/lib/firebase/game-session-service';
-import { submitOnlineWord, type StoredPlayerWord } from '@/lib/firebase/player-words-service';
+import {
+  submitOnlineWord,
+  type StoredPlayerWord,
+  type SubmitWordError,
+} from '@/lib/firebase/player-words-service';
 import { acceptWord } from '@/lib/game/play-word';
 import {
   playWordErrorMessage,
@@ -24,6 +28,13 @@ import { createSubmitWordProfile, type SubmitWordProfile } from '@/lib/online/su
 import type { FeedbackMode } from '@/lib/settings/feedback-mode';
 
 const VALIDATION_DEBOUNCE_MS = 1000;
+
+type PendingWordSync = {
+  normalized: string;
+  display: string;
+};
+
+type SyncOutcome = 'ok' | 'duplicate' | 'retry' | 'fatal';
 
 type UseOnlineWordSubmitParams = {
   gameId: string;
@@ -41,7 +52,8 @@ type UseOnlineWordSubmitParams = {
   letterKeys: readonly LetterKey[];
   wordAcceptedFeedback: FeedbackMode;
   t: TFunction;
-  isConnected: boolean;
+  /** When RTDB reconnects, flush queued word syncs. */
+  rtdbOnline: boolean;
   draft: string;
   setDraft: Dispatch<SetStateAction<string>>;
   setDraftKeyIndices: Dispatch<SetStateAction<number[]>>;
@@ -51,6 +63,16 @@ type UseOnlineWordSubmitParams = {
   setScrollRequest: Dispatch<SetStateAction<{ normalized: string; id: number } | null>>;
   setBackgroundSyncing: (value: boolean) => void;
 };
+
+function classifySubmitError(error: SubmitWordError): SyncOutcome {
+  if (error === 'DUPLICATE') {
+    return 'duplicate';
+  }
+  if (error === 'NETWORK' || error === 'SESSION_MISSING') {
+    return 'retry';
+  }
+  return 'fatal';
+}
 
 /**
  * Local validation, optimistic accept, and Firebase word submit for online play.
@@ -71,7 +93,7 @@ export function useOnlineWordSubmit({
   letterKeys,
   wordAcceptedFeedback,
   t,
-  isConnected,
+  rtdbOnline,
   draft,
   setDraft,
   setDraftKeyIndices,
@@ -86,16 +108,202 @@ export function useOnlineWordSubmit({
   const syncInFlightRef = useRef(0);
   const pendingListenerWordRef = useRef<string | null>(null);
   const activeSubmitProfileRef = useRef<SubmitWordProfile | null>(null);
+  const pendingSyncRef = useRef<PendingWordSync[]>([]);
+  const flushInFlightRef = useRef(false);
 
   const finishBackgroundSync = useCallback(() => {
     syncInFlightRef.current = Math.max(0, syncInFlightRef.current - 1);
-    setBackgroundSyncing(syncInFlightRef.current > 0);
+    const pending = pendingSyncRef.current.length > 0;
+    setBackgroundSyncing(syncInFlightRef.current > 0 || pending);
   }, [setBackgroundSyncing]);
 
   const clearDraftFeedback = useCallback(() => {
     setFeedback(null);
     setFeedbackVariant('default');
   }, [setFeedback, setFeedbackVariant]);
+
+  const removeOptimisticWord = useCallback(
+    (normalized: string) => {
+      setOptimisticWords((prev) => {
+        if (!prev.has(normalized)) {
+          return prev;
+        }
+        const next = new Map(prev);
+        next.delete(normalized);
+        return next;
+      });
+    },
+    [setOptimisticWords],
+  );
+
+  const enqueuePending = useCallback(
+    (item: PendingWordSync) => {
+      if (pendingSyncRef.current.some((row) => row.normalized === item.normalized)) {
+        return;
+      }
+      pendingSyncRef.current.push(item);
+      setBackgroundSyncing(true);
+    },
+    [setBackgroundSyncing],
+  );
+
+  const trySyncWord = useCallback(
+    async (
+      normalized: string,
+      display: string,
+      profile?: SubmitWordProfile | null,
+    ): Promise<SyncOutcome> => {
+      const remote = await submitOnlineWord(
+        gameId,
+        myUid,
+        normalized,
+        display,
+        uniqueBonusEnabled,
+        { profile },
+      );
+      if (remote.ok) {
+        return 'ok';
+      }
+      return classifySubmitError(remote.error);
+    },
+    [gameId, myUid, uniqueBonusEnabled],
+  );
+
+  const rollbackAcceptedWord = useCallback(
+    (
+      normalized: string,
+      savedDraft: string,
+      savedKeyIndices: readonly number[],
+      message: string,
+      variant: PlayWordFeedbackVariant,
+    ) => {
+      pendingListenerWordRef.current = null;
+      activeSubmitProfileRef.current = null;
+      removeOptimisticWord(normalized);
+      setDraft(savedDraft);
+      setDraftKeyIndices([...savedKeyIndices]);
+      lastValidatedDraft.current = '';
+      setFeedback(message);
+      setFeedbackVariant(variant);
+    },
+    [removeOptimisticWord, setDraft, setDraftKeyIndices, setFeedback, setFeedbackVariant],
+  );
+
+  const runWordSync = useCallback(
+    (
+      normalized: string,
+      display: string,
+      profile: SubmitWordProfile | null,
+      savedDraft: string,
+      savedKeyIndices: readonly number[],
+    ) => {
+      syncInFlightRef.current += 1;
+      setBackgroundSyncing(true);
+      pendingListenerWordRef.current = normalized;
+
+      void trySyncWord(normalized, display, profile).then((outcome) => {
+        finishBackgroundSync();
+        profile?.mark('remoteDone');
+
+        if (outcome === 'ok') {
+          lastValidatedDraft.current = '';
+          if (myWordsRef.current?.has(normalized)) {
+            profile?.mark('listener');
+            profile?.finish();
+            activeSubmitProfileRef.current = null;
+            pendingListenerWordRef.current = null;
+          }
+          pendingSyncRef.current = pendingSyncRef.current.filter(
+            (row) => row.normalized !== normalized,
+          );
+          return;
+        }
+
+        if (outcome === 'duplicate') {
+          profile?.finish();
+          activeSubmitProfileRef.current = null;
+          pendingListenerWordRef.current = null;
+          removeOptimisticWord(normalized);
+          pendingSyncRef.current = pendingSyncRef.current.filter(
+            (row) => row.normalized !== normalized,
+          );
+          if (!myWordsRef.current?.has(normalized)) {
+            setFeedback(t('game.errorAlreadySubmitted'));
+            setFeedbackVariant('default');
+          }
+          return;
+        }
+
+        if (outcome === 'retry') {
+          profile?.finish();
+          activeSubmitProfileRef.current = null;
+          pendingListenerWordRef.current = null;
+          enqueuePending({ normalized, display });
+          lastValidatedDraft.current = '';
+          return;
+        }
+
+        profile?.finish();
+        rollbackAcceptedWord(
+          normalized,
+          savedDraft,
+          savedKeyIndices,
+          t('online.errorFirebaseNetwork'),
+          'warning',
+        );
+      });
+    },
+    [
+      enqueuePending,
+      finishBackgroundSync,
+      myWordsRef,
+      removeOptimisticWord,
+      rollbackAcceptedWord,
+      setBackgroundSyncing,
+      setFeedback,
+      setFeedbackVariant,
+      t,
+      trySyncWord,
+    ],
+  );
+
+  const flushPendingSync = useCallback(async () => {
+    if (flushInFlightRef.current || pendingSyncRef.current.length === 0 || !rtdbOnline) {
+      return;
+    }
+    flushInFlightRef.current = true;
+    try {
+      const queue = [...pendingSyncRef.current];
+      for (const item of queue) {
+        const outcome = await trySyncWord(item.normalized, item.display);
+        if (outcome === 'ok' || outcome === 'duplicate') {
+          pendingSyncRef.current = pendingSyncRef.current.filter(
+            (row) => row.normalized !== item.normalized,
+          );
+          if (outcome === 'duplicate') {
+            removeOptimisticWord(item.normalized);
+          }
+          continue;
+        }
+        if (outcome === 'fatal') {
+          pendingSyncRef.current = pendingSyncRef.current.filter(
+            (row) => row.normalized !== item.normalized,
+          );
+          removeOptimisticWord(item.normalized);
+        }
+      }
+    } finally {
+      flushInFlightRef.current = false;
+      setBackgroundSyncing(syncInFlightRef.current > 0 || pendingSyncRef.current.length > 0);
+    }
+  }, [removeOptimisticWord, rtdbOnline, setBackgroundSyncing, trySyncWord]);
+
+  useEffect(() => {
+    if (!rtdbOnline || session?.status !== 'playing') {
+      return;
+    }
+    void flushPendingSync();
+  }, [flushPendingSync, rtdbOnline, session?.status]);
 
   const submitDraft = useCallback(
     (draftValue: string) => {
@@ -107,11 +315,6 @@ export function useOnlineWordSubmit({
         !myUid ||
         draftValue.length === 0
       ) {
-        return;
-      }
-      if (!isConnected) {
-        setFeedback(t('online.waitingForNetwork'));
-        setFeedbackVariant('warning');
         return;
       }
       if (draftValue === lastValidatedDraft.current) {
@@ -174,58 +377,15 @@ export function useOnlineWordSubmit({
       playWordAcceptedFeedback(wordAcceptedFeedback);
       profile?.mark('optimisticUi');
 
-      syncInFlightRef.current += 1;
-      setBackgroundSyncing(true);
-      pendingListenerWordRef.current = result.normalized;
-
-      void submitOnlineWord(gameId, myUid, result.normalized, display, uniqueBonusEnabled, {
-        profile,
-      }).then((remote) => {
-        finishBackgroundSync();
-        profile?.mark('remoteDone');
-
-        if (!remote.ok) {
-          pendingListenerWordRef.current = null;
-          profile?.finish();
-          activeSubmitProfileRef.current = null;
-          setOptimisticWords((prev) => {
-            const next = new Map(prev);
-            next.delete(result.normalized);
-            return next;
-          });
-          setDraft(savedDraft);
-          setDraftKeyIndices(savedKeyIndices);
-          lastValidatedDraft.current = '';
-          if (remote.error === 'DUPLICATE') {
-            setFeedback(t('game.errorAlreadySubmitted'));
-            setFeedbackVariant('default');
-          } else {
-            setFeedback(t('online.errorFirebaseNetwork'));
-            setFeedbackVariant('warning');
-          }
-          return;
-        }
-
-        lastValidatedDraft.current = '';
-        if (myWordsRef.current?.has(result.normalized)) {
-          profile?.mark('listener');
-          profile?.finish();
-          activeSubmitProfileRef.current = null;
-          pendingListenerWordRef.current = null;
-        }
-      });
+      runWordSync(result.normalized, display, profile, savedDraft, savedKeyIndices);
     },
     [
       draftKeyIndicesRef,
-      finishBackgroundSync,
-      gameId,
-      isConnected,
       myUid,
-      myWordsRef,
       resultsNavigatedRef,
       roundLexicon,
+      runWordSync,
       session,
-      setBackgroundSyncing,
       setDraft,
       setDraftKeyIndices,
       setFeedback,
@@ -246,6 +406,7 @@ export function useOnlineWordSubmit({
         debounceRef.current = null;
       }
       lastValidatedDraft.current = '';
+      pendingSyncRef.current = [];
       return;
     }
     if (debounceRef.current) {

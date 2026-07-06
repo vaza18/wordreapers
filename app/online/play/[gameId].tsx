@@ -95,7 +95,7 @@ export default function OnlinePlayScreen() {
   const viewerGender = useProfileStore((state) => state.gender);
   const { hydrated: trainingHydrated, hasCompletedTrainingRound } = useTrainingMilestone();
   const canInviteOthers = trainingHydrated && hasCompletedTrainingRound;
-  const { isOnline: connectivityOnline } = useConnectivity();
+  const { rtdbConnected } = useConnectivity();
 
   const [playInit] = useState(() => {
     const bootstrap = gameId ? consumePlaySessionBootstrap(gameId) : null;
@@ -112,7 +112,6 @@ export default function OnlinePlayScreen() {
     [myUid, session],
   );
   useRegisterConnectivityMonitoring(hasOnlineOpponentInRound);
-  const isConnected = !hasOnlineOpponentInRound || connectivityOnline;
   const [myWords, setMyWords] = useState<Map<string, StoredPlayerWord>>(new Map());
   const [loading, setLoading] = useState(playInit.loading);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -420,7 +419,7 @@ export default function OnlinePlayScreen() {
       letterKeys,
       wordAcceptedFeedback,
       t,
-      isConnected,
+      rtdbOnline: rtdbConnected,
       draft,
       setDraft,
       setDraftKeyIndices,

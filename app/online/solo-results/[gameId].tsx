@@ -52,7 +52,7 @@ export default function OrganizerSoloResultsScreen() {
   const status = useOrganizerSoloStore((state) => state.status);
   const words = useOrganizerSoloStore((state) => state.words);
   const uniqueBonusEnabled = useOrganizerSoloStore((state) => state.uniqueBonusEnabled);
-  const finishedAt = useOrganizerSoloStore((state) => state.endsAt);
+  const finishedAt = useOrganizerSoloStore((state) => state.finishedAt);
   const roundPlayedSeconds = useOrganizerSoloStore((state) => state.roundPlayedSeconds);
   const clear = useOrganizerSoloStore((state) => state.clear);
   const profileName = useProfileStore((state) => state.name);
@@ -95,7 +95,7 @@ export default function OrganizerSoloResultsScreen() {
           gender: profile.gender,
           avatarColorIndex: profile.avatarColorIndex,
         },
-        state.endsAt ?? undefined,
+        state.finishedAt ?? undefined,
         state.roundPlayedSeconds ?? undefined,
       ).catch((error) => {
         archiveRecordedRef.current = false;

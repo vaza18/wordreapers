@@ -34,4 +34,18 @@ describe('organizer solo addTime', () => {
     const after = useOrganizerSoloStore.getState().pausedRemainingMs;
     expect(after).toBe((before ?? 0) + 3 * 60_000);
   });
+
+  it('freezes remaining countdown when finishing early', () => {
+    const endsAt = useOrganizerSoloStore.getState().endsAt;
+    expect(endsAt).not.toBeNull();
+    const remainingBeforeFinish = (endsAt ?? 0) - Date.now();
+    useOrganizerSoloStore.getState().finishRound();
+    const state = useOrganizerSoloStore.getState();
+    expect(state.status).toBe('finished');
+    expect(state.endsAt).toBeNull();
+    expect(state.finishedAt).not.toBeNull();
+    expect(state.finishedRemainingMs).toBeGreaterThan(remainingBeforeFinish - 500);
+    expect(state.finishedRemainingMs).toBeLessThanOrEqual(remainingBeforeFinish);
+    expect(state.getRemainingMs(Date.now())).toBe(state.finishedRemainingMs);
+  });
 });

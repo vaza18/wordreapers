@@ -1,4 +1,4 @@
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +12,7 @@ import { LobbyRoomCodeCard } from '@/components/online/LobbyRoomCodeCard';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { Screen } from '@/components/Screen';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useConnectivity } from '@/contexts/ConnectivityContext';
 import { useLobbyActions } from '@/hooks/useLobbyActions';
 import { useLobbyPickerSync } from '@/hooks/useLobbyPickerSync';
 import { useLobbySession } from '@/hooks/useLobbySession';
@@ -57,6 +58,7 @@ export default function LobbyScreen() {
   const firebaseUid = useFirebaseStore((state) => state.uid);
   const serverNow = useServerNow(30_000);
   const myUid = firebaseUid ?? '';
+  const { isOnline: connectivityOnline } = useConnectivity();
 
   const { session, firebaseSessionLive, loading, error, setError, rematchArchive } =
     useLobbySession(gameId);
@@ -76,6 +78,7 @@ export default function LobbyScreen() {
     Boolean(
       gameId &&
       myUid &&
+      connectivityOnline &&
       firebaseSessionLive &&
       (session?.status === 'waiting' || session?.status === 'finished'),
     ),
@@ -133,11 +136,12 @@ export default function LobbyScreen() {
   } = useLobbyActions({ gameId, myUid, session, isOrganizer, rematchArchive, setError });
 
   const handleBack = useCallback(() => {
-    if (!myUid) {
+    if (isOrganizer && session?.status === 'waiting') {
+      router.back();
       return;
     }
     handleLeaveToHome();
-  }, [handleLeaveToHome, myUid]);
+  }, [handleLeaveToHome, isOrganizer, session?.status]);
 
   const onBack = useSyncedStackBack(handleBack);
 

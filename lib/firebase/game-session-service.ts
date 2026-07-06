@@ -68,6 +68,15 @@ import type { BaseWord } from '../dictionary/dictionary-index.js';
 
 let cachedBaseWordsForValidation: BaseWord[] | null = null;
 
+async function isRtdbSocketConnected(): Promise<boolean> {
+  try {
+    const snapshot = await get(ref(getFirebaseDatabase(), '.info/connected'));
+    return snapshot.val() === true;
+  } catch {
+    return false;
+  }
+}
+
 async function loadBaseWordsForValidation(): Promise<readonly string[]> {
   if (cachedBaseWordsForValidation) {
     return cachedBaseWordsForValidation;
@@ -145,6 +154,9 @@ async function cancelPlayerOnDisconnect(gameId: string, uid: string): Promise<vo
 }
 
 async function setPlayerOnlinePresence(gameId: string, uid: string): Promise<void> {
+  if (!(await isRtdbSocketConnected())) {
+    return;
+  }
   const normalized = normalizeRoomCode(gameId);
   const node = playerRef(normalized, uid);
   try {
@@ -166,6 +178,9 @@ export async function syncLobbyPickerState(gameId: string): Promise<void> {
 }
 
 async function reconcileLobbyPickerState(gameId: string): Promise<void> {
+  if (!(await isRtdbSocketConnected())) {
+    return;
+  }
   const snapshot = await get(sessionRef(gameId));
   if (!snapshot.exists()) {
     return;
@@ -752,6 +767,9 @@ export function subscribeGameSession(
  * Skips players who voluntarily left (`hasLeft`).
  */
 export async function markPlayerOnline(gameId: string, uid: string): Promise<void> {
+  if (!(await isRtdbSocketConnected())) {
+    return;
+  }
   const normalized = normalizeRoomCode(gameId);
   const node = playerRef(normalized, uid);
   try {
@@ -1219,6 +1237,9 @@ export async function organizerLeaveWaitingLobby(
   organizerUid: string,
   session: GameSession,
 ): Promise<void> {
+  if (!(await isRtdbSocketConnected())) {
+    return;
+  }
   await markPlayerOffline(gameId, organizerUid);
   if (shouldOrganizerAbandonWaitingRoom(session, organizerUid)) {
     await abandonWaitingGameSession(gameId, organizerUid);

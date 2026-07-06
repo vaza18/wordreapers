@@ -19,6 +19,9 @@ export function routeRequiresConnectivityMonitoring(
   pathname: string,
   params?: ConnectivityRouteParams,
 ): boolean {
+  if (/^\/online\/solo\//.test(pathname) || /^\/online\/solo-results\//.test(pathname)) {
+    return false;
+  }
   if (pathname === '/online/join' || pathname === '/online/browse') {
     return true;
   }

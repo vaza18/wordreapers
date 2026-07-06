@@ -18,7 +18,7 @@ import {
 } from '@/lib/online/connectivity-scope';
 
 export type ConnectivityState = {
-  /** Device has network and RTDB socket is up — safe to submit online words. */
+  /** RTDB socket is up — online play can sync; NetInfo alone does not block play. */
   isOnline: boolean;
   deviceConnected: boolean;
   rtdbConnected: boolean;
@@ -73,7 +73,7 @@ export function ConnectivityProvider({ children }: { children: ReactNode }) {
   const rtdbConnected = useRtdbConnected(monitoringEnabled);
   const value = useMemo(
     () => ({
-      isOnline: !monitoringEnabled || (deviceConnected && rtdbConnected),
+      isOnline: !monitoringEnabled || rtdbConnected,
       deviceConnected: !monitoringEnabled || deviceConnected,
       rtdbConnected: !monitoringEnabled || rtdbConnected,
       monitoringEnabled,
