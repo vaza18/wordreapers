@@ -2,8 +2,11 @@ import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { GameSessionSnapshot } from '@/lib/firebase/game-session-service';
-import { detectPlayToastEvents } from '@/lib/online/play-toast-events';
-import { playToastSessionSignature } from '@/lib/online/play-toast-session-signature';
+import { detectPlayToastEvents, detectRankEvents } from '@/lib/online/play-toast-events';
+import {
+  playToastRankSignature,
+  playToastRosterSignature,
+} from '@/lib/online/play-toast-session-signature';
 import { formatPlayToastEvents } from '@/lib/online/format-play-toast';
 import { useProfileStore } from '@/store/profile-store';
 
@@ -18,43 +21,118 @@ export {
   type PlayToastVariant,
 } from './useToastQueue';
 
+/** Coalesce split RTDB score updates into one net rank toast. */
+export const PLAY_TOAST_RANK_DEBOUNCE_MS = 400;
+
+function detectRosterToastEvents(
+  prev: GameSessionSnapshot,
+  curr: GameSessionSnapshot,
+  myUid: string,
+) {
+  return detectPlayToastEvents(prev, curr, myUid).filter(
+    (event) => event.type !== 'overtook_me' && event.type !== 'yielded_to_me',
+  );
+}
+
 /**
  * Short-lived roster / standings toasts while an online round is in progress.
+ * Roster diffs use core session; rank diffs use word-map standings with debounce.
  */
 export function usePlaySessionToasts(
-  session: GameSessionSnapshot | null,
+  rosterSession: GameSessionSnapshot | null,
+  rankSession: GameSessionSnapshot | null,
   myUid: string,
   enabled = true,
 ): PlayToastItem[] {
   const { t } = useTranslation();
   const viewerGender = useProfileStore((state) => state.gender);
   const { toasts, enqueueToasts } = useToastQueue();
-  const prevSessionRef = useRef<GameSessionSnapshot | null>(null);
-  const sessionRef = useRef(session);
-  sessionRef.current = session;
+  const prevRosterRef = useRef<GameSessionSnapshot | null>(null);
+  const rankBaselineRef = useRef<GameSessionSnapshot | null>(null);
+  const rankLatestRef = useRef<GameSessionSnapshot | null>(null);
+  const rankDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rosterSessionRef = useRef(rosterSession);
+  const rankSessionRef = useRef(rankSession);
+  rosterSessionRef.current = rosterSession;
+  rankSessionRef.current = rankSession;
 
-  const sessionSignature =
-    enabled && session && session.status === 'playing' && myUid
-      ? playToastSessionSignature(session)
+  const rosterSignature =
+    enabled && rosterSession && rosterSession.status === 'playing' && myUid
+      ? playToastRosterSignature(rosterSession)
+      : null;
+
+  const rankSignature =
+    enabled && rankSession && rankSession.status === 'playing' && myUid
+      ? playToastRankSignature(rankSession)
       : null;
 
   useEffect(() => {
-    const current = sessionRef.current;
+    const current = rosterSessionRef.current;
     if (!enabled || !current || current.status !== 'playing' || !myUid) {
-      prevSessionRef.current = current;
+      prevRosterRef.current = current;
       return;
     }
 
-    const prev = prevSessionRef.current;
-    prevSessionRef.current = current;
+    const prev = prevRosterRef.current;
+    prevRosterRef.current = current;
     if (!prev || prev.id !== current.id || prev.status !== 'playing') {
       return;
     }
 
-    const events = detectPlayToastEvents(prev, current, myUid);
+    const events = detectRosterToastEvents(prev, current, myUid);
     const items = formatPlayToastEvents(t, events, viewerGender, current, myUid);
     enqueueToasts(items);
-  }, [enabled, enqueueToasts, myUid, sessionSignature, t, viewerGender]);
+  }, [enabled, enqueueToasts, myUid, rosterSignature, t, viewerGender]);
+
+  useEffect(() => {
+    if (!enabled || !myUid) {
+      rankBaselineRef.current = null;
+      rankLatestRef.current = null;
+      if (rankDebounceRef.current) {
+        clearTimeout(rankDebounceRef.current);
+        rankDebounceRef.current = null;
+      }
+      return undefined;
+    }
+
+    const current = rankSessionRef.current;
+    if (!current || current.status !== 'playing') {
+      rankBaselineRef.current = current;
+      rankLatestRef.current = current;
+      return undefined;
+    }
+
+    rankLatestRef.current = current;
+    if (!rankBaselineRef.current || rankBaselineRef.current.id !== current.id) {
+      rankBaselineRef.current = current;
+      return undefined;
+    }
+
+    if (rankDebounceRef.current) {
+      clearTimeout(rankDebounceRef.current);
+    }
+
+    rankDebounceRef.current = setTimeout(() => {
+      rankDebounceRef.current = null;
+      const prev = rankBaselineRef.current;
+      const latest = rankLatestRef.current;
+      if (!prev || !latest || prev.status !== 'playing' || latest.status !== 'playing') {
+        rankBaselineRef.current = latest;
+        return;
+      }
+      rankBaselineRef.current = latest;
+      const events = detectRankEvents(prev, latest, myUid);
+      const items = formatPlayToastEvents(t, events, viewerGender, latest, myUid);
+      enqueueToasts(items);
+    }, PLAY_TOAST_RANK_DEBOUNCE_MS);
+
+    return () => {
+      if (rankDebounceRef.current) {
+        clearTimeout(rankDebounceRef.current);
+        rankDebounceRef.current = null;
+      }
+    };
+  }, [enabled, enqueueToasts, myUid, rankSignature, t, viewerGender]);
 
   return toasts;
 }

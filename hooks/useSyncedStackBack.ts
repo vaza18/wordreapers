@@ -11,11 +11,13 @@ const BACK_ACTIONS = new Set(['GO_BACK', 'POP', 'POP_TO']);
 export function useSyncedStackBack(handler: () => void): () => void {
   const navigation = useNavigation();
   const handlerRef = useRef(handler);
+  const skipNextRemoveRef = useRef(false);
   const pendingExitRef = useRef(false);
 
   handlerRef.current = handler;
 
   const runBack = useCallback(() => {
+    skipNextRemoveRef.current = true;
     pendingExitRef.current = true;
     handlerRef.current();
   }, []);
@@ -27,9 +29,14 @@ export function useSyncedStackBack(handler: () => void): () => void {
         return;
       }
 
-      // Handler may call dismissTo('/') and pop several screens — allow every pop
-      // until this screen unmounts instead of re-entering the handler each time.
+      if (skipNextRemoveRef.current) {
+        skipNextRemoveRef.current = false;
+        pendingExitRef.current = false;
+        return;
+      }
+
       if (pendingExitRef.current) {
+        event.preventDefault();
         return;
       }
 
@@ -40,6 +47,7 @@ export function useSyncedStackBack(handler: () => void): () => void {
     return () => {
       unsubscribe();
       pendingExitRef.current = false;
+      skipNextRemoveRef.current = false;
     };
   }, [navigation, runBack]);
 

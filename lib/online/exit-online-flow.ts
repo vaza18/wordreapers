@@ -1,8 +1,10 @@
 import { get, ref } from 'firebase/database';
 
-import { navigateHomeWithBackAnimation } from '@/lib/navigation/navigate-home';
+import { navigateHomeClearingStack } from '@/lib/navigation/navigate-home';
 
 import {
+  beginVoluntaryLeave,
+  endVoluntaryLeave,
   abandonWaitingGameSession,
   leaveGameSession,
   markPlayerOffline,
@@ -30,8 +32,6 @@ export interface ExitOnlineFlowOptions {
   wordsForArchive?: AllPlayerWords;
   /** True when leaving the finished results screen for home. */
   exitedResults?: boolean;
-  /** Navigate immediately and finish RTDB cleanup in the background (offline UX). */
-  preferImmediateNavigation?: boolean;
 }
 
 async function readLiveSession(gameId: string): Promise<GameSession | null> {
@@ -100,33 +100,33 @@ export async function exitOnlineToHome(options: ExitOnlineFlowOptions): Promise<
   }
 
   const shouldAwaitCleanup = sessionStatus === 'waiting' || Boolean(exitedResults);
-  const immediate = Boolean(options.preferImmediateNavigation);
+  const guardWaitingLeave = shouldAwaitCleanup && sessionStatus === 'waiting' && Boolean(uid);
 
-  if (shouldAwaitCleanup && immediate) {
-    void runExitCleanup(options).catch((error) => {
-      if (__DEV__) {
-        console.warn('exitOnlineToHome cleanup', error);
-      }
-    });
-    navigateHomeWithBackAnimation();
-    return;
+  if (guardWaitingLeave && uid) {
+    beginVoluntaryLeave(gameId, uid);
   }
 
-  if (shouldAwaitCleanup) {
-    try {
-      await runExitCleanup(options);
-    } catch (error) {
-      if (__DEV__) {
-        console.warn('exitOnlineToHome cleanup', error);
+  try {
+    if (shouldAwaitCleanup) {
+      try {
+        await runExitCleanup(options);
+      } catch (error) {
+        if (__DEV__) {
+          console.warn('exitOnlineToHome cleanup', error);
+        }
       }
+    } else {
+      void runExitCleanup(options).catch((error) => {
+        if (__DEV__) {
+          console.warn('exitOnlineToHome cleanup', error);
+        }
+      });
     }
-  } else {
-    void runExitCleanup(options).catch((error) => {
-      if (__DEV__) {
-        console.warn('exitOnlineToHome cleanup', error);
-      }
-    });
+  } finally {
+    if (guardWaitingLeave && uid) {
+      endVoluntaryLeave(gameId, uid);
+    }
   }
 
-  navigateHomeWithBackAnimation();
+  navigateHomeClearingStack();
 }

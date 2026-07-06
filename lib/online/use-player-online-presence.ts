@@ -2,13 +2,16 @@ import { useEffect } from 'react';
 import { AppState } from 'react-native';
 
 import {
-  cancelPlayerOnlineOnDisconnect,
   markPlayerOnline,
   subscribePlayerOnlinePresence,
+  voluntaryLeaveWaitingLobbyIfMember,
 } from '../firebase/game-session-service.js';
+
+import { consumePresenceHandoff } from './presence-handoff.js';
 
 /**
  * Keep `players/{uid}.online` accurate across reconnects and app foreground.
+ * On unmount, marks offline unless another online screen claimed a presence handoff.
  */
 export function usePlayerOnlinePresence(
   gameId: string | undefined,
@@ -31,7 +34,10 @@ export function usePlayerOnlinePresence(
     return () => {
       unsubPresence();
       appSub.remove();
-      void cancelPlayerOnlineOnDisconnect(gameId, uid);
+      if (consumePresenceHandoff(gameId)) {
+        return;
+      }
+      void voluntaryLeaveWaitingLobbyIfMember(gameId, uid);
     };
   }, [enabled, gameId, uid]);
 }

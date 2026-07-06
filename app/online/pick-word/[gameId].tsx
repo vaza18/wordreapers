@@ -35,6 +35,7 @@ import {
 import { sessionContentSafetyLocked } from '@/lib/online/public-lobby/content-safety';
 import { isPublicBaseWordSafeFromDisplay } from '@/lib/online/public-lobby/validate-public-base-word';
 import { baseWordPickerTurnNumber, isCurrentBaseWordPicker } from '@/lib/online/base-word-picker';
+import { handoffPlayerPresence } from '@/lib/online/presence-handoff';
 import { usePlayerOnlinePresence } from '@/lib/online/use-player-online-presence';
 import type { UniqueBonusMode } from '@/lib/game/scoring';
 
@@ -97,18 +98,23 @@ export default function OnlinePickWordScreen() {
 
   usePlayerOnlinePresence(gameId, myUid ?? undefined, Boolean(gameId && myUid));
 
+  const goToLobby = useCallback(() => {
+    handoffPlayerPresence(gameId);
+    router.replace({ pathname: '/online/lobby/[gameId]', params: { gameId } });
+  }, [gameId]);
+
   useEffect(() => {
     if (!isFocused || !session || !myUid) {
       return;
     }
     if (session.status !== 'waiting') {
-      router.replace({ pathname: '/online/lobby/[gameId]', params: { gameId } });
+      goToLobby();
       return;
     }
     if (!isCurrentBaseWordPicker(session, myUid)) {
-      router.replace({ pathname: '/online/lobby/[gameId]', params: { gameId } });
+      goToLobby();
     }
-  }, [gameId, isFocused, myUid, session]);
+  }, [goToLobby, isFocused, myUid, session]);
 
   useEffect(() => {
     if (!session || !dictionary || sessionPrefilledRef.current) {
@@ -165,8 +171,8 @@ export default function OnlinePickWordScreen() {
   const playerCount = session ? Object.keys(session.players).length : 1;
 
   const handleBack = useCallback(() => {
-    router.replace({ pathname: '/online/lobby/[gameId]', params: { gameId } });
-  }, [gameId]);
+    goToLobby();
+  }, [goToLobby]);
 
   const onBack = useSyncedStackBack(handleBack);
 
@@ -194,7 +200,7 @@ export default function OnlinePickWordScreen() {
           playerCount,
         ),
       });
-      router.replace({ pathname: '/online/lobby/[gameId]', params: { gameId } });
+      goToLobby();
     } catch (err) {
       const message = err instanceof Error ? err.message : '';
       if (message === 'BASE_WORD_NOT_ALLOWED') {
@@ -218,7 +224,7 @@ export default function OnlinePickWordScreen() {
           <PrimaryButton
             label={t('online.roomRematchRetry')}
             onPress={() => {
-              router.replace({ pathname: '/online/lobby/[gameId]', params: { gameId } });
+              goToLobby();
             }}
           />
           <PrimaryButton

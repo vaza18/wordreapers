@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { GameSessionSnapshot } from '@/lib/firebase/game-session-service';
 import { resolveLobbyScreenActions } from '@/lib/online/live-round-screen-actions';
 import { onlineResultsRoute } from '@/lib/online/online-results-route';
+import { handoffPlayerPresence } from '@/lib/online/presence-handoff';
 import {
   claimPlayRouteNavigation,
   seedPlaySessionBootstrap,
@@ -71,6 +72,7 @@ export function useLiveRoundLobbyScreen({
       const snapshot = { ...session, id: gameId };
       if (claimPlayRouteNavigation(gameId, snapshot)) {
         seedPlaySessionBootstrap(snapshot);
+        handoffPlayerPresence(gameId);
         router.replace({ pathname: '/online/play/[gameId]', params: { gameId } });
       }
       return undefined;
@@ -154,6 +156,7 @@ export function useLiveRoundLobbyScreen({
         const snapshot = { ...liveSession, id: gameId };
         if (claimPlayRouteNavigation(gameId, snapshot)) {
           seedPlaySessionBootstrap(snapshot);
+          handoffPlayerPresence(gameId);
           router.replace({ pathname: '/online/play/[gameId]', params: { gameId } });
         }
       })

@@ -27,7 +27,7 @@ import {
 import { wordsAreFromPreviousRound } from '../online/stale-player-words.js';
 
 import { ensureAnonymousAuth } from './auth.js';
-import { isFirebaseIgnorableRtdbError, isFirebasePermissionDenied } from './rtdb-errors.js';
+import { isFirebasePermissionDenied } from './rtdb-errors.js';
 import { getFirebaseDatabase } from './init.js';
 import {
   gameSessionPlayerPath,
@@ -364,20 +364,11 @@ export function storedWordsToScoredEntries(
   };
 }
 
-export type SubmitWordError =
-  | 'NOT_PLAYING'
-  | 'DUPLICATE'
-  | 'SESSION_MISSING'
-  | 'PLAYER_MISSING'
-  | 'NETWORK';
+export type SubmitWordError = 'NOT_PLAYING' | 'DUPLICATE' | 'SESSION_MISSING' | 'PLAYER_MISSING';
 
 export type SubmitOnlineWordOptions = {
   profile?: SubmitWordProfile | null;
 };
-
-function shardClaimError(snapshotVal: unknown): 'DUPLICATE' | 'NETWORK' {
-  return snapshotVal === true ? 'DUPLICATE' : 'NETWORK';
-}
 
 async function commitPlayerScorePlan(
   gameId: string,
@@ -454,7 +445,7 @@ export async function submitOnlineWord(
       profile?.mark('wordPlayersShardTx');
 
       if (!committedShard.committed) {
-        return { ok: false, error: shardClaimError(committedShard.snapshot?.val()) };
+        return { ok: false, error: 'DUPLICATE' };
       }
 
       const parentSnapshot = await get(wordPlayersPerWordRef(roomId, normalized));
@@ -469,9 +460,6 @@ export async function submitOnlineWord(
     } catch (error) {
       if (isFirebasePermissionDenied(error)) {
         return { ok: false, error: 'NOT_PLAYING' };
-      }
-      if (isFirebaseIgnorableRtdbError(error)) {
-        return { ok: false, error: 'NETWORK' };
       }
       throw error;
     }
@@ -489,18 +477,8 @@ export async function submitOnlineWord(
           },
         );
         profile?.mark('wordFirstSet');
-        if (!firstCommit.committed) {
-          const existing = firstCommit.snapshot?.val();
-          if (typeof existing === 'string') {
-            firstUid = existing;
-          } else {
-            await rollbackWordMapsShard(roomId, normalized, uid);
-            return { ok: false, error: 'NETWORK' };
-          }
-        } else {
-          const value = firstCommit.snapshot.val();
-          firstUid = typeof value === 'string' ? value : uid;
-        }
+        const value = firstCommit.snapshot.val();
+        firstUid = typeof value === 'string' ? value : uid;
       } catch (error) {
         if (isFirebasePermissionDenied(error)) {
           try {
@@ -543,9 +521,6 @@ export async function submitOnlineWord(
       if (isFirebasePermissionDenied(error)) {
         return { ok: false, error: 'NOT_PLAYING' };
       }
-      if (isFirebaseIgnorableRtdbError(error)) {
-        return { ok: false, error: 'NETWORK' };
-      }
       throw error;
     }
 
@@ -576,15 +551,12 @@ export async function submitOnlineWord(
       if (isFirebasePermissionDenied(error)) {
         return { ok: false, error: 'NOT_PLAYING' };
       }
-      if (isFirebaseIgnorableRtdbError(error)) {
-        return { ok: false, error: 'NETWORK' };
-      }
       throw error;
     }
 
     if (!sessionCommitted) {
       await rollbackWordMapsShard(roomId, normalized, uid);
-      return { ok: false, error: 'NETWORK' };
+      return { ok: false, error: 'NOT_PLAYING' };
     }
 
     try {
@@ -597,9 +569,6 @@ export async function submitOnlineWord(
       if (isFirebasePermissionDenied(error)) {
         return { ok: false, error: 'DUPLICATE' };
       }
-      if (isFirebaseIgnorableRtdbError(error)) {
-        return { ok: false, error: 'NETWORK' };
-      }
       throw error;
     }
     profile?.mark('wordSet');
@@ -607,9 +576,6 @@ export async function submitOnlineWord(
     profile?.mark('done');
     return { ok: true, entry };
   } catch (error) {
-    if (isFirebaseIgnorableRtdbError(error)) {
-      return { ok: false, error: 'NETWORK' };
-    }
     if (__DEV__) {
       console.warn('submitOnlineWord', error);
     }

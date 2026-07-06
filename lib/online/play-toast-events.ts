@@ -3,7 +3,7 @@ import { assignDisplayRanks } from '../game/scoring.js';
 import { resolveGameSessionSettingsForSession } from '../firebase/session-settings.js';
 import type { GameSession } from '../firebase/types.js';
 import { buildLiveStandingsFromSession } from './live-standings.js';
-import { isActiveLivePlayer, liveParticipantIds } from './live-round-membership.js';
+import { isActiveLivePlayer, isInLiveRound, liveParticipantIds } from './live-round-membership.js';
 
 export type PlayToastEvent =
   | {
@@ -53,6 +53,53 @@ function becameActiveInLiveRound(prev: GameSession, curr: GameSession, playerId:
   return isActiveLivePlayer(curr, playerId) && !isActiveLivePlayer(prev, playerId);
 }
 
+function liveRoundUidList(session: GameSession): string[] {
+  return session.liveRoundPlayerUids ?? [];
+}
+
+/**
+ * Toast only genuine mid-round joins and rejoins — not lobby participants syncing presence at round start.
+ */
+export function shouldToastRosterPlayerJoined(
+  prev: GameSession,
+  curr: GameSession,
+  playerId: string,
+): boolean {
+  if (!becameActiveInLiveRound(prev, curr, playerId)) {
+    return false;
+  }
+
+  const prevPlayer = prev.players[playerId];
+  if (!prevPlayer) {
+    return true;
+  }
+
+  if (prevPlayer.hasLeft === true && prevPlayer.online !== true) {
+    return true;
+  }
+
+  const prevUids = liveRoundUidList(prev);
+  const currUids = liveRoundUidList(curr);
+  if (!prevUids.includes(playerId) && currUids.includes(playerId)) {
+    return true;
+  }
+
+  if (
+    prevPlayer.online !== true &&
+    prevPlayer.hasLeft !== true &&
+    isInLiveRound(prev, playerId) &&
+    ((prevPlayer.wordCount ?? 0) > 0 || (prevPlayer.score ?? 0) > 0)
+  ) {
+    return true;
+  }
+
+  if (prevUids.includes(playerId) && currUids.includes(playerId)) {
+    return false;
+  }
+
+  return false;
+}
+
 function detectRosterEvents(prev: GameSession, curr: GameSession, myUid: string): PlayToastEvent[] {
   const events: PlayToastEvent[] = [];
   const currRanks = assignDisplayRanks(buildLiveStandingsFromSession(curr));
@@ -94,6 +141,10 @@ function detectRosterEvents(prev: GameSession, curr: GameSession, myUid: string)
         gender: playerGender(curr, playerId),
         inviterName,
       });
+      continue;
+    }
+
+    if (!shouldToastRosterPlayerJoined(prev, curr, playerId)) {
       continue;
     }
 
@@ -143,17 +194,25 @@ function activeCompetitorIds(session: GameSession): string[] {
   return Object.keys(session.players).filter((playerId) => isCompetingInRound(session, playerId));
 }
 
-function detectRankEvents(prev: GameSession, curr: GameSession, myUid: string): PlayToastEvent[] {
-  if (activeCompetitorIds(curr).length < 2) {
-    return [];
-  }
+type RelativeStanding = 'ahead' | 'behind' | 'tied';
 
-  const rankChanged = Object.keys(curr.players).some(
-    (playerId) =>
-      isCompetingInRound(curr, playerId) &&
-      rankMetric(prev, playerId) !== rankMetric(curr, playerId),
-  );
-  if (!rankChanged) {
+function relativeStanding(myMetric: number, theirMetric: number): RelativeStanding {
+  if (myMetric > theirMetric) {
+    return 'ahead';
+  }
+  if (myMetric < theirMetric) {
+    return 'behind';
+  }
+  return 'tied';
+}
+
+/** Pairwise rank-order flip between viewer and one opponent (at most one toast per opponent). */
+export function detectRankEvents(
+  prev: GameSession,
+  curr: GameSession,
+  myUid: string,
+): PlayToastEvent[] {
+  if (activeCompetitorIds(curr).length < 2) {
     return [];
   }
 
@@ -164,24 +223,14 @@ function detectRankEvents(prev: GameSession, curr: GameSession, myUid: string): 
       continue;
     }
 
-    if (rankMetric(curr, playerId) === rankMetric(curr, myUid)) {
+    const prevRel = relativeStanding(rankMetric(prev, myUid), rankMetric(prev, playerId));
+    const currRel = relativeStanding(rankMetric(curr, myUid), rankMetric(curr, playerId));
+
+    if (prevRel === currRel || currRel === 'tied') {
       continue;
     }
 
-    const opponentChanged = rankMetric(prev, playerId) !== rankMetric(curr, playerId);
-    const myChanged = rankMetric(prev, myUid) !== rankMetric(curr, myUid);
-
-    const theyTookLead =
-      rankMetric(curr, playerId) > rankMetric(curr, myUid) &&
-      rankMetric(prev, playerId) <= rankMetric(prev, myUid) &&
-      (opponentChanged || myChanged);
-
-    const iTookLead =
-      rankMetric(curr, myUid) > rankMetric(curr, playerId) &&
-      rankMetric(prev, myUid) <= rankMetric(prev, playerId) &&
-      (myChanged || opponentChanged);
-
-    if (theyTookLead) {
+    if (currRel === 'behind') {
       events.push({
         type: 'overtook_me',
         playerId,
@@ -191,7 +240,7 @@ function detectRankEvents(prev: GameSession, curr: GameSession, myUid: string): 
       continue;
     }
 
-    if (iTookLead) {
+    if (currRel === 'ahead') {
       events.push({
         type: 'yielded_to_me',
         playerId,
