@@ -27,6 +27,7 @@ export function useLobbyPickerSync({
   myUid,
 }: UseLobbyPickerSyncParams): void {
   const lobbyWordsClearedForRoundRef = useRef<number | null>(null);
+  const pickerSyncAttemptKeyRef = useRef<string | null>(null);
   const sessionRef = useRef(session);
   sessionRef.current = session;
 
@@ -43,6 +44,7 @@ export function useLobbyPickerSync({
 
   useEffect(() => {
     if (!gameId || !session || session.status !== 'waiting') {
+      pickerSyncAttemptKeyRef.current = null;
       return;
     }
     const picker = currentBaseWordPickerUid(session);
@@ -50,10 +52,26 @@ export function useLobbyPickerSync({
     const wordDrifted = Boolean(
       session.baseWord && session.baseWordChosenBy && session.baseWordChosenBy !== picker,
     );
-    if (pickerDrifted || wordDrifted) {
-      void syncLobbyPickerState(gameId);
+    if (!pickerDrifted && !wordDrifted) {
+      pickerSyncAttemptKeyRef.current = null;
+      return;
     }
-  }, [gameId, session]);
+    const driftKey = `${session.baseWordRound ?? 0}:${session.baseWordPickerUid ?? ''}:${picker}:${session.baseWordChosenBy ?? ''}`;
+    if (pickerSyncAttemptKeyRef.current === driftKey) {
+      return;
+    }
+    pickerSyncAttemptKeyRef.current = driftKey;
+    void syncLobbyPickerState(gameId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- picker drift uses live session snapshot via ref
+  }, [
+    gameId,
+    session?.baseWord,
+    session?.baseWordChosenBy,
+    session?.baseWordPickerUid,
+    session?.baseWordRound,
+    session?.status,
+    session?.players,
+  ]);
 
   useEffect(() => {
     if (!gameId || !session || session.status !== 'waiting' || !isOrganizer || !myUid) {

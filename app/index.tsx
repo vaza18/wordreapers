@@ -12,8 +12,7 @@ import { SettingsIconButton } from '@/components/SettingsIconButton';
 import { spacing, type ThemeColors } from '@/constants/theme';
 import { useTrainingMilestone } from '@/hooks/useTrainingMilestone';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
-import { joinErrorMessage } from '@/lib/firebase/join-error-message';
-import { navigateToNewOnlineRoom } from '@/lib/online/create-room';
+import { navigateToLocalRoomSetup, navigateToNewOnlineRoom } from '@/lib/online/create-room';
 import { continueWithProfileOrRedirect } from '@/lib/online/require-profile';
 import { useProfileStore } from '@/store/profile-store';
 
@@ -44,10 +43,13 @@ export default function HomeScreen() {
     if (!continueWithProfileOrRedirect('create')) {
       return;
     }
-    const { name, gender, avatarColorIndex } = useProfileStore.getState();
-    void navigateToNewOnlineRoom({ name, gender, avatarColorIndex }).catch((error) => {
-      Alert.alert(t('app.name'), joinErrorMessage(error, t));
-    });
+    const profile = useProfileStore.getState();
+    const { name, gender, avatarColorIndex } = profile;
+    if (joinLocked) {
+      navigateToLocalRoomSetup({ name, gender, avatarColorIndex });
+      return;
+    }
+    navigateToNewOnlineRoom({ name, gender, avatarColorIndex });
   };
 
   const handleJoinOnline = () => {

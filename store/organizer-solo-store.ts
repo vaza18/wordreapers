@@ -19,6 +19,10 @@ export interface OrganizerSoloState {
   setup: LocalRoomSetup | null;
   uniqueBonusEnabled: boolean;
   endsAt: number | null;
+  /** Wall-clock moment the round ended (results/archive). */
+  finishedAt: number | null;
+  /** Countdown remaining when the round ended (frozen for the header). */
+  finishedRemainingMs: number | null;
   pausedRemainingMs: number | null;
   roundTimerBudgetSeconds: number | null;
   roundPlayedSeconds: number | null;
@@ -44,6 +48,8 @@ const initialState = {
   setup: null as LocalRoomSetup | null,
   uniqueBonusEnabled: false,
   endsAt: null as number | null,
+  finishedAt: null as number | null,
+  finishedRemainingMs: null as number | null,
   pausedRemainingMs: null as number | null,
   roundTimerBudgetSeconds: null as number | null,
   roundPlayedSeconds: null as number | null,
@@ -89,14 +95,17 @@ export const useOrganizerSoloStore = create<OrganizerSoloState>((set, get) => ({
   finishRound: () => {
     const state = get();
     const now = Date.now();
+    const remainingMs = state.getRemainingMs(now);
     const budget = state.roundTimerBudgetSeconds ?? (state.setup?.durationMinutes ?? 0) * 60;
     const roundPlayedSeconds = computeRoundPlayedSecondsFromTimerState({
       budgetSeconds: budget,
-      remainingMs: state.getRemainingMs(now),
+      remainingMs,
     });
     set({
       status: 'finished',
-      endsAt: now,
+      endsAt: null,
+      finishedAt: now,
+      finishedRemainingMs: remainingMs,
       pausedRemainingMs: null,
       roundPlayedSeconds,
     });
@@ -166,7 +175,10 @@ export const useOrganizerSoloStore = create<OrganizerSoloState>((set, get) => ({
   getScore: () => computePlayerScore(get().getScoredWords()),
 
   getRemainingMs: (now) => {
-    const { status, endsAt, pausedRemainingMs } = get();
+    const { status, endsAt, pausedRemainingMs, finishedRemainingMs } = get();
+    if (status === 'finished') {
+      return finishedRemainingMs ?? 0;
+    }
     if (status === 'paused' && pausedRemainingMs !== null) {
       return pausedRemainingMs;
     }

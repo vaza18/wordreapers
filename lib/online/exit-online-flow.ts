@@ -30,6 +30,8 @@ export interface ExitOnlineFlowOptions {
   wordsForArchive?: AllPlayerWords;
   /** True when leaving the finished results screen for home. */
   exitedResults?: boolean;
+  /** Navigate immediately and finish RTDB cleanup in the background (offline UX). */
+  preferImmediateNavigation?: boolean;
 }
 
 async function readLiveSession(gameId: string): Promise<GameSession | null> {
@@ -98,6 +100,17 @@ export async function exitOnlineToHome(options: ExitOnlineFlowOptions): Promise<
   }
 
   const shouldAwaitCleanup = sessionStatus === 'waiting' || Boolean(exitedResults);
+  const immediate = Boolean(options.preferImmediateNavigation);
+
+  if (shouldAwaitCleanup && immediate) {
+    void runExitCleanup(options).catch((error) => {
+      if (__DEV__) {
+        console.warn('exitOnlineToHome cleanup', error);
+      }
+    });
+    navigateHomeWithBackAnimation();
+    return;
+  }
 
   if (shouldAwaitCleanup) {
     try {

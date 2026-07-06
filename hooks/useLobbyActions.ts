@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useCallback, useState, type Dispatch, type SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useConnectivity } from '@/contexts/ConnectivityContext';
 import {
   readGameSessionSnapshot,
   rejoinExistingPlayer,
@@ -9,6 +10,7 @@ import {
   type GameSessionSnapshot,
 } from '@/lib/firebase/game-session-service';
 import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
+import { navigateHomeWithBackAnimation } from '@/lib/navigation/navigate-home';
 import type { FinishedRoundArchive } from '@/lib/online/online-session-archive';
 import {
   claimPlayRouteNavigation,
@@ -48,6 +50,7 @@ export function useLobbyActions({
   setError,
 }: UseLobbyActionsParams): LobbyActions {
   const { t } = useTranslation();
+  const { isOnline: connectivityOnline } = useConnectivity();
   const [starting, setStarting] = useState(false);
   const [rematchLoading, setRematchLoading] = useState(false);
 
@@ -119,6 +122,7 @@ export function useLobbyActions({
 
   const handleLeaveToHome = useCallback(() => {
     if (!myUid) {
+      navigateHomeWithBackAnimation();
       return;
     }
     void exitOnlineToHome({
@@ -127,8 +131,9 @@ export function useLobbyActions({
       isOrganizer: Boolean(isOrganizer),
       sessionStatus: session?.status ?? 'waiting',
       session,
+      preferImmediateNavigation: !connectivityOnline,
     });
-  }, [gameId, isOrganizer, myUid, session]);
+  }, [connectivityOnline, gameId, isOrganizer, myUid, session]);
 
   return {
     starting,

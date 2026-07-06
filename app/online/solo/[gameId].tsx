@@ -1,9 +1,11 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useConnectivity, useRegisterConnectivityMonitoring } from '@/contexts/ConnectivityContext';
 import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
 import {
   hasWordInSortedList,
@@ -44,6 +46,7 @@ import { gameSessionSettingsFromSetup } from '@/lib/firebase/session-settings';
 import type { GameSession } from '@/lib/firebase/types';
 import { computePlayerScore } from '@/lib/game/scoring';
 import { getLocalRoomDraft } from '@/lib/online/local-room-draft';
+import { abandonOrganizerWaitingRoomForDraft } from '@/lib/online/abandon-tracked-waiting-room';
 import { publishPlayingSoloForDraft } from '@/lib/online/publish-room';
 import { useFirebaseStore } from '@/store/firebase-store';
 import {
@@ -71,6 +74,9 @@ export default function OrganizerSoloPlayScreen() {
   const myUid = useFirebaseStore((state) => state.uid) ?? 'solo';
   const { hydrated: trainingHydrated, hasCompletedTrainingRound } = useTrainingMilestone();
   const canInviteOthers = trainingHydrated && hasCompletedTrainingRound;
+  useRegisterConnectivityMonitoring(false);
+  const isFocused = useIsFocused();
+  const { isOnline: connectivityOnline } = useConnectivity();
 
   const setup = useOrganizerSoloStore((state) => state.setup);
   const status = useOrganizerSoloStore((state) => state.status);
@@ -117,6 +123,17 @@ export default function OrganizerSoloPlayScreen() {
   }, [gameId, setup, status]);
 
   useEffect(() => {
+    if (!connectivityOnline || !gameId) {
+      return;
+    }
+    void abandonOrganizerWaitingRoomForDraft(gameId).catch((error) => {
+      if (__DEV__) {
+        console.warn('solo reconnect abandon waiting room', error);
+      }
+    });
+  }, [connectivityOnline, gameId]);
+
+  useEffect(() => {
     void Promise.all([loadBundledDictionary(), loadBundledSupplements()]).then(
       ([dict, supplements]) => {
         setDictionary(dict);
@@ -138,7 +155,7 @@ export default function OrganizerSoloPlayScreen() {
     enabled: Boolean(setup?.baseWord && status === 'playing'),
   });
 
-  const timeUpModalVisible = status === 'finished';
+  const timeUpModalVisible = status === 'finished' && isFocused;
 
   const clearFeedback = useCallback(() => {
     setFeedback(null);

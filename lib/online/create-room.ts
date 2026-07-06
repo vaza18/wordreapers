@@ -7,21 +7,37 @@ import type { PlayerProfile } from '@/lib/profile/player-profile';
 import { abandonTrackedOrganizerWaitingRoom } from '@/lib/online/abandon-tracked-waiting-room';
 import { useFirebaseStore } from '@/store/firebase-store';
 
-/**
- * Open organizer setup with a local room code (no Firebase until publish).
- */
-export async function navigateToNewOnlineRoom(profile: PlayerProfile): Promise<void> {
-  const firebase = await ensureFirebaseReady();
-  if (firebase?.uid) {
-    useFirebaseStore.getState().setConnection({
-      status: firebase.status,
-      uid: firebase.uid,
-      errorMessage: firebase.errorMessage ?? null,
-    });
-    await abandonTrackedOrganizerWaitingRoom(firebase.uid);
-  }
-
+function openLocalRoomSetup(profile: PlayerProfile): void {
   const code = generateRoomCode();
   createLocalRoomDraft(code, profile);
   router.push({ pathname: '/online/setup', params: { gameId: code } });
+}
+
+/**
+ * Open organizer setup with a local room code (no Firebase until publish or invite).
+ */
+export function navigateToLocalRoomSetup(profile: PlayerProfile): void {
+  openLocalRoomSetup(profile);
+}
+
+/**
+ * Open local organizer setup immediately, then bootstrap Firebase in the background.
+ * Setup is offline-safe until the player invites others or publishes a room.
+ */
+export function navigateToNewOnlineRoom(profile: PlayerProfile): void {
+  openLocalRoomSetup(profile);
+  void prepareFirebaseForOrganizerCreate();
+}
+
+async function prepareFirebaseForOrganizerCreate(): Promise<void> {
+  const firebase = await ensureFirebaseReady();
+  if (!firebase?.uid) {
+    return;
+  }
+  useFirebaseStore.getState().setConnection({
+    status: firebase.status,
+    uid: firebase.uid,
+    errorMessage: firebase.errorMessage ?? null,
+  });
+  await abandonTrackedOrganizerWaitingRoom(firebase.uid);
 }
