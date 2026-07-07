@@ -24,7 +24,11 @@ export function isRematchWaitingLobbyOptedIn(
  * First-round waiting shows everyone; rematch waiting only shows opt-in participants.
  */
 export function isLobbyVisiblePlayer(session: GameSession, uid: string): boolean {
-  if (!session.players[uid]) {
+  const player = session.players[uid];
+  if (!player) {
+    return false;
+  }
+  if (player.hasLeft === true) {
     return false;
   }
   if (!isRematchWaitingLobby(session)) {

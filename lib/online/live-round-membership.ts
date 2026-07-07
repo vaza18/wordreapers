@@ -99,6 +99,30 @@ export function liveParticipantOpponentIds(session: GameSession, myUid: string):
   return liveParticipantIds(session).filter((id) => id !== myUid);
 }
 
+/**
+ * Still rostered for this live round and has not voluntarily left (may be briefly offline).
+ * Used to avoid «alone in game» toasts during presence sync at round start.
+ */
+export function isExpectedLiveRoundParticipant(
+  session: Pick<GameSession, 'baseWordRound' | 'liveRoundPlayerUids' | 'players'>,
+  playerId: string,
+): boolean {
+  const player = session.players[playerId];
+  if (!player || player.hasLeft === true) {
+    return false;
+  }
+  return isInLiveRound(session, playerId);
+}
+
+export function expectedLiveRoundOpponentIds(
+  session: Pick<GameSession, 'baseWordRound' | 'liveRoundPlayerUids' | 'players'>,
+  myUid: string,
+): string[] {
+  return Object.keys(session.players).filter(
+    (id) => id !== myUid && isExpectedLiveRoundParticipant(session, id),
+  );
+}
+
 /** Presence and score reset when a finished session reopens for rematch. */
 export function rematchWaitingPlayerPatch(
   session: GameSession,

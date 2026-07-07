@@ -46,6 +46,28 @@ describe('isLobbyVisiblePlayer', () => {
     expect(isLobbyVisiblePlayer(s, 'p3')).toBe(true);
   });
 
+  it('hides voluntarily left players from the waiting lobby', () => {
+    const s = session({
+      baseWordRound: 0,
+      players: {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        p2: { name: 'Two', wordCount: 0, score: 0, online: false, hasLeft: true },
+      },
+    });
+    expect(isLobbyVisiblePlayer(s, 'p2')).toBe(false);
+  });
+
+  it('hides left players even when presence was resurrected as online', () => {
+    const s = session({
+      baseWordRound: 1,
+      players: {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        p2: { name: 'Two', wordCount: 0, score: 0, online: true, hasLeft: true },
+      },
+    });
+    expect(isLobbyVisiblePlayer(s, 'p2')).toBe(false);
+  });
+
   it('shows only opt-in participants during rematch waiting', () => {
     const s = session();
     expect(isLobbyVisiblePlayer(s, 'org')).toBe(true);

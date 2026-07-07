@@ -90,7 +90,7 @@ export function useLiveRoundPlayScreen({
   }, [actions?.shouldRedirectToResults, frozenBaseWordRound, gameId, isFocused, myUid, session]);
 
   useEffect(() => {
-    if (!isFocused || loading || !session || !myUid || !gameId) {
+    if (loading || !session || !myUid || !gameId) {
       return;
     }
     if (actions?.shouldRedirectToLobby) {
@@ -100,7 +100,7 @@ export function useLiveRoundPlayScreen({
     if (!roundEnded && session.status === 'finished') {
       router.replace(onlineResultsRoute(gameId, session.baseWordRound ?? undefined));
     }
-  }, [actions?.shouldRedirectToLobby, gameId, isFocused, loading, myUid, roundEnded, session]);
+  }, [actions?.shouldRedirectToLobby, gameId, loading, myUid, roundEnded, session]);
 
   useEffect(() => {
     if (!gameId || !myUid || !roundEnded) {

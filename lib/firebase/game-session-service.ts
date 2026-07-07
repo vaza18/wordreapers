@@ -68,15 +68,6 @@ import type { BaseWord } from '../dictionary/dictionary-index.js';
 
 let cachedBaseWordsForValidation: BaseWord[] | null = null;
 
-async function isRtdbSocketConnected(): Promise<boolean> {
-  try {
-    const snapshot = await get(ref(getFirebaseDatabase(), '.info/connected'));
-    return snapshot.val() === true;
-  } catch {
-    return false;
-  }
-}
-
 async function loadBaseWordsForValidation(): Promise<readonly string[]> {
   if (cachedBaseWordsForValidation) {
     return cachedBaseWordsForValidation;
@@ -153,11 +144,37 @@ async function cancelPlayerOnDisconnect(gameId: string, uid: string): Promise<vo
   }
 }
 
-async function setPlayerOnlinePresence(gameId: string, uid: string): Promise<void> {
-  if (!(await isRtdbSocketConnected())) {
+const voluntaryLeaveInFlight = new Map<string, number>();
+
+function voluntaryLeaveKey(gameId: string, uid: string): string {
+  return `${normalizeRoomCode(gameId)}:${uid}`;
+}
+
+/** Blocks mark-online races while a player is voluntarily leaving the waiting lobby. */
+export function beginVoluntaryLeave(gameId: string, uid: string): void {
+  const key = voluntaryLeaveKey(gameId, uid);
+  voluntaryLeaveInFlight.set(key, (voluntaryLeaveInFlight.get(key) ?? 0) + 1);
+}
+
+export function endVoluntaryLeave(gameId: string, uid: string): void {
+  const key = voluntaryLeaveKey(gameId, uid);
+  const count = voluntaryLeaveInFlight.get(key) ?? 0;
+  if (count <= 1) {
+    voluntaryLeaveInFlight.delete(key);
     return;
   }
+  voluntaryLeaveInFlight.set(key, count - 1);
+}
+
+function isVoluntaryLeaveInFlight(gameId: string, uid: string): boolean {
+  return (voluntaryLeaveInFlight.get(voluntaryLeaveKey(gameId, uid)) ?? 0) > 0;
+}
+
+async function setPlayerOnlinePresence(gameId: string, uid: string): Promise<void> {
   const normalized = normalizeRoomCode(gameId);
+  if (isVoluntaryLeaveInFlight(normalized, uid)) {
+    return;
+  }
   const node = playerRef(normalized, uid);
   try {
     await onDisconnect(node).cancel();
@@ -178,9 +195,6 @@ export async function syncLobbyPickerState(gameId: string): Promise<void> {
 }
 
 async function reconcileLobbyPickerState(gameId: string): Promise<void> {
-  if (!(await isRtdbSocketConnected())) {
-    return;
-  }
   const snapshot = await get(sessionRef(gameId));
   if (!snapshot.exists()) {
     return;
@@ -764,13 +778,13 @@ export function subscribeGameSession(
 
 /**
  * Mark player online and register onDisconnect → offline.
- * Skips players who voluntarily left (`hasLeft`).
+ * Skips players who voluntarily left (`hasLeft`); use `rejoinExistingPlayer` to opt back in.
  */
 export async function markPlayerOnline(gameId: string, uid: string): Promise<void> {
-  if (!(await isRtdbSocketConnected())) {
+  const normalized = normalizeRoomCode(gameId);
+  if (isVoluntaryLeaveInFlight(normalized, uid)) {
     return;
   }
-  const normalized = normalizeRoomCode(gameId);
   const node = playerRef(normalized, uid);
   try {
     const snapshot = await get(node);
@@ -778,11 +792,8 @@ export async function markPlayerOnline(gameId: string, uid: string): Promise<voi
       return;
     }
     const player = snapshot.val() as GameSessionPlayer;
-    if (player.hasLeft === true && player.online !== true) {
-      return;
-    }
     if (player.hasLeft === true) {
-      await update(node, { hasLeft: false });
+      return;
     }
     await setPlayerOnlinePresence(normalized, uid);
   } catch (error) {
@@ -966,27 +977,74 @@ export async function startGameSession(gameId: string, actorUid: string): Promis
  */
 export async function leaveGameSession(gameId: string, uid: string): Promise<void> {
   const normalized = normalizeRoomCode(gameId);
-  const node = playerRef(normalized, uid);
-  await onDisconnect(node).cancel();
-  await update(node, { online: false, hasLeft: true });
+  beginVoluntaryLeave(normalized, uid);
   try {
-    await resolveEarlyFinishVoteIfExpired(normalized);
-    await resolveResumeVoteIfExpired(normalized);
-  } catch (error) {
-    if (__DEV__) {
-      console.warn('leaveGameSession vote cleanup', error);
+    const node = playerRef(normalized, uid);
+    await onDisconnect(node).cancel();
+    await update(node, { online: false, hasLeft: true });
+    try {
+      await syncLobbyPickerState(normalized);
+    } catch (error) {
+      if (__DEV__) {
+        console.warn('leaveGameSession picker sync', error);
+      }
     }
-  }
+    try {
+      await resolveEarlyFinishVoteIfExpired(normalized);
+      await resolveResumeVoteIfExpired(normalized);
+    } catch (error) {
+      if (__DEV__) {
+        console.warn('leaveGameSession vote cleanup', error);
+      }
+    }
 
+    try {
+      const sessionSnap = await get(sessionRef(normalized));
+      if (sessionSnap.exists()) {
+        await reconcilePublicLobbyAfterRosterChange(normalized, sessionSnap.val() as GameSession);
+      }
+    } catch (error) {
+      if (__DEV__) {
+        console.warn('leaveGameSession public lobby reconcile', error);
+      }
+    }
+  } finally {
+    endVoluntaryLeave(normalized, uid);
+  }
+}
+
+/**
+ * Presence unmount safety net: full waiting-lobby leave for non-organizers.
+ */
+export async function voluntaryLeaveWaitingLobbyIfMember(
+  gameId: string,
+  uid: string,
+): Promise<void> {
+  const normalized = normalizeRoomCode(gameId);
   try {
-    const sessionSnap = await get(sessionRef(normalized));
-    if (sessionSnap.exists()) {
-      await reconcilePublicLobbyAfterRosterChange(normalized, sessionSnap.val() as GameSession);
+    const snapshot = await get(sessionRef(normalized));
+    if (!snapshot.exists()) {
+      await markPlayerOffline(normalized, uid);
+      return;
     }
+    const session = snapshot.val() as GameSession;
+    const player = session.players[uid];
+    if (!player) {
+      return;
+    }
+    if (player.hasLeft === true && player.online !== true) {
+      return;
+    }
+    if (session.status === 'waiting' && session.organizerId !== uid) {
+      await leaveGameSession(normalized, uid);
+      return;
+    }
+    await markPlayerOffline(normalized, uid);
   } catch (error) {
-    if (__DEV__) {
-      console.warn('leaveGameSession public lobby reconcile', error);
+    if (isFirebasePermissionDenied(error)) {
+      return;
     }
+    throw error;
   }
 }
 
@@ -1237,9 +1295,6 @@ export async function organizerLeaveWaitingLobby(
   organizerUid: string,
   session: GameSession,
 ): Promise<void> {
-  if (!(await isRtdbSocketConnected())) {
-    return;
-  }
   await markPlayerOffline(gameId, organizerUid);
   if (shouldOrganizerAbandonWaitingRoom(session, organizerUid)) {
     await abandonWaitingGameSession(gameId, organizerUid);

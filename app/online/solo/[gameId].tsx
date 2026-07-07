@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { useConnectivity, useRegisterConnectivityMonitoring } from '@/contexts/ConnectivityContext';
 import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
 import {
   hasWordInSortedList,
@@ -74,9 +73,7 @@ export default function OrganizerSoloPlayScreen() {
   const myUid = useFirebaseStore((state) => state.uid) ?? 'solo';
   const { hydrated: trainingHydrated, hasCompletedTrainingRound } = useTrainingMilestone();
   const canInviteOthers = trainingHydrated && hasCompletedTrainingRound;
-  useRegisterConnectivityMonitoring(false);
   const isFocused = useIsFocused();
-  const { isOnline: connectivityOnline } = useConnectivity();
 
   const setup = useOrganizerSoloStore((state) => state.setup);
   const status = useOrganizerSoloStore((state) => state.status);
@@ -123,15 +120,15 @@ export default function OrganizerSoloPlayScreen() {
   }, [gameId, setup, status]);
 
   useEffect(() => {
-    if (!connectivityOnline || !gameId) {
+    if (!gameId) {
       return;
     }
     void abandonOrganizerWaitingRoomForDraft(gameId).catch((error) => {
       if (__DEV__) {
-        console.warn('solo reconnect abandon waiting room', error);
+        console.warn('solo abandon waiting room for draft', error);
       }
     });
-  }, [connectivityOnline, gameId]);
+  }, [gameId]);
 
   useEffect(() => {
     void Promise.all([loadBundledDictionary(), loadBundledSupplements()]).then(

@@ -5,8 +5,6 @@ import { I18nextProvider } from 'react-i18next';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { ConnectivityProvider } from '@/contexts/ConnectivityContext';
-import { ConnectivityBanner } from '@/components/ConnectivityBanner';
 import { VictoryConfettiHost } from '@/components/VictoryConfetti';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { stackScreenOptions } from '@/constants/stack-screen-options';
@@ -57,7 +55,6 @@ function RootStack() {
   return (
     <I18nextProvider i18n={i18n}>
       <StatusBar hidden translucent />
-      <ConnectivityBanner />
       <Stack
         screenOptions={{
           ...stackScreenOptions,
@@ -217,9 +214,7 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <ConnectivityProvider>
-        <ThemeProvider>{ready ? <RootStack /> : <BootstrapLoading />}</ThemeProvider>
-      </ConnectivityProvider>
+      <ThemeProvider>{ready ? <RootStack /> : <BootstrapLoading />}</ThemeProvider>
     </SafeAreaProvider>
   );
 }
