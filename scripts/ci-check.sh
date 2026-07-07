@@ -23,7 +23,7 @@ npm run format:check
 echo "→ Typecheck"
 npm run typecheck
 
-echo "→ Unit tests"
-npm test
+echo "→ Unit tests with coverage gate"
+npm run test:coverage
 
 echo "✓ CI checks passed"

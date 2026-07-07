@@ -20,7 +20,7 @@ npm run ci:check
 3. `npm run lint` — ESLint on the whole repo
 4. `npm run format:check` — Prettier (no write; must already match)
 5. `npm run typecheck` — `tsc --noEmit` (app + node tsconfigs)
-6. `npm test` — Vitest unit tests (includes `pretest` → `legal:bundle`)
+6. `npm run test:coverage` — Vitest unit tests with coverage gate (includes `pretest` → `legal:bundle`)
 
 ## Workflow
 
