@@ -97,6 +97,37 @@ export function liveParticipantIds(session: GameSession): string[] {
   return Object.keys(session.players).filter((id) => isLiveParticipant(session, id));
 }
 
+/** Whether this player belongs in finished-round standings (no online/presence gate). */
+export function isFinishedRoundStandingsParticipant(
+  session: Pick<GameSession, 'baseWordRound' | 'liveRoundPlayerUids' | 'players' | 'wordPlayers'>,
+  playerId: string,
+): boolean {
+  const player = session.players[playerId];
+  if (!player || !isInLiveRound(session, playerId)) {
+    return false;
+  }
+  const scoredInRound =
+    (player.wordCount ?? 0) > 0 ||
+    (player.score ?? 0) > 0 ||
+    Object.values(session.wordPlayers ?? {}).some((onWord) => onWord[playerId]);
+  if (player.hasLeft === true) {
+    return scoredInRound;
+  }
+  if ((session.baseWordRound ?? 0) === 0) {
+    return scoredInRound;
+  }
+  return true;
+}
+
+/** Live roster scope for results after `status === 'finished'`. */
+export function finishedRoundParticipantIds(
+  session: Pick<GameSession, 'baseWordRound' | 'liveRoundPlayerUids' | 'players' | 'wordPlayers'>,
+): string[] {
+  return Object.keys(session.players).filter((id) =>
+    isFinishedRoundStandingsParticipant(session, id),
+  );
+}
+
 export function liveParticipantOpponentIds(session: GameSession, myUid: string): string[] {
   return liveParticipantIds(session).filter((id) => id !== myUid);
 }

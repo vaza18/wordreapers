@@ -8,6 +8,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — Finished results missing winners and word avatars
+
+- **Symptom:** After reconnect at round end, results showed words and x2 badges but headline stayed «Гра завершена», no winner, no avatars next to words.
+- **Cause:** `buildLiveStandingsFromSession()` filtered via `liveParticipantIds()`, which returns nobody when `status !== 'playing'`. Results always use word-map standings when `wordPlayers` exists, so finished sessions got empty standings → `isSoloStandings([])` hid word authors.
+- **Fix:** Added `finishedRoundParticipantIds()` for finished sessions; `buildLiveStandingsFromSession()` uses live roster scope without online/presence gates when not `playing`.
+- **Test:** `lib/online/__tests__/live-standings.test.ts`, `tests/online-results-data.test.ts`
+- **Area:** `lib/online/live-standings.ts`, `lib/online/presence/live-round-membership.ts`
+
 ### 2026-07 — Overtake toast skipped at equal score (word tie-breaker)
 
 - **Symptom:** When a player took 1st place with the same score as 2nd but more words, 2nd place got no “overtook you” toast (3rd place did).

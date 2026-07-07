@@ -2,18 +2,28 @@ import { resolveGameSessionSettingsForSession } from '../firebase/session-settin
 import type { GameSession } from '../firebase/types.js';
 import { buildStandingsFromSessionWordMaps, type PlayerStandings } from '../game/scoring.js';
 
-import { liveParticipantIds } from './presence/live-round-membership.js';
+import {
+  finishedRoundParticipantIds,
+  liveParticipantIds,
+} from './presence/live-round-membership.js';
 
 type SessionForStandings = Pick<
   GameSession,
   'players' | 'wordPlayers' | 'settings' | 'status' | 'baseWordRound' | 'liveRoundPlayerUids'
 >;
 
+function standingsParticipantIds(session: SessionForStandings): string[] {
+  if (session.status === 'playing') {
+    return liveParticipantIds(session as GameSession);
+  }
+  return finishedRoundParticipantIds(session);
+}
+
 /** Standings for live-round participants only (scores derived from wordPlayers; matches x2 badges). */
 export function buildLiveStandingsFromSession(session: SessionForStandings): PlayerStandings[] {
   const uniqueBonusEnabled = resolveGameSessionSettingsForSession(session).uniqueBonusEnabled;
   const all = buildStandingsFromSessionWordMaps(session, uniqueBonusEnabled);
-  const participantIds = new Set(liveParticipantIds(session as GameSession));
+  const participantIds = new Set(standingsParticipantIds(session));
   return all.filter((row) => participantIds.has(row.playerId));
 }
 

@@ -69,4 +69,47 @@ describe('buildLiveStandingsFromSession', () => {
     expect(standings.map((row) => row.playerId).sort()).toEqual(['a', 'org']);
     expect(standings.find((row) => row.playerId === 'org')?.score).toBe(1);
   });
+
+  it('includes live roster on finished sessions (results screen)', () => {
+    const s = session({
+      status: 'finished',
+      players: {
+        org: { name: 'Орг', score: 2, wordCount: 1, avatarColorIndex: 0, online: false },
+        a: { name: 'А', score: 1, wordCount: 1, avatarColorIndex: 1, online: false },
+        b: { name: 'Б', score: 0, wordCount: 0, avatarColorIndex: 2, online: false },
+      },
+      wordPlayers: {
+        ера: { org: true },
+        мор: { a: true },
+      },
+    });
+
+    const standings = buildLiveStandingsFromSession(s);
+    expect(standings.map((row) => row.playerId).sort()).toEqual(['a', 'org']);
+  });
+
+  it('excludes non-opt-in roster members from finished rematch round standings', () => {
+    const s = session({
+      status: 'finished',
+      baseWordRound: 1,
+      liveRoundPlayerUids: ['org', 'a'],
+      players: {
+        org: { name: 'Орг', score: 1, wordCount: 1, avatarColorIndex: 0, online: false },
+        a: { name: 'А', score: 0, wordCount: 0, avatarColorIndex: 1, online: false },
+        b: {
+          name: 'Б',
+          score: 12,
+          wordCount: 12,
+          avatarColorIndex: 2,
+          online: false,
+        },
+      },
+      wordPlayers: {
+        жар: { org: true },
+      },
+    });
+
+    const standings = buildLiveStandingsFromSession(s);
+    expect(standings.map((row) => row.playerId).sort()).toEqual(['a', 'org']);
+  });
 });
