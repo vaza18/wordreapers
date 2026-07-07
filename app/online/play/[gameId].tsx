@@ -20,6 +20,10 @@ import { spacing, type ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useAutoPauseOnAppBackground } from '@/hooks/useAutoPauseOnAppBackground';
+import {
+  PLAY_WORD_FEEDBACK_DISMISS_MS,
+  usePlayWordFeedbackDismiss,
+} from '@/hooks/usePlayWordFeedback';
 import { usePlaySessionSubscriptions } from '@/hooks/usePlaySessionSubscriptions';
 import { usePlaySessionToasts } from '@/hooks/usePlaySessionToasts';
 import { useResultsRematchToast } from '@/hooks/useResultsRematchToast';
@@ -106,7 +110,6 @@ import { useProfileStore } from '@/store/profile-store';
 import { useSettingsStore } from '@/store/settings-store';
 
 const VALIDATION_DEBOUNCE_MS = 1000;
-const FEEDBACK_DISMISS_MS = 2200;
 
 const EMPTY_WORD_LIST_ENTRIES: never[] = [];
 const EMPTY_WORD_LIST_DISPLAYS: string[] = [];
@@ -602,18 +605,11 @@ export default function OnlinePlayScreen() {
   const hasOpponent = standings.length >= 2;
   const playRulesLabel = formatPlayRulesLabel(t, displaySession?.settings);
 
-  useEffect(() => {
-    if (!feedback) {
-      return;
-    }
-    const timer = setTimeout(() => {
-      setFeedback(null);
-      setFeedbackVariant('default');
-    }, FEEDBACK_DISMISS_MS);
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [feedback]);
+  const clearFeedback = useCallback(() => {
+    setFeedback(null);
+    setFeedbackVariant('default');
+  }, []);
+  usePlayWordFeedbackDismiss(feedback, feedbackVariant, clearFeedback);
 
   useEffect(() => {
     setOptimisticWords((prev) => {
@@ -948,12 +944,12 @@ export default function OnlinePlayScreen() {
           clearTimeout(debounceRef.current);
         }
         debounceRef.current = setTimeout(() => {
-          setFeedback(null);
-        }, FEEDBACK_DISMISS_MS);
+          clearFeedback();
+        }, PLAY_WORD_FEEDBACK_DISMISS_MS);
       }
       return false;
     });
-  }, [hasOnlineOpponentInRound, myUid, session, t]);
+  }, [clearFeedback, hasOnlineOpponentInRound, myUid, session, t]);
 
   const handleEndEarlyConfirm = () => {
     setShowEndEarlyConfirm(false);
