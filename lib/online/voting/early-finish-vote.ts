@@ -1,4 +1,5 @@
 import type { GameSession, SessionVote } from '../../firebase/types.js';
+import { assertActiveLivePlayerVoteEligibility } from '../invariants.js';
 import { displayPlayerName } from '../public-lobby/display-player-name.js';
 import { isActiveLivePlayer } from '../presence/live-round-membership.js';
 import { playerGenderForDisplay } from '../public-lobby/session-identity.js';
@@ -27,7 +28,11 @@ export function isEarlyFinishVoteRequired(
   if (playerId === proposerId) {
     return false;
   }
-  return isActiveLivePlayer(session, playerId);
+  const required = isActiveLivePlayer(session, playerId);
+  if (required) {
+    assertActiveLivePlayerVoteEligibility(session, playerId, proposerId);
+  }
+  return required;
 }
 
 /**

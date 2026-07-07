@@ -20,13 +20,13 @@ alwaysApply: false
 - **Opt-in rematch** — next round starts only for players who pressed «Грати ще» or joined `waiting` after rematch.
 - **Frozen round view** — players who did not opt in stay on their finished round UI; RTDB may already show the next round.
 - **Presence** — `online` / `hasLeft` / `liveRoundPlayerUids` drive lobby visibility and round membership.
-- **Mid-round join** — blind join into `playing`; `uniqueBonusEnabled` derived from current roster size.
+- **Mid-round join** — blind join into `playing`; `auto` x2 latches on at 3+ roster and never off mid-round; `off` never enables x2 for the round.
 
 ## After changing behavior
 
 1. Update the relevant table in `docs/online-multiplayer-rules.md`.
 2. Update `docs/firebase_schema.md` if schema or policies changed.
-3. Add or update a test in `tests/` (many existing tests cover edge cases: `bootstrap-rematch-waiting`, `live-round-membership`, `mask-results-for-viewer`, etc.).
+3. Add or update a test in `tests/` (many existing tests cover edge cases: `bootstrap-rematch-waiting`, `live-round-membership`, `mask-results-for-viewer`, etc.). For invariant changes, extend `tests/online-invariants.test.ts`.
 4. If UX changed materially, update `docs/wordreapers_screens.html`.
 5. Record non-trivial bug fixes in `docs/known-issues.md`.
 

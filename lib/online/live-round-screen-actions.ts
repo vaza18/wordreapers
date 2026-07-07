@@ -1,5 +1,6 @@
 import type { GameSession } from '../firebase/types.js';
 
+import { assertPresenceOfflineOnPriorRoundView } from './invariants.js';
 import {
   isActiveLivePlayer,
   isInLiveRound,
@@ -169,10 +170,13 @@ export function resolveResultsPresence(ctx: ResultsPresenceContext): boolean {
   }
   const liveRound = liveSession.baseWordRound ?? 0;
   if (frozenBaseWordRound != null && frozenBaseWordRound < liveRound) {
+    assertPresenceOfflineOnPriorRoundView(frozenBaseWordRound, liveRound, true);
     return true;
   }
   if (liveSession.status === 'playing') {
-    return false;
+    const shouldMark = false;
+    assertPresenceOfflineOnPriorRoundView(frozenBaseWordRound, liveRound, shouldMark);
+    return shouldMark;
   }
   if (liveSession.status !== 'finished') {
     return false;
@@ -180,5 +184,7 @@ export function resolveResultsPresence(ctx: ResultsPresenceContext): boolean {
   if (frozenBaseWordRound == null) {
     return true;
   }
-  return liveRound <= frozenBaseWordRound;
+  const shouldMark = liveRound <= frozenBaseWordRound;
+  assertPresenceOfflineOnPriorRoundView(frozenBaseWordRound, liveRound, shouldMark);
+  return shouldMark;
 }
