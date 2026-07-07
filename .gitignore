@@ -20,7 +20,6 @@ lib/legal/bundled-legal.ts
 .firebaserc
 
 # Internal docs (not for public repo)
-docs/online-multiplayer-rules.md
 docs/slovozbyrachy_tz.md
 docs/wordreapers_plan.md
 docs/wordreapers_screens.html
