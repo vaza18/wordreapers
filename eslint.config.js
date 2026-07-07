@@ -16,7 +16,7 @@ const appFiles = [
   'store/**/*.ts',
   'i18n/**/*.ts',
 ];
-const scriptFiles = ['scripts/**/*.ts', 'tests/**/*.ts', 'vitest.config.ts'];
+const scriptFiles = ['scripts/**/*.ts', 'tests/**/*.{ts,tsx}', 'vitest.config.ts'];
 
 export default defineConfig(
   {

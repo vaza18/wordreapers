@@ -1,0 +1,17 @@
+---
+description: Before changing online or Firebase behavior, state Expected behavior / Invariants / Affected areas
+alwaysApply: true
+---
+
+# Risky-zone pre-flight (before editing code)
+
+When the task changes **behavior** in `lib/online/**`, `firebase/**`, or `functions/src/**`, state this block in your reply **before** the first code edit (use [`docs/task-template.md`](../../docs/task-template.md)):
+
+1. **Expected behavior** — user-visible outcome.
+2. **Invariants (must NOT change)** — copy from `docs/online-multiplayer-rules.md` or `docs/decisions.md` for the affected area.
+3. **Affected areas** — files/modules you will touch.
+4. **Regression context** — search `docs/known-issues.md` for similar past bugs; mention if found.
+
+Skip the block only for trivial edits with no behavior change (comments, formatting, renames).
+
+After the change: update tests (`tests/online-invariants.test.ts` when invariants shift), run `npm run ci:check`, and record non-trivial fixes in `docs/known-issues.md`.

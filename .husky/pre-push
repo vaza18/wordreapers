@@ -1,1 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+# Run RTDB rules tests only when backend paths changed in commits being pushed.
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
+    continue
+  fi
+  if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+    range="$local_sha"
+  else
+    range="$remote_sha..$local_sha"
+  fi
+  if git diff --name-only "$range" | grep -qE '^(firebase/|functions/src/)'; then
+    echo "→ Firebase backend changed in push range — running test:rules"
+    npm run test:rules
+    break
+  fi
+done
+
 npm run ci:check

@@ -8,7 +8,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { formatTimerMs } from '@/lib/game/timer-label';
-import { ADD_TIME_MINUTE_OPTIONS } from '@/lib/online/add-time-vote';
+import { ADD_TIME_MINUTE_OPTIONS } from '@/lib/online/voting/add-time-vote';
 
 interface AddTimeModalProps {
   visible: boolean;

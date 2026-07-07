@@ -3,12 +3,12 @@ import { didPlayerWinOnlineRound } from '../profile/player-stats.js';
 import { incrementCloudPlayerStatsIfRegistered } from '../firebase/user-stats-service.js';
 import { usePlayerStatsStore } from '@/store/player-stats-store';
 
-import { clearActiveRoundCacheForSession } from './cache-active-round.js';
+import { clearActiveRoundCacheForSession } from './session/cache-active-round.js';
 import {
   markOnlineRoundProcessed,
   onlineRoundKey,
   wasOnlineRoundProcessed,
-} from './processed-online-rounds.js';
+} from './session/processed-online-rounds.js';
 
 /**
  * Record win/loss for this device once per online round (local + cloud if registered).

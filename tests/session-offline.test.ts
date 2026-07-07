@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { GameSession } from '../lib/firebase/types.js';
-import { allSessionPlayersOffline } from '../lib/online/session-offline.js';
+import { allSessionPlayersOffline } from '../lib/online/presence/session-offline.js';
 
 function session(players: GameSession['players']): GameSession {
   return {

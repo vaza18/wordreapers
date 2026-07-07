@@ -1,5 +1,5 @@
 import { currentBaseWordPickerUid } from './base-word-picker.js';
-import { isActiveLivePlayer } from './live-round-membership.js';
+import { isActiveLivePlayer } from './presence/live-round-membership.js';
 import type { GameSession } from '../firebase/types.js';
 
 export interface PostJoinRoute {
@@ -20,6 +20,7 @@ export function resolvePostJoinRoute(
   uid: string,
   gameId: string,
 ): PostJoinRoute {
+  // INVARIANT (see docs/known-issues.md — 2026-06 Passive roster member routed to play): play only for active live-round members.
   if (session.status === 'playing') {
     if (isActiveLivePlayer(session, uid)) {
       return { pathname: '/online/play/[gameId]', params: { gameId } };

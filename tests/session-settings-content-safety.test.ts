@@ -65,4 +65,47 @@ describe('resolveGameSessionSettingsForSession content safety', () => {
     );
     expect(resolved.uniqueBonusEnabled).toBe(true);
   });
+
+  it('keeps unique bonus latched when roster drops below 3 during playing', () => {
+    const resolved = resolveGameSessionSettingsForSession(
+      session({
+        status: 'playing',
+        settings: {
+          durationSeconds: 600,
+          uniqueBonusEnabled: true,
+          uniqueBonusMode: 'auto',
+          language: 'uk-uk',
+          allowProperNouns: false,
+          allowSlang: false,
+        },
+        players: {
+          org: { name: 'Org', wordCount: 0, score: 0 },
+          p1: { name: 'One', wordCount: 0, score: 0 },
+        },
+      }),
+    );
+    expect(resolved.uniqueBonusEnabled).toBe(true);
+  });
+
+  it('never enables unique bonus mid-round when mode is off', () => {
+    const resolved = resolveGameSessionSettingsForSession(
+      session({
+        status: 'playing',
+        settings: {
+          durationSeconds: 600,
+          uniqueBonusEnabled: false,
+          uniqueBonusMode: 'off',
+          language: 'uk-uk',
+          allowProperNouns: false,
+          allowSlang: false,
+        },
+        players: {
+          org: { name: 'Org', wordCount: 0, score: 0 },
+          p1: { name: 'One', wordCount: 0, score: 0 },
+          joiner: { name: 'Late', wordCount: 0, score: 0 },
+        },
+      }),
+    );
+    expect(resolved.uniqueBonusEnabled).toBe(false);
+  });
 });

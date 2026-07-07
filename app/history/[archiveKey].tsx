@@ -13,9 +13,12 @@ import { useOnlineViewerUid } from '@/hooks/useOnlineViewerUid';
 import { isViewerWinner } from '@/lib/game/is-viewer-winner';
 import type { GameSession } from '@/lib/firebase/types';
 import { stackHeaderWithBackAndSettings } from '@/lib/navigation/stack-header-options';
-import { loadFrozenFinishedRoundFromArchive } from '@/lib/online/frozen-finished-round';
+import { loadFrozenFinishedRoundFromArchive } from '@/lib/online/session/frozen-finished-round';
 import { buildOnlineResultsView } from '@/lib/online/online-results-data';
-import { getFinishedRoundArchive, parseArchiveRouteKey } from '@/lib/online/online-session-archive';
+import {
+  getFinishedRoundArchive,
+  parseArchiveRouteKey,
+} from '@/lib/online/session/online-session-archive';
 import { useResultsRoundLexicon } from '@/hooks/useResultsRoundLexicon';
 import type { PlayableLexiconSnapshot } from '@/lib/dictionary/round-playable-lexicon';
 

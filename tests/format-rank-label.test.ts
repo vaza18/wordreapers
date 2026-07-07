@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { formatRankWithMedal } from '@/lib/game/format-rank-label';
 import { roomStandingDisplayName } from '@/lib/online/room-standing-display-name';
 import { computeRoomHistoryAggregate } from '@/lib/online/room-history-aggregate';
-import type { FinishedRoundArchive } from '@/lib/online/online-session-archive';
+import type { FinishedRoundArchive } from '@/lib/online/session/online-session-archive';
 
 describe('formatRankWithMedal', () => {
   it('prefixes podium emoji for ranks 1–3', () => {

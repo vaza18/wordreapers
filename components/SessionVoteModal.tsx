@@ -5,13 +5,13 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { VoteParticipantModal } from '@/components/VoteParticipantCard';
 import { useServerNowWhen } from '@/hooks/useServerNow';
 import type { AddTimeVote, GameSession, SessionVote } from '@/lib/firebase/types';
-import { viewerNeedsAddTimeVote } from '@/lib/online/add-time-vote';
+import { viewerNeedsAddTimeVote } from '@/lib/online/voting/add-time-vote';
 import {
   buildEarlyFinishParticipantRows,
   EARLY_FINISH_VOTE_TIMEOUT_MS,
   viewerNeedsEarlyFinishVote,
-} from '@/lib/online/early-finish-vote';
-import { viewerNeedsPauseVote } from '@/lib/online/pause-vote';
+} from '@/lib/online/voting/early-finish-vote';
+import { viewerNeedsPauseVote } from '@/lib/online/voting/pause-vote';
 import { voteProposerName } from '@/lib/firebase/session-votes-service';
 import { formatTimerMs } from '@/lib/game/timer-label';
 

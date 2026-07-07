@@ -56,4 +56,29 @@ describe('resolveLobbyScreenActions auto-join', () => {
     );
     expect(shouldLobbyAutoJoinLiveRound(session, 'p2')).toBe(true);
   });
+
+  it('auto-joins rematch lobby organizer when live round started without their uid', () => {
+    const session = playingSession(
+      {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        p1: { name: 'One', wordCount: 0, score: 0, online: true },
+        p3: { name: 'Three', wordCount: 8, score: 8, online: false },
+      },
+      ['p1'],
+    );
+    const actions = resolveLobbyScreenActions({ session, myUid: 'org' });
+    expect(actions.shouldNavigateToPlay).toBe(false);
+    expect(actions.shouldAutoJoinLiveRound).toBe(true);
+  });
+
+  it('navigates active organizer already in liveRoundPlayerUids', () => {
+    const session = playingSession(
+      {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        p1: { name: 'One', wordCount: 0, score: 0, online: true },
+      },
+      ['org', 'p1'],
+    );
+    expect(shouldLobbyAutoJoinLiveRound(session, 'org')).toBe(true);
+  });
 });

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import type { GameSession } from '../lib/firebase/types.js';
-import { isLiveParticipant, liveParticipantIds } from '../lib/online/live-round-membership.js';
+import {
+  isLiveParticipant,
+  liveParticipantIds,
+} from '../lib/online/presence/live-round-membership.js';
 
 function playingSession(
   players: GameSession['players'],

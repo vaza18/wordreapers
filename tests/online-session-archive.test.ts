@@ -36,7 +36,7 @@ import {
   parseArchiveRouteKey,
   playingRoundSnapshotFromSession,
   saveFinishedRoundArchive,
-} from '../lib/online/online-session-archive.js';
+} from '../lib/online/session/online-session-archive.js';
 
 function session(
   status: GameSession['status'],

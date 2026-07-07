@@ -5,10 +5,10 @@ import { EarlyFinishVoteModal } from '@/components/EarlyFinishVoteModal';
 import { PauseVoteModal } from '@/components/PauseVoteModal';
 import type { GameSession, SessionVote } from '@/lib/firebase/types';
 import type { AddTimeVote } from '@/lib/firebase/types';
-import { viewerNeedsAddTimeVote } from '@/lib/online/add-time-vote';
-import { viewerNeedsEarlyFinishVote } from '@/lib/online/early-finish-vote';
-import { viewerNeedsPauseVote } from '@/lib/online/pause-vote';
-import { shouldShowInvitePlayVoteBanner } from '@/lib/online/play-vote-banner';
+import { viewerNeedsAddTimeVote } from '@/lib/online/voting/add-time-vote';
+import { viewerNeedsEarlyFinishVote } from '@/lib/online/voting/early-finish-vote';
+import { viewerNeedsPauseVote } from '@/lib/online/voting/pause-vote';
+import { shouldShowInvitePlayVoteBanner } from '@/lib/online/voting/play-vote-banner';
 
 export type PlayVoteLayerProps = {
   layout: 'modal' | 'banner';

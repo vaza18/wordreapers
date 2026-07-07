@@ -27,7 +27,7 @@ function activePlayerCount(players: Record<string, GameSessionPlayer> | undefine
 }
 
 /** Whether a browse index row should be removed. */
-function shouldPurgeIndexRow(
+export function shouldPurgeIndexRow(
   entry: PublicLobbyEntry,
   session: GameSession | null,
   now: number,
@@ -77,8 +77,10 @@ export interface PurgePublicLobbiesResult {
 /**
  * Remove stale public lobby index rows; reconcile counts per language shard.
  */
-export async function purgeStalePublicLobbies(now = Date.now()): Promise<PurgePublicLobbiesResult> {
-  const db = admin.database();
+export async function purgeStalePublicLobbies(
+  now = Date.now(),
+  db: admin.database.Database = admin.database(),
+): Promise<PurgePublicLobbiesResult> {
   const rootSnap = await db.ref('public_lobbies').once('value');
   if (!rootSnap.exists()) {
     return { scanned: 0, purged: 0 };

@@ -10,7 +10,7 @@ import {
 import { subscribePlayerWords, type StoredPlayerWord } from '@/lib/firebase/player-words-service';
 import { subscribeSessionWordMaps } from '@/lib/firebase/session-word-maps-service';
 import type { SessionWordMaps } from '@/lib/firebase/types';
-import { mergePlaySessionSubscription } from '@/lib/online/play-session-bootstrap';
+import { mergePlaySessionSubscription } from '@/lib/online/session/play-session-bootstrap';
 
 type UsePlaySessionSubscriptionsParams = {
   gameId: string;

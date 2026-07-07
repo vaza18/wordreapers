@@ -1,0 +1,27 @@
+---
+description: Dictionary and word validation — cross-check test cases and run dict:validate after logic changes
+globs: lib/dictionary/**,scripts/dictionary/**
+alwaysApply: false
+---
+
+# Dictionary and word validation
+
+Word validation is core gameplay. Regressions here break player trust.
+
+## Before changing code
+
+1. Read [`docs/validation_test_cases.md`](../../docs/validation_test_cases.md) for expected accept/reject behavior.
+2. Understand normalization in `lib/dictionary/normalize.ts` and validation in `lib/dictionary/validate-word.ts`.
+
+## After changing logic
+
+1. Add or update tests in `tests/dictionary.test.ts` or related files.
+2. Run dictionary regression cases (also run by `npm run ci:check`):
+
+```bash
+npm run dict:validate
+```
+
+3. If build pipeline or artifact layout changes, update `scripts/dictionary/README.md` and [`assets/README.md`](../../assets/README.md).
+
+Do not change `assets/generated/dictionaries/` by hand — use `npm run dict:build` / `dict:all`.

@@ -24,7 +24,7 @@ import { subscribeImmersiveStatusBar } from '@/lib/system-ui';
 enableAccessibleTypography();
 import { useRoundFinishedNotificationRouting } from '@/hooks/useRoundFinishedNotificationRouting';
 import { useOnlineSyncCoordinator } from '@/hooks/useOnlineSyncCoordinator';
-import { purgeStaleActiveRoundCaches } from '@/lib/online/cache-active-round';
+import { purgeStaleActiveRoundCaches } from '@/lib/online/session/cache-active-round';
 import { ensureDictionaryDiskCache } from '@/services/dictionary-service';
 import { usePlayerStatsStore } from '@/store/player-stats-store';
 import { useProfileStore } from '@/store/profile-store';

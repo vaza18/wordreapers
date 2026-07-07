@@ -100,4 +100,28 @@ describe('buildOnlineResultsView', () => {
     expect(view.playerRankGroups[0]?.players[0]?.playerName).toBe('Гравець 1');
     expect(view.globalWords[0]?.authors[0]?.playerName).toBe('Гравець 1');
   });
+
+  it('builds winner headline when word maps exist on a finished session', () => {
+    const byPlayer = new Map([
+      ['p1', new Map([['рот', storedWord('РОТ')]])],
+      ['p2', new Map([['тор', { ...storedWord('ТОР'), at: 20 }]])],
+    ]);
+
+    const view = buildOnlineResultsView(
+      t,
+      {
+        ...session(),
+        wordPlayers: {
+          рот: { p1: true },
+          тор: { p2: true },
+        },
+      },
+      byPlayer,
+    );
+
+    expect(view.standings).toHaveLength(2);
+    expect(view.isSolo).toBe(false);
+    expect(view.headline).not.toBe('game.resultsTitle');
+    expect(view.playerRankGroups[0]?.players[0]?.playerName).toBe('Аня');
+  });
 });

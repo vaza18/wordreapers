@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { shouldShowInvitePlayVoteBanner } from '@/lib/online/play-vote-banner';
+import { shouldShowInvitePlayVoteBanner } from '@/lib/online/voting/play-vote-banner';
 
 describe('shouldShowInvitePlayVoteBanner', () => {
   it('shows while the viewer still needs to vote', () => {

@@ -4,10 +4,13 @@ import type { GameSession, SessionVote } from '../lib/firebase/types.js';
 import {
   buildEarlyFinishParticipantRows,
   earlyFinishRequiredVoterIds,
-} from '../lib/online/early-finish-vote.js';
-import { hasOnlineOpponent } from '../lib/online/session-presence.js';
-import { buildPlayersPatchForRoundStart } from '../lib/online/players-patch-for-round-start.js';
-import { isLiveParticipant, waitingLobbyOptInUids } from '../lib/online/live-round-membership.js';
+} from '../lib/online/voting/early-finish-vote.js';
+import { hasOnlineOpponent } from '../lib/online/presence/session-presence.js';
+import { buildPlayersPatchForRoundStart } from '../lib/online/presence/players-patch-for-round-start.js';
+import {
+  isLiveParticipant,
+  waitingLobbyOptInUids,
+} from '../lib/online/presence/live-round-membership.js';
 import {
   resolveLobbyScreenActions,
   resolvePlayScreenActions,
@@ -41,7 +44,7 @@ function rematchWaitingLobby(): GameSession {
 }
 
 function applyRoundStartPatch(session: GameSession): GameSession {
-  const patch = buildPlayersPatchForRoundStart(session);
+  const patch = buildPlayersPatchForRoundStart(session, 'p1');
   const players = { ...session.players };
   for (const [uid, fields] of Object.entries(patch)) {
     players[uid] = { ...players[uid], ...fields };
@@ -69,10 +72,9 @@ describe('round two early-finish scenario (3 players, p3 skips rematch)', () => 
   const playing = applyRoundStartPatch(waiting);
 
   it('clears stale counters for non-participant at round start', () => {
-    expect(buildPlayersPatchForRoundStart(waiting).p3).toEqual({
+    expect(buildPlayersPatchForRoundStart(waiting, 'p1').p3).toEqual({
       score: 0,
       wordCount: 0,
-      online: false,
     });
     expect(playing.players.p3).toMatchObject({ score: 0, wordCount: 0, online: false });
   });

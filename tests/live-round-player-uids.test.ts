@@ -6,7 +6,7 @@ import {
   isActiveLivePlayer,
   isInLiveRound,
   waitingLobbyOptInUids,
-} from '../lib/online/live-round-membership.js';
+} from '../lib/online/presence/live-round-membership.js';
 
 function playingSession(
   players: GameSession['players'],

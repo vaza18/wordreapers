@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { loadFrozenRoundWithRetry } from '../lib/online/load-frozen-round-with-retry.js';
+import { loadFrozenRoundWithRetry } from '../lib/online/session/load-frozen-round-with-retry.js';
 
 describe('loadFrozenRoundWithRetry', () => {
   it('returns the first successful snapshot', async () => {

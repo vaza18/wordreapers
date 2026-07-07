@@ -1,4 +1,4 @@
-import type { FinishedRoundArchive } from '@/lib/online/online-session-archive';
+import type { FinishedRoundArchive } from '@/lib/online/session/online-session-archive';
 
 /** Total accepted words for one player across locally archived online rounds. */
 export function sumArchivedWordCountForPlayer(

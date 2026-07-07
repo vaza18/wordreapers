@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { playerForRoundStart } from '../lib/online/player-for-round-start.js';
+import { playerForRoundStart } from '../lib/online/presence/player-for-round-start.js';
 
 describe('playerForRoundStart', () => {
   it('resets scores and clears hasLeft without forcing online', () => {

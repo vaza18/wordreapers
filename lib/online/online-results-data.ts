@@ -6,7 +6,7 @@ import { createOnlineResultsDirectory } from '../game/results-directory.js';
 import { formatResultsHeadline } from '../game/results-headline.js';
 import { buildGlobalResultWords, buildPlayerResultRankGroups } from '../game/results-view.js';
 import { computeRoundDurationSeconds } from '../game/round-duration.js';
-import { buildLiveStandingsFromSession } from '../online/live-standings.js';
+import { buildLiveStandingsFromSession } from './live-standings.js';
 import { isSoloStandings } from '../game/solo-round.js';
 import { buildStandingsFromSession, type PlayerStandings } from '../game/scoring.js';
 

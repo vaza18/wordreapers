@@ -179,7 +179,9 @@ describe('joinGameSession blind invite join', () => {
     const sessionUpdate = updateMock.mock.calls.find(
       ([, payload]) => payload && typeof payload === 'object' && 'baseWordPickerOrder' in payload,
     );
-    expect(sessionUpdate?.[1]).not.toHaveProperty('settings');
+    expect(sessionUpdate?.[1]).toMatchObject({
+      settings: expect.objectContaining({ uniqueBonusEnabled: true, uniqueBonusMode: 'auto' }),
+    });
     expect(result.players.joiner).toBeDefined();
   });
 });

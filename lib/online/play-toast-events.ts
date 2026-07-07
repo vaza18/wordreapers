@@ -1,6 +1,5 @@
 import type { PlayerGender } from '../game/grammar.js';
-import { assignDisplayRanks } from '../game/scoring.js';
-import { resolveGameSessionSettingsForSession } from '../firebase/session-settings.js';
+import { assignDisplayRanks, compareStandings, type PlayerStandings } from '../game/scoring.js';
 import type { GameSession } from '../firebase/types.js';
 import { buildLiveStandingsFromSession } from './live-standings.js';
 import {
@@ -8,7 +7,7 @@ import {
   isInLiveRound,
   liveParticipantIds,
   expectedLiveRoundOpponentIds,
-} from './live-round-membership.js';
+} from './presence/live-round-membership.js';
 
 export type PlayToastEvent =
   | {
@@ -62,6 +61,7 @@ function liveRoundUidList(session: GameSession): string[] {
   return session.liveRoundPlayerUids ?? [];
 }
 
+// INVARIANT (see docs/known-issues.md — 2026-07 Spurious “player joined” toasts): filter lobby sync vs real mid-round joins.
 /**
  * Toast only genuine mid-round joins and rejoins — not lobby participants syncing presence at round start.
  */
@@ -107,6 +107,7 @@ export function shouldToastRosterPlayerJoined(
 
 function detectRosterEvents(prev: GameSession, curr: GameSession, myUid: string): PlayToastEvent[] {
   const events: PlayToastEvent[] = [];
+  const prevRanks = assignDisplayRanks(buildLiveStandingsFromSession(prev));
   const currRanks = assignDisplayRanks(buildLiveStandingsFromSession(curr));
 
   for (const [playerId, player] of Object.entries(curr.players)) {
@@ -123,7 +124,8 @@ function detectRosterEvents(prev: GameSession, curr: GameSession, myUid: string)
         playerId,
         name: player.name,
         gender: playerGender(curr, playerId),
-        rank: currRanks.get(playerId) ?? Object.keys(curr.players).length,
+        rank:
+          prevRanks.get(playerId) ?? currRanks.get(playerId) ?? Object.keys(curr.players).length,
       });
       continue;
     }
@@ -179,14 +181,10 @@ function detectRosterEvents(prev: GameSession, curr: GameSession, myUid: string)
   return events;
 }
 
-/** Same totals as the live standings header (word maps when present). */
-function rankMetric(session: GameSession, playerId: string): number {
-  const useScoreRanking = resolveGameSessionSettingsForSession(session).uniqueBonusEnabled;
+/** Same row as the live standings header (word maps when present). */
+function standingsRow(session: GameSession, playerId: string): PlayerStandings {
   const row = buildLiveStandingsFromSession(session).find((entry) => entry.playerId === playerId);
-  if (!row) {
-    return 0;
-  }
-  return useScoreRanking ? row.score : row.wordCount;
+  return row ?? { playerId, score: 0, wordCount: 0, uniqueCount: 0 };
 }
 
 function activeCompetitorIds(session: GameSession): string[] {
@@ -195,11 +193,13 @@ function activeCompetitorIds(session: GameSession): string[] {
 
 type RelativeStanding = 'ahead' | 'behind' | 'tied';
 
-function relativeStanding(myMetric: number, theirMetric: number): RelativeStanding {
-  if (myMetric > theirMetric) {
+/** Pairwise order using the same rules as {@link compareStandings} / display rank. */
+function relativeStanding(myRow: PlayerStandings, theirRow: PlayerStandings): RelativeStanding {
+  const cmp = compareStandings(myRow, theirRow);
+  if (cmp < 0) {
     return 'ahead';
   }
-  if (myMetric < theirMetric) {
+  if (cmp > 0) {
     return 'behind';
   }
   return 'tied';
@@ -222,8 +222,8 @@ export function detectRankEvents(
       continue;
     }
 
-    const prevRel = relativeStanding(rankMetric(prev, myUid), rankMetric(prev, playerId));
-    const currRel = relativeStanding(rankMetric(curr, myUid), rankMetric(curr, playerId));
+    const prevRel = relativeStanding(standingsRow(prev, myUid), standingsRow(prev, playerId));
+    const currRel = relativeStanding(standingsRow(curr, myUid), standingsRow(curr, playerId));
 
     if (prevRel === currRel || currRel === 'tied') {
       continue;

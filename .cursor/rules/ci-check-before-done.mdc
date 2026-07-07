@@ -1,0 +1,30 @@
+---
+description: Run npm run ci:check before finishing work or committing
+alwaysApply: true
+---
+
+# CI quality gate (pre-commit hook)
+
+The Husky pre-commit hook runs `npm run ci:check` (`scripts/ci-check.sh`). Before claiming work is complete, creating a commit, or opening a PR, run the same checks locally and fix failures.
+
+## Required command
+
+```bash
+npm run ci:check
+```
+
+## What it runs (in order)
+
+1. `npm run lint` — ESLint on the whole repo
+2. `npm run format:check` — Prettier (no write; must already match)
+3. `npm run typecheck` — `tsc --noEmit` (app + node tsconfigs)
+4. `npm run test:coverage` — Vitest unit tests with coverage gate (includes `pretest` → `legal:bundle`)
+
+Dictionary fetch/build runs on `npm install` / `npm ci` when artifacts are missing (`postinstall` → `scripts/ensure-dictionary.mjs`). GitHub Actions additionally runs `npm run dict:validate` after install.
+
+## Workflow
+
+- After substantive code edits, run `npm run ci:check` before handing off.
+- If Prettier fails: `npx prettier --write <files>` or `npm run format`, then re-run `ci:check`.
+- If ESLint fails: fix issues or `npm run lint:fix` where safe, then re-run.
+- Do not skip hooks or commit with known lint/format/type/test failures.

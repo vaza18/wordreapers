@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ActiveRoundCacheEntry } from '../lib/online/active-round-cache.js';
-import { canRestorePlayingRoundFromCache } from '../lib/online/active-round-cache.js';
+import type { ActiveRoundCacheEntry } from '../lib/online/session/active-round-cache.js';
+import { canRestorePlayingRoundFromCache } from '../lib/online/session/active-round-cache.js';
 import { parseRoundFinishedNotificationData } from '../lib/online/round-finished-notification-data.js';
 
 describe('canRestorePlayingRoundFromCache', () => {

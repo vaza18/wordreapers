@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { GameSession } from '../lib/firebase/types.js';
-import { detectRematchToastEvent } from '../lib/online/rematch-toast-events.js';
+import { detectRematchToastEvent } from '../lib/online/rematch/rematch-toast-events.js';
 
 function session(
   status: GameSession['status'],

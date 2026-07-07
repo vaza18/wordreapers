@@ -18,8 +18,10 @@ export interface PurgeResult {
  * Delete game_sessions + session_word_maps + player_words when purgeAfterAt has passed.
  * Admin SDK bypasses RTDB security rules.
  */
-export async function purgeExpiredRtdbSessions(now = Date.now()): Promise<PurgeResult> {
-  const db = admin.database();
+export async function purgeExpiredRtdbSessions(
+  now = Date.now(),
+  db: admin.database.Database = admin.database(),
+): Promise<PurgeResult> {
   const sessionsSnap = await db
     .ref('game_sessions')
     .orderByChild('purgeAfterAt')

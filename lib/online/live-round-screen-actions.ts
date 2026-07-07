@@ -1,8 +1,16 @@
 import type { GameSession } from '../firebase/types.js';
 
-import { isActiveLivePlayer, isInLiveRound, isLiveParticipant } from './live-round-membership.js';
-import { isRematchWaitingLobby, isRematchWaitingLobbyOptedIn } from './rematch-waiting-lobby.js';
-import { isReviewingPriorRoundOnPlayScreen } from './is-reviewing-prior-round-on-play.js';
+import { assertPresenceOfflineOnPriorRoundView } from './invariants.js';
+import {
+  isActiveLivePlayer,
+  isInLiveRound,
+  isLiveParticipant,
+} from './presence/live-round-membership.js';
+import {
+  isRematchWaitingLobby,
+  isRematchWaitingLobbyOptedIn,
+} from './rematch/rematch-waiting-lobby.js';
+import { isReviewingPriorRoundOnPlayScreen } from './session/is-reviewing-prior-round-on-play.js';
 
 export type PlayScreenContext = {
   session: Pick<GameSession, 'status' | 'baseWordRound' | 'liveRoundPlayerUids' | 'players'> & {
@@ -47,6 +55,11 @@ function isReviewingPriorRound(
   liveBaseWordRound: number | null | undefined,
 ): boolean {
   return isReviewingPriorRoundOnPlayScreen(roundEnded, frozenBaseWordRound, liveBaseWordRound);
+}
+
+/** Live round committed on RTDB (`playing` or timer already running). */
+export function isLiveRoundStarted(session: Pick<GameSession, 'status' | 'timerEndsAt'>): boolean {
+  return session.status === 'playing' || session.timerEndsAt != null;
 }
 
 /** Resolve play-screen presence, rejoin, and navigation guards in one place. */
@@ -114,7 +127,7 @@ export function resolvePlayScreenActions(ctx: PlayScreenContext): PlayScreenActi
 export function resolveLobbyScreenActions(ctx: LobbyScreenContext): LobbyScreenActions {
   const { session, myUid, justOptedIn } = ctx;
 
-  if (session.status === 'playing') {
+  if (isLiveRoundStarted(session)) {
     if (isActiveLivePlayer(session, myUid)) {
       return {
         shouldNavigateToPlay: true,
@@ -124,9 +137,16 @@ export function resolveLobbyScreenActions(ctx: LobbyScreenContext): LobbyScreenA
       };
     }
     const player = session.players[myUid];
+    const missedLiveRosterWhileOptedIn =
+      (session.baseWordRound ?? 0) > 0 &&
+      player != null &&
+      player.hasLeft !== true &&
+      (isRematchWaitingLobbyOptedIn(session, myUid) || session.organizerId === myUid) &&
+      !isInLiveRound(session, myUid);
     const shouldAutoJoinLiveRound =
-      isLiveParticipant(session, myUid) &&
-      Boolean(player && (player.online !== true || player.hasLeft === true));
+      (isLiveParticipant(session, myUid) &&
+        Boolean(player && (player.online !== true || player.hasLeft === true))) ||
+      missedLiveRosterWhileOptedIn;
     return {
       shouldNavigateToPlay: false,
       shouldAutoJoinLiveRound,
@@ -162,10 +182,13 @@ export function resolveResultsPresence(ctx: ResultsPresenceContext): boolean {
   }
   const liveRound = liveSession.baseWordRound ?? 0;
   if (frozenBaseWordRound != null && frozenBaseWordRound < liveRound) {
+    assertPresenceOfflineOnPriorRoundView(frozenBaseWordRound, liveRound, true);
     return true;
   }
   if (liveSession.status === 'playing') {
-    return false;
+    const shouldMark = false;
+    assertPresenceOfflineOnPriorRoundView(frozenBaseWordRound, liveRound, shouldMark);
+    return shouldMark;
   }
   if (liveSession.status !== 'finished') {
     return false;
@@ -173,5 +196,7 @@ export function resolveResultsPresence(ctx: ResultsPresenceContext): boolean {
   if (frozenBaseWordRound == null) {
     return true;
   }
-  return liveRound <= frozenBaseWordRound;
+  const shouldMark = liveRound <= frozenBaseWordRound;
+  assertPresenceOfflineOnPriorRoundView(frozenBaseWordRound, liveRound, shouldMark);
+  return shouldMark;
 }

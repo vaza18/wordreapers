@@ -5,7 +5,7 @@ import {
   normalizeProfilePlayerName,
   type PlayerStats,
 } from '@/lib/profile/player-stats';
-import type { FinishedRoundArchive } from '@/lib/online/online-session-archive';
+import type { FinishedRoundArchive } from '@/lib/online/session/online-session-archive';
 
 /** Profile + Firebase uid stats derived from locally archived finished rounds. */
 export function computeArchivedPlayerStats(

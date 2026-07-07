@@ -10,7 +10,7 @@ import {
   earlyFinishVoteExpired,
   shouldFinishFromEarlyVote,
   viewerNeedsEarlyFinishVote,
-} from '../lib/online/early-finish-vote.js';
+} from '../lib/online/voting/early-finish-vote.js';
 
 function session(players: GameSession['players']): GameSession {
   return {

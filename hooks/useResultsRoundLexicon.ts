@@ -4,7 +4,7 @@ import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
 import type { PlayableLexiconSnapshot } from '@/lib/dictionary/round-playable-lexicon';
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import type { GameSession } from '@/lib/firebase/types';
-import { getFinishedRoundArchive } from '@/lib/online/online-session-archive';
+import { getFinishedRoundArchive } from '@/lib/online/session/online-session-archive';
 
 export type UseResultsRoundLexiconOptions = {
   /** Pre-loaded archive snapshot (history screen). */

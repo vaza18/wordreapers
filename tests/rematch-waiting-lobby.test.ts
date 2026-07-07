@@ -5,7 +5,7 @@ import {
   isLobbyVisiblePlayer,
   isRematchWaitingLobby,
   isRematchWaitingLobbyOptedIn,
-} from '../lib/online/rematch-waiting-lobby.js';
+} from '../lib/online/rematch/rematch-waiting-lobby.js';
 
 function session(overrides: Partial<GameSession> = {}): GameSession {
   return {
@@ -79,5 +79,11 @@ describe('isLobbyVisiblePlayer', () => {
     const s = session({ resultsExitedBy: { p2: true } });
     expect(isRematchWaitingLobbyOptedIn(s, 'p2')).toBe(true);
     expect(isLobbyVisiblePlayer(s, 'p2')).toBe(true);
+  });
+
+  it('returns false for unknown roster uids', () => {
+    const s = session();
+    expect(isRematchWaitingLobbyOptedIn(s, 'missing')).toBe(false);
+    expect(isLobbyVisiblePlayer(s, 'missing')).toBe(false);
   });
 });

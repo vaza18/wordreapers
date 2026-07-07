@@ -18,12 +18,16 @@ import {
   resetFirebaseRtdbMocks,
   rtdbSnapshot,
 } from './helpers/mock-firebase-rtdb.js';
-import { waitingSession } from './helpers/game-session-fixtures.js';
+import { waitingSession, PUBLIC_LOBBY_SESSION_SETTINGS } from './helpers/game-session-fixtures.js';
 import {
+  activePublicLobbyPlayerCount,
   setRoomPrivate,
   setRoomPublic,
   syncPublicLobbyPlayerCount,
   fetchPublicLobbyCount,
+  fetchPublicLobbyPage,
+  reconcilePublicLobbyAfterRosterChange,
+  unpublishPublicLobby,
 } from '../lib/firebase/public-lobby-service.js';
 
 const {
@@ -140,5 +144,107 @@ describe('fetchPublicLobbyCount', () => {
   it('returns null for invalid counter values', async () => {
     getMock.mockResolvedValueOnce(rtdbSnapshot('bad'));
     await expect(fetchPublicLobbyCount('uk-uk')).resolves.toBeNull();
+  });
+});
+
+describe('activePublicLobbyPlayerCount', () => {
+  it('counts only active roster members', () => {
+    expect(
+      activePublicLobbyPlayerCount({
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        guest: { name: 'Guest', wordCount: 0, score: 0, online: false, hasLeft: true },
+      }),
+    ).toBe(1);
+  });
+});
+
+describe('unpublishPublicLobby', () => {
+  beforeEach(() => {
+    resetFirebaseRtdbMocks();
+    removeMock.mockResolvedValue(undefined);
+    updateMock.mockResolvedValue(undefined);
+  });
+
+  it('removes public lobby index row for organizer', async () => {
+    getMock.mockResolvedValueOnce(
+      rtdbSnapshot(
+        waitingSession({
+          isPublic: true,
+          players: {
+            org: { name: 'Org', wordCount: 0, score: 0, online: true },
+          },
+        }),
+      ),
+    );
+
+    await unpublishPublicLobby('ABCD', 'org', { clearSessionFlag: true });
+
+    expect(removeMock).toHaveBeenCalled();
+    expect(updateMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ isPublic: false }),
+    );
+  });
+});
+
+describe('fetchPublicLobbyPage', () => {
+  beforeEach(() => {
+    resetFirebaseRtdbMocks();
+    getMock.mockReset();
+  });
+
+  it('returns an empty page when total count is zero', async () => {
+    getMock.mockImplementation(async (ref: { path?: string }) => {
+      if (String(ref?.path).includes('public_lobby_counts')) {
+        return rtdbSnapshot(0);
+      }
+      return {
+        exists: () => true,
+        forEach: (_fn: (child: { key: string; val: () => unknown }) => void) => {
+          return false;
+        },
+      };
+    });
+
+    const page = await fetchPublicLobbyPage('uk', 'newest', 1);
+
+    expect(page.total).toBe(0);
+    expect(page.rows).toEqual([]);
+  });
+});
+
+describe('reconcilePublicLobbyAfterRosterChange', () => {
+  beforeEach(() => {
+    resetFirebaseRtdbMocks();
+    updateMock.mockResolvedValue(undefined);
+  });
+
+  it('updates browse index playerCount for waiting public rooms', async () => {
+    await reconcilePublicLobbyAfterRosterChange(
+      'ABCD',
+      waitingSession({
+        isPublic: true,
+        settings: PUBLIC_LOBBY_SESSION_SETTINGS,
+        players: {
+          org: { name: 'Org', wordCount: 0, score: 0, online: true },
+          guest: { name: 'Guest', wordCount: 0, score: 0, online: true },
+        },
+      }),
+    );
+
+    expect(updateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ path: expect.stringContaining('public_lobbies/uk-uk/ABCD') }),
+      { playerCount: 2 },
+    );
+  });
+
+  it('no-ops for private or non-waiting sessions', async () => {
+    await reconcilePublicLobbyAfterRosterChange('ABCD', waitingSession());
+    await reconcilePublicLobbyAfterRosterChange(
+      'ABCD',
+      waitingSession({ isPublic: true, status: 'playing' }),
+    );
+
+    expect(updateMock).not.toHaveBeenCalled();
   });
 });

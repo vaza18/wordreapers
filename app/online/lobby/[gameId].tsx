@@ -36,13 +36,14 @@ import { formatLobbySettingsLabel } from '@/lib/online/lobby-settings-label';
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
 import { useLiveRoundLobbyScreen } from '@/hooks/useLiveRoundLobbyScreen';
+import { isLiveRoundStarted } from '@/lib/online/live-round-screen-actions';
 import { usePublicLobbyPublish } from '@/hooks/usePublicLobbyPublish';
 import { useServerNow } from '@/hooks/useServerNow';
 import {
   latestFinishedArchiveForGame,
   type FinishedRoundArchive,
-} from '@/lib/online/online-session-archive';
-import { restartRematchOnlineRound } from '@/lib/online/restart-rematch-online-round';
+} from '@/lib/online/session/online-session-archive';
+import { restartRematchOnlineRound } from '@/lib/online/rematch/restart-rematch-online-round';
 import { useProfileStore } from '@/store/profile-store';
 import {
   comparePlayersByJoinOrder,
@@ -56,14 +57,14 @@ import {
 import { needsPublicAliasReconcile } from '@/lib/online/public-lobby/public-alias';
 import { PUBLIC_LOBBY_TTL_MS } from '@/lib/online/public-lobby/constants';
 import { useOrganizerAbandonWaitingOnExit } from '@/lib/online/use-organizer-abandon-on-exit';
-import { usePlayerOnlinePresence } from '@/lib/online/use-player-online-presence';
+import { usePlayerOnlinePresence } from '@/lib/online/presence/use-player-online-presence';
 import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
-import { isLobbyVisiblePlayer } from '@/lib/online/rematch-waiting-lobby';
-import { handoffPlayerPresence } from '@/lib/online/presence-handoff';
+import { isLobbyVisiblePlayer } from '@/lib/online/rematch/rematch-waiting-lobby';
+import { handoffPlayerPresence } from '@/lib/online/presence/presence-handoff';
 import {
   claimPlayRouteNavigation,
   seedPlaySessionBootstrap,
-} from '@/lib/online/play-session-bootstrap';
+} from '@/lib/online/session/play-session-bootstrap';
 import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
 import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
 import { useFirebaseStore } from '@/store/firebase-store';
@@ -157,7 +158,9 @@ export default function LobbyScreen() {
       gameId &&
       myUid &&
       firebaseSessionLive &&
-      (session?.status === 'waiting' || session?.status === 'finished'),
+      (session?.status === 'waiting' ||
+        session?.status === 'finished' ||
+        session?.status === 'playing'),
     ),
   );
   const isOrganizer = session?.organizerId === myUid;
@@ -276,6 +279,9 @@ export default function LobbyScreen() {
       await Promise.all([loadBundledDictionary(), loadBundledSupplements()]);
       await startGameSession(gameId, myUid);
       const snapshot = await readGameSessionSnapshot(gameId);
+      if (!snapshot || snapshot.status !== 'playing') {
+        throw new Error('START_NOT_COMMITTED');
+      }
       if (claimPlayRouteNavigation(gameId, snapshot)) {
         seedPlaySessionBootstrap(snapshot);
         handoffPlayerPresence(gameId);
@@ -405,7 +411,7 @@ export default function LobbyScreen() {
     (isOrganizer && !isFinished && isFirstRound && !hasBaseWord);
 
   const footerWaitingHint =
-    !isPicker && !isFinished && hasBaseWord
+    !isPicker && !isFinished && hasBaseWord && !isLiveRoundStarted(session)
       ? t('online.waitingForRoundStart', { name: pickerName })
       : null;
 

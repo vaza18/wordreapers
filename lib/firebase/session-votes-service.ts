@@ -8,14 +8,14 @@ import {
   earlyFinishRequiredVoterIds,
   earlyFinishVoteExpired,
   shouldFinishFromEarlyVote,
-} from '../online/early-finish-vote.js';
+} from '../online/voting/early-finish-vote.js';
 import {
   computeExtendedTimerEndsAt,
   shouldApplyAddTimeFromVote,
   shouldClearAddTimeVote,
-} from '../online/add-time-vote.js';
-import { shouldActivatePauseFromVote } from '../online/pause-vote.js';
-import { resumeVoteRequiredIds, shouldResumeFromVote } from '../online/resume-vote.js';
+} from '../online/voting/add-time-vote.js';
+import { shouldActivatePauseFromVote } from '../online/voting/pause-vote.js';
+import { resumeVoteRequiredIds, shouldResumeFromVote } from '../online/voting/resume-vote.js';
 import { isFirebaseIgnorableRtdbError } from './rtdb-errors.js';
 import { computePurgeAfterAt } from './session-purge.js';
 import { getServerNow } from './server-clock.js';

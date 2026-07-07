@@ -13,7 +13,10 @@ import { isSoloStandings } from '@/lib/game/solo-round';
 import { formatUkPlayers } from '@/lib/i18n/uk-plural';
 import { didPlayerWinOnlineRound } from '@/lib/profile/player-stats';
 import { formatArchiveSavedAt } from '@/lib/online/format-archive-date';
-import { archiveRouteKey, type FinishedRoundArchive } from '@/lib/online/online-session-archive';
+import {
+  archiveRouteKey,
+  type FinishedRoundArchive,
+} from '@/lib/online/session/online-session-archive';
 
 export interface HistoryRoundCardProps {
   archive: FinishedRoundArchive;

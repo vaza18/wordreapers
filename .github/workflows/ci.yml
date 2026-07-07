@@ -9,9 +9,9 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -20,14 +20,21 @@ jobs:
       - name: Use npm 11
         run: npm install -g npm@11.6.2
 
+      - uses: actions/cache@v5
+        with:
+          path: .data/vesum
+          key: vesum-${{ runner.os }}-${{ hashFiles('scripts/dictionary/fetch-vesum.ts', 'scripts/dictionary/build-dictionary.ts') }}
+          restore-keys: |
+            vesum-${{ runner.os }}-
+
       - name: Install dependencies
         run: npm ci
 
       - name: Install Cloud Functions dependencies
         run: npm ci --prefix functions
 
-      - name: Prepare dictionary stubs for typecheck
-        run: npm run dict:stub
+      - name: Dictionary validation regression cases
+        run: npm run dict:validate
 
       - name: ESLint
         run: npm run lint
@@ -38,5 +45,8 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Unit tests
-        run: npm test
+      - name: Unit tests with coverage gate
+        run: npm run test:coverage
+
+      - name: RTDB security rules tests
+        run: npm run test:rules

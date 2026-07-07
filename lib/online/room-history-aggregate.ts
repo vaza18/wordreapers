@@ -3,7 +3,7 @@ import { isSoloStandings } from '@/lib/game/solo-round';
 import { didPlayerWinOnlineRound } from '@/lib/profile/player-stats';
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import { displayPlayerName } from '@/lib/online/public-lobby/display-player-name';
-import type { FinishedRoundArchive } from '@/lib/online/online-session-archive';
+import type { FinishedRoundArchive } from '@/lib/online/session/online-session-archive';
 
 export interface RoomPlayerAggregate {
   playerId: string;

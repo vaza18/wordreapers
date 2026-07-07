@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { GameSession } from '../lib/firebase/types.js';
 import { resolveGameSessionSettings } from '../lib/firebase/session-settings.js';
-import { buildRematchWaitingSession } from '../lib/online/build-rematch-waiting-session.js';
+import { buildRematchWaitingSession } from '../lib/online/rematch/build-rematch-waiting-session.js';
 
 describe('bootstrap rematch waiting session shape', () => {
   it('resets scores and clears round fields without player_words restore', () => {
@@ -37,6 +37,35 @@ describe('bootstrap rematch waiting session shape', () => {
     expect(waiting.wordPlayers).toBeUndefined();
     expect(waiting.purgeAfterAt).toBeUndefined();
     expect(waiting.resultsExitedBy).toBeUndefined();
+  });
+
+  it('synthesizes organizer roster entry when missing from archived players', () => {
+    const finished: GameSession = {
+      baseWord: 'альт',
+      status: 'finished',
+      settings: {
+        durationSeconds: 300,
+        uniqueBonusEnabled: false,
+        language: 'uk',
+        allowProperNouns: false,
+        allowSlang: false,
+      },
+      timerEndsAt: null,
+      organizerId: 'org',
+      baseWordRound: 1,
+      players: {
+        guest: { name: 'Guest', wordCount: 2, score: 4, online: false },
+      },
+    };
+
+    const waiting = buildRematchWaitingSession(finished);
+    expect(waiting.players.org).toEqual({
+      name: 'Organizer',
+      wordCount: 0,
+      score: 0,
+      online: false,
+      hasLeft: true,
+    });
   });
 });
 

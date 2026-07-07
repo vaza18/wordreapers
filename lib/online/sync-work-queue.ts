@@ -1,7 +1,7 @@
 import { normalizeRoomCode } from '../firebase/room-code.js';
 
-import type { FinishedRoundArchive } from './online-session-archive.js';
-import type { PendingRoundArchive } from './pending-round-archive.js';
+import type { FinishedRoundArchive } from './session/online-session-archive.js';
+import type { PendingRoundArchive } from './session/pending-round-archive.js';
 
 export const SYNC_COORDINATOR_SCAN_LIMIT = 10;
 

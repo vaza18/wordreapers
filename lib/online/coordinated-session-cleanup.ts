@@ -3,8 +3,11 @@ import { markResultsExited } from '../firebase/results-coordination-service.js';
 import { isFirebasePermissionDenied } from '../firebase/rtdb-errors.js';
 import type { GameSession } from '../firebase/types.js';
 
-import type { AllPlayerWords } from './clone-player-words.js';
-import { markFinishedArchiveAckSent, saveFinishedRoundArchive } from './online-session-archive.js';
+import type { AllPlayerWords } from './session/clone-player-words.js';
+import {
+  markFinishedArchiveAckSent,
+  saveFinishedRoundArchive,
+} from './session/online-session-archive.js';
 import { shouldMarkResultsExited } from './results-viewed.js';
 
 /**

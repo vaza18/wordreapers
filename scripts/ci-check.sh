@@ -8,9 +8,6 @@ if [ ! -d functions/node_modules/firebase-admin ]; then
   npm ci --prefix functions
 fi
 
-echo "→ Prepare dictionary stubs for typecheck"
-npm run dict:stub
-
 echo "→ ESLint"
 npm run lint
 
@@ -20,7 +17,10 @@ npm run format:check
 echo "→ Typecheck"
 npm run typecheck
 
-echo "→ Unit tests"
-npm test
+echo "→ Unit tests with coverage gate"
+npm run test:coverage
+
+echo "→ Critical module coverage gate"
+node scripts/check-critical-coverage.mjs
 
 echo "✓ CI checks passed"

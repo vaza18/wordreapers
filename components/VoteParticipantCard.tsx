@@ -8,7 +8,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { formatPlayerLeftLabel, formatVoteStatusLabel } from '@/lib/game/vote-status-label';
-import type { EarlyFinishParticipantRow } from '@/lib/online/early-finish-vote';
+import type { EarlyFinishParticipantRow } from '@/lib/online/voting/early-finish-vote';
 import { modalCardChrome, modalOverlayBackground } from '@/lib/ui/modal-chrome';
 
 export type VoteParticipantCardProps = {

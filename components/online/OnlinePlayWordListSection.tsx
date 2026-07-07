@@ -59,8 +59,7 @@ function createStyles(colors: ThemeColors) {
       minHeight: 32,
       alignItems: 'center',
       justifyContent: 'center',
-      flexDirection: 'row',
-      gap: spacing.sm,
+      position: 'relative',
     },
     feedbackToast: {
       fontSize: 13,
@@ -71,7 +70,12 @@ function createStyles(colors: ThemeColors) {
       overflow: 'hidden',
       borderWidth: 1,
     },
-    syncIndicator: {
+    syncIndicatorSlot: {
+      position: 'absolute',
+      right: spacing.xs,
+      top: 0,
+      bottom: 0,
+      justifyContent: 'center',
       opacity: 0.7,
     },
   });
@@ -124,7 +128,14 @@ export const OnlinePlayWordListSection = memo(function OnlinePlayWordListSection
           </Text>
         ) : null}
         {backgroundSyncing ? (
-          <ActivityIndicator size="small" color={colors.accent} style={styles.syncIndicator} />
+          <View
+            style={styles.syncIndicatorSlot}
+            pointerEvents="none"
+            accessibilityLabel="Синхронізація з сервером"
+            accessibilityRole="progressbar"
+          >
+            <ActivityIndicator size="small" color={colors.accent} />
+          </View>
         ) : null}
       </View>
     </View>

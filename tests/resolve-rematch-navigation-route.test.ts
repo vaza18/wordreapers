@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveRematchNavigationRoute } from '../lib/online/resolve-rematch-navigation-route.js';
+import { resolveRematchNavigationRoute } from '../lib/online/rematch/resolve-rematch-navigation-route.js';
 
 describe('resolveRematchNavigationRoute', () => {
   it('routes to play when the live round already started', () => {

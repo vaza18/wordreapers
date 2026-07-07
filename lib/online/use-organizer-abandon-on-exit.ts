@@ -11,6 +11,7 @@ import { setOrganizerWaitingRoom } from './organizer-waiting-room.js';
 
 const ORGANIZER_EXIT_BACK_ACTIONS = new Set(['GO_BACK', 'POP', 'POP_TO']);
 
+// INVARIANT (see docs/known-issues.md — 2026-06 Organizer waiting room deleted on app background): abandon only on back navigation, not AppState.
 /**
  * Drop waiting rooms when the organizer leaves lobby via back navigation.
  * Screen lock / app background must not delete the room — use exitOnlineToHome for explicit leave.

@@ -20,6 +20,10 @@ import { spacing, type ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useAutoPauseOnAppBackground } from '@/hooks/useAutoPauseOnAppBackground';
+import {
+  PLAY_WORD_FEEDBACK_DISMISS_MS,
+  usePlayWordFeedbackDismiss,
+} from '@/hooks/usePlayWordFeedback';
 import { usePlaySessionSubscriptions } from '@/hooks/usePlaySessionSubscriptions';
 import { usePlaySessionToasts } from '@/hooks/usePlaySessionToasts';
 import { useResultsRematchToast } from '@/hooks/useResultsRematchToast';
@@ -41,24 +45,27 @@ import { mergeSessionWithWordMaps } from '@/lib/firebase/session-word-maps';
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import type { SessionWordMaps } from '@/lib/firebase/types';
 import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
-import { markPendingRoundArchive } from '@/lib/online/pending-round-archive';
+import { markPendingRoundArchive } from '@/lib/online/session/pending-round-archive';
 import {
   cacheActiveRoundProgress,
   purgeStaleActiveRoundCaches,
   tryRestoreActiveRoundCache,
-} from '@/lib/online/cache-active-round';
-import { hasOnlineOpponent, onlineActiveOpponentNames } from '@/lib/online/session-presence';
+} from '@/lib/online/session/cache-active-round';
+import {
+  hasOnlineOpponent,
+  onlineActiveOpponentNames,
+} from '@/lib/online/presence/session-presence';
 import { onlineResultsRoute } from '@/lib/online/online-results-route';
-import { isReviewingPriorRoundOnPlayScreen } from '@/lib/online/is-reviewing-prior-round-on-play';
-import { resolveRoundEndSessionSnapshot } from '@/lib/online/resolve-round-end-session-snapshot';
-import { shouldKeepFrozenResultsOverLiveFinished } from '@/lib/online/frozen-round-view';
-import { consumePlaySessionBootstrap } from '@/lib/online/play-session-bootstrap';
+import { isReviewingPriorRoundOnPlayScreen } from '@/lib/online/session/is-reviewing-prior-round-on-play';
+import { resolveRoundEndSessionSnapshot } from '@/lib/online/session/resolve-round-end-session-snapshot';
+import { shouldKeepFrozenResultsOverLiveFinished } from '@/lib/online/session/frozen-round-view';
+import { consumePlaySessionBootstrap } from '@/lib/online/session/play-session-bootstrap';
 import {
   submitOnlineWord,
   reconcileOwnPlayerWordsWithSession,
   type StoredPlayerWord,
 } from '@/lib/firebase/player-words-service';
-import { archiveFinishedRoundFromFirebase } from '@/lib/online/archive-finished-round-from-firebase';
+import { archiveFinishedRoundFromFirebase } from '@/lib/online/session/archive-finished-round-from-firebase';
 import {
   cancelAddTimeVote,
   cancelEarlyFinishVote,
@@ -103,7 +110,6 @@ import { useProfileStore } from '@/store/profile-store';
 import { useSettingsStore } from '@/store/settings-store';
 
 const VALIDATION_DEBOUNCE_MS = 1000;
-const FEEDBACK_DISMISS_MS = 2200;
 
 const EMPTY_WORD_LIST_ENTRIES: never[] = [];
 const EMPTY_WORD_LIST_DISPLAYS: string[] = [];
@@ -599,18 +605,11 @@ export default function OnlinePlayScreen() {
   const hasOpponent = standings.length >= 2;
   const playRulesLabel = formatPlayRulesLabel(t, displaySession?.settings);
 
-  useEffect(() => {
-    if (!feedback) {
-      return;
-    }
-    const timer = setTimeout(() => {
-      setFeedback(null);
-      setFeedbackVariant('default');
-    }, FEEDBACK_DISMISS_MS);
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [feedback]);
+  const clearFeedback = useCallback(() => {
+    setFeedback(null);
+    setFeedbackVariant('default');
+  }, []);
+  usePlayWordFeedbackDismiss(feedback, feedbackVariant, clearFeedback);
 
   useEffect(() => {
     setOptimisticWords((prev) => {
@@ -945,12 +944,12 @@ export default function OnlinePlayScreen() {
           clearTimeout(debounceRef.current);
         }
         debounceRef.current = setTimeout(() => {
-          setFeedback(null);
-        }, FEEDBACK_DISMISS_MS);
+          clearFeedback();
+        }, PLAY_WORD_FEEDBACK_DISMISS_MS);
       }
       return false;
     });
-  }, [hasOnlineOpponentInRound, myUid, session, t]);
+  }, [clearFeedback, hasOnlineOpponentInRound, myUid, session, t]);
 
   const handleEndEarlyConfirm = () => {
     setShowEndEarlyConfirm(false);
