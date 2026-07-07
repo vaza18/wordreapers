@@ -1,101 +1,187 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { GameSession } from '../lib/firebase/types.js';
+const getMock = vi.fn();
+const abandonWaitingGameSession = vi.fn();
+const fetchSessionPlayerWords = vi.fn();
+const persistLocalArchive = vi.fn();
+const finalizeOnlineRoundForPlayer = vi.fn();
+const clearPendingRoundArchive = vi.fn();
+const notifyRoundFinishedOnce = vi.fn();
+
+vi.mock('firebase/database', () => ({
+  get: (...args: unknown[]) => getMock(...args),
+  ref: (_db: unknown, path: string) => ({ path }),
+}));
+
+vi.mock('../lib/firebase/init.js', () => ({
+  getFirebaseDatabase: () => ({}),
+}));
+
+vi.mock('../lib/firebase/game-session-service.js', () => ({
+  abandonWaitingGameSession: (...args: unknown[]) => abandonWaitingGameSession(...args),
+}));
+
+vi.mock('../lib/firebase/player-words-service.js', () => ({
+  fetchSessionPlayerWords: (...args: unknown[]) => fetchSessionPlayerWords(...args),
+}));
+
+vi.mock('../lib/online/coordinated-session-cleanup.js', () => ({
+  persistLocalArchive: (...args: unknown[]) => persistLocalArchive(...args),
+}));
+
+vi.mock('../lib/online/finalize-online-round.js', () => ({
+  finalizeOnlineRoundForPlayer: (...args: unknown[]) => finalizeOnlineRoundForPlayer(...args),
+}));
+
+vi.mock('../lib/online/pending-round-archive.js', () => ({
+  clearPendingRoundArchive: (...args: unknown[]) => clearPendingRoundArchive(...args),
+  listPendingRoundArchives: vi.fn(),
+}));
+
+vi.mock('../lib/online/online-session-archive.js', () => ({
+  getFinishedRoundArchive: vi.fn(),
+  isFinishedArchiveStale: vi.fn(),
+  listFinishedRoundArchives: vi.fn(),
+  markFinishedArchiveAckSent: vi.fn(),
+}));
+
+vi.mock('../lib/online/round-finished-notification-once.js', () => ({
+  notifyRoundFinishedOnce: (...args: unknown[]) => notifyRoundFinishedOnce(...args),
+}));
+
 import {
+  getFinishedRoundArchive,
   isFinishedArchiveStale,
-  playerWordCountsFromSession,
-  type FinishedRoundArchive,
+  listFinishedRoundArchives,
+  markFinishedArchiveAckSent,
 } from '../lib/online/online-session-archive.js';
-import { buildSyncWorkQueue, SYNC_COORDINATOR_SCAN_LIMIT } from '../lib/online/sync-work-queue.js';
+import { listPendingRoundArchives } from '../lib/online/pending-round-archive.js';
+import {
+  buildSyncWorkQueue,
+  syncFinishedRoundsCoordinator,
+} from '../lib/online/sync-coordinator.js';
+import { DEFAULT_SESSION_SETTINGS } from './helpers/game-session-fixtures.js';
 
-function finishedSession(overrides: Partial<GameSession> = {}): GameSession {
-  return {
-    baseWord: 'тест',
-    status: 'finished',
-    settings: {
-      durationSeconds: 300,
-      uniqueBonusEnabled: true,
-      language: 'uk',
-      allowProperNouns: false,
-      allowSlang: false,
-    },
-    timerEndsAt: null,
-    organizerId: 'org',
-    players: {
-      a: { name: 'A', wordCount: 2, score: 10 },
-      b: { name: 'B', wordCount: 1, score: 5 },
-    },
-    baseWordRound: 0,
-    ...overrides,
-  };
-}
-
-describe('playerWordCountsFromSession', () => {
-  it('maps player word counts', () => {
-    expect(playerWordCountsFromSession(finishedSession())).toEqual({ a: 2, b: 1 });
-  });
-});
-
-describe('isFinishedArchiveStale', () => {
-  it('returns true when archive is missing', () => {
-    expect(isFinishedArchiveStale(null, finishedSession())).toBe(true);
+describe('sync-coordinator', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(listPendingRoundArchives).mockResolvedValue([]);
+    vi.mocked(listFinishedRoundArchives).mockResolvedValue([]);
+    vi.mocked(getFinishedRoundArchive).mockResolvedValue(null);
+    vi.mocked(isFinishedArchiveStale).mockReturnValue(true);
+    vi.mocked(markFinishedArchiveAckSent).mockResolvedValue(undefined);
+    fetchSessionPlayerWords.mockResolvedValue(new Map());
+    persistLocalArchive.mockResolvedValue(undefined);
+    finalizeOnlineRoundForPlayer.mockResolvedValue(undefined);
+    clearPendingRoundArchive.mockResolvedValue(undefined);
+    abandonWaitingGameSession.mockResolvedValue(undefined);
   });
 
-  it('returns false when word counts match', () => {
-    const session = finishedSession();
-    const archive: FinishedRoundArchive = {
-      gameId: 'ABCD',
-      baseWordRound: 0,
-      savedAt: Date.now(),
-      session,
-      playerWords: {},
-      playerWordCounts: { a: 2, b: 1 },
-    };
-    expect(isFinishedArchiveStale(archive, session)).toBe(false);
-  });
-
-  it('returns true when word counts diverge', () => {
-    const session = finishedSession();
-    const archive: FinishedRoundArchive = {
-      gameId: 'ABCD',
-      baseWordRound: 0,
-      savedAt: Date.now(),
-      session,
-      playerWords: {},
-      playerWordCounts: { a: 1, b: 1 },
-    };
-    expect(isFinishedArchiveStale(archive, session)).toBe(true);
-  });
-});
-
-describe('buildSyncWorkQueue', () => {
-  it('dedupes pending and recent archives', () => {
+  it('dedupes pending and recent archives in buildSyncWorkQueue', () => {
     const queue = buildSyncWorkQueue(
-      [{ gameId: 'ABCD', baseWordRound: 0, uid: 'u1', markedAt: 1 }],
+      [{ gameId: 'ABCD', baseWordRound: 0, uid: 'u1', markedAt: 1_000 }],
       [
         {
           gameId: 'ABCD',
           baseWordRound: 0,
-          savedAt: 2,
-          session: finishedSession(),
-          playerWords: {},
-        },
-        {
-          gameId: 'EFGH',
-          baseWordRound: 1,
-          savedAt: 3,
-          session: finishedSession({ baseWordRound: 1 }),
+          savedAt: 1_000,
+          ackSent: false,
+          session: {
+            baseWord: 'тест',
+            status: 'finished',
+            settings: DEFAULT_SESSION_SETTINGS,
+            timerEndsAt: null,
+            organizerId: 'org',
+            players: {},
+          },
           playerWords: {},
         },
       ],
       'u2',
     );
-    expect(queue).toHaveLength(2);
-    expect(queue.find((item) => item.gameId === 'ABCD')?.fromPending).toBe(true);
-    expect(queue.find((item) => item.gameId === 'EFGH')?.uid).toBe('u2');
+
+    expect(queue).toHaveLength(1);
+    expect(queue[0]).toMatchObject({
+      gameId: 'ABCD',
+      baseWordRound: 0,
+      fromPending: true,
+      uid: 'u1',
+    });
   });
 
-  it('respects scan limit constant', () => {
-    expect(SYNC_COORDINATOR_SCAN_LIMIT).toBe(10);
+  it('persists finished round archives for rostered players', async () => {
+    vi.mocked(listPendingRoundArchives).mockResolvedValue([
+      { gameId: 'ABCD', baseWordRound: 0, uid: 'org', markedAt: 1_000 },
+    ]);
+    getMock.mockResolvedValue({
+      exists: () => true,
+      val: () => ({
+        baseWord: 'тест',
+        status: 'finished',
+        settings: DEFAULT_SESSION_SETTINGS,
+        timerEndsAt: null,
+        organizerId: 'org',
+        baseWordRound: 0,
+        players: {
+          org: { name: 'Org', wordCount: 1, score: 5, online: false },
+        },
+      }),
+    });
+
+    await syncFinishedRoundsCoordinator({ uid: 'org' });
+
+    expect(persistLocalArchive).toHaveBeenCalled();
+    expect(finalizeOnlineRoundForPlayer).toHaveBeenCalled();
+    expect(clearPendingRoundArchive).toHaveBeenCalledWith('ABCD', 0);
+  });
+
+  it('abandons stale waiting rooms when organizer is alone offline', async () => {
+    vi.mocked(listFinishedRoundArchives).mockResolvedValue([
+      {
+        gameId: 'WAIT1',
+        baseWordRound: 0,
+        savedAt: 1_000,
+        ackSent: false,
+        session: {
+          baseWord: 'тест',
+          status: 'waiting',
+          settings: DEFAULT_SESSION_SETTINGS,
+          timerEndsAt: null,
+          organizerId: 'org',
+          players: {
+            org: { name: 'Org', wordCount: 0, score: 0, online: false },
+          },
+        },
+        playerWords: {},
+      },
+    ]);
+    getMock.mockResolvedValue({
+      exists: () => true,
+      val: () => ({
+        baseWord: 'тест',
+        status: 'waiting',
+        settings: DEFAULT_SESSION_SETTINGS,
+        timerEndsAt: null,
+        organizerId: 'org',
+        players: {
+          org: { name: 'Org', wordCount: 0, score: 0, online: false },
+        },
+      }),
+    });
+
+    await syncFinishedRoundsCoordinator({ uid: 'org' });
+
+    expect(abandonWaitingGameSession).toHaveBeenCalledWith('WAIT1', 'org');
+  });
+
+  it('skips sync work for the active play screen game', async () => {
+    vi.mocked(listPendingRoundArchives).mockResolvedValue([
+      { gameId: 'ABCD', baseWordRound: 0, uid: 'org', markedAt: 1_000 },
+    ]);
+
+    await syncFinishedRoundsCoordinator({ uid: 'org', activePlayGameId: 'ABCD' });
+
+    expect(getMock).not.toHaveBeenCalled();
+    expect(persistLocalArchive).not.toHaveBeenCalled();
   });
 });
