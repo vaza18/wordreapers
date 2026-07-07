@@ -20,10 +20,12 @@ import {
 } from './helpers/mock-firebase-rtdb.js';
 import { waitingSession } from './helpers/game-session-fixtures.js';
 import {
+  activePublicLobbyPlayerCount,
   setRoomPrivate,
   setRoomPublic,
   syncPublicLobbyPlayerCount,
   fetchPublicLobbyCount,
+  unpublishPublicLobby,
 } from '../lib/firebase/public-lobby-service.js';
 
 const {
@@ -140,5 +142,45 @@ describe('fetchPublicLobbyCount', () => {
   it('returns null for invalid counter values', async () => {
     getMock.mockResolvedValueOnce(rtdbSnapshot('bad'));
     await expect(fetchPublicLobbyCount('uk-uk')).resolves.toBeNull();
+  });
+});
+
+describe('activePublicLobbyPlayerCount', () => {
+  it('counts only active roster members', () => {
+    expect(
+      activePublicLobbyPlayerCount({
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        guest: { name: 'Guest', wordCount: 0, score: 0, online: false, hasLeft: true },
+      }),
+    ).toBe(1);
+  });
+});
+
+describe('unpublishPublicLobby', () => {
+  beforeEach(() => {
+    resetFirebaseRtdbMocks();
+    removeMock.mockResolvedValue(undefined);
+    updateMock.mockResolvedValue(undefined);
+  });
+
+  it('removes public lobby index row for organizer', async () => {
+    getMock.mockResolvedValueOnce(
+      rtdbSnapshot(
+        waitingSession({
+          isPublic: true,
+          players: {
+            org: { name: 'Org', wordCount: 0, score: 0, online: true },
+          },
+        }),
+      ),
+    );
+
+    await unpublishPublicLobby('ABCD', 'org', { clearSessionFlag: true });
+
+    expect(removeMock).toHaveBeenCalled();
+    expect(updateMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ isPublic: false }),
+    );
   });
 });

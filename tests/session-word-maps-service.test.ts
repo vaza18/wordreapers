@@ -25,6 +25,7 @@ vi.mock('../lib/firebase/auth.js', () => ({
 import {
   clearSessionWordMaps,
   fetchSessionWordMaps,
+  subscribeSessionWordMaps,
   writeSessionWordMapsShards,
 } from '../lib/firebase/session-word-maps-service.js';
 
@@ -66,5 +67,48 @@ describe('session-word-maps-service', () => {
     removeMock.mockRejectedValueOnce(denied);
 
     await expect(clearSessionWordMaps('ABCD')).resolves.toBeUndefined();
+  });
+
+  it('subscribes to live word maps and emits parsed values', () => {
+    let valueListener:
+      | ((snapshot: { exists: () => boolean; val: () => unknown }) => void)
+      | undefined;
+    onValueMock.mockImplementation((_ref, onNext) => {
+      valueListener = onNext as typeof valueListener;
+      return vi.fn();
+    });
+
+    const listener = vi.fn();
+    subscribeSessionWordMaps('ABCD', listener);
+
+    valueListener?.({
+      exists: () => true,
+      val: () => ({
+        wordFirst: { порт: 'org-1' },
+        wordPlayers: { порт: { 'org-1': true } },
+      }),
+    });
+
+    expect(listener).toHaveBeenCalledWith({
+      wordFirst: { порт: 'org-1' },
+      wordPlayers: { порт: { 'org-1': true } },
+    });
+  });
+
+  it('returns empty maps on permission denied subscription errors', () => {
+    let errorListener: ((error: Error & { code: string }) => void) | undefined;
+    onValueMock.mockImplementation((_ref, _onNext, onError) => {
+      errorListener = onError as typeof errorListener;
+      return vi.fn();
+    });
+
+    const listener = vi.fn();
+    subscribeSessionWordMaps('ABCD', listener);
+    errorListener?.(Object.assign(new Error('denied'), { code: 'PERMISSION_DENIED' }));
+
+    expect(listener).toHaveBeenCalledWith({
+      wordFirst: {},
+      wordPlayers: {},
+    });
   });
 });

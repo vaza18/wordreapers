@@ -23,13 +23,18 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['lib/**/*.ts', 'functions/src/**/*.ts'],
-      exclude: ['lib/**/__tests__/**', 'lib/legal/bundled-legal.ts'],
+      exclude: [
+        'lib/**/__tests__/**',
+        'lib/legal/bundled-legal.ts',
+        // Rolldown (Vitest v8 coverage remap) cannot parse TS syntax in this SDK bootstrap file.
+        'lib/firebase/init.ts',
+      ],
       reporter: ['text', 'lcov'],
       thresholds: {
-        statements: 53,
-        branches: 50,
-        functions: 62,
-        lines: 53,
+        statements: 67,
+        branches: 61,
+        functions: 74,
+        lines: 67,
       },
     },
   },

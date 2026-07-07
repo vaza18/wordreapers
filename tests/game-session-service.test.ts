@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const getMock = vi.fn();
 const updateMock = vi.fn();
 const removeMock = vi.fn();
+const setMock = vi.fn();
+const runTransactionMock = vi.fn();
 const onDisconnectCancel = vi.fn();
 const onDisconnectUpdate = vi.fn();
 
@@ -10,6 +12,8 @@ vi.mock('firebase/database', () => ({
   get: (...args: unknown[]) => getMock(...args),
   update: (...args: unknown[]) => updateMock(...args),
   remove: (...args: unknown[]) => removeMock(...args),
+  set: (...args: unknown[]) => setMock(...args),
+  runTransaction: (...args: unknown[]) => runTransactionMock(...args),
   onDisconnect: () => ({
     cancel: () => onDisconnectCancel(),
     update: (...args: unknown[]) => onDisconnectUpdate(...args),
@@ -31,6 +35,28 @@ vi.mock('../lib/firebase/player-words-service.js', () => ({
 
 vi.mock('../lib/firebase/session-word-maps-service.js', () => ({
   clearSessionWordMaps: vi.fn().mockResolvedValue(undefined),
+  fetchSessionWordMaps: vi.fn().mockResolvedValue({ wordFirst: {}, wordPlayers: {} }),
+}));
+
+vi.mock('../lib/firebase/server-clock.js', () => ({
+  getServerNow: () => 2_000_000,
+}));
+
+vi.mock('../lib/online/active-round-cache.js', () => ({
+  clearAllActiveRoundCachesForGame: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../lib/online/organizer-waiting-room.js', () => ({
+  setOrganizerWaitingRoom: vi.fn(),
+}));
+
+vi.mock('../lib/firebase/session-votes-service.js', () => ({
+  resolveEarlyFinishVoteIfExpired: vi.fn().mockResolvedValue(undefined),
+  resolveResumeVoteIfExpired: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../services/dictionary-service.js', () => ({
+  loadBundledBaseWords: vi.fn().mockResolvedValue(['портрет', 'тест']),
 }));
 
 vi.mock('../lib/firebase/auth.js', () => ({
@@ -45,12 +71,17 @@ vi.mock('../lib/firebase/session-ref.js', () => ({
 import {
   abandonWaitingGameSession,
   beginVoluntaryLeave,
+  finishGameSessionIfExpired,
+  gameSessionExists,
+  leaveGameSession,
   markPlayerOffline,
   markPlayerOnline,
   organizerLeaveWaitingLobby,
+  rematchFinishedSessionToWaiting,
+  startGameSession,
   tryReadGameSessionSnapshot,
 } from '../lib/firebase/game-session-service.js';
-import { DEFAULT_SESSION_SETTINGS } from './helpers/game-session-fixtures.js';
+import { DEFAULT_SESSION_SETTINGS, finishedSession } from './helpers/game-session-fixtures.js';
 
 const waitingSession = {
   baseWord: 'тест',
@@ -130,5 +161,115 @@ describe('game-session-service', () => {
     await organizerLeaveWaitingLobby('ABCD', 'org-1', waitingSession);
 
     expect(removeMock).toHaveBeenCalled();
+  });
+
+  it('marks a guest as offline and left when leaving a waiting room', async () => {
+    const session = {
+      ...waitingSession,
+      players: {
+        'org-1': { name: 'Org', wordCount: 0, score: 0, online: true },
+        guest: { name: 'Guest', wordCount: 0, score: 0, online: true },
+      },
+    };
+    getMock.mockResolvedValue({
+      exists: () => true,
+      val: () => session,
+    });
+
+    await leaveGameSession('ABCD', 'guest');
+
+    expect(updateMock).toHaveBeenCalledWith(expect.anything(), {
+      online: false,
+      hasLeft: true,
+    });
+  });
+
+  it('reports whether a game session exists', async () => {
+    getMock.mockResolvedValueOnce({ exists: () => true });
+    await expect(gameSessionExists('ABCD')).resolves.toBe(true);
+
+    getMock.mockResolvedValueOnce({ exists: () => false });
+    await expect(gameSessionExists('ABCD')).resolves.toBe(false);
+  });
+
+  it('finishes an expired playing session', async () => {
+    const session = {
+      baseWord: 'тест',
+      status: 'playing' as const,
+      settings: DEFAULT_SESSION_SETTINGS,
+      timerEndsAt: 1_000_000,
+      organizerId: 'org-1',
+      players: {
+        'org-1': { name: 'Org', wordCount: 1, score: 1, online: true },
+      },
+    };
+    getMock.mockResolvedValue({ exists: () => true, val: () => session });
+    runTransactionMock.mockImplementation(async (_ref, updater) => {
+      const next = updater(session);
+      if (next) {
+        Object.assign(session, next);
+      }
+      return { committed: next != null, snapshot: { val: () => session } };
+    });
+
+    await expect(finishGameSessionIfExpired('ABCD')).resolves.toBe(true);
+    expect(session.status).toBe('finished');
+  });
+
+  it('transitions a finished session back to waiting for rematch', async () => {
+    const session = finishedSession();
+    getMock
+      .mockResolvedValueOnce({ exists: () => true, val: () => session })
+      .mockResolvedValueOnce({
+        exists: () => true,
+        val: () => ({ ...session, status: 'waiting' }),
+      });
+
+    await rematchFinishedSessionToWaiting('ABCD', 'org');
+
+    expect(updateMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        status: 'waiting',
+        baseWordRound: 1,
+      }),
+    );
+  });
+
+  it('starts a waiting session when the picker has a valid base word', async () => {
+    const session = {
+      ...waitingSession,
+      baseWord: 'портрет',
+      players: {
+        'org-1': { name: 'Org', wordCount: 0, score: 0, online: true },
+      },
+    };
+    getMock.mockResolvedValue({ exists: () => true, val: () => session });
+
+    await startGameSession('ABCD', 'org-1');
+
+    expect(updateMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        'game_sessions/ABCD/status': 'playing',
+      }),
+    );
+  });
+
+  it('does not finish a playing session before the timer expires', async () => {
+    const session = {
+      baseWord: 'тест',
+      status: 'playing' as const,
+      settings: DEFAULT_SESSION_SETTINGS,
+      timerEndsAt: 5_000_000,
+      organizerId: 'org-1',
+      players: {
+        'org-1': { name: 'Org', wordCount: 0, score: 0, online: true },
+      },
+    };
+    getMock.mockResolvedValue({ exists: () => true, val: () => session });
+
+    await expect(finishGameSessionIfExpired('ABCD')).resolves.toBe(false);
+    expect(session.status).toBe('playing');
   });
 });
