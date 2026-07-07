@@ -2,7 +2,7 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { LobbyQrCode } from '@/components/LobbyQrCode';
@@ -380,6 +380,11 @@ export default function LobbyScreen() {
       <View style={styles.baseWordSection}>
         <Text style={styles.baseWordLabel}>{t('game.baseWord')}</Text>
         <Text style={styles.baseWordTitle}>{session.baseWord.toUpperCase()}</Text>
+        {!isFirstRound ? (
+          <Text style={styles.baseWordRound}>
+            {t('online.baseWordRoundLabel', { round: turnNumber })}
+          </Text>
+        ) : null}
         <Text style={styles.baseWordMeta}>
           {tGendered(
             t,
@@ -394,191 +399,208 @@ export default function LobbyScreen() {
       </View>
     ) : null;
 
+  const footerHasActions =
+    isFinished ||
+    (isPicker && !isFinished) ||
+    (isOrganizer && !isFinished && isFirstRound && !hasBaseWord);
+
+  const footerWaitingHint =
+    !isPicker && !isFinished && hasBaseWord
+      ? t('online.waitingForRoundStart', { name: pickerName })
+      : null;
+
+  const showFooter = footerHasActions || Boolean(footerWaitingHint);
+
   return (
     <>
       <Stack.Screen options={screenOptions} />
-      <Screen>
-        <View style={styles.codeCard}>
-          <Text style={styles.code}>{formatRoomCodeDisplay(session.id)}</Text>
-          <Text style={styles.codeLabel}>{t('online.roomCodeLabel')}</Text>
-          <LobbyQrCode roomCode={session.id} invitedByUid={myUid || undefined} />
-        </View>
-
-        {!isFinished && !hasBaseWord ? (
-          <Text style={styles.pickerBanner}>
-            {isPicker
-              ? t('online.baseWordPickerYourTurn', { turn: turnNumber })
-              : t('online.baseWordPickerWaiting', { name: pickerName, turn: turnNumber })}
-          </Text>
-        ) : null}
-
-        {baseWordBlock && isPicker && session.status === 'waiting' ? (
-          <FeedbackPressable
-            accessibilityRole="button"
-            onPress={() => {
-              router.push({ pathname: '/online/pick-word/[gameId]', params: { gameId } });
-            }}
-            style={styles.baseWordBannerPressable}
-          >
-            {baseWordBlock}
-          </FeedbackPressable>
-        ) : (
-          baseWordBlock
-        )}
-
-        {hasBaseWord && lobbyLexicon ? (
-          <Text style={styles.playableWordsHint}>
-            {t('online.playableWordsMax', { count: lobbyLexicon.maxCount })}
-          </Text>
-        ) : hasBaseWord && lobbyLexiconLoading ? (
-          <Text style={styles.playableWordsHint}>{t('game.playableWordsLoading')}</Text>
-        ) : null}
-
-        <Text style={styles.settingsBanner}>{formatLobbySettingsLabel(t, session)}</Text>
-
-        {isOrganizer && session.status === 'waiting' && hasBaseWord ? (
-          <View style={styles.publicSection}>
-            <SettingSwitch
-              label={t('online.publicRoom')}
-              value={session.isPublic === true}
-              onChange={(value) => {
-                if (publicPublish.toggling) {
-                  return;
-                }
-                if (value && !publicPublish.canPublish) {
-                  return;
-                }
-                void publicPublish.togglePublic(value).catch(() => {
-                  setError(t('online.errorPublicRoomFailed'));
-                });
-              }}
-            />
-            {!publicPublish.canPublish &&
-            publicPublish.publishBlockReason &&
-            publicPublish.publishBlockReason !== 'BASE_WORDS_LOADING' ? (
-              <Text style={styles.publicHint}>{t('online.publicRoomNeedsSafeBaseWord')}</Text>
-            ) : publicPublish.canPublish ? (
-              <Text style={styles.publicHint}>{t('online.publicRoomHint')}</Text>
-            ) : null}
-            {session.isPublic && session.publicPublishedAt ? (
-              <Text style={styles.publicExpiry}>
-                {t('online.publicRoomExpiresIn', {
-                  minutes: Math.max(
-                    0,
-                    Math.ceil(
-                      (session.publicPublishedAt + PUBLIC_LOBBY_TTL_MS - serverNow) / 60_000,
-                    ),
-                  ),
-                })}
-              </Text>
-            ) : null}
+      <Screen scroll={false} style={styles.screen}>
+        <View style={styles.header}>
+          <View style={styles.joinCard}>
+            <View style={styles.joinCodeBlock}>
+              <Text style={styles.code}>{formatRoomCodeDisplay(session.id)}</Text>
+              <Text style={styles.codeLabel}>{t('online.roomCodeLabel')}</Text>
+            </View>
+            <LobbyQrCode roomCode={session.id} invitedByUid={myUid || undefined} />
           </View>
-        ) : null}
+
+          {!isFinished && !hasBaseWord ? (
+            <Text style={styles.pickerBanner}>
+              {isPicker
+                ? t('online.baseWordPickerYourTurn', { turn: turnNumber })
+                : t('online.baseWordPickerWaiting', { name: pickerName, turn: turnNumber })}
+            </Text>
+          ) : null}
+
+          {baseWordBlock && isPicker && session.status === 'waiting' ? (
+            <FeedbackPressable
+              accessibilityRole="button"
+              onPress={() => {
+                router.push({ pathname: '/online/pick-word/[gameId]', params: { gameId } });
+              }}
+              style={styles.baseWordBannerPressable}
+            >
+              {baseWordBlock}
+            </FeedbackPressable>
+          ) : (
+            baseWordBlock
+          )}
+
+          {hasBaseWord && lobbyLexicon ? (
+            <Text style={styles.playableWordsHint}>
+              {t('online.playableWordsMax', { count: lobbyLexicon.maxCount })}
+            </Text>
+          ) : hasBaseWord && lobbyLexiconLoading ? (
+            <Text style={styles.playableWordsHint}>{t('game.playableWordsLoading')}</Text>
+          ) : null}
+
+          <Text style={styles.settingsBanner}>{formatLobbySettingsLabel(t, session)}</Text>
+
+          {isOrganizer && session.status === 'waiting' && hasBaseWord ? (
+            <View style={styles.publicSection}>
+              <SettingSwitch
+                label={t('online.publicRoom')}
+                value={session.isPublic === true}
+                onChange={(value) => {
+                  if (publicPublish.toggling) {
+                    return;
+                  }
+                  if (value && !publicPublish.canPublish) {
+                    return;
+                  }
+                  void publicPublish.togglePublic(value).catch(() => {
+                    setError(t('online.errorPublicRoomFailed'));
+                  });
+                }}
+              />
+              {!publicPublish.canPublish &&
+              publicPublish.publishBlockReason &&
+              publicPublish.publishBlockReason !== 'BASE_WORDS_LOADING' ? (
+                <Text style={styles.publicHint}>{t('online.publicRoomNeedsSafeBaseWord')}</Text>
+              ) : publicPublish.canPublish ? (
+                <Text style={styles.publicHint}>{t('online.publicRoomHint')}</Text>
+              ) : null}
+              {session.isPublic && session.publicPublishedAt ? (
+                <Text style={styles.publicExpiry}>
+                  {t('online.publicRoomExpiresIn', {
+                    minutes: Math.max(
+                      0,
+                      Math.ceil(
+                        (session.publicPublishedAt + PUBLIC_LOBBY_TTL_MS - serverNow) / 60_000,
+                      ),
+                    ),
+                  })}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
 
         <Text style={styles.sectionLabel}>
           {t('online.playersCount', { count: players.length })}
         </Text>
 
-        {players.map(({ uid, name, avatarColorIndex, online, hasLeft, ...playerRest }) => {
-          const displayName = session
-            ? displayPlayerName({ name, ...playerRest }, myUid, uid, session)
-            : name;
-          const seenAs = uid === myUid && session ? viewerPublicAlias(playerRest, session) : null;
-          const showOffline = hasLeft === true || online !== true;
-          const isActivePicker =
-            uid === pickerUid &&
-            session.status === 'waiting' &&
-            isEligibleBaseWordPickerPlayer({
-              name,
-              avatarColorIndex,
-              online,
-              hasLeft,
-              ...playerRest,
-            });
-          return (
-            <View key={uid} style={styles.playerRow}>
-              <PlayerAvatar name={displayName} avatarColorIndex={avatarColorIndex ?? 0} />
-              <View style={styles.playerNameBlock}>
-                <Text style={styles.playerName}>{displayName}</Text>
-                {seenAs ? (
-                  <Text style={styles.playerSeenAs}>
-                    {t('online.youAreSeenAs', { alias: seenAs })}
-                  </Text>
-                ) : null}
-              </View>
-              {uid === session.organizerId ? (
-                <Text style={styles.organizerTag}>{t('online.organizer')}</Text>
-              ) : null}
-              {isActivePicker ? (
-                <Text style={styles.pickerTag}>{t('online.pickerTag')}</Text>
-              ) : null}
-              {!showOffline ? null : <Text style={styles.offlineTag}>📵</Text>}
-            </View>
-          );
-        })}
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-
-        {isFinished ? (
-          <>
-            <PrimaryButton
-              label={t('game.newGameSamePlayers')}
-              disabled={rematchLoading}
-              onPress={() => {
-                void handleRematch();
-              }}
-            />
-            {!isOrganizer ? (
-              <Text style={styles.waitingHint}>{t('online.waitingForRematch')}</Text>
-            ) : null}
-          </>
-        ) : null}
-
-        {isPicker && !isFinished && !hasBaseWord ? (
-          <PrimaryButton
-            label={t('online.pickBaseWordAction')}
-            onPress={() => {
-              router.push({ pathname: '/online/pick-word/[gameId]', params: { gameId } });
-            }}
-          />
-        ) : null}
-
-        {isOrganizer && !isFinished && isFirstRound && !hasBaseWord ? (
-          <PrimaryButton
-            label={t('online.configureGame')}
-            variant="secondary"
-            onPress={() => {
-              router.replace({
-                pathname: '/online/setup',
-                params: { gameId, from: 'lobby' },
+        <ScrollView
+          style={styles.scrollBody}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {players.map(({ uid, name, avatarColorIndex, online, hasLeft, ...playerRest }) => {
+            const displayName = session
+              ? displayPlayerName({ name, ...playerRest }, myUid, uid, session)
+              : name;
+            const seenAs = uid === myUid && session ? viewerPublicAlias(playerRest, session) : null;
+            const showOffline = hasLeft === true || online !== true;
+            const isActivePicker =
+              uid === pickerUid &&
+              session.status === 'waiting' &&
+              isEligibleBaseWordPickerPlayer({
+                name,
+                avatarColorIndex,
+                online,
+                hasLeft,
+                ...playerRest,
               });
-            }}
-          />
-        ) : null}
+            return (
+              <View key={uid} style={styles.playerRow}>
+                <PlayerAvatar name={displayName} avatarColorIndex={avatarColorIndex ?? 0} />
+                <View style={styles.playerNameBlock}>
+                  <Text style={styles.playerName}>{displayName}</Text>
+                  {seenAs ? (
+                    <Text style={styles.playerSeenAs}>
+                      {t('online.youAreSeenAs', { alias: seenAs })}
+                    </Text>
+                  ) : null}
+                </View>
+                {uid === session.organizerId ? (
+                  <Text style={styles.organizerTag}>{t('online.organizer')}</Text>
+                ) : null}
+                {isActivePicker ? (
+                  <Text style={styles.pickerTag}>{t('online.pickerTag')}</Text>
+                ) : null}
+                {!showOffline ? null : <Text style={styles.offlineTag}>📵</Text>}
+              </View>
+            );
+          })}
 
-        {isPicker && !isFinished ? (
-          <>
-            <PrimaryButton
-              label={t('online.startGame')}
-              disabled={!canStart || starting || lobbyLexiconLoading}
-              onPress={() => {
-                void handleStart();
-              }}
-            />
-            <Text style={styles.startHint}>{t('online.startHint')}</Text>
-          </>
-        ) : null}
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+        </ScrollView>
 
-        {!isPicker && !isFinished && hasBaseWord ? (
-          <Text style={styles.waitingHint}>
-            {t('online.waitingForRoundStart', { name: pickerName })}
-          </Text>
-        ) : null}
+        {showFooter ? (
+          <View style={styles.footer}>
+            {isFinished ? (
+              <>
+                <PrimaryButton
+                  label={t('game.newGameSamePlayers')}
+                  disabled={rematchLoading}
+                  onPress={() => {
+                    void handleRematch();
+                  }}
+                />
+                {!isOrganizer ? (
+                  <Text style={styles.waitingHint}>{t('online.waitingForRematch')}</Text>
+                ) : null}
+              </>
+            ) : null}
 
-        {!isOrganizer && !isFinished && !hasBaseWord && !isPicker ? (
-          <Text style={styles.waitingHint}>
-            {t('online.baseWordPickerWaiting', { name: pickerName, turn: turnNumber })}
-          </Text>
+            {isPicker && !isFinished && !hasBaseWord ? (
+              <PrimaryButton
+                label={t('online.pickBaseWordAction')}
+                onPress={() => {
+                  router.push({ pathname: '/online/pick-word/[gameId]', params: { gameId } });
+                }}
+              />
+            ) : null}
+
+            {isOrganizer && !isFinished && isFirstRound && !hasBaseWord ? (
+              <PrimaryButton
+                label={t('online.configureGame')}
+                variant="secondary"
+                onPress={() => {
+                  router.replace({
+                    pathname: '/online/setup',
+                    params: { gameId, from: 'lobby' },
+                  });
+                }}
+              />
+            ) : null}
+
+            {isPicker && !isFinished && hasBaseWord ? (
+              <>
+                <PrimaryButton
+                  label={t('online.startGame')}
+                  disabled={!canStart || starting || lobbyLexiconLoading}
+                  onPress={() => {
+                    void handleStart();
+                  }}
+                />
+                <Text style={styles.startHint}>{t('online.startHint')}</Text>
+              </>
+            ) : null}
+
+            {footerWaitingHint ? <Text style={styles.waitingHint}>{footerWaitingHint}</Text> : null}
+          </View>
         ) : null}
       </Screen>
     </>
@@ -592,12 +614,46 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
     },
-    codeCard: {
+    screen: {
+      flex: 1,
+      padding: 0,
+      gap: 0,
+    },
+    header: {
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.md,
+      paddingBottom: spacing.sm,
+      gap: spacing.sm,
+    },
+    joinCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
       backgroundColor: colors.backgroundPrimary,
       borderRadius: radii.md,
-      padding: spacing.md,
-      alignItems: 'center',
+      padding: spacing.sm,
       gap: spacing.sm,
+    },
+    joinCodeBlock: {
+      flex: 1,
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    scrollBody: {
+      flex: 1,
+      minHeight: 0,
+    },
+    scrollContent: {
+      paddingHorizontal: spacing.md,
+      paddingBottom: spacing.sm,
+      gap: spacing.sm,
+    },
+    footer: {
+      padding: spacing.md,
+      gap: spacing.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.borderTertiary,
+      backgroundColor: colors.backgroundSecondary,
     },
     code: {
       fontSize: 28,
@@ -612,8 +668,8 @@ function createStyles(colors: ThemeColors) {
     pickerBanner: {
       fontSize: 14,
       fontWeight: '500',
-      color: '#633806',
-      backgroundColor: '#FAEEDA',
+      color: colors.warningText,
+      backgroundColor: colors.warningBg,
       borderRadius: radii.sm,
       padding: spacing.sm,
       textAlign: 'center',
@@ -621,10 +677,10 @@ function createStyles(colors: ThemeColors) {
     baseWordSection: {
       alignItems: 'center',
       gap: spacing.xs,
-      paddingVertical: spacing.sm,
+      paddingVertical: spacing.xs,
     },
     baseWordLabel: {
-      fontSize: 13,
+      fontSize: 14,
       color: colors.textSecondary,
       textAlign: 'center',
     },
@@ -632,6 +688,11 @@ function createStyles(colors: ThemeColors) {
       fontSize: 24,
       fontWeight: '700',
       color: colors.accent,
+      textAlign: 'center',
+    },
+    baseWordRound: {
+      fontSize: 13,
+      color: colors.textSecondary,
       textAlign: 'center',
     },
     baseWordMeta: {
@@ -643,33 +704,31 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.accentMuted,
       borderRadius: radii.sm,
       paddingHorizontal: spacing.md,
-      marginVertical: spacing.xs,
+      paddingVertical: spacing.xs,
     },
     baseWordChangeHint: {
-      fontSize: 11,
+      fontSize: 12,
       color: colors.textSecondary,
       textAlign: 'center',
-      marginTop: spacing.xs,
     },
     settingsBanner: {
       fontSize: 12,
-      color: '#633806',
-      backgroundColor: '#FAEEDA',
+      color: colors.warningText,
+      backgroundColor: colors.warningBg,
       borderRadius: radii.sm,
       padding: spacing.sm,
       textAlign: 'center',
     },
     publicSection: {
       gap: spacing.xs,
-      marginVertical: spacing.xs,
     },
     publicHint: {
-      fontSize: 11,
+      fontSize: 12,
       color: colors.textSecondary,
       textAlign: 'center',
     },
     publicExpiry: {
-      fontSize: 11,
+      fontSize: 12,
       color: colors.accent,
       textAlign: 'center',
       fontWeight: '500',
@@ -678,18 +737,19 @@ function createStyles(colors: ThemeColors) {
       fontSize: 13,
       color: colors.textSecondary,
       textAlign: 'center',
-      marginTop: spacing.xs,
     },
     sectionLabel: {
       fontSize: 14,
       fontWeight: '500',
       color: colors.textSecondary,
+      paddingHorizontal: spacing.md,
+      paddingBottom: spacing.xs,
     },
     playerRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: spacing.sm,
-      paddingVertical: spacing.xs,
+      paddingVertical: 2,
     },
     playerNameBlock: {
       flex: 1,
@@ -704,7 +764,7 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
     },
     organizerTag: {
-      fontSize: 11,
+      fontSize: 12,
       fontWeight: '600',
       color: colors.accent,
       backgroundColor: colors.accentMuted,
@@ -713,10 +773,10 @@ function createStyles(colors: ThemeColors) {
       borderRadius: radii.sm,
     },
     pickerTag: {
-      fontSize: 11,
+      fontSize: 12,
       fontWeight: '600',
-      color: '#633806',
-      backgroundColor: '#FAEEDA',
+      color: colors.warningText,
+      backgroundColor: colors.warningBg,
       paddingHorizontal: spacing.sm,
       paddingVertical: 2,
       borderRadius: radii.sm,
@@ -725,7 +785,7 @@ function createStyles(colors: ThemeColors) {
       fontSize: 14,
     },
     startHint: {
-      fontSize: 12,
+      fontSize: 13,
       color: colors.textTertiary,
       textAlign: 'center',
     },

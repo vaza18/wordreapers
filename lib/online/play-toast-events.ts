@@ -3,7 +3,12 @@ import { assignDisplayRanks } from '../game/scoring.js';
 import { resolveGameSessionSettingsForSession } from '../firebase/session-settings.js';
 import type { GameSession } from '../firebase/types.js';
 import { buildLiveStandingsFromSession } from './live-standings.js';
-import { isActiveLivePlayer, isInLiveRound, liveParticipantIds } from './live-round-membership.js';
+import {
+  isActiveLivePlayer,
+  isInLiveRound,
+  liveParticipantIds,
+  expectedLiveRoundOpponentIds,
+} from './live-round-membership.js';
 
 export type PlayToastEvent =
   | {
@@ -156,23 +161,17 @@ function detectRosterEvents(prev: GameSession, curr: GameSession, myUid: string)
     });
   }
 
-  const prevActive =
-    prev.status === 'playing'
-      ? liveParticipantIds(prev).filter((id) => isActiveLivePlayer(prev, id))
-      : [];
+  const playerLeftThisDiff = events.some((event) => event.type === 'player_left');
   const currActive =
     curr.status === 'playing'
       ? liveParticipantIds(curr).filter((id) => isActiveLivePlayer(curr, id))
       : [];
-  const othersStillInLiveRound = liveParticipantIds(curr).filter(
-    (id) => id !== myUid && isRosterActive(curr, id),
-  );
+  const othersStillExpected = expectedLiveRoundOpponentIds(curr, myUid);
   if (
-    prevActive.length > 1 &&
-    prevActive.includes(myUid) &&
+    playerLeftThisDiff &&
     currActive.length === 1 &&
     currActive[0] === myUid &&
-    othersStillInLiveRound.length === 0
+    othersStillExpected.length === 0
   ) {
     events.push({ type: 'alone_in_game' });
   }

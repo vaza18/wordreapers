@@ -267,6 +267,128 @@ describe('detectPlayToastEvents', () => {
     expect(detectPlayToastEvents(prev, curr, 'p1')).toEqual([]);
   });
 
+  it('does not toast alone at round 1 start when lobby opponent is briefly offline', () => {
+    const liveRound = {
+      baseWordRound: 0,
+      liveRoundPlayerUids: ['org', 'guest'] as string[],
+    };
+    const bothOnline = session(
+      {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        guest: { name: 'Guest', gender: 'm', wordCount: 0, score: 0, online: true },
+      },
+      'playing',
+      undefined,
+      liveRound,
+    );
+    const guestOffline = session(
+      {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        guest: { name: 'Guest', gender: 'm', wordCount: 0, score: 0, online: false },
+      },
+      'playing',
+      undefined,
+      liveRound,
+    );
+
+    expect(detectPlayToastEvents(bothOnline, guestOffline, 'org')).toEqual([]);
+    expect(detectPlayToastEvents(guestOffline, bothOnline, 'guest')).toEqual([]);
+  });
+
+  it('toasts alone again when a rejoined opponent leaves a second time', () => {
+    const liveRound = { baseWordRound: 0, liveRoundPlayerUids: ['org', 'guest'] as string[] };
+    const bothPlaying = session(
+      {
+        org: { name: 'Org', wordCount: 2, score: 4, online: true },
+        guest: {
+          name: 'Guest',
+          gender: 'm',
+          wordCount: 1,
+          score: 2,
+          online: true,
+          hasLeft: false,
+        },
+      },
+      'playing',
+      undefined,
+      liveRound,
+    );
+    const guestLeftAgain = session(
+      {
+        org: { name: 'Org', wordCount: 2, score: 4, online: true },
+        guest: {
+          name: 'Guest',
+          gender: 'm',
+          wordCount: 1,
+          score: 2,
+          online: false,
+          hasLeft: true,
+        },
+      },
+      'playing',
+      undefined,
+      liveRound,
+    );
+
+    expect(detectPlayToastEvents(bothPlaying, guestLeftAgain, 'org')).toEqual([
+      {
+        type: 'player_left',
+        playerId: 'guest',
+        name: 'Guest',
+        gender: 'm',
+        rank: 2,
+      },
+      { type: 'alone_in_game' },
+    ]);
+  });
+
+  it('toasts alone when rejoined opponent was online but not counted as active live player', () => {
+    const liveRound = { baseWordRound: 2, liveRoundPlayerUids: ['org'] as string[] };
+    const guestRejoined = session(
+      {
+        org: { name: 'Org', wordCount: 1, score: 2, online: true },
+        guest: {
+          name: 'Guest',
+          gender: 'm',
+          wordCount: 0,
+          score: 0,
+          online: true,
+          hasLeft: false,
+        },
+      },
+      'playing',
+      undefined,
+      liveRound,
+    );
+    const guestLeftAgain = session(
+      {
+        org: { name: 'Org', wordCount: 1, score: 2, online: true },
+        guest: {
+          name: 'Guest',
+          gender: 'm',
+          wordCount: 0,
+          score: 0,
+          online: false,
+          hasLeft: true,
+        },
+      },
+      'playing',
+      undefined,
+      liveRound,
+    );
+
+    expect(detectPlayToastEvents(guestRejoined, guestLeftAgain, 'org')).toEqual([
+      {
+        type: 'player_left',
+        playerId: 'guest',
+        name: 'Guest',
+        gender: 'm',
+        rank: 2,
+      },
+      { type: 'alone_in_game' },
+    ]);
+  });
+
   it('detects overtakes after a tied start', () => {
     const prev = scoringSession({
       me: { name: 'Я', wordCount: 0, score: 0, online: true },

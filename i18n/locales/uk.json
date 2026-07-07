@@ -108,6 +108,7 @@
     "baseWordChosenBy": "обравно гравцем {{name}}",
     "playableWordsMax": "Можна зібрати до {{count}} слів",
     "baseWordChangeHint": "Натисніть, щоб змінити",
+    "baseWordRoundLabel": "раунд {{round}}",
     "continueToLobby": "Далі → лобі",
     "inviteOthers": "Змагання",
     "inviteOthersHint": "2+ гравці",
