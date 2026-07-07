@@ -49,6 +49,10 @@ For bugs or features in `lib/online/` or `firebase/`, use [`docs/task-template.m
 
 [`docs/agent-notes.md`](docs/agent-notes.md) holds short-lived session findings. When a note becomes a stable rule or regression lesson, move it to `known-issues.md`, `online-multiplayer-rules.md`, or `decisions.md` and remove the stale note.
 
+**End-of-session rule:** after non-trivial work in `lib/online/**`, `firebase/**`, or `functions/src/**`, if you discovered a nuance that does not yet warrant a permanent doc entry (flaky emulator behavior, temporary workaround, unclear edge case), add a dated line to `docs/agent-notes.md` before ending the session. Promote stable notes on the next pass.
+
+**Pre-commit gate:** changes under `lib/online/`, `firebase/`, or `functions/src/` must also touch a file under `tests/` (see `scripts/check-test-touched.mjs`). Opt out with `[skip-test-check]` in the commit message when behavior is unchanged (e.g. comment-only).
+
 ## High-risk zones (extra care)
 
 | Area                                                                 | Why risky                                                                                    |
@@ -81,11 +85,12 @@ One logical change per commit (feature / refactor / docs separately). Future age
 
 ## Cursor rules (always or auto-attached)
 
-| Rule                               | When                                                |
-| ---------------------------------- | --------------------------------------------------- |
-| `docs-sync.mdc`                    | Always — keep docs/mockups/legal in sync            |
-| `ci-check-before-done.mdc`         | Always — run `npm run ci:check` before done         |
-| `commit-hygiene.mdc`               | Always — atomic commits                             |
-| `online-multiplayer-domain.mdc`    | Editing `app/online/`, `lib/online/`, related hooks |
-| `dictionary-validation-domain.mdc` | Editing `lib/dictionary/`, `scripts/dictionary/`    |
-| `firebase-backend-domain.mdc`      | Editing `firebase/`, `functions/src/`               |
+| Rule                               | When                                                  |
+| ---------------------------------- | ----------------------------------------------------- |
+| `docs-sync.mdc`                    | Always — keep docs/mockups/legal in sync              |
+| `ci-check-before-done.mdc`         | Always — run `npm run ci:check` before done           |
+| `commit-hygiene.mdc`               | Always — atomic commits                               |
+| `online-multiplayer-domain.mdc`    | Editing `app/online/`, `lib/online/`, related hooks   |
+| `dictionary-validation-domain.mdc` | Editing `lib/dictionary/`, `scripts/dictionary/`      |
+| `firebase-backend-domain.mdc`      | Editing `firebase/`, `functions/src/`                 |
+| `risky-zone-preflight.mdc`         | Always — state Expected/Invariants before risky edits |
