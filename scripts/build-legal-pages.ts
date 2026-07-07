@@ -9,6 +9,25 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(root, GENERATED_LEGAL_PAGES_DIR);
 const iconSource = join(root, 'assets/icons/app-icon-512x512.png');
 const iconFileName = 'app-icon-512x512.png';
+const storeBadgeSources = [
+  { source: 'assets/store-badges/google-play-uk.svg', fileName: 'google-play-uk.svg' },
+  { source: 'assets/store-badges/app-store-uk.svg', fileName: 'app-store-uk.svg' },
+] as const;
+
+const STORE_LINKS = [
+  {
+    href: 'https://play.google.com/store/apps/details?id=com.wordreapers.app&hl=uk',
+    badge: 'google-play-uk.svg',
+    alt: 'Завантажити в Google Play',
+    className: 'store-badge--google-play',
+  },
+  {
+    href: 'https://apps.apple.com/us/app/wordreapers/id6782702694',
+    badge: 'app-store-uk.svg',
+    alt: 'Завантажити в App Store',
+    className: 'store-badge--app-store',
+  },
+] as const;
 
 const SITE_LINKS = [
   { href: 'index.html', label: 'Головна' },
@@ -49,6 +68,9 @@ const STYLES = `
   .site-header p { margin: 0; color: #555; }
   .site-nav { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; justify-content: center; margin: 1rem 0 0; padding: 0; list-style: none; font-size: 0.95rem; }
   .site-nav a { color: #2d4a3e; }
+  .store-badges { display: flex; flex-wrap: wrap; gap: 0.75rem 1rem; align-items: center; justify-content: center; margin: 1.5rem 0 2rem; }
+  .store-badge { display: inline-block; line-height: 0; }
+  .store-badge img { display: block; width: auto; height: 40px; }
   .site-footer { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid #ddd; font-size: 0.9rem; color: #555; }
   .site-footer a { color: #2d4a3e; }
   h1, h2, h3 { line-height: 1.25; }
@@ -195,6 +217,14 @@ function renderSiteHeader(activeHref: string, subtitle?: string): string {
 </header>`;
 }
 
+function renderStoreBadges(): string {
+  const items = STORE_LINKS.map(
+    ({ href, badge, alt, className }) =>
+      `<a class="store-badge ${className}" href="${href}" rel="noopener noreferrer" target="_blank"><img src="${badge}" alt="${alt}" /></a>`,
+  ).join('\n    ');
+  return `<div class="store-badges">\n    ${items}\n  </div>`;
+}
+
 function renderSiteFooter(): string {
   const links = SITE_LINKS.filter(({ href }) => href !== 'index.html')
     .map(({ href, label }) => `<a href="${href}">${label}</a>`)
@@ -227,6 +257,9 @@ ${renderSiteFooter()}
 
 mkdirSync(outDir, { recursive: true });
 copyFileSync(iconSource, join(outDir, iconFileName));
+for (const { source, fileName } of storeBadgeSources) {
+  copyFileSync(join(root, source), join(outDir, fileName));
+}
 
 for (const page of pages) {
   const md = readFileSync(join(root, page.source), 'utf8');
@@ -238,6 +271,7 @@ for (const page of pages) {
 
 const indexBody = `
   <p>Офіційні тексти додатку <strong>Wordreapers</strong> (Словозбирачі) — правила гри, заява про використання штучного інтелекту при розробці та юридичні документи.</p>
+  ${renderStoreBadges()}
   <ul>
     <li><a href="about.html">Про гру та правила</a></li>
     <li><a href="ai-attestation.html">Заява про використання ШІ та відповідальність</a></li>

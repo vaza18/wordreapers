@@ -7,6 +7,7 @@ on:
       - 'docs/legal/**'
       - 'docs/wordreapers_about.md'
       - 'assets/icons/app-icon-512x512.png'
+      - 'assets/store-badges/**'
       - 'scripts/build-legal-pages.ts'
       - '.github/workflows/legal-pages.yml'
   workflow_dispatch:

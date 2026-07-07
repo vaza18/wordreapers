@@ -4,6 +4,7 @@
 | ------------------------------------ | ------ | ------------------------------------------------------------ |
 | `icons/app-icon.png`                 | Yes    | Manual (1024×1024; iOS icon, splash)                         |
 | `icons/adaptive-icon-foreground.png` | Yes    | `npm run icons:adaptive` (from app-icon; Android foreground) |
+| `store-badges/`                      | Yes    | Official Google Play / App Store badge SVGs (GitHub Pages)   |
 | `generated/sounds/`                  | No     | `npm run sounds:generate` (also `postinstall`)               |
 | `generated/dictionaries/`            | No     | `npm run dict:all`                                           |
 | `generated/legal-pages/`             | No     | `npm run legal:pages` (GitHub Pages; not in the app bundle)  |
