@@ -29,7 +29,7 @@ import {
 } from './local-room-draft.js';
 import { buildPlayingSoloTimerFields } from './publish-playing-solo-fields.js';
 import { setOrganizerWaitingRoom } from './organizer-waiting-room.js';
-import { restoreSessionWordsToRtdb } from './restore-session-words-to-rtdb.js';
+import { restoreSessionWordsToRtdb } from './session/restore-session-words-to-rtdb.js';
 
 function profileToPlayer(profile: PlayerProfile): GameSessionPlayer {
   const player: GameSessionPlayer = {

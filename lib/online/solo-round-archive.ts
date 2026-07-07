@@ -4,9 +4,9 @@ import type { PlayerProfile } from '../profile/player-profile.js';
 import { gameSessionSettingsFromSetup } from '../firebase/session-settings.js';
 import { computePlayerScore, type ScoredWordEntry } from '../game/scoring.js';
 
-import type { AllPlayerWords } from './clone-player-words.js';
+import type { AllPlayerWords } from './session/clone-player-words.js';
 import type { LocalRoomSetup } from './local-room-draft.js';
-import { saveFinishedRoundArchive } from './online-session-archive.js';
+import { saveFinishedRoundArchive } from './session/online-session-archive.js';
 import type { OrganizerSoloWord } from '@/store/organizer-solo-store';
 
 export function buildSoloFinishedSession(

@@ -9,13 +9,13 @@ vi.mock('../lib/firebase/player-words-service.js', () => ({
   fetchSessionPlayerWords: (...args: unknown[]) => fetchSessionPlayerWords(...args),
 }));
 
-vi.mock('../lib/online/online-session-archive.js', () => ({
+vi.mock('../lib/online/session/online-session-archive.js', () => ({
   getFinishedRoundArchive: (...args: unknown[]) => getFinishedRoundArchive(...args),
   isFinishedArchiveStale: (...args: unknown[]) => isFinishedArchiveStale(...args),
   saveFinishedRoundArchive: (...args: unknown[]) => saveFinishedRoundArchive(...args),
 }));
 
-import { archiveFinishedRoundFromFirebase } from '../lib/online/archive-finished-round-from-firebase.js';
+import { archiveFinishedRoundFromFirebase } from '../lib/online/session/archive-finished-round-from-firebase.js';
 import { finishedSession } from './helpers/game-session-fixtures.js';
 
 describe('archiveFinishedRoundFromFirebase', () => {

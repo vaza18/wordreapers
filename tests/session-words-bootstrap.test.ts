@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import type { StoredPlayerWord } from '../lib/firebase/player-words-service.js';
 import type { GameSession } from '../lib/firebase/types.js';
-import type { AllPlayerWords } from '../lib/online/clone-player-words.js';
-import { isSessionWordsSnapshotReady } from '../lib/online/session-words-bootstrap.js';
+import type { AllPlayerWords } from '../lib/online/session/clone-player-words.js';
+import { isSessionWordsSnapshotReady } from '../lib/online/session/session-words-bootstrap.js';
 
 function sessionWithCounts(counts: Record<string, number>): GameSession {
   return {

@@ -16,10 +16,10 @@ import {
   buildEarlyFinishParticipantRows,
   EARLY_FINISH_VOTE_TIMEOUT_MS,
   viewerNeedsEarlyFinishVote,
-} from '@/lib/online/early-finish-vote';
+} from '@/lib/online/voting/early-finish-vote';
 import { displayPlayerName } from '@/lib/online/public-lobby/display-player-name';
 import { playerGenderForDisplay } from '@/lib/online/public-lobby/session-identity';
-import { RESUME_VOTE_TIMEOUT_MS, viewerNeedsResumeVote } from '@/lib/online/resume-vote';
+import { RESUME_VOTE_TIMEOUT_MS, viewerNeedsResumeVote } from '@/lib/online/voting/resume-vote';
 import {
   assignDisplayRanks,
   buildStandingsFromSession,

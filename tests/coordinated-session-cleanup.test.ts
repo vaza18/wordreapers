@@ -13,7 +13,7 @@ vi.mock('../lib/firebase/results-coordination-service.js', () => ({
   markResultsExited: (...args: unknown[]) => markResultsExited(...args),
 }));
 
-vi.mock('../lib/online/online-session-archive.js', () => ({
+vi.mock('../lib/online/session/online-session-archive.js', () => ({
   saveFinishedRoundArchive: (...args: unknown[]) => saveFinishedRoundArchive(...args),
   markFinishedArchiveAckSent: (...args: unknown[]) => markFinishedArchiveAckSent(...args),
 }));

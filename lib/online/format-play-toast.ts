@@ -1,6 +1,6 @@
 import { tGendered, type PlayerGender } from '../game/grammar.js';
-import { displayPlayerName } from '../online/public-lobby/display-player-name.js';
-import { playerGenderForDisplay } from '../online/public-lobby/session-identity.js';
+import { displayPlayerName } from './public-lobby/display-player-name.js';
+import { playerGenderForDisplay } from './public-lobby/session-identity.js';
 import type { GameSession } from '../firebase/types.js';
 import { playToastVariantForEvent, type PlayToastVariant } from './play-toast-display.js';
 import type { PlayToastEvent } from './play-toast-events.js';

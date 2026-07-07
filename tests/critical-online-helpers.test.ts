@@ -4,7 +4,7 @@ import { formatWinnerHeadline, genderedI18nKey, tGendered } from '../lib/game/gr
 import {
   activeRoundPlayerRows,
   stillPlayingPlayerNames,
-} from '../lib/online/active-round-players.js';
+} from '../lib/online/presence/active-round-players.js';
 import { buildRoomJoinUrl } from '../lib/online/join-link.js';
 import {
   playToastRankSignature,

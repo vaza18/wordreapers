@@ -4,7 +4,7 @@ import {
   fetchSessionPlayerWords,
   subscribeSessionPlayerWords,
 } from '@/lib/firebase/player-words-service';
-import { mergeAllPlayerWords, type AllPlayerWords } from '@/lib/online/clone-player-words';
+import { mergeAllPlayerWords, type AllPlayerWords } from '@/lib/online/session/clone-player-words';
 
 const EMPTY_WORDS: AllPlayerWords = new Map();
 

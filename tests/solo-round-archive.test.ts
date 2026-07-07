@@ -6,7 +6,7 @@ vi.mock('@react-native-async-storage/async-storage', async () => {
 });
 
 import { resetAsyncStorageMock } from './helpers/mock-async-storage.js';
-import { getFinishedRoundArchive } from '../lib/online/online-session-archive.js';
+import { getFinishedRoundArchive } from '../lib/online/session/online-session-archive.js';
 import { saveSoloFinishedRoundArchive } from '../lib/online/solo-round-archive.js';
 
 describe('saveSoloFinishedRoundArchive', () => {

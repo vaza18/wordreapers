@@ -26,7 +26,7 @@ vi.mock('../lib/firebase/server-clock.js', () => ({
   getServerNow: () => getServerNow(),
 }));
 
-vi.mock('../lib/online/restore-session-words-to-rtdb.js', () => ({
+vi.mock('../lib/online/session/restore-session-words-to-rtdb.js', () => ({
   restoreSessionWordsToRtdb: (...args: unknown[]) => restoreSessionWordsToRtdb(...args),
 }));
 

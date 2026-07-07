@@ -3,8 +3,8 @@ import { useCallback, useEffect, useRef } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 
 import { ensureFirebaseReady } from '@/lib/firebase/ensure-firebase-ready';
-import { listPendingRoundArchives } from '@/lib/online/pending-round-archive';
-import { listFinishedRoundArchives } from '@/lib/online/online-session-archive';
+import { listPendingRoundArchives } from '@/lib/online/session/pending-round-archive';
+import { listFinishedRoundArchives } from '@/lib/online/session/online-session-archive';
 import { syncFinishedRoundsCoordinator } from '@/lib/online/sync-coordinator';
 import { useFirebaseStore } from '@/store/firebase-store';
 

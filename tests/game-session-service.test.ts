@@ -42,7 +42,7 @@ vi.mock('../lib/firebase/server-clock.js', () => ({
   getServerNow: () => 2_000_000,
 }));
 
-vi.mock('../lib/online/active-round-cache.js', () => ({
+vi.mock('../lib/online/session/active-round-cache.js', () => ({
   clearAllActiveRoundCachesForGame: vi.fn().mockResolvedValue(undefined),
 }));
 

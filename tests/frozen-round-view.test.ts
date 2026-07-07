@@ -5,7 +5,7 @@ import {
   shouldKeepFrozenResultsOverLiveFinished,
   shouldLoadViewingRoundFromArchive,
   shouldRecoverFinishedRoundFromArchive,
-} from '../lib/online/frozen-round-view.js';
+} from '../lib/online/session/frozen-round-view.js';
 import { gameSession, sessionWithRound } from './helpers/game-session-fixtures.js';
 
 describe('shouldFreezeLiveFinishedOnResults', () => {

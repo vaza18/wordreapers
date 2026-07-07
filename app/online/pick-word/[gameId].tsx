@@ -35,8 +35,8 @@ import {
 import { sessionContentSafetyLocked } from '@/lib/online/public-lobby/content-safety';
 import { isPublicBaseWordSafeFromDisplay } from '@/lib/online/public-lobby/validate-public-base-word';
 import { baseWordPickerTurnNumber, isCurrentBaseWordPicker } from '@/lib/online/base-word-picker';
-import { handoffPlayerPresence } from '@/lib/online/presence-handoff';
-import { usePlayerOnlinePresence } from '@/lib/online/use-player-online-presence';
+import { handoffPlayerPresence } from '@/lib/online/presence/presence-handoff';
+import { usePlayerOnlinePresence } from '@/lib/online/presence/use-player-online-presence';
 import type { UniqueBonusMode } from '@/lib/game/scoring';
 
 const MIN_BASE_WORD_LENGTH = 6;

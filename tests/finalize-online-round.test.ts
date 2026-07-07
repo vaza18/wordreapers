@@ -6,13 +6,13 @@ const clearActiveRoundCacheForSession = vi.fn();
 const recordOnlineRound = vi.fn();
 const incrementCloudPlayerStatsIfRegistered = vi.fn();
 
-vi.mock('../lib/online/processed-online-rounds.js', () => ({
+vi.mock('../lib/online/session/processed-online-rounds.js', () => ({
   onlineRoundKey: (gameId: string, round: number) => `${gameId}:${round}`,
   wasOnlineRoundProcessed: (...args: unknown[]) => wasOnlineRoundProcessed(...args),
   markOnlineRoundProcessed: (...args: unknown[]) => markOnlineRoundProcessed(...args),
 }));
 
-vi.mock('../lib/online/cache-active-round.js', () => ({
+vi.mock('../lib/online/session/cache-active-round.js', () => ({
   clearActiveRoundCacheForSession: (...args: unknown[]) => clearActiveRoundCacheForSession(...args),
 }));
 

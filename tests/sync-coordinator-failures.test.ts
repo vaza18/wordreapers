@@ -32,12 +32,12 @@ vi.mock('../lib/online/finalize-online-round.js', () => ({
   finalizeOnlineRoundForPlayer: (...args: unknown[]) => finalizeOnlineRoundForPlayer(...args),
 }));
 
-vi.mock('../lib/online/pending-round-archive.js', () => ({
+vi.mock('../lib/online/session/pending-round-archive.js', () => ({
   clearPendingRoundArchive: (...args: unknown[]) => clearPendingRoundArchive(...args),
   listPendingRoundArchives: vi.fn(),
 }));
 
-vi.mock('../lib/online/online-session-archive.js', () => ({
+vi.mock('../lib/online/session/online-session-archive.js', () => ({
   getFinishedRoundArchive: vi.fn(),
   isFinishedArchiveStale: vi.fn(),
   listFinishedRoundArchives: vi.fn(),
@@ -51,8 +51,8 @@ vi.mock('../lib/online/round-finished-notification-once.js', () => ({
 import {
   getFinishedRoundArchive,
   listFinishedRoundArchives,
-} from '../lib/online/online-session-archive.js';
-import { listPendingRoundArchives } from '../lib/online/pending-round-archive.js';
+} from '../lib/online/session/online-session-archive.js';
+import { listPendingRoundArchives } from '../lib/online/session/pending-round-archive.js';
 import { syncFinishedRoundsCoordinator } from '../lib/online/sync-coordinator.js';
 import { DEFAULT_SESSION_SETTINGS } from './helpers/game-session-fixtures.js';
 

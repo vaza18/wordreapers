@@ -15,19 +15,19 @@ import { isOrphanGameSessionShell, orphanShellHasPlayer } from '../online/orphan
 import type { PlayerProfile } from '../profile/player-profile.js';
 
 import { currentBaseWordPickerUid } from '../online/base-word-picker.js';
-import { clearAllActiveRoundCachesForGame } from '../online/active-round-cache.js';
+import { clearAllActiveRoundCachesForGame } from '../online/session/active-round-cache.js';
 import { setOrganizerWaitingRoom } from '../online/organizer-waiting-room.js';
 import {
   resolveGameSessionSettings,
   resolveGameSessionSettingsForSession,
 } from './session-settings.js';
 import { recomputeSessionPlayerScores } from '../game/scoring.js';
-import { buildPlayersPatchForRoundStart } from '../online/players-patch-for-round-start.js';
+import { buildPlayersPatchForRoundStart } from '../online/presence/players-patch-for-round-start.js';
 import { appendLiveRoundPlayerUid } from './live-round-player-uids.js';
 import {
   rematchWaitingPlayerPatch,
   waitingLobbyOptInUids,
-} from '../online/live-round-membership.js';
+} from '../online/presence/live-round-membership.js';
 import { shouldOrganizerAbandonWaitingRoom } from '../online/should-organizer-abandon-waiting-room.js';
 import { computeRoundPlayedSecondsAtFinish } from '../game/round-duration.js';
 import {

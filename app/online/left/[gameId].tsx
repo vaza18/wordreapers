@@ -20,14 +20,14 @@ import {
 import {
   persistFinishedRoundForPlayer,
   persistFinishedRoundFromFirebase,
-} from '@/lib/online/complete-pending-round-archive';
+} from '@/lib/online/session/complete-pending-round-archive';
 import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
 import {
   freezeFinishedRound,
   loadFrozenFinishedRoundFromArchive,
   type FrozenFinishedRound,
-} from '@/lib/online/frozen-finished-round';
-import { markPendingRoundArchive } from '@/lib/online/pending-round-archive';
+} from '@/lib/online/session/frozen-finished-round';
+import { markPendingRoundArchive } from '@/lib/online/session/pending-round-archive';
 import { maskResultsForEarlyExit } from '@/lib/online/mask-results-for-viewer';
 import { buildOnlineResultsView } from '@/lib/online/online-results-data';
 import { onlineResultsRoute } from '@/lib/online/online-results-route';
@@ -41,8 +41,8 @@ import {
   shouldShowLeftRoundViewResults,
 } from '@/lib/online/left-round-screen-actions';
 import { resolvePostJoinRoute } from '@/lib/online/post-join-route';
-import { rejoinOnlineRound } from '@/lib/online/rejoin-online-round';
-import { stillPlayingPlayerNames } from '@/lib/online/active-round-players';
+import { rejoinOnlineRound } from '@/lib/online/session/rejoin-online-round';
+import { stillPlayingPlayerNames } from '@/lib/online/presence/active-round-players';
 import {
   notifyRoundFinishedOnce,
   isRoundFinishedNotified,

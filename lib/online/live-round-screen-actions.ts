@@ -1,8 +1,15 @@
 import type { GameSession } from '../firebase/types.js';
 
-import { isActiveLivePlayer, isInLiveRound, isLiveParticipant } from './live-round-membership.js';
-import { isRematchWaitingLobby, isRematchWaitingLobbyOptedIn } from './rematch-waiting-lobby.js';
-import { isReviewingPriorRoundOnPlayScreen } from './is-reviewing-prior-round-on-play.js';
+import {
+  isActiveLivePlayer,
+  isInLiveRound,
+  isLiveParticipant,
+} from './presence/live-round-membership.js';
+import {
+  isRematchWaitingLobby,
+  isRematchWaitingLobbyOptedIn,
+} from './rematch/rematch-waiting-lobby.js';
+import { isReviewingPriorRoundOnPlayScreen } from './session/is-reviewing-prior-round-on-play.js';
 
 export type PlayScreenContext = {
   session: Pick<GameSession, 'status' | 'baseWordRound' | 'liveRoundPlayerUids' | 'players'> & {

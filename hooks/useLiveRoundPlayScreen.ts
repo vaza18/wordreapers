@@ -6,8 +6,8 @@ import type { GameSessionSnapshot } from '@/lib/firebase/game-session-service';
 import { markPlayerOffline } from '@/lib/firebase/game-session-service';
 import { resolvePlayScreenActions } from '@/lib/online/live-round-screen-actions';
 import { onlineResultsRoute } from '@/lib/online/online-results-route';
-import { reconcilePlayerPresence } from '@/lib/online/reconcile-player-presence';
-import { usePlayerOnlinePresence } from '@/lib/online/use-player-online-presence';
+import { reconcilePlayerPresence } from '@/lib/online/presence/reconcile-player-presence';
+import { usePlayerOnlinePresence } from '@/lib/online/presence/use-player-online-presence';
 import { useProfileStore } from '@/store/profile-store';
 
 type UseLiveRoundPlayScreenParams = {

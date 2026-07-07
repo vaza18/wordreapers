@@ -15,7 +15,7 @@ import {
   saveActiveRoundCache,
   wordsMapFromCache,
   wordsRecordFromMap,
-} from '../lib/online/active-round-cache.js';
+} from '../lib/online/session/active-round-cache.js';
 import type { StoredPlayerWord } from '../lib/firebase/player-words-service.js';
 
 const snapshot = {

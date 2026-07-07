@@ -6,7 +6,7 @@ import { normalizeRoomCode } from '../firebase/room-code.js';
 import { toDisplayUpper } from '../dictionary/normalize.js';
 
 import { notifyRoundFinished } from './round-finished-notification.js';
-import { onlineRoundKey } from './processed-online-rounds.js';
+import { onlineRoundKey } from './session/processed-online-rounds.js';
 
 const NOTIFIED_KEY = 'wordreapers.roundFinishedNotified';
 

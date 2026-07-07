@@ -18,7 +18,7 @@ vi.mock('../lib/firebase/session-word-maps-service.js', () => ({
   writeSessionWordMapsShards: (...args: unknown[]) => writeSessionWordMapsShards(...args),
 }));
 
-import { restoreSessionWordsToRtdb } from '../lib/online/restore-session-words-to-rtdb.js';
+import { restoreSessionWordsToRtdb } from '../lib/online/session/restore-session-words-to-rtdb.js';
 
 describe('restoreSessionWordsToRtdb', () => {
   beforeEach(() => {

@@ -28,7 +28,7 @@ vi.mock('../lib/firebase/game-session-service.js', () => ({
   leaveGameSession: (...args: unknown[]) => runExitCleanupMocks.leaveGameSession(...args),
 }));
 
-vi.mock('../lib/online/cache-active-round.js', () => ({
+vi.mock('../lib/online/session/cache-active-round.js', () => ({
   cacheActiveRoundProgress: (...args: unknown[]) => cacheActiveRoundProgress(...args),
 }));
 

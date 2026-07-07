@@ -1,17 +1,17 @@
 import { useEffect } from 'react';
 
-import { getFinishedRoundArchive } from '@/lib/online/online-session-archive';
+import { getFinishedRoundArchive } from '@/lib/online/session/online-session-archive';
 import {
   loadFrozenFinishedRoundBeforeLive,
   loadFrozenFinishedRoundFromArchive,
   loadLatestFrozenFinishedRoundFromArchive,
   type FrozenFinishedRound,
-} from '@/lib/online/frozen-finished-round';
+} from '@/lib/online/session/frozen-finished-round';
 import {
   shouldLoadViewingRoundFromArchive,
   shouldRecoverFinishedRoundFromArchive,
-} from '@/lib/online/frozen-round-view';
-import { loadFrozenRoundWithRetry } from '@/lib/online/load-frozen-round-with-retry';
+} from '@/lib/online/session/frozen-round-view';
+import { loadFrozenRoundWithRetry } from '@/lib/online/session/load-frozen-round-with-retry';
 import type { GameSessionSnapshot } from '@/lib/firebase/game-session-service';
 
 export type UseFrozenRoundRecoveryOptions = {

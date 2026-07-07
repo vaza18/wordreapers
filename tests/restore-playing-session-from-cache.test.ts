@@ -24,8 +24,9 @@ vi.mock('../lib/firebase/session-ref.js', () => ({
 vi.mock('../lib/firebase/server-clock.js', () => ({
   getServerNow: () => 2_000_000,
 }));
-vi.mock('../lib/online/active-round-cache.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../lib/online/active-round-cache.js')>();
+vi.mock('../lib/online/session/active-round-cache.js', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../lib/online/session/active-round-cache.js')>();
   return {
     ...actual,
     findActiveRoundCacheForGame: (...args: unknown[]) => findActiveRoundCacheForGame(...args),
@@ -45,11 +46,11 @@ vi.mock('../lib/firebase/auth.js', () => ({
   ensureAnonymousAuth: () => ensureAnonymousAuth(),
 }));
 
-import type { ActiveRoundCacheEntry } from '../lib/online/active-round-cache.js';
+import type { ActiveRoundCacheEntry } from '../lib/online/session/active-round-cache.js';
 import {
   rejoinOnlineRound,
   restorePlayingSessionFromLocalCache,
-} from '../lib/online/rejoin-online-round.js';
+} from '../lib/online/session/rejoin-online-round.js';
 
 function cacheEntry(overrides: Partial<ActiveRoundCacheEntry> = {}): ActiveRoundCacheEntry {
   return {

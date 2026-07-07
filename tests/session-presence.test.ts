@@ -5,7 +5,7 @@ import {
   hasActiveOpponent,
   hasOnlineOpponent,
   onlineActiveOpponentNames,
-} from '../lib/online/session-presence.js';
+} from '../lib/online/presence/session-presence.js';
 
 function session(players: GameSession['players']): GameSession {
   return {

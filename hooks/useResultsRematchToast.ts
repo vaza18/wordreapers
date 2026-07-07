@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { GameSessionSnapshot } from '@/lib/firebase/game-session-service';
 import { tGendered } from '@/lib/game/grammar';
 import { displayPlayerName } from '@/lib/online/public-lobby/display-player-name';
-import { detectRematchToastEvent } from '@/lib/online/rematch-toast-events';
+import { detectRematchToastEvent } from '@/lib/online/rematch/rematch-toast-events';
 import { useProfileStore } from '@/store/profile-store';
 
 import { type PlayToastItem, useToastQueue } from './useToastQueue';

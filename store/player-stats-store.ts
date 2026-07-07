@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 
 import { computeArchivedPlayerStats } from '@/lib/online/compute-archived-player-stats';
-import { listFinishedRoundArchives } from '@/lib/online/online-session-archive';
+import { listFinishedRoundArchives } from '@/lib/online/session/online-session-archive';
 import {
   DEFAULT_PLAYER_STATS,
   parsePlayerStats,

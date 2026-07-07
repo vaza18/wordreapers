@@ -21,11 +21,11 @@ vi.mock('../lib/online/finalize-online-round.js', () => ({
   finalizeOnlineRoundForPlayer: (...args: unknown[]) => finalizeOnlineRoundForPlayer(...args),
 }));
 
-vi.mock('../lib/online/pending-round-archive.js', () => ({
+vi.mock('../lib/online/session/pending-round-archive.js', () => ({
   clearPendingRoundArchive: (...args: unknown[]) => clearPendingRoundArchive(...args),
 }));
 
-vi.mock('../lib/online/online-session-archive.js', () => ({
+vi.mock('../lib/online/session/online-session-archive.js', () => ({
   getFinishedRoundArchive: (...args: unknown[]) => getFinishedRoundArchive(...args),
   isFinishedArchiveStale: (...args: unknown[]) => isFinishedArchiveStale(...args),
   saveFinishedRoundArchive: (...args: unknown[]) => saveFinishedRoundArchive(...args),
@@ -44,7 +44,7 @@ import {
   persistFinishedRoundForPlayer,
   persistFinishedRoundFromFirebase,
   readLiveSession,
-} from '../lib/online/complete-pending-round-archive.js';
+} from '../lib/online/session/complete-pending-round-archive.js';
 import { finishedSession } from './helpers/game-session-fixtures.js';
 
 const words = new Map([['org', new Map([['порт', { display: 'порт', at: 100 }]])]]);

@@ -4,10 +4,13 @@ import type { GameSession, SessionVote } from '../lib/firebase/types.js';
 import {
   buildEarlyFinishParticipantRows,
   earlyFinishRequiredVoterIds,
-} from '../lib/online/early-finish-vote.js';
-import { hasOnlineOpponent } from '../lib/online/session-presence.js';
-import { buildPlayersPatchForRoundStart } from '../lib/online/players-patch-for-round-start.js';
-import { isLiveParticipant, waitingLobbyOptInUids } from '../lib/online/live-round-membership.js';
+} from '../lib/online/voting/early-finish-vote.js';
+import { hasOnlineOpponent } from '../lib/online/presence/session-presence.js';
+import { buildPlayersPatchForRoundStart } from '../lib/online/presence/players-patch-for-round-start.js';
+import {
+  isLiveParticipant,
+  waitingLobbyOptInUids,
+} from '../lib/online/presence/live-round-membership.js';
 import {
   resolveLobbyScreenActions,
   resolvePlayScreenActions,

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { GameSessionSnapshot } from '../lib/firebase/game-session-service.js';
-import { optIntoLiveRound } from '../lib/online/opt-into-live-round.js';
+import { optIntoLiveRound } from '../lib/online/rematch/opt-into-live-round.js';
 
 const { readGameSessionSnapshot, tryReadGameSessionSnapshot } = vi.hoisted(() => {
   const readGameSessionSnapshot = vi.fn();
@@ -20,13 +20,13 @@ vi.mock('../lib/firebase/game-session-service.js', () => ({
   markPlayerOnline: vi.fn(),
 }));
 
-vi.mock('../lib/online/restart-rematch-online-round.js', () => ({
+vi.mock('../lib/online/rematch/restart-rematch-online-round.js', () => ({
   restartRematchOnlineRound: vi.fn(),
 }));
 
 import { markResultsExited } from '../lib/firebase/results-coordination-service.js';
 import { rejoinExistingPlayer, markPlayerOnline } from '../lib/firebase/game-session-service.js';
-import { restartRematchOnlineRound } from '../lib/online/restart-rematch-online-round.js';
+import { restartRematchOnlineRound } from '../lib/online/rematch/restart-rematch-online-round.js';
 
 const profile = { name: 'Org', gender: 'm' as const, avatarColorIndex: 0 };
 

@@ -8,7 +8,7 @@ import {
   isInLiveRound,
   liveParticipantIds,
   expectedLiveRoundOpponentIds,
-} from './live-round-membership.js';
+} from './presence/live-round-membership.js';
 
 export type PlayToastEvent =
   | {

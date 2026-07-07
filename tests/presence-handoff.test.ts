@@ -4,7 +4,7 @@ import {
   consumePresenceHandoff,
   handoffPlayerPresence,
   resetPresenceHandoff,
-} from '../lib/online/presence-handoff.js';
+} from '../lib/online/presence/presence-handoff.js';
 
 describe('presence-handoff', () => {
   it('consumes handoff once for the same room', () => {

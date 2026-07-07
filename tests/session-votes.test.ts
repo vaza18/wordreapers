@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { votingPlayerIds } from '../lib/online/voting-player-ids.js';
+import { votingPlayerIds } from '../lib/online/voting/voting-player-ids.js';
 import { playingSession, sessionWithPlayers } from './helpers/game-session-fixtures.js';
 
 describe('votingPlayerIds', () => {

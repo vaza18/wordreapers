@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { AddTimeVote, GameSession } from '../lib/firebase/types.js';
-import { EARLY_FINISH_VOTE_TIMEOUT_MS } from '../lib/online/early-finish-vote.js';
+import { EARLY_FINISH_VOTE_TIMEOUT_MS } from '../lib/online/voting/early-finish-vote.js';
 import {
   computeExtendedTimerEndsAt,
   shouldApplyAddTimeFromVote,
@@ -9,7 +9,7 @@ import {
   shouldDeferTimerFinishForAddTimeVote,
   shouldFinishRoundAfterTimerExpired,
   viewerNeedsAddTimeVote,
-} from '../lib/online/add-time-vote.js';
+} from '../lib/online/voting/add-time-vote.js';
 
 function session(players: GameSession['players']): GameSession {
   return {

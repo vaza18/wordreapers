@@ -33,8 +33,9 @@ vi.mock('../lib/firebase/server-clock.js', () => ({
   getServerNow: () => 1_500_000,
 }));
 
-vi.mock('../lib/online/active-round-cache.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../lib/online/active-round-cache.js')>();
+vi.mock('../lib/online/session/active-round-cache.js', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../lib/online/session/active-round-cache.js')>();
   return {
     ...actual,
     getActiveRoundCache: (...args: unknown[]) => getActiveRoundCache(...args),
@@ -48,7 +49,7 @@ import {
   cacheActiveRoundProgress,
   purgeStaleActiveRoundCaches,
   tryRestoreActiveRoundCache,
-} from '../lib/online/cache-active-round.js';
+} from '../lib/online/session/cache-active-round.js';
 import { playingSession } from './helpers/game-session-fixtures.js';
 
 describe('cache-active-round', () => {

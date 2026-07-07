@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { GameSession } from '../lib/firebase/types.js';
-import { isFinishedArchiveStale } from '../lib/online/online-session-archive.js';
+import { isFinishedArchiveStale } from '../lib/online/session/online-session-archive.js';
 
 function finishedSession(baseWordRound: number): GameSession {
   return {

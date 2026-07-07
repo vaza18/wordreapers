@@ -1,6 +1,6 @@
 import type { GameSession, GameSessionPlayer } from '../firebase/types.js';
 
-import { isRematchWaitingLobby } from './rematch-waiting-lobby.js';
+import { isRematchWaitingLobby } from './rematch/rematch-waiting-lobby.js';
 
 /** True when the player may pick the base word this round (online, still in roster). */
 export function isEligibleBaseWordPickerPlayer(player: GameSessionPlayer | undefined): boolean {

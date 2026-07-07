@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isReviewingPriorRoundOnPlayScreen } from '../lib/online/is-reviewing-prior-round-on-play.js';
+import { isReviewingPriorRoundOnPlayScreen } from '../lib/online/session/is-reviewing-prior-round-on-play.js';
 
 describe('isReviewingPriorRoundOnPlayScreen', () => {
   it('is true while a finished round is frozen and live advanced', () => {

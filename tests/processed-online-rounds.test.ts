@@ -10,7 +10,7 @@ import {
   markOnlineRoundProcessed,
   onlineRoundKey,
   wasOnlineRoundProcessed,
-} from '../lib/online/processed-online-rounds.js';
+} from '../lib/online/session/processed-online-rounds.js';
 
 const STORAGE_KEY = 'wordreapers.processedOnlineRounds';
 

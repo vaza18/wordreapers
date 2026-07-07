@@ -1,5 +1,5 @@
 import { currentBaseWordPickerUid } from './base-word-picker.js';
-import { isActiveLivePlayer } from './live-round-membership.js';
+import { isActiveLivePlayer } from './presence/live-round-membership.js';
 import type { GameSession } from '../firebase/types.js';
 
 export interface PostJoinRoute {

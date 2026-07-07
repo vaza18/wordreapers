@@ -13,7 +13,10 @@ import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useOnlineViewerUid } from '@/hooks/useOnlineViewerUid';
 import { normalizeRoomCode } from '@/lib/firebase/room-code';
 import { stackHeaderWithBackAndSettings } from '@/lib/navigation/stack-header-options';
-import { archiveRouteKey, listFinishedRoundArchives } from '@/lib/online/online-session-archive';
+import {
+  archiveRouteKey,
+  listFinishedRoundArchives,
+} from '@/lib/online/session/online-session-archive';
 import {
   computeRoomHistoryAggregate,
   didPlayerLeadRoomAggregate,

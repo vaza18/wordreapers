@@ -4,7 +4,7 @@ import type { GameSession } from '../lib/firebase/types.js';
 import {
   buildPlayersPatchForRoundStart,
   playerPatchForRoundStart,
-} from '../lib/online/players-patch-for-round-start.js';
+} from '../lib/online/presence/players-patch-for-round-start.js';
 
 function waitingSession(
   players: GameSession['players'],

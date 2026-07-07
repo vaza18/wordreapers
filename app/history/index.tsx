@@ -18,7 +18,7 @@ import {
   archiveRouteKey,
   listFinishedRoundArchives,
   type FinishedRoundArchive,
-} from '@/lib/online/online-session-archive';
+} from '@/lib/online/session/online-session-archive';
 import { buildHistoryListEntries } from '@/lib/online/room-history-aggregate';
 import { usePlayerStatsStore } from '@/store/player-stats-store';
 import { useProfileStore } from '@/store/profile-store';

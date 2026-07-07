@@ -25,11 +25,11 @@ vi.mock('../lib/firebase/game-session-service.js', () => ({
     voluntaryLeaveWaitingLobbyIfMember(...args),
 }));
 
-vi.mock('../lib/online/presence-handoff.js', () => ({
+vi.mock('../lib/online/presence/presence-handoff.js', () => ({
   consumePresenceHandoff: (...args: unknown[]) => consumePresenceHandoff(...args),
 }));
 
-import { usePlayerOnlinePresence } from '../lib/online/use-player-online-presence.js';
+import { usePlayerOnlinePresence } from '../lib/online/presence/use-player-online-presence.js';
 
 function HookHost(props: { gameId?: string; uid?: string; enabled?: boolean }) {
   usePlayerOnlinePresence(props.gameId, props.uid, props.enabled ?? true);

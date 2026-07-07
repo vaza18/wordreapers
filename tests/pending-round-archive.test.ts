@@ -20,7 +20,7 @@ import {
   clearPendingRoundArchive,
   listPendingRoundArchives,
   markPendingRoundArchive,
-} from '../lib/online/pending-round-archive';
+} from '../lib/online/session/pending-round-archive';
 
 describe('pending-round-archive', () => {
   beforeEach(() => {

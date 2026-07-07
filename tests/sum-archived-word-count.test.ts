@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { FinishedRoundArchive } from '@/lib/online/online-session-archive';
+import type { FinishedRoundArchive } from '@/lib/online/session/online-session-archive';
 import { sumArchivedWordCountForPlayer } from '@/lib/online/sum-archived-word-count';
 
 describe('sumArchivedWordCountForPlayer', () => {

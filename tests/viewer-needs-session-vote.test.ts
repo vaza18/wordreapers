@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { GameSession, SessionVote } from '../lib/firebase/types.js';
-import { viewerNeedsSessionVote } from '../lib/online/viewer-needs-session-vote.js';
+import { viewerNeedsSessionVote } from '../lib/online/voting/viewer-needs-session-vote.js';
 import { DEFAULT_SESSION_SETTINGS } from './helpers/game-session-fixtures.js';
 
 const session: GameSession = {

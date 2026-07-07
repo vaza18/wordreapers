@@ -8,17 +8,20 @@ import { normalizeRoomCode } from '../firebase/room-code.js';
 import type { GameSession } from '../firebase/types.js';
 import { buildStandingsFromSession } from '../game/scoring.js';
 
-import type { AllPlayerWords } from './clone-player-words.js';
+import type { AllPlayerWords } from './session/clone-player-words.js';
 import { persistLocalArchive } from './coordinated-session-cleanup.js';
 import { finalizeOnlineRoundForPlayer } from './finalize-online-round.js';
-import { clearPendingRoundArchive, listPendingRoundArchives } from './pending-round-archive.js';
+import {
+  clearPendingRoundArchive,
+  listPendingRoundArchives,
+} from './session/pending-round-archive.js';
 import {
   getFinishedRoundArchive,
   isFinishedArchiveStale,
   listFinishedRoundArchives,
   markFinishedArchiveAckSent,
-} from './online-session-archive.js';
-import { allSessionPlayersOffline } from './session-offline.js';
+} from './session/online-session-archive.js';
+import { allSessionPlayersOffline } from './presence/session-offline.js';
 import { notifyRoundFinishedOnce } from './round-finished-notification-once.js';
 import {
   buildSyncWorkQueue,

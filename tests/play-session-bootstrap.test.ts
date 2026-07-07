@@ -7,7 +7,7 @@ import {
   mergePlaySessionSubscription,
   resetPlayRouteNavigationClaims,
   seedPlaySessionBootstrap,
-} from '../lib/online/play-session-bootstrap.js';
+} from '../lib/online/session/play-session-bootstrap.js';
 
 function snapshot(
   status: GameSessionSnapshot['status'],

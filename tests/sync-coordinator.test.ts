@@ -33,12 +33,12 @@ vi.mock('../lib/online/finalize-online-round.js', () => ({
   finalizeOnlineRoundForPlayer: (...args: unknown[]) => finalizeOnlineRoundForPlayer(...args),
 }));
 
-vi.mock('../lib/online/pending-round-archive.js', () => ({
+vi.mock('../lib/online/session/pending-round-archive.js', () => ({
   clearPendingRoundArchive: (...args: unknown[]) => clearPendingRoundArchive(...args),
   listPendingRoundArchives: vi.fn(),
 }));
 
-vi.mock('../lib/online/online-session-archive.js', () => ({
+vi.mock('../lib/online/session/online-session-archive.js', () => ({
   getFinishedRoundArchive: vi.fn(),
   isFinishedArchiveStale: vi.fn(),
   listFinishedRoundArchives: vi.fn(),
@@ -54,8 +54,8 @@ import {
   isFinishedArchiveStale,
   listFinishedRoundArchives,
   markFinishedArchiveAckSent,
-} from '../lib/online/online-session-archive.js';
-import { listPendingRoundArchives } from '../lib/online/pending-round-archive.js';
+} from '../lib/online/session/online-session-archive.js';
+import { listPendingRoundArchives } from '../lib/online/session/pending-round-archive.js';
 import {
   buildSyncWorkQueue,
   syncFinishedRoundsCoordinator,

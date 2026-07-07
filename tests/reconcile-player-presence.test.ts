@@ -8,7 +8,7 @@ vi.mock('../lib/firebase/game-session-service.js', () => ({
   markPlayerOnline: (...args: unknown[]) => markPlayerOnline(...args),
 }));
 
-import { reconcilePlayerPresence } from '../lib/online/reconcile-player-presence.js';
+import { reconcilePlayerPresence } from '../lib/online/presence/reconcile-player-presence.js';
 
 const profile = { name: 'Player', avatarColorIndex: 1, gender: 'm' as const };
 

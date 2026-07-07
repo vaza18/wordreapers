@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { computeArchivedPlayerStats } from '@/lib/online/compute-archived-player-stats';
-import type { FinishedRoundArchive } from '@/lib/online/online-session-archive';
+import type { FinishedRoundArchive } from '@/lib/online/session/online-session-archive';
 
 function archive(
   gameId: string,

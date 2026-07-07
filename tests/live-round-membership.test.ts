@@ -4,7 +4,7 @@ import {
   hasOptedIntoNextRound,
   isActiveLivePlayer,
   rematchWaitingPlayerPatch,
-} from '../lib/online/live-round-membership.js';
+} from '../lib/online/presence/live-round-membership.js';
 import { finishedSession, gameSession } from './helpers/game-session-fixtures.js';
 
 describe('isActiveLivePlayer', () => {

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import type { GameSession, SessionVote } from '../lib/firebase/types.js';
-import { shouldActivatePauseFromVote } from '../lib/online/pause-vote.js';
-import { viewerNeedsPauseVote as needsPauseVote } from '../lib/online/pause-vote.js';
-import { resumeVoteRequiredIds, shouldResumeFromVote } from '../lib/online/resume-vote.js';
-import { EARLY_FINISH_VOTE_TIMEOUT_MS } from '../lib/online/early-finish-vote.js';
+import { shouldActivatePauseFromVote } from '../lib/online/voting/pause-vote.js';
+import { viewerNeedsPauseVote as needsPauseVote } from '../lib/online/voting/pause-vote.js';
+import { resumeVoteRequiredIds, shouldResumeFromVote } from '../lib/online/voting/resume-vote.js';
+import { EARLY_FINISH_VOTE_TIMEOUT_MS } from '../lib/online/voting/early-finish-vote.js';
 
 function session(players: GameSession['players']): GameSession {
   return {

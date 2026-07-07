@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getFinishedRoundArchive = vi.fn();
 
-vi.mock('../lib/online/online-session-archive.js', () => ({
+vi.mock('../lib/online/session/online-session-archive.js', () => ({
   getFinishedRoundArchive: (...args: unknown[]) => getFinishedRoundArchive(...args),
 }));
 
@@ -11,7 +11,7 @@ import {
   loadFrozenFinishedRoundBeforeLive,
   loadFrozenFinishedRoundFromArchive,
   loadLatestFrozenFinishedRoundFromArchive,
-} from '../lib/online/frozen-finished-round.js';
+} from '../lib/online/session/frozen-finished-round.js';
 import { finishedSession } from './helpers/game-session-fixtures.js';
 
 const session = finishedSession();

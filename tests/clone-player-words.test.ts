@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { mergeAllPlayerWords } from '../lib/online/clone-player-words.js';
+import { mergeAllPlayerWords } from '../lib/online/session/clone-player-words.js';
 import type { StoredPlayerWord } from '../lib/firebase/player-words-service.js';
 
 function word(display: string): StoredPlayerWord {

@@ -5,12 +5,12 @@ import { useTranslation } from 'react-i18next';
 import type { GameSessionSnapshot } from '@/lib/firebase/game-session-service';
 import { resolveLobbyScreenActions } from '@/lib/online/live-round-screen-actions';
 import { onlineResultsRoute } from '@/lib/online/online-results-route';
-import { handoffPlayerPresence } from '@/lib/online/presence-handoff';
+import { handoffPlayerPresence } from '@/lib/online/presence/presence-handoff';
 import {
   claimPlayRouteNavigation,
   seedPlaySessionBootstrap,
-} from '@/lib/online/play-session-bootstrap';
-import { reconcilePlayerPresence } from '@/lib/online/reconcile-player-presence';
+} from '@/lib/online/session/play-session-bootstrap';
+import { reconcilePlayerPresence } from '@/lib/online/presence/reconcile-player-presence';
 import { useProfileStore } from '@/store/profile-store';
 
 type UseLiveRoundLobbyScreenParams = {

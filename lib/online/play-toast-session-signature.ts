@@ -1,6 +1,6 @@
 import type { GameSessionSnapshot } from '../firebase/game-session-service.js';
 import { buildLiveStandingsFromSession } from './live-standings.js';
-import { liveParticipantIds } from './live-round-membership.js';
+import { liveParticipantIds } from './presence/live-round-membership.js';
 
 /**
  * Roster/presence signature — excludes scores so join/leave toasts are not re-run on every word.

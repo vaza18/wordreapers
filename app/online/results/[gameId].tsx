@@ -23,17 +23,20 @@ import {
 } from '@/lib/firebase/game-session-service';
 import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
 import { persistLocalArchive } from '@/lib/online/coordinated-session-cleanup';
-import { isSessionWordsSnapshotReady } from '@/lib/online/session-words-bootstrap';
-import { freezeFinishedRound, type FrozenFinishedRound } from '@/lib/online/frozen-finished-round';
+import { isSessionWordsSnapshotReady } from '@/lib/online/session/session-words-bootstrap';
+import {
+  freezeFinishedRound,
+  type FrozenFinishedRound,
+} from '@/lib/online/session/frozen-finished-round';
 import { finalizeOnlineRoundForPlayer } from '@/lib/online/finalize-online-round';
 import {
   getFinishedRoundArchive,
   isFinishedArchiveStale,
-} from '@/lib/online/online-session-archive';
+} from '@/lib/online/session/online-session-archive';
 import { buildOnlineResultsView } from '@/lib/online/online-results-data';
-import { shouldFreezeLiveFinishedOnResults } from '@/lib/online/frozen-round-view';
+import { shouldFreezeLiveFinishedOnResults } from '@/lib/online/session/frozen-round-view';
 import { resolveResultsPresence } from '@/lib/online/live-round-screen-actions';
-import { optIntoLiveRound } from '@/lib/online/opt-into-live-round';
+import { optIntoLiveRound } from '@/lib/online/rematch/opt-into-live-round';
 import { parseViewingBaseWordRoundParam } from '@/lib/online/parse-viewing-base-word-round-param';
 import { mergeSessionWithWordMaps } from '@/lib/firebase/session-word-maps';
 import { subscribeSessionWordMaps } from '@/lib/firebase/session-word-maps-service';

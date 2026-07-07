@@ -14,16 +14,16 @@ vi.mock('../lib/firebase/init.js', () => ({
   getFirebaseDatabase: () => ({}),
 }));
 
-vi.mock('../lib/online/online-session-archive.js', () => ({
+vi.mock('../lib/online/session/online-session-archive.js', () => ({
   getFinishedRoundArchive: vi.fn(),
 }));
 
-vi.mock('../lib/online/restore-session-words-to-rtdb.js', () => ({
+vi.mock('../lib/online/session/restore-session-words-to-rtdb.js', () => ({
   restoreSessionWordsToRtdb: (...args: unknown[]) => restoreSessionWordsToRtdb(...args),
 }));
 
-import { getFinishedRoundArchive } from '../lib/online/online-session-archive.js';
-import { restoreFinishedRoundToFirebase } from '../lib/online/restore-finished-round-to-firebase.js';
+import { getFinishedRoundArchive } from '../lib/online/session/online-session-archive.js';
+import { restoreFinishedRoundToFirebase } from '../lib/online/session/restore-finished-round-to-firebase.js';
 import { DEFAULT_SESSION_SETTINGS } from './helpers/game-session-fixtures.js';
 
 const archive = {

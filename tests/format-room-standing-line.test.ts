@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { formatRoomStandingLine } from '@/lib/online/format-room-standing-line';
 import { computeRoomHistoryAggregate } from '@/lib/online/room-history-aggregate';
-import type { FinishedRoundArchive } from '@/lib/online/online-session-archive';
+import type { FinishedRoundArchive } from '@/lib/online/session/online-session-archive';
 
 const t = ((key: string, params?: Record<string, string | number>) => {
   if (key === 'history.roomStandingWithScores') {

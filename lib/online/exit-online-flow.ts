@@ -16,10 +16,10 @@ import type { GameSession } from '../firebase/types.js';
 import type { StoredPlayerWord } from '../firebase/player-words-service.js';
 
 import { abandonTrackedOrganizerWaitingRoom } from './abandon-tracked-waiting-room.js';
-import type { AllPlayerWords } from './clone-player-words.js';
+import type { AllPlayerWords } from './session/clone-player-words.js';
 import { markResultsExitedAndOffline, persistLocalArchive } from './coordinated-session-cleanup.js';
 import { setOrganizerWaitingRoom } from './organizer-waiting-room.js';
-import { cacheActiveRoundProgress } from './cache-active-round.js';
+import { cacheActiveRoundProgress } from './session/cache-active-round.js';
 
 export interface ExitOnlineFlowOptions {
   gameId: string;

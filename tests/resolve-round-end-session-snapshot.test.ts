@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { GameSession } from '../lib/firebase/types.js';
-import { resolveRoundEndSessionSnapshot } from '../lib/online/resolve-round-end-session-snapshot.js';
+import { resolveRoundEndSessionSnapshot } from '../lib/online/session/resolve-round-end-session-snapshot.js';
 
 function finishedRound(baseWordRound: number, baseWord: string): GameSession {
   return {
