@@ -7,6 +7,10 @@ describe('markdownHeadingSlug', () => {
     expect(markdownHeadingSlug('Про гру')).toBe('про-гру');
     expect(markdownHeadingSlug('Правила гри')).toBe('правила-гри');
     expect(markdownHeadingSlug('Юридична інформація')).toBe('юридична-інформація');
+    expect(markdownHeadingSlug('Автори')).toBe('автори');
+    expect(markdownHeadingSlug('Використання ШІ при розробці')).toBe(
+      'використання-ші-при-розробці',
+    );
   });
 });
 

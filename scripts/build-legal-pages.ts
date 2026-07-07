@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { GENERATED_LEGAL_PAGES_DIR } from '../lib/assets/generated-paths.js';
+import { markdownHeadingSlug } from '../lib/legal/markdown-links.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(root, GENERATED_LEGAL_PAGES_DIR);
@@ -51,6 +52,7 @@ const STYLES = `
   .site-footer { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid #ddd; font-size: 0.9rem; color: #555; }
   .site-footer a { color: #2d4a3e; }
   h1, h2, h3 { line-height: 1.25; }
+  h1[id], h2[id], h3[id] { scroll-margin-top: 1.5rem; }
   table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.95rem; }
   th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: left; }
   th { background: #f5f3ed; }
@@ -127,6 +129,18 @@ function markdownToHtml(md: string): string {
       .replace(/\*([^*]+)\*/g, '<em>$1</em>')
       .replace(/`([^`]+)`/g, '<code>$1</code>');
 
+  const headingPlainText = (raw: string): string =>
+    raw
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/\*([^*]+)\*/g, '$1')
+      .replace(/`([^`]+)`/g, '$1');
+
+  const headingTag = (level: 'h1' | 'h2' | 'h3', raw: string): string => {
+    const id = markdownHeadingSlug(headingPlainText(raw));
+    const idAttr = id ? ` id="${id}"` : '';
+    return `<${level}${idAttr}>${inline(raw)}</${level}>`;
+  };
+
   for (const line of lines) {
     if (line.startsWith('|')) {
       inTable = true;
@@ -140,11 +154,11 @@ function markdownToHtml(md: string): string {
     if (/^---+$/.test(line.trim())) {
       out.push('<hr />');
     } else if (line.startsWith('### ')) {
-      out.push(`<h3>${inline(line.slice(4))}</h3>`);
+      out.push(headingTag('h3', line.slice(4)));
     } else if (line.startsWith('## ')) {
-      out.push(`<h2>${inline(line.slice(3))}</h2>`);
+      out.push(headingTag('h2', line.slice(3)));
     } else if (line.startsWith('# ')) {
-      out.push(`<h1>${inline(line.slice(2))}</h1>`);
+      out.push(headingTag('h1', line.slice(2)));
     } else if (line.startsWith('> ')) {
       out.push(`<blockquote><p>${inline(line.slice(2))}</p></blockquote>`);
     } else if (/^[-*] /.test(line)) {
