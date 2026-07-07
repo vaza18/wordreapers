@@ -41,12 +41,12 @@ Format: **Decision → Alternatives → Why rejected → Date**
 - **Why rejected:** Mid-round invitees and non-opt-in roster ghosts are in the room history but not active participants; they should see results/spectator flow, not an empty play screen.
 - **Date:** 2026-06 — `lib/online/post-join-route.ts`
 
-## ADR-006: Freeze unique bonus at round start
+## ADR-006: Auto x2 latches on at 3+ players, never off mid-round
 
-- **Decision:** `uniqueBonusEnabledForActiveRound()` freezes x2 rules from settings at round start; do not recompute from live roster size during `playing`/`finished`.
-- **Alternatives considered:** Recompute bonus when roster size crosses threshold mid-round.
-- **Why rejected:** QR join mid-round flipped scoring rules unfairly for words already submitted under the old rules.
-- **Date:** 2026-06 — `lib/firebase/session-settings.ts`
+- **Decision:** In `auto` mode, `uniqueBonusEnabled` turns on when roster reaches 3+ (lobby or mid-round join) and scores recompute. Once on for a round (`settings.uniqueBonusEnabled === true` in RTDB or latched via join), it **never turns off** during that round even if roster drops below 3. `off` mode never enables x2 or score recompute for bonus during the round. Each new round resolves fresh from roster at round start.
+- **Alternatives considered:** Freeze bonus strictly at round-start roster (never enable mid-round); recompute both on and off when roster crosses threshold.
+- **Why rejected:** Product spec requires x2 when 3+ join at any stage; disabling mid-round after someone leaves would unfairly strip points already earned under x2 rules.
+- **Date:** 2026-06 (updated 2026-07) — `lib/firebase/session-settings.ts`, `uniqueBonusEnabledForActiveRound()`
 
 ---
 

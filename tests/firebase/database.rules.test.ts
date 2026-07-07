@@ -350,15 +350,59 @@ describe('players write', () => {
     );
   });
 
-  it('denies joiner from changing settings mid-round', async () => {
+  it('allows auto x2 latch settings update during playing when roster reaches 3+', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await ctx
         .database()
-        .ref('game_sessions/ABCDE/players/joiner')
-        .set({ name: 'Late', wordCount: 0, score: 0, online: true, avatarColorIndex: 2 });
+        .ref('game_sessions/ABCDE')
+        .set({
+          ...playingSession,
+          settings: {
+            ...playingSession.settings,
+            uniqueBonusMode: 'auto',
+            uniqueBonusEnabled: false,
+          },
+          players: {
+            ...playingSession.players,
+            joiner: { name: 'Late', wordCount: 0, score: 0, online: true },
+          },
+        });
+    });
+    await assertSucceeds(
+      authed('joiner')
+        .database()
+        .ref('game_sessions/ABCDE/settings')
+        .update({
+          ...playingSession.settings,
+          uniqueBonusMode: 'auto',
+          uniqueBonusEnabled: true,
+        }),
+    );
+  });
+
+  it('denies turning unique bonus off mid-round', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .database()
+        .ref('game_sessions/ABCDE')
+        .set({
+          ...playingSession,
+          settings: {
+            ...playingSession.settings,
+            uniqueBonusMode: 'auto',
+            uniqueBonusEnabled: true,
+          },
+        });
     });
     await assertFails(
-      authed('joiner').database().ref('game_sessions/ABCDE/settings/uniqueBonusEnabled').set(true),
+      authed('p1')
+        .database()
+        .ref('game_sessions/ABCDE/settings')
+        .update({
+          ...playingSession.settings,
+          uniqueBonusMode: 'auto',
+          uniqueBonusEnabled: false,
+        }),
     );
   });
 });

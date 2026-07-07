@@ -20,6 +20,8 @@ import { setOrganizerWaitingRoom } from '../online/organizer-waiting-room.js';
 import {
   resolveGameSessionSettings,
   resolveGameSessionSettingsForSession,
+  uniqueBonusEnabledForActiveRound,
+  uniqueBonusLatchSettingsPatch,
 } from './session-settings.js';
 import { recomputeSessionPlayerScores } from '../game/scoring.js';
 import { buildPlayersPatchForRoundStart } from '../online/presence/players-patch-for-round-start.js';
@@ -503,17 +505,24 @@ function buildJoinCommitPatch(
   }
 
   if (next.status === 'playing') {
+    const latchSettings = uniqueBonusLatchSettingsPatch(next);
+    const sessionAfterJoin = latchSettings ? { ...next, settings: latchSettings } : next;
+    if (latchSettings) {
+      patch.settings = latchSettings;
+    }
+
     // Round 2+ requires liveRoundPlayerUids; round 1 treats all roster members as opted in.
-    const liveUids: string[] | null | undefined = next.liveRoundPlayerUids;
+    const liveUids: string[] | null | undefined = sessionAfterJoin.liveRoundPlayerUids;
     patch.liveRoundPlayerUids = appendLiveRoundPlayerUid(liveUids, uid);
 
     const hasWords = Object.keys(context.wordMaps.wordPlayers ?? {}).length > 0;
-    if (hasWords) {
+    const bonusEnabled = uniqueBonusEnabledForActiveRound(sessionAfterJoin);
+    if (hasWords && bonusEnabled) {
       recomputeSessionPlayerScores(
-        { ...next, wordPlayers: context.wordMaps.wordPlayers },
-        resolvedSettings.uniqueBonusEnabled,
+        { ...sessionAfterJoin, wordPlayers: context.wordMaps.wordPlayers },
+        bonusEnabled,
       );
-      patch.players = next.players;
+      patch.players = sessionAfterJoin.players;
     }
   }
 

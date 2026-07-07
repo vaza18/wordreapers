@@ -67,8 +67,8 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 ### 2026-06 — Unique bonus (x2) changed mid-round when roster grew
 
 - **Symptom:** x2 unique-word scoring flipped on/off mid-round when a new player joined via invite QR (roster size crossed the 3-player threshold).
-- **Cause:** `uniqueBonusEnabled` was recomputed from current player count during `playing`/`finished` status.
-- **Fix:** Added `uniqueBonusEnabledForActiveRound()` in `lib/firebase/session-settings.ts` to freeze bonus rules from settings stored at round start.
+- **Cause:** `uniqueBonusEnabled` was recomputed from current player count during `playing`/`finished`, toggling x2 **off** when roster shrank below 3 after it had been enabled.
+- **Fix:** `uniqueBonusEnabledForActiveRound()` latches x2 on at 3+ in `auto` mode (lobby or mid-round) and never turns off mid-round; `off` mode skips bonus recompute entirely.
 - **Test:** `lib/online/__tests__/live-standings.test.ts`, `lib/online/__tests__/online-word-display.test.ts`
 - **Area:** `lib/firebase/session-settings.ts`
 
