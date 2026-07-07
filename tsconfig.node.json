@@ -17,7 +17,9 @@
   },
   "include": [
     "scripts/**/*.ts",
+    "contexts/**/*.tsx",
     "tests/**/*.ts",
+    "tests/**/*.tsx",
     "functions/src/**/*.ts",
     "lib/**/*.ts",
     "constants/theme.ts",
