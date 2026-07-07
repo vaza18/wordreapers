@@ -1,0 +1,29 @@
+---
+description: Firebase RTDB rules and Cloud Functions — run test:rules and add tests for backend logic
+globs: firebase/**,functions/src/**
+alwaysApply: false
+---
+
+# Firebase backend (rules + Cloud Functions)
+
+Security rules and scheduled Cloud Functions have **limited UI feedback** when broken. Failures may be silent until production.
+
+## Before changing code
+
+1. Read [`docs/firebase_schema.md`](../../docs/firebase_schema.md) for RTDB paths and policies.
+2. Types: [`lib/firebase/types.ts`](../../lib/firebase/types.ts).
+3. Online behavior that rules must enforce: [`docs/online-multiplayer-rules.md`](../../docs/online-multiplayer-rules.md).
+
+## After changing rules or functions
+
+1. Run RTDB security rules tests (requires Firebase emulator):
+
+```bash
+npm run test:rules
+```
+
+2. Add unit tests in `tests/` for pure logic in `functions/src/` (see `tests/guard-public-lobby-write-trigger.test.ts` as a pattern).
+3. Update `docs/firebase_schema.md` when schema or write policies change.
+4. Record non-trivial fixes in `docs/known-issues.md`.
+
+Cloud Functions deploy: `npm run firebase:deploy:functions`. Rules deploy: `npm run firebase:deploy:rules`.

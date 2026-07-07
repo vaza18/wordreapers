@@ -1,0 +1,26 @@
+---
+description: Keep commits atomic so git history remains useful context for future agents
+alwaysApply: true
+---
+
+# Commit hygiene
+
+Future AI agents rely on `git log` and `git blame` to understand **why** code exists. Large mixed commits make that archaeology nearly impossible.
+
+## One logical change per commit
+
+Split work into separate commits when possible:
+
+- **Feature** — behavior change with tests
+- **Refactor** — no behavior change
+- **Docs** — markdown, mockups, AGENTS.md, known-issues
+- **Deps / tooling** — package.json, CI, Cursor rules
+
+## Commit message style
+
+- Imperative mood, concise subject (e.g. `Fix rematch lobby footer when baseWordRound > 0`).
+- Mention doc/test updates in the body when not obvious from the diff.
+
+## When creating commits for the user
+
+Do not bundle unrelated refactors with a bugfix. If a task required both, prefer two commits or note clearly in the summary which files belong to which concern.

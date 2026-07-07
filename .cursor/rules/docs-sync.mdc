@@ -1,0 +1,20 @@
+---
+description: Keep docs, mockups, and legal bundles aligned with code changes
+alwaysApply: true
+---
+
+# Documentation and mockups stay in sync
+
+When you change user-visible behavior, data flows, or screens in Wordreapers:
+
+1. **Firebase / online flow** — update `docs/firebase_schema.md` and, if needed, `docs/slovozbyrachy_tz.md`.
+2. **Screens / UX** — update `docs/wordreapers_screens.html` mockups when layout or flows change materially.
+3. **Legal / about text** — edit markdown only under `docs/legal/` or `docs/wordreapers_about.md`. `lib/legal/bundled-legal.ts` is generated (gitignored); `npm run legal:bundle` runs on `postinstall` / `prestart`, or run it manually after MD edits.
+4. **Plan / milestones** — tick or adjust `docs/wordreapers_plan.md` when a feature lands.
+5. **Regression log** — when fixing a non-trivial bug, add an entry to `docs/known-issues.md` (symptom → cause → fix → test).
+
+Do not ship placeholder i18n legal strings when real markdown exists in `docs/legal/`.
+
+After substantive feature work, mention doc updates in the PR/summary if files were touched.
+
+See also [`AGENTS.md`](../AGENTS.md) for the full doc map and agent workflow.

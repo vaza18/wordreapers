@@ -1,0 +1,32 @@
+---
+description: Online multiplayer domain — read rules docs and add regression tests before changing room state logic
+globs: app/online/**,hooks/useLiveRound*.ts,hooks/usePlaySession*.ts,hooks/useOnlineSyncCoordinator.ts,lib/online/**
+alwaysApply: false
+---
+
+# Online multiplayer domain
+
+`lib/online/` (~100 files) is the **highest regression-risk** area in Wordreapers. Room lifecycle involves opt-in rematch, presence, frozen round view, mid-round join, and voting — many non-obvious invariants.
+
+## Before changing code
+
+1. Read [`docs/online-multiplayer-rules.md`](../../docs/online-multiplayer-rules.md) for the state machine and navigation rules.
+2. Read [`docs/firebase_schema.md`](../../docs/firebase_schema.md) if you touch RTDB fields or read/write paths.
+3. Search [`docs/known-issues.md`](../../docs/known-issues.md) for similar past bugs.
+
+## Critical invariants (do not break casually)
+
+- **Opt-in rematch** — next round starts only for players who pressed «Грати ще» or joined `waiting` after rematch.
+- **Frozen round view** — players who did not opt in stay on their finished round UI; RTDB may already show the next round.
+- **Presence** — `online` / `hasLeft` / `liveRoundPlayerUids` drive lobby visibility and round membership.
+- **Mid-round join** — blind join into `playing`; `uniqueBonusEnabled` derived from current roster size.
+
+## After changing behavior
+
+1. Update the relevant table in `docs/online-multiplayer-rules.md`.
+2. Update `docs/firebase_schema.md` if schema or policies changed.
+3. Add or update a test in `tests/` (many existing tests cover edge cases: `bootstrap-rematch-waiting`, `live-round-membership`, `mask-results-for-viewer`, etc.).
+4. If UX changed materially, update `docs/wordreapers_screens.html`.
+5. Record non-trivial bug fixes in `docs/known-issues.md`.
+
+Prefer pure functions in `lib/online/` over logic in screen components.
