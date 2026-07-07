@@ -16,12 +16,12 @@ vi.mock('../lib/firebase/game-session-service.js', () => ({
   rematchFinishedSessionToWaiting: (...args: unknown[]) => rematchFinishedSessionToWaiting(...args),
 }));
 
-vi.mock('../lib/online/bootstrap-rematch-waiting-from-archive.js', () => ({
+vi.mock('../lib/online/rematch/bootstrap-rematch-waiting-from-archive.js', () => ({
   bootstrapRematchWaitingFromArchive: (...args: unknown[]) =>
     bootstrapRematchWaitingFromArchive(...args),
 }));
 
-import { restartRematchOnlineRound } from '../lib/online/restart-rematch-online-round.js';
+import { restartRematchOnlineRound } from '../lib/online/rematch/restart-rematch-online-round.js';
 import { finishedSession } from './helpers/game-session-fixtures.js';
 
 describe('restartRematchOnlineRound', () => {
@@ -74,5 +74,22 @@ describe('restartRematchOnlineRound', () => {
 
     expect(bootstrapRematchWaitingFromArchive).not.toHaveBeenCalled();
     expect(rematchFinishedSessionToWaiting).not.toHaveBeenCalled();
+  });
+
+  it('ignores permission-denied RTDB reads and bootstraps from archive', async () => {
+    const permissionDenied = Object.assign(new Error('PERMISSION_DENIED'), {
+      code: 'PERMISSION_DENIED',
+    });
+    getMock.mockRejectedValue(permissionDenied);
+
+    await restartRematchOnlineRound('ABCD', 'org', 0);
+
+    expect(bootstrapRematchWaitingFromArchive).toHaveBeenCalledWith('ABCD', 'org', 0);
+  });
+
+  it('rethrows non-permission RTDB read errors', async () => {
+    getMock.mockRejectedValue(new Error('NETWORK_ERROR'));
+
+    await expect(restartRematchOnlineRound('ABCD', 'org', 0)).rejects.toThrow('NETWORK_ERROR');
   });
 });

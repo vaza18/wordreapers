@@ -22,7 +22,7 @@ vi.mock('../lib/firebase/game-session-service.js', () => ({
   rematchFinishedSessionToWaiting: (...args: unknown[]) => rematchFinishedSessionToWaiting(...args),
 }));
 
-vi.mock('../lib/online/active-round-cache.js', () => ({
+vi.mock('../lib/online/session/active-round-cache.js', () => ({
   clearAllActiveRoundCachesForGame: (...args: unknown[]) =>
     clearAllActiveRoundCachesForGame(...args),
 }));
@@ -31,11 +31,11 @@ vi.mock('../lib/online/organizer-waiting-room.js', () => ({
   setOrganizerWaitingRoom: (...args: unknown[]) => setOrganizerWaitingRoom(...args),
 }));
 
-vi.mock('../lib/online/online-session-archive.js', () => ({
+vi.mock('../lib/online/session/online-session-archive.js', () => ({
   getFinishedRoundArchive: (...args: unknown[]) => getFinishedRoundArchive(...args),
 }));
 
-import { bootstrapRematchWaitingFromArchive } from '../lib/online/bootstrap-rematch-waiting-from-archive.js';
+import { bootstrapRematchWaitingFromArchive } from '../lib/online/rematch/bootstrap-rematch-waiting-from-archive.js';
 import { finishedSession } from './helpers/game-session-fixtures.js';
 
 const archiveSession = finishedSession();
@@ -157,6 +157,107 @@ describe('bootstrapRematchWaitingFromArchive', () => {
         status: 'playing' as const,
       }),
     });
+
+    await expect(bootstrapRematchWaitingFromArchive('ABCD', 'org', 0)).rejects.toThrow(
+      'REMATCH_FAILED',
+    );
+  });
+
+  it('reuses peer waiting session after permission denied on set', async () => {
+    const peerWaiting = {
+      ...archiveSession,
+      status: 'waiting' as const,
+      baseWordRound: 1,
+    };
+    const permissionDenied = Object.assign(new Error('PERMISSION_DENIED'), {
+      code: 'PERMISSION_DENIED',
+    });
+    getMock
+      .mockResolvedValueOnce({ exists: () => false })
+      .mockResolvedValueOnce({ exists: () => false })
+      .mockResolvedValueOnce({ exists: () => true, val: () => peerWaiting });
+
+    setMock.mockRejectedValueOnce(permissionDenied);
+
+    const session = await bootstrapRematchWaitingFromArchive('ABCD', 'p2', 0);
+
+    expect(session).toBe(peerWaiting);
+    expect(setOrganizerWaitingRoom).not.toHaveBeenCalled();
+  });
+
+  it('skips organizer waiting room when a non-organizer bootstraps', async () => {
+    getMock.mockResolvedValue({ exists: () => false });
+
+    await bootstrapRematchWaitingFromArchive('ABCD', 'p2', 0);
+
+    expect(setOrganizerWaitingRoom).not.toHaveBeenCalled();
+  });
+
+  it('treats orphan RTDB shells as absent and creates waiting session', async () => {
+    getMock
+      .mockResolvedValueOnce({ exists: () => false })
+      .mockResolvedValueOnce({ exists: () => true, val: () => ({ players: { org: {} } }) })
+      .mockResolvedValueOnce({ exists: () => false });
+
+    const session = await bootstrapRematchWaitingFromArchive('ABCD', 'org', 0);
+
+    expect(session.status).toBe('waiting');
+    expect(setMock).toHaveBeenCalled();
+  });
+
+  it('rethrows non-permission errors while creating waiting session', async () => {
+    getMock.mockResolvedValue({ exists: () => false });
+    setMock.mockRejectedValue(new Error('NETWORK_ERROR'));
+
+    await expect(bootstrapRematchWaitingFromArchive('ABCD', 'org', 0)).rejects.toThrow(
+      'NETWORK_ERROR',
+    );
+  });
+
+  it('retries when set is permission denied and no peer waiting session exists yet', async () => {
+    const permissionDenied = Object.assign(new Error('PERMISSION_DENIED'), {
+      code: 'PERMISSION_DENIED',
+    });
+    const peerWaiting = {
+      ...archiveSession,
+      status: 'waiting' as const,
+      baseWordRound: 1,
+    };
+    getMock
+      .mockResolvedValueOnce({ exists: () => false })
+      .mockResolvedValueOnce({ exists: () => false })
+      .mockResolvedValueOnce({ exists: () => false })
+      .mockResolvedValueOnce({ exists: () => true, val: () => peerWaiting });
+
+    setMock.mockRejectedValueOnce(permissionDenied);
+
+    const session = await bootstrapRematchWaitingFromArchive('ABCD', 'org', 0);
+
+    expect(session).toBe(peerWaiting);
+  });
+
+  it('reuses waiting session discovered on the second RTDB read', async () => {
+    const peerWaiting = {
+      ...archiveSession,
+      status: 'waiting' as const,
+      baseWordRound: 1,
+    };
+    getMock
+      .mockResolvedValueOnce({ exists: () => false })
+      .mockResolvedValueOnce({ exists: () => true, val: () => peerWaiting });
+
+    const session = await bootstrapRematchWaitingFromArchive('ABCD', 'org', 0);
+
+    expect(session).toBe(peerWaiting);
+    expect(setMock).not.toHaveBeenCalled();
+  });
+
+  it('throws when rematch bootstrap exhausts retries without a waiting session', async () => {
+    getMock.mockResolvedValue({
+      exists: () => true,
+      val: () => ({ ...archiveSession, status: 'finished' as const }),
+    });
+    rematchFinishedSessionToWaiting.mockResolvedValue(undefined);
 
     await expect(bootstrapRematchWaitingFromArchive('ABCD', 'org', 0)).rejects.toThrow(
       'REMATCH_FAILED',
