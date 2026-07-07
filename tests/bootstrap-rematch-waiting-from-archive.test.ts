@@ -95,4 +95,71 @@ describe('bootstrapRematchWaitingFromArchive', () => {
       'REMATCH_FAILED',
     );
   });
+
+  it('throws when archived organizer is missing from roster', async () => {
+    getFinishedRoundArchive.mockResolvedValue({
+      ...archive,
+      session: {
+        ...archive.session,
+        organizerId: 'missing',
+        players: { p2: { name: 'Two', wordCount: 0, score: 0 } },
+      },
+    });
+
+    await expect(bootstrapRematchWaitingFromArchive('ABCD', 'p2', 0)).rejects.toThrow(
+      'REMATCH_FAILED',
+    );
+  });
+
+  it('retries through orphan shell and reuses peer waiting session', async () => {
+    const peerWaiting = {
+      ...archiveSession,
+      status: 'waiting' as const,
+      baseWordRound: 1,
+    };
+    getMock
+      .mockResolvedValueOnce({ exists: () => false })
+      .mockResolvedValueOnce({ exists: () => true, val: () => ({ players: { org: {} } }) })
+      .mockResolvedValueOnce({ exists: () => true, val: () => peerWaiting });
+
+    const session = await bootstrapRematchWaitingFromArchive('ABCD', 'org', 0);
+
+    expect(session).toBe(peerWaiting);
+    expect(clearSessionRootForRecreate).toHaveBeenCalled();
+    expect(setMock).not.toHaveBeenCalled();
+  });
+
+  it('transitions finished RTDB session via rematch helper', async () => {
+    const peerWaiting = {
+      ...archiveSession,
+      status: 'waiting' as const,
+      baseWordRound: 1,
+    };
+    getMock
+      .mockResolvedValueOnce({ exists: () => false })
+      .mockResolvedValueOnce({
+        exists: () => true,
+        val: () => ({ ...archiveSession, status: 'finished' as const }),
+      })
+      .mockResolvedValueOnce({ exists: () => true, val: () => peerWaiting });
+
+    const session = await bootstrapRematchWaitingFromArchive('ABCD', 'org', 0);
+
+    expect(rematchFinishedSessionToWaiting).toHaveBeenCalledWith('ABCD', 'org');
+    expect(session).toBe(peerWaiting);
+  });
+
+  it('throws when RTDB session is still playing', async () => {
+    getMock.mockResolvedValueOnce({ exists: () => false }).mockResolvedValueOnce({
+      exists: () => true,
+      val: () => ({
+        ...archiveSession,
+        status: 'playing' as const,
+      }),
+    });
+
+    await expect(bootstrapRematchWaitingFromArchive('ABCD', 'org', 0)).rejects.toThrow(
+      'REMATCH_FAILED',
+    );
+  });
 });

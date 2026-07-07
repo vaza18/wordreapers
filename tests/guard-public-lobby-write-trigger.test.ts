@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  isWordInAllowlist,
+  normalizeUkForAllowlist,
   resolvePublicLobbyWriteAction,
   validatePublicLobbyEntry,
 } from '../functions/src/guard-public-lobby-write.js';
@@ -20,6 +22,19 @@ function validEntry(overrides: Record<string, unknown> = {}) {
   };
 }
 
+describe('normalizeUkForAllowlist', () => {
+  it('normalizes Ukrainian text for allowlist lookup', () => {
+    expect(normalizeUkForAllowlist('  ПОРТРЕТ ')).toBe('портрет');
+  });
+});
+
+describe('isWordInAllowlist', () => {
+  it('finds words in a sorted allowlist', () => {
+    expect(isWordInAllowlist('компютер', ALLOWLIST)).toBe(true);
+    expect(isWordInAllowlist('няшка', ALLOWLIST)).toBe(false);
+  });
+});
+
 describe('validatePublicLobbyEntry', () => {
   it('rejects baseWordNorm that does not match normalized baseWord', () => {
     expect(
@@ -36,6 +51,16 @@ describe('validatePublicLobbyEntry', () => {
         NOW,
       ),
     ).toEqual({ ok: false, reason: 'BASE_WORD_NORM_MISMATCH' });
+  });
+
+  it('rejects unsafe base words', () => {
+    expect(
+      validatePublicLobbyEntry(
+        validEntry({ baseWord: 'няшка', baseWordNorm: 'няшка' }),
+        ALLOWLIST,
+        NOW,
+      ),
+    ).toEqual({ ok: false, reason: 'UNSAFE_BASE_WORD' });
   });
 });
 

@@ -1,0 +1,21 @@
+{
+  "minStatementsPct": 90,
+  "files": [
+    "lib/online/rejoin-online-round.ts",
+    "lib/online/processed-online-rounds.ts",
+    "lib/firebase/session-word-maps.ts",
+    "lib/firebase/user-stats-service.ts",
+    "lib/firebase/results-coordination-service.ts",
+    "lib/firebase/bootstrap.ts",
+    "lib/firebase/connection.ts",
+    "lib/firebase/ensure-firebase-ready.ts",
+    "lib/firebase/server-clock.ts",
+    "lib/online/viewer-needs-session-vote.ts",
+    "lib/online/join-link.ts",
+    "lib/online/active-round-players.ts",
+    "lib/online/play-toast-session-signature.ts",
+    "lib/game/grammar.ts",
+    "lib/dictionary/round-playable-lexicon-cache.ts",
+    "functions/src/rtdb-config.ts"
+  ]
+}

@@ -37,6 +37,7 @@
     "test:rules": "firebase emulators:exec --only database --project wordreapers-rules-test \"VITEST_RULES=1 vitest run tests/firebase/database.rules.test.ts\"",
     "qa:round-two-vote": "vitest run tests/online-round-two-vote-scenario.test.ts && npm run test:rules",
     "test:coverage": "vitest run --coverage",
+    "test:critical": "npm run test:coverage && node scripts/check-critical-coverage.mjs",
     "test:watch": "vitest",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
