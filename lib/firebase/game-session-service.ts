@@ -505,15 +505,17 @@ function buildJoinCommitPatch(
   }
 
   if (next.status === 'playing') {
-    const latchSettings = uniqueBonusLatchSettingsPatch(next);
-    const sessionAfterJoin = latchSettings ? { ...next, settings: latchSettings } : next;
+    // Round 2+ requires liveRoundPlayerUids; round 1 treats all roster members as opted in.
+    const liveUids = appendLiveRoundPlayerUid(next.liveRoundPlayerUids, uid);
+    const sessionWithLiveUid: GameSession = { ...next, liveRoundPlayerUids: liveUids };
+    const latchSettings = uniqueBonusLatchSettingsPatch(sessionWithLiveUid);
+    const sessionAfterJoin = latchSettings
+      ? { ...sessionWithLiveUid, settings: latchSettings }
+      : sessionWithLiveUid;
     if (latchSettings) {
       patch.settings = latchSettings;
     }
-
-    // Round 2+ requires liveRoundPlayerUids; round 1 treats all roster members as opted in.
-    const liveUids: string[] | null | undefined = sessionAfterJoin.liveRoundPlayerUids;
-    patch.liveRoundPlayerUids = appendLiveRoundPlayerUid(liveUids, uid);
+    patch.liveRoundPlayerUids = liveUids;
 
     const hasWords = Object.keys(context.wordMaps.wordPlayers ?? {}).length > 0;
     const bonusEnabled = uniqueBonusEnabledForActiveRound(sessionAfterJoin);
@@ -924,7 +926,9 @@ export async function startGameSession(gameId: string, actorUid: string): Promis
 
   const settings = resolveGameSessionSettings(
     session.settings,
-    Object.keys(session.players).length,
+    (session.baseWordRound ?? 0) > 0
+      ? waitingLobbyOptInUids(session).length
+      : Object.keys(session.players).length,
   );
 
   const now = getServerNow();

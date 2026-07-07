@@ -10,7 +10,7 @@ import { playingSession } from './helpers/game-session-fixtures.js';
 describe('live-standings', () => {
   it('derives live score from word maps', () => {
     const session = playingSession(
-      { org: { name: 'Org', wordCount: 0, score: 0 } },
+      { org: { name: 'Org', wordCount: 0, score: 0, online: true } },
       {
         wordPlayers: { порт: { org: true } },
         wordFirst: { порт: 'org' },

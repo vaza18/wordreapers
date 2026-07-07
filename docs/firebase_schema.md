@@ -31,7 +31,7 @@ Core session document for a room.
 
 - **Roster members** — full read on `game_sessions/{gameId}` for any `status`.
 - **Non-members** — read only when `status === 'waiting'` (browse / lobby peek).
-- **Invite into `playing` room** — no pre-read; client uses blind join (`players/{self}` + session metadata patch), then reads as roster. RTDB `settings` are not writable while `status === 'playing'`, but clients derive `uniqueBonusEnabled` from `uniqueBonusMode` + **current** roster size (mid-round join to 3+ turns on auto x2 in UI and score sync).
+- **Invite into `playing` room** — no pre-read; client uses blind join (`players/{self}` + session metadata patch), then reads as roster. RTDB `settings` are not writable while `status === 'playing'`, but clients derive `uniqueBonusEnabled` from `uniqueBonusMode` + **live-round roster size** (`liveRoundPlayerUids` in rematch rounds; full roster in round 1). Mid-round join to 3+ live participants turns on auto x2 in UI and score sync.
 
 `players/{uid}.joinedVia`:
 

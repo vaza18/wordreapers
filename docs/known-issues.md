@@ -72,6 +72,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 - **Test:** `lib/online/__tests__/live-standings.test.ts`, `lib/online/__tests__/online-word-display.test.ts`
 - **Area:** `lib/firebase/session-settings.ts`
 
+### 2026-07 — Rematch standings and x2 counted passive roster members
+
+- **Symptom:** During round 2+, a player still reviewing round-1 results appeared in live «Рейтинг» with 0 points; x2 applied as if 3 players were in the round.
+- **Cause:** `buildLiveStandingsFromSession` listed all `session.players`; `playerCountForUniqueBonus` used full roster size instead of `liveRoundPlayerUids` for rematch rounds.
+- **Fix:** Filter live standings to `liveParticipantIds`; derive auto x2 from `liveRoundPlayerUids` (or waiting-lobby opt-in before start) in rematch rounds.
+- **Test:** `lib/online/__tests__/live-standings.test.ts`, `tests/session-settings-unique-bonus.test.ts`, `tests/online-invariants.test.ts`
+- **Area:** `lib/online/live-standings.ts`, `lib/firebase/session-settings.ts`
+
 ---
 
 ## Template (copy for new entries)

@@ -20,12 +20,8 @@ import {
 import { displayPlayerName } from '@/lib/online/public-lobby/display-player-name';
 import { playerGenderForDisplay } from '@/lib/online/public-lobby/session-identity';
 import { RESUME_VOTE_TIMEOUT_MS, viewerNeedsResumeVote } from '@/lib/online/voting/resume-vote';
-import {
-  assignDisplayRanks,
-  buildStandingsFromSession,
-  compareStandings,
-  shouldShowPointUi,
-} from '@/lib/game/scoring';
+import { assignDisplayRanks, compareStandings, shouldShowPointUi } from '@/lib/game/scoring';
+import { buildLiveStandingsFromSession } from '@/lib/online/live-standings';
 import { formatStandingRowMeta } from '@/lib/game/format-play-stats';
 import { formatPlayerLeftLabel, formatVoteStatusLabel } from '@/lib/game/vote-status-label';
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
@@ -77,7 +73,7 @@ function PauseBody({
   const { top, bottom } = useSafeAreaInsets();
   const frozenMs = session.pauseState?.frozenRemainingMs ?? 0;
   const standings = useMemo(
-    () => buildStandingsFromSession(session).sort(compareStandings),
+    () => buildLiveStandingsFromSession(session).sort(compareStandings),
     [session],
   );
   const displayRanks = useMemo(() => assignDisplayRanks(standings), [standings]);

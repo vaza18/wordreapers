@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   uniqueBonusEnabledForActiveRound,
   uniqueBonusLatchSettingsPatch,
+  playerCountForUniqueBonus,
 } from '../lib/firebase/session-settings.js';
 import type { GameSession } from '../lib/firebase/types.js';
 
@@ -71,5 +72,35 @@ describe('uniqueBonusEnabledForActiveRound', () => {
       },
     });
     expect(uniqueBonusLatchSettingsPatch(session)).toBeNull();
+  });
+
+  it('counts only liveRoundPlayerUids for rematch rounds', () => {
+    const session = baseSession({
+      baseWordRound: 1,
+      liveRoundPlayerUids: ['org', 'p1'],
+      players: {
+        org: { name: 'Org', wordCount: 0, score: 0 },
+        p1: { name: 'One', wordCount: 0, score: 0 },
+        p2: { name: 'Two', wordCount: 8, score: 8, online: false },
+      },
+    });
+    expect(playerCountForUniqueBonus(session)).toBe(2);
+    expect(uniqueBonusEnabledForActiveRound(session)).toBe(false);
+    expect(uniqueBonusLatchSettingsPatch(session)).toBeNull();
+  });
+
+  it('latches x2 when third player joins live rematch round', () => {
+    const session = baseSession({
+      baseWordRound: 1,
+      liveRoundPlayerUids: ['org', 'p1', 'joiner'],
+      players: {
+        org: { name: 'Org', wordCount: 0, score: 0 },
+        p1: { name: 'One', wordCount: 0, score: 0 },
+        joiner: { name: 'Late', wordCount: 0, score: 0 },
+        p2: { name: 'Passive', wordCount: 8, score: 8, online: false },
+      },
+    });
+    expect(playerCountForUniqueBonus(session)).toBe(3);
+    expect(uniqueBonusLatchSettingsPatch(session)?.uniqueBonusEnabled).toBe(true);
   });
 });

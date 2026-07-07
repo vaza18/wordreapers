@@ -342,5 +342,29 @@ describe('online invariants (canonical spec)', () => {
         }),
       ).toThrow(/cannot turn off mid-round/);
     });
+
+    it('does not enable x2 in rematch when passive roster member stays out of liveRoundPlayerUids', () => {
+      const session = playingSession(
+        {
+          org: { name: 'Org', wordCount: 0, score: 0, online: true },
+          a: { name: 'A', wordCount: 0, score: 0, online: true },
+          b: { name: 'B', wordCount: 8, score: 8, online: false },
+        },
+        {
+          baseWordRound: 1,
+          liveRoundPlayerUids: ['org', 'a'],
+          settings: {
+            durationSeconds: 300,
+            uniqueBonusMode: 'auto',
+            uniqueBonusEnabled: false,
+            language: 'uk',
+            allowProperNouns: false,
+            allowSlang: false,
+          },
+        },
+      );
+      const resolved = resolveGameSessionSettingsForSession(session);
+      expect(resolved.uniqueBonusEnabled).toBe(false);
+    });
   });
 });

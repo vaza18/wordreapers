@@ -108,6 +108,7 @@ export function shouldToastRosterPlayerJoined(
 
 function detectRosterEvents(prev: GameSession, curr: GameSession, myUid: string): PlayToastEvent[] {
   const events: PlayToastEvent[] = [];
+  const prevRanks = assignDisplayRanks(buildLiveStandingsFromSession(prev));
   const currRanks = assignDisplayRanks(buildLiveStandingsFromSession(curr));
 
   for (const [playerId, player] of Object.entries(curr.players)) {
@@ -124,7 +125,8 @@ function detectRosterEvents(prev: GameSession, curr: GameSession, myUid: string)
         playerId,
         name: player.name,
         gender: playerGender(curr, playerId),
-        rank: currRanks.get(playerId) ?? Object.keys(curr.players).length,
+        rank:
+          prevRanks.get(playerId) ?? currRanks.get(playerId) ?? Object.keys(curr.players).length,
       });
       continue;
     }
