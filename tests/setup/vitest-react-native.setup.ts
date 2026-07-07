@@ -16,6 +16,18 @@ vi.mock('expo-modules-core', () => ({
   },
 }));
 
+vi.mock('expo-constants', () => ({
+  default: {
+    expoConfig: { extra: {} },
+    executionEnvironment: 'storeClient',
+  },
+  ExecutionEnvironment: {
+    Bare: 'bare',
+    Standalone: 'standalone',
+    StoreClient: 'storeClient',
+  },
+}));
+
 vi.mock('@/lib/feedback/game-feedback', () => ({
   playButtonFeedback: vi.fn(),
 }));
