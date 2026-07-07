@@ -79,11 +79,18 @@ function createStyles(colors: ThemeColors) {
       height: THUMB_SIZE,
       borderRadius: THUMB_RADIUS,
       backgroundColor: colors.switchThumbOn,
-      shadowColor: colors.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.22,
-      shadowRadius: 2,
-      elevation: 3,
+      ...Platform.select({
+        web: {
+          boxShadow: '0px 2px 2px rgba(0, 0, 0, 0.22)',
+        },
+        default: {
+          shadowColor: colors.shadow,
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.22,
+          shadowRadius: 2,
+          elevation: 3,
+        },
+      }),
     },
     value: {
       minWidth: 52,
@@ -171,10 +178,13 @@ export function DurationSlider({
             <View style={styles.track} />
             <View style={[styles.trackFill, { width: `${fillPercent}%` }]} />
             <View
-              pointerEvents="none"
               style={[
                 styles.thumb,
-                { left: `${fillPercent}%`, transform: [{ translateX: -THUMB_RADIUS }] },
+                {
+                  left: `${fillPercent}%`,
+                  transform: [{ translateX: -THUMB_RADIUS }],
+                  pointerEvents: 'none',
+                },
               ]}
             />
           </View>
