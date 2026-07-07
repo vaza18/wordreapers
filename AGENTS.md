@@ -14,6 +14,8 @@ Almost all code is written and maintained by AI agents. This file is the single 
 | Feature status and milestones                                       | [`docs/wordreapers_plan.md`](docs/wordreapers_plan.md)                                                 |
 | Screen flows and UX mockups                                         | [`docs/wordreapers_screens.html`](docs/wordreapers_screens.html)                                       |
 | Past bugs and regression lessons                                    | [`docs/known-issues.md`](docs/known-issues.md)                                                         |
+| Why non-obvious design choices exist                                | [`docs/decisions.md`](docs/decisions.md)                                                               |
+| Rolling agent session notes (promote to permanent docs when stable) | [`docs/agent-notes.md`](docs/agent-notes.md)                                                           |
 | Legal / about copy                                                  | [`docs/legal/`](docs/legal/), [`docs/wordreapers_about.md`](docs/wordreapers_about.md)                 |
 
 Types for Firebase live in [`lib/firebase/types.ts`](lib/firebase/types.ts). Shared game logic is in [`lib/game/`](lib/game/). Online session logic is in [`lib/online/`](lib/online/) (~100 files — highest regression risk).
@@ -39,6 +41,14 @@ npm run test:rules
 
 For dictionary logic changes, `ci:check` already runs `npm run dict:validate`.
 
+## Task specs for non-trivial work
+
+For bugs or features in `lib/online/` or `firebase/`, use [`docs/task-template.md`](docs/task-template.md) (or the GitHub issue template) so invariants and manual verification steps are explicit before coding.
+
+## Agent notes hygiene
+
+[`docs/agent-notes.md`](docs/agent-notes.md) holds short-lived session findings. When a note becomes a stable rule or regression lesson, move it to `known-issues.md`, `online-multiplayer-rules.md`, or `decisions.md` and remove the stale note.
+
 ## High-risk zones (extra care)
 
 | Area                                                                 | Why risky                                                                                    |
@@ -57,7 +67,7 @@ Domain-specific Cursor rules auto-attach when you edit files in these areas (see
 app/           Expo Router screens (online play, settings, profile)
 components/    UI components
 hooks/         React hooks (often thin wrappers over lib/)
-lib/           Pure logic — dictionary, game, online, firebase helpers
+lib/           Pure logic — dictionary, game, online (rematch/, presence/, session/, voting/), firebase helpers
 store/         Zustand stores
 tests/         Vitest unit tests (regression tests for edge cases)
 functions/     Firebase Cloud Functions (TypeScript)

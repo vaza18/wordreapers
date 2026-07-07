@@ -24,3 +24,12 @@ Split work into separate commits when possible:
 ## When creating commits for the user
 
 Do not bundle unrelated refactors with a bugfix. If a task required both, prefer two commits or note clearly in the summary which files belong to which concern.
+
+## Regression log reminder
+
+When a commit fixes a non-trivial bug in `lib/online/**`, `functions/src/**`, or `firebase/database.rules.json` (commit message mentions fix, bug, or regress):
+
+1. Search [`docs/known-issues.md`](../../docs/known-issues.md) for similar past bugs before editing.
+2. After the fix lands, add an entry using the template at the bottom of `known-issues.md` (symptom → cause → fix → test).
+
+This is a documentation reminder only — not a CI gate.

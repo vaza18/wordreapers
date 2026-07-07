@@ -11,8 +11,9 @@ alwaysApply: false
 ## Before changing code
 
 1. Read [`docs/online-multiplayer-rules.md`](../../docs/online-multiplayer-rules.md) for the state machine and navigation rules.
-2. Read [`docs/firebase_schema.md`](../../docs/firebase_schema.md) if you touch RTDB fields or read/write paths.
-3. Search [`docs/known-issues.md`](../../docs/known-issues.md) for similar past bugs.
+2. Read [`docs/decisions.md`](../../docs/decisions.md) for why key invariants exist.
+3. Read [`docs/firebase_schema.md`](../../docs/firebase_schema.md) if you touch RTDB fields or read/write paths.
+4. Search [`docs/known-issues.md`](../../docs/known-issues.md) for similar past bugs.
 
 ## Critical invariants (do not break casually)
 
