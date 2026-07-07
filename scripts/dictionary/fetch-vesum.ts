@@ -10,14 +10,23 @@ const VESUM_DIR = path.join(ROOT, '.data', 'vesum');
 const MANIFEST_PATH = path.join(VESUM_DIR, 'manifest.json');
 const BZ2_PATH = path.join(VESUM_DIR, 'dict_corp_vis.txt.bz2');
 const TXT_PATH = path.join(VESUM_DIR, 'dict_corp_vis.txt');
+const PINNED_RELEASE_PATH = path.join(ROOT, 'scripts/dictionary/vesum-release.json');
 
 const REPO = 'brown-uk/dict_uk';
 const ASSET_NAME = 'dict_corp_vis.txt.bz2';
+const FETCH_LATEST = process.argv.includes('--latest') || process.env.VESUM_FETCH_LATEST === '1';
 
 interface GitHubRelease {
   tag_name: string;
   published_at: string;
   assets: Array<{ name: string; browser_download_url: string }>;
+}
+
+interface PinnedRelease {
+  repo?: string;
+  tag: string;
+  publishedAt: string;
+  assetName?: string;
 }
 
 interface VesumManifest {
@@ -27,14 +36,72 @@ interface VesumManifest {
   sourceUrl: string;
 }
 
-async function fetchLatestRelease(): Promise<GitHubRelease> {
+interface ResolvedRelease {
+  tag: string;
+  publishedAt: string;
+  downloadUrl: string;
+}
+
+function githubAuthHeaders(): Record<string, string> {
+  const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN;
+  const headers: Record<string, string> = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'wordreapers-dict-fetch',
+  };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+function releaseDownloadUrl(repo: string, tag: string, assetName: string): string {
+  return `https://github.com/${repo}/releases/download/${tag}/${assetName}`;
+}
+
+async function loadPinnedRelease(): Promise<ResolvedRelease> {
+  const config = JSON.parse(await readFile(PINNED_RELEASE_PATH, 'utf8')) as PinnedRelease;
+  const repo = config.repo ?? REPO;
+  const assetName = config.assetName ?? ASSET_NAME;
+  return {
+    tag: config.tag,
+    publishedAt: config.publishedAt,
+    downloadUrl: releaseDownloadUrl(repo, config.tag, assetName),
+  };
+}
+
+async function fetchLatestRelease(): Promise<ResolvedRelease> {
   const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
-    headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'wordreapers-dict-fetch' },
+    headers: githubAuthHeaders(),
   });
   if (!res.ok) {
-    throw new Error(`GitHub API error: ${res.status} ${res.statusText}`);
+    const hint =
+      res.status === 403
+        ? ' (GitHub API rate limit — use pinned release or set GITHUB_TOKEN for --latest)'
+        : '';
+    throw new Error(`GitHub API error: ${res.status} ${res.statusText}${hint}`);
   }
-  return (await res.json()) as GitHubRelease;
+
+  const release = (await res.json()) as GitHubRelease;
+  const asset = release.assets.find((a) => a.name === ASSET_NAME);
+  if (!asset) {
+    throw new Error(`Asset ${ASSET_NAME} not found in release ${release.tag_name}`);
+  }
+
+  return {
+    tag: release.tag_name,
+    publishedAt: release.published_at,
+    downloadUrl: asset.browser_download_url,
+  };
+}
+
+async function resolveRelease(): Promise<ResolvedRelease> {
+  if (FETCH_LATEST) {
+    console.log('Fetching latest VESUM release from GitHub API…');
+    return fetchLatestRelease();
+  }
+
+  console.log('Using pinned VESUM release (scripts/dictionary/vesum-release.json)…');
+  return loadPinnedRelease();
 }
 
 async function loadManifest(): Promise<VesumManifest | null> {
@@ -77,34 +144,29 @@ async function decompressBz2(src: string, dest: string): Promise<void> {
 async function main(): Promise<void> {
   await mkdir(VESUM_DIR, { recursive: true });
 
-  const release = await fetchLatestRelease();
-  const asset = release.assets.find((a) => a.name === ASSET_NAME);
-  if (!asset) {
-    throw new Error(`Asset ${ASSET_NAME} not found in release ${release.tag_name}`);
-  }
-
+  const release = await resolveRelease();
   const existing = await loadManifest();
   const txtExists = await readFile(TXT_PATH, 'utf8')
     .then(() => true)
     .catch(() => false);
 
-  if (existing?.tag === release.tag_name && txtExists) {
-    console.log(`VESUM ${release.tag_name} already present at ${TXT_PATH}`);
+  if (existing?.tag === release.tag && txtExists) {
+    console.log(`VESUM ${release.tag} already present at ${TXT_PATH}`);
     return;
   }
 
-  console.log(`Downloading VESUM ${release.tag_name}…`);
-  console.log(asset.browser_download_url);
+  console.log(`Downloading VESUM ${release.tag}…`);
+  console.log(release.downloadUrl);
 
-  await downloadFile(asset.browser_download_url, BZ2_PATH);
+  await downloadFile(release.downloadUrl, BZ2_PATH);
   console.log('Decompressing…');
   await decompressBz2(BZ2_PATH, TXT_PATH);
 
   const manifest: VesumManifest = {
-    tag: release.tag_name,
-    publishedAt: release.published_at,
+    tag: release.tag,
+    publishedAt: release.publishedAt,
     downloadedAt: new Date().toISOString(),
-    sourceUrl: asset.browser_download_url,
+    sourceUrl: release.downloadUrl,
   };
   await writeFile(MANIFEST_PATH, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
 

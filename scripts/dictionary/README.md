@@ -45,4 +45,11 @@ Paths are defined in `lib/dictionary/paths.ts`.
 
 Downloaded from [brown-uk/dict_uk releases](https://github.com/brown-uk/dict_uk/releases): `dict_corp_vis.txt.bz2`.
 
-Future Expo app: hook `dict:all` into `prebuild` when the mobile project exists.
+By default `dict:fetch` uses the pinned tag in `vesum-release.json` (direct download URL, no GitHub API). To pull the latest release tag via API (needs `GITHUB_TOKEN` on CI when rate-limited):
+
+```bash
+npm run dict:fetch:latest
+# then update scripts/dictionary/vesum-release.json and rebuild
+```
+
+EAS local builds bundle `assets/generated/dictionaries/` via `.easignore`; run `npm run dict:all` once after clone if missing.
