@@ -101,6 +101,7 @@ export function liveParticipantOpponentIds(session: GameSession, myUid: string):
   return liveParticipantIds(session).filter((id) => id !== myUid);
 }
 
+// INVARIANT (see docs/known-issues.md — 2026-07 False “alone in game” toast): expected roster members count even when briefly offline.
 /**
  * Still rostered for this live round and has not voluntarily left (may be briefly offline).
  * Used to avoid «alone in game» toasts during presence sync at round start.

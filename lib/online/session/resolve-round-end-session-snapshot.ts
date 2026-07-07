@@ -2,6 +2,7 @@ import type { GameSession } from '../../firebase/types.js';
 
 import { shouldKeepFrozenResultsOverLiveFinished } from './frozen-round-view.js';
 
+// INVARIANT (see docs/known-issues.md — 2026-06 Frozen round results overwritten): keep frozen snapshot when live round advances.
 /** Keep a locally frozen finished round when RTDB reports a later round finished. */
 export function resolveRoundEndSessionSnapshot<T extends GameSession>(
   previous: T | null,

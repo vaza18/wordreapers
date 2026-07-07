@@ -4,6 +4,7 @@ import type { GameSession } from '../../firebase/types.js';
  * Frozen-round viewing helpers for play/results when live RTDB advances ahead of the viewer.
  */
 
+// INVARIANT (see docs/known-issues.md — 2026-06 Frozen round results overwritten): frozenBaseWordRound < liveBaseWordRound → keep frozen UI.
 /** Keep showing a frozen earlier round while a later round finishes in RTDB. */
 export function shouldKeepFrozenResultsOverLiveFinished(
   frozenBaseWordRound: number,

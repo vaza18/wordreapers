@@ -29,6 +29,7 @@ export function isLobbyVisiblePlayer(session: GameSession, uid: string): boolean
   if (!player) {
     return false;
   }
+  // INVARIANT (see docs/known-issues.md — 2026-07 Left players visible in rematch waiting lobby): hasLeft → not visible.
   if (player.hasLeft === true) {
     return false;
   }

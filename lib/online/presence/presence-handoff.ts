@@ -1,3 +1,4 @@
+// INVARIANT (see docs/known-issues.md — 2026-07 Presence handoff): in-room screen transitions must not mark offline on unmount.
 /** Game id whose presence hook unmount should not mark the player offline (screen-to-screen). */
 let handoffGameId: string | null = null;
 

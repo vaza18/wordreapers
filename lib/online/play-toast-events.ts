@@ -62,6 +62,7 @@ function liveRoundUidList(session: GameSession): string[] {
   return session.liveRoundPlayerUids ?? [];
 }
 
+// INVARIANT (see docs/known-issues.md — 2026-07 Spurious “player joined” toasts): filter lobby sync vs real mid-round joins.
 /**
  * Toast only genuine mid-round joins and rejoins — not lobby participants syncing presence at round start.
  */
