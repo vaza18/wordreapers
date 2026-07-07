@@ -9,7 +9,14 @@ const lcovPath = path.join(rootDir, 'coverage/lcov.info');
 
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
 const minPct = manifest.minStatementsPct ?? 90;
-const targets = new Set(manifest.files);
+const explicitFiles = manifest.files ?? [];
+const globPatterns = manifest.globs ?? [];
+
+/** Match a repo-relative path against a simple glob (`*` = any chars except `/`). */
+function matchGlob(pattern, file) {
+  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*');
+  return new RegExp(`^${escaped}$`).test(file);
+}
 
 /** Parse Vitest lcov output into per-file line hit counts. */
 function parseLcov(content) {
@@ -39,6 +46,14 @@ function parseLcov(content) {
   return records;
 }
 
+/** Merge explicit manifest paths with lcov files matched by glob patterns. */
+function resolveCriticalTargets(records) {
+  const fromGlobs = [...records.keys()].filter((file) =>
+    globPatterns.some((pattern) => matchGlob(pattern, file)),
+  );
+  return [...new Set([...explicitFiles, ...fromGlobs])].sort();
+}
+
 let lcov;
 try {
   lcov = readFileSync(lcovPath, 'utf8');
@@ -48,6 +63,7 @@ try {
 }
 
 const records = parseLcov(lcov);
+const targets = resolveCriticalTargets(records);
 const failures = [];
 
 for (const file of targets) {
@@ -70,4 +86,7 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log(`Critical coverage OK for ${targets.size} files (>= ${minPct}% lines).`);
+const globCount = targets.length - explicitFiles.length;
+const globNote =
+  globPatterns.length > 0 ? ` (${explicitFiles.length} explicit + ${globCount} from globs)` : '';
+console.log(`Critical coverage OK for ${targets.length} files${globNote} (>= ${minPct}% lines).`);
