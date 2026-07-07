@@ -18,18 +18,18 @@ import { currentBaseWordPickerUid } from '../online/base-word-picker.js';
 import { clearAllActiveRoundCachesForGame } from '../online/session/active-round-cache.js';
 import { setOrganizerWaitingRoom } from '../online/organizer-waiting-room.js';
 import {
+  buildRoundStartWritePaths,
+  resolveRoundStartSettings,
+} from '../online/start-game-session-write.js';
+import {
   resolveGameSessionSettings,
   resolveGameSessionSettingsForSession,
   uniqueBonusEnabledForActiveRound,
   uniqueBonusLatchSettingsPatch,
 } from './session-settings.js';
 import { recomputeSessionPlayerScores } from '../game/scoring.js';
-import { buildPlayersPatchForRoundStart } from '../online/presence/players-patch-for-round-start.js';
 import { appendLiveRoundPlayerUid } from './live-round-player-uids.js';
-import {
-  rematchWaitingPlayerPatch,
-  waitingLobbyOptInUids,
-} from '../online/presence/live-round-membership.js';
+import { rematchWaitingPlayerPatch } from '../online/presence/live-round-membership.js';
 import { shouldOrganizerAbandonWaitingRoom } from '../online/should-organizer-abandon-waiting-room.js';
 import { computeRoundPlayedSecondsAtFinish } from '../game/round-duration.js';
 import {
@@ -907,6 +907,7 @@ export async function updateGameSessionBaseWord(
  */
 export async function startGameSession(gameId: string, actorUid: string): Promise<void> {
   const normalized = normalizeRoomCode(gameId);
+  await syncLobbyPickerState(normalized);
   const snapshot = await get(sessionRef(normalized));
   if (!snapshot.exists()) {
     throw new Error('ROOM_NOT_FOUND');
@@ -924,15 +925,8 @@ export async function startGameSession(gameId: string, actorUid: string): Promis
   }
   await assertSessionBaseWordAllowed(session.baseWord, session);
 
-  const settings = resolveGameSessionSettings(
-    session.settings,
-    (session.baseWordRound ?? 0) > 0
-      ? waitingLobbyOptInUids(session).length
-      : Object.keys(session.players).length,
-  );
-
+  const settings = resolveRoundStartSettings(session);
   const now = getServerNow();
-  const endsAt = now + settings.durationSeconds * 1000;
 
   setOrganizerWaitingRoom(null);
 
@@ -953,35 +947,14 @@ export async function startGameSession(gameId: string, actorUid: string): Promis
     await unpublishPublicLobby(normalized, actorUid, { force: true });
   }
 
-  const playersPatch = buildPlayersPatchForRoundStart(session);
-  const sessionStartPatch: Record<string, unknown> = {
-    status: 'playing',
-    timerEndsAt: endsAt,
-    roundStartedAt: now,
-    roundTimerBudgetSeconds: settings.durationSeconds,
-    roundPlayedSeconds: null,
-    settings,
-    earlyFinishVote: null,
-    pauseVote: null,
-    resumeVote: null,
-    pauseState: null,
-    isPublic: false,
-    publicPublishedAt: null,
-    liveRoundPlayerUids: waitingLobbyOptInUids(session),
-    resultsExitedBy: null,
-  };
-
   const rootRef = ref(getFirebaseDatabase());
-  const basePath = gameSessionPath(normalized);
-  const multiPath: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(sessionStartPatch)) {
-    multiPath[`${basePath}/${key}`] = value;
-  }
-  for (const [uid, patch] of Object.entries(playersPatch)) {
-    for (const [field, value] of Object.entries(patch)) {
-      multiPath[`${basePath}/players/${uid}/${field}`] = value;
-    }
-  }
+  const multiPath = buildRoundStartWritePaths({
+    gameId: normalized,
+    session,
+    actorUid,
+    now,
+    settings,
+  });
   await update(rootRef, multiPath);
 }
 

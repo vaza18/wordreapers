@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { GameSession } from '../lib/firebase/types.js';
 import {
+  isLiveRoundStarted,
   resolveLobbyScreenActions,
   resolvePlayScreenActions,
   resolveResultsPresence,
@@ -98,6 +99,26 @@ describe('resolvePlayScreenActions', () => {
 });
 
 describe('resolveLobbyScreenActions', () => {
+  it('auto-joins organizer when timer is live but status still reads waiting', () => {
+    const session: GameSession = {
+      baseWord: 'тест',
+      status: 'waiting',
+      baseWordRound: 1,
+      liveRoundPlayerUids: ['p1'],
+      settings,
+      timerEndsAt: Date.now() + 60_000,
+      organizerId: 'org',
+      players: {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        p1: { name: 'One', wordCount: 0, score: 0, online: true },
+      },
+    };
+    expect(isLiveRoundStarted(session)).toBe(true);
+    const actions = resolveLobbyScreenActions({ session, myUid: 'org' });
+    expect(actions.shouldNavigateToPlay).toBe(false);
+    expect(actions.shouldAutoJoinLiveRound).toBe(true);
+  });
+
   it('redirects non-opt-in viewers away from rematch waiting lobby', () => {
     const session: GameSession = {
       baseWord: 'тест',

@@ -18,6 +18,7 @@ export function playerPatchForRoundStart(
   session: GameSession,
   uid: string,
   player: GameSessionPlayer,
+  actorUid: string,
 ): RoundStartPlayerPatch | null {
   const optedIn = hasOptedIntoNextRound(session, uid);
   if (player.hasLeft === true && !optedIn) {
@@ -25,18 +26,25 @@ export function playerPatchForRoundStart(
   }
   if (player.online === true || optedIn) {
     const next = playerForRoundStart(player);
-    return { score: next.score, wordCount: next.wordCount, hasLeft: next.hasLeft };
+    const patch: RoundStartPlayerPatch = { score: next.score, wordCount: next.wordCount };
+    // Only the round starter may write their own `hasLeft` leaf (RTDB rules).
+    if (uid === actorUid) {
+      patch.hasLeft = next.hasLeft;
+    }
+    return patch;
   }
-  return { score: 0, wordCount: 0, online: false };
+  // Omit `online` — round starter cannot write other players' presence (RTDB rules).
+  return { score: 0, wordCount: 0 };
 }
 
 /** RTDB `players` multi-update before or with round start. */
 export function buildPlayersPatchForRoundStart(
   session: GameSession,
+  actorUid: string,
 ): Record<string, RoundStartPlayerPatch> {
   const patch: Record<string, RoundStartPlayerPatch> = {};
   for (const [uid, player] of Object.entries(session.players)) {
-    const next = playerPatchForRoundStart(session, uid, player);
+    const next = playerPatchForRoundStart(session, uid, player, actorUid);
     if (next) {
       patch[uid] = next;
     }

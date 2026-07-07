@@ -7,6 +7,9 @@ import {
 import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 
+import { buildRoundStartWritePaths } from '../../lib/online/start-game-session-write.js';
+import type { GameSession } from '../../lib/firebase/types.js';
+
 const PROJECT_ID = 'wordreapers-rules-test';
 
 let testEnv: RulesTestEnvironment;
@@ -434,6 +437,7 @@ describe('waiting → playing round start player patch', () => {
         .database()
         .ref()
         .update({
+          'game_sessions/REMCH/baseWordPickerUid': 'p1',
           'game_sessions/REMCH/status': 'playing',
           'game_sessions/REMCH/timerEndsAt': now + 600_000,
           'game_sessions/REMCH/roundStartedAt': now,
@@ -443,15 +447,104 @@ describe('waiting → playing round start player patch', () => {
           'game_sessions/REMCH/pauseVote': null,
           'game_sessions/REMCH/resumeVote': null,
           'game_sessions/REMCH/pauseState': null,
+          'game_sessions/REMCH/liveRoundPlayerUids': ['org', 'p1'],
+          'game_sessions/REMCH/resultsExitedBy': null,
           'game_sessions/REMCH/players/org/score': 0,
           'game_sessions/REMCH/players/org/wordCount': 0,
-          'game_sessions/REMCH/players/org/hasLeft': false,
           'game_sessions/REMCH/players/p1/score': 0,
           'game_sessions/REMCH/players/p1/wordCount': 0,
           'game_sessions/REMCH/players/p1/hasLeft': false,
           'game_sessions/REMCH/players/p3/score': 0,
           'game_sessions/REMCH/players/p3/wordCount': 0,
         }),
+    );
+  });
+
+  it('denies round start when stored picker uid is stale and not corrected', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.database().ref('game_sessions/REMCH/baseWordPickerUid').set('org');
+    });
+    const now = Date.now();
+    await assertFails(
+      authed('p1')
+        .database()
+        .ref()
+        .update({
+          'game_sessions/REMCH/status': 'playing',
+          'game_sessions/REMCH/timerEndsAt': now + 600_000,
+          'game_sessions/REMCH/roundStartedAt': now,
+        }),
+    );
+  });
+
+  it('allows round start when picker uid is corrected in the same atomic update', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.database().ref('game_sessions/REMCH/baseWordPickerUid').set('org');
+    });
+    const now = Date.now();
+    await assertSucceeds(
+      authed('p1')
+        .database()
+        .ref()
+        .update({
+          'game_sessions/REMCH/baseWordPickerUid': 'p1',
+          'game_sessions/REMCH/status': 'playing',
+          'game_sessions/REMCH/timerEndsAt': now + 600_000,
+          'game_sessions/REMCH/roundStartedAt': now,
+          'game_sessions/REMCH/liveRoundPlayerUids': ['org', 'p1'],
+          'game_sessions/REMCH/players/p1/score': 0,
+          'game_sessions/REMCH/players/p1/wordCount': 0,
+          'game_sessions/REMCH/players/p1/hasLeft': false,
+        }),
+    );
+  });
+
+  it('allows full client round-start payload when uniqueBonusEnabled drops for opt-in roster', async () => {
+    const rematchWithAutoX2: GameSession = {
+      ...(rematchWaiting as GameSession),
+      settings: {
+        ...waitingSession.settings,
+        uniqueBonusMode: 'auto',
+        uniqueBonusEnabled: true,
+      },
+    };
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.database().ref('game_sessions/REMCH2').set(rematchWithAutoX2);
+    });
+    const now = Date.now();
+    const settings = {
+      ...rematchWithAutoX2.settings,
+      uniqueBonusEnabled: false,
+    };
+    const multiPath = buildRoundStartWritePaths({
+      gameId: 'REMCH2',
+      session: rematchWithAutoX2,
+      actorUid: 'p1',
+      now,
+      settings,
+    });
+    await assertSucceeds(authed('p1').database().ref().update(multiPath));
+  });
+
+  it('denies uniqueBonusEnabled true→false while playing (mid-round latch)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .database()
+        .ref('game_sessions/PLAYX')
+        .set({
+          ...playingSession,
+          settings: {
+            ...playingSession.settings,
+            uniqueBonusMode: 'auto',
+            uniqueBonusEnabled: true,
+          },
+        });
+    });
+    await assertFails(
+      authed('p1')
+        .database()
+        .ref('game_sessions/PLAYX/settings')
+        .update({ uniqueBonusEnabled: false }),
     );
   });
 

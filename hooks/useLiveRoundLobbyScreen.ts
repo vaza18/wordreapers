@@ -2,7 +2,10 @@ import { router } from 'expo-router';
 import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { GameSessionSnapshot } from '@/lib/firebase/game-session-service';
+import {
+  readGameSessionSnapshot,
+  type GameSessionSnapshot,
+} from '@/lib/firebase/game-session-service';
 import { resolveLobbyScreenActions } from '@/lib/online/live-round-screen-actions';
 import { onlineResultsRoute } from '@/lib/online/online-results-route';
 import { handoffPlayerPresence } from '@/lib/online/presence/presence-handoff';
@@ -145,11 +148,11 @@ export function useLiveRoundLobbyScreen({
     let cancelled = false;
     const { name, gender, avatarColorIndex } = useProfileStore.getState();
     void reconcilePlayerPresence(gameId, myUid, { name, gender, avatarColorIndex })
-      .then(() => {
+      .then(async () => {
         if (cancelled) {
           return;
         }
-        const liveSession = sessionRef.current;
+        const liveSession = (await readGameSessionSnapshot(gameId)) ?? sessionRef.current;
         if (!liveSession) {
           return;
         }

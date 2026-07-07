@@ -36,6 +36,7 @@ import { formatLobbySettingsLabel } from '@/lib/online/lobby-settings-label';
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
 import { useLiveRoundLobbyScreen } from '@/hooks/useLiveRoundLobbyScreen';
+import { isLiveRoundStarted } from '@/lib/online/live-round-screen-actions';
 import { usePublicLobbyPublish } from '@/hooks/usePublicLobbyPublish';
 import { useServerNow } from '@/hooks/useServerNow';
 import {
@@ -157,7 +158,9 @@ export default function LobbyScreen() {
       gameId &&
       myUid &&
       firebaseSessionLive &&
-      (session?.status === 'waiting' || session?.status === 'finished'),
+      (session?.status === 'waiting' ||
+        session?.status === 'finished' ||
+        session?.status === 'playing'),
     ),
   );
   const isOrganizer = session?.organizerId === myUid;
@@ -276,6 +279,9 @@ export default function LobbyScreen() {
       await Promise.all([loadBundledDictionary(), loadBundledSupplements()]);
       await startGameSession(gameId, myUid);
       const snapshot = await readGameSessionSnapshot(gameId);
+      if (!snapshot || snapshot.status !== 'playing') {
+        throw new Error('START_NOT_COMMITTED');
+      }
       if (claimPlayRouteNavigation(gameId, snapshot)) {
         seedPlaySessionBootstrap(snapshot);
         handoffPlayerPresence(gameId);
@@ -405,7 +411,7 @@ export default function LobbyScreen() {
     (isOrganizer && !isFinished && isFirstRound && !hasBaseWord);
 
   const footerWaitingHint =
-    !isPicker && !isFinished && hasBaseWord
+    !isPicker && !isFinished && hasBaseWord && !isLiveRoundStarted(session)
       ? t('online.waitingForRoundStart', { name: pickerName })
       : null;
 
