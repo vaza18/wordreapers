@@ -6,7 +6,7 @@
 | `icons/adaptive-icon-foreground.png` | Yes    | `npm run icons:adaptive` (from app-icon; Android foreground) |
 | `store-badges/`                      | Yes    | Official Google Play / App Store badge SVGs (GitHub Pages)   |
 | `generated/sounds/`                  | No     | `npm run sounds:generate` (also `postinstall`)               |
-| `generated/dictionaries/`            | No     | `npm run dict:all`                                           |
+| `generated/dictionaries/`            | No     | `npm run dict:all` (also `postinstall` when missing)         |
 | `generated/legal-pages/`             | No     | `npm run legal:pages` (GitHub Pages; not in the app bundle)  |
 
 **Legal pages on GitHub Pages:** workflow `.github/workflows/legal-pages.yml` builds on `main` and `dev`, deploys only from `main`. One-time repo setup: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
@@ -16,4 +16,4 @@
 
 Legacy SVG grid mockups: `npm run icons:generate` → `docs/store/icon-mockups/` only.
 
-The `assets/generated/` tree is gitignored. After clone: `npm install` (sounds) and `npm run dict:all` (dictionaries as gzip, ~1.2 MB in bundle).
+The `assets/generated/` tree is gitignored. After clone: `npm install` builds sounds and dictionaries when missing (~1.2 MB gzip in app bundle).

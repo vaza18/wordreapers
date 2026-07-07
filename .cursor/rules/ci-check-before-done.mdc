@@ -15,12 +15,12 @@ npm run ci:check
 
 ## What it runs (in order)
 
-1. `npm run dict:stub` — dictionary stubs for typecheck
-2. `npm run dict:validate` — dictionary regression cases
-3. `npm run lint` — ESLint on the whole repo
-4. `npm run format:check` — Prettier (no write; must already match)
-5. `npm run typecheck` — `tsc --noEmit` (app + node tsconfigs)
-6. `npm run test:coverage` — Vitest unit tests with coverage gate (includes `pretest` → `legal:bundle`)
+1. `npm run lint` — ESLint on the whole repo
+2. `npm run format:check` — Prettier (no write; must already match)
+3. `npm run typecheck` — `tsc --noEmit` (app + node tsconfigs)
+4. `npm run test:coverage` — Vitest unit tests with coverage gate (includes `pretest` → `legal:bundle`)
+
+Dictionary fetch/build runs on `npm install` / `npm ci` when artifacts are missing (`postinstall` → `scripts/ensure-dictionary.mjs`). GitHub Actions additionally runs `npm run dict:validate` after install.
 
 ## Workflow
 
