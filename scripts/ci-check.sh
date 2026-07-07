@@ -11,6 +11,9 @@ fi
 echo "→ Prepare dictionary stubs for typecheck"
 npm run dict:stub
 
+echo "→ Dictionary validation regression cases"
+npm run dict:validate
+
 echo "→ ESLint"
 npm run lint
 

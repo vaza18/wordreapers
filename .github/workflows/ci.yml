@@ -29,6 +29,9 @@ jobs:
       - name: Prepare dictionary stubs for typecheck
         run: npm run dict:stub
 
+      - name: Dictionary validation regression cases
+        run: npm run dict:validate
+
       - name: ESLint
         run: npm run lint
 
@@ -40,3 +43,6 @@ jobs:
 
       - name: Unit tests
         run: npm test
+
+      - name: RTDB security rules tests
+        run: npm run test:rules
