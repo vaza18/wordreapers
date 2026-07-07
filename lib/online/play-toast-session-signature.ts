@@ -26,8 +26,3 @@ export function playToastRankSignature(session: GameSessionSnapshot): string {
     .join('|');
   return `${session.id}:${session.status}:${session.baseWordRound ?? 0}:${standings}`;
 }
-
-/** @deprecated Use playToastRosterSignature or playToastRankSignature. */
-export function playToastSessionSignature(session: GameSessionSnapshot): string {
-  return playToastRosterSignature(session);
-}
