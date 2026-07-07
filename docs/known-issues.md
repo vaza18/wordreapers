@@ -8,6 +8,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — Overtake toast skipped at equal score (word tie-breaker)
+
+- **Symptom:** When a player took 1st place with the same score as 2nd but more words, 2nd place got no “overtook you” toast (3rd place did).
+- **Cause:** `detectRankEvents()` compared only total score (or word count when x2 off), ignoring the word-count tie-breaker used by live standings.
+- **Fix:** Pairwise rank toasts now use `compareStandings()` — same rules as the header rank (score → words → tie).
+- **Test:** `tests/play-toast-events.test.ts` — “detects overtakes when equal score but fewer words”
+- **Area:** `lib/online/play-toast-events.ts`
+
 ### 2026-07 — Presence handoff between online screens
 
 - **Symptom:** Navigating lobby → play → results in the same room briefly marked the player offline; others saw them leave/rejoin.

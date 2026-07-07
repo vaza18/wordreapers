@@ -549,7 +549,45 @@ describe('detectPlayToastEvents', () => {
       c: { name: 'С', wordCount: 0, score: 0, online: true },
     });
 
-    expect(detectPlayToastEvents(wordOnlyPrev, wordOnlyCurr, 'me')).toEqual([]);
+    expect(detectPlayToastEvents(wordOnlyPrev, wordOnlyCurr, 'me')).toEqual([
+      {
+        type: 'overtook_me',
+        playerId: 'bab',
+        name: 'Бабуся',
+        gender: 'f',
+      },
+    ]);
+  });
+
+  it('detects overtakes when equal score but fewer words (tie-breaker rank)', () => {
+    const prev = scoringSession({
+      p1: { name: 'iPad', gender: 'm', wordCount: 15, score: 15, online: true },
+      p2: { name: 'iPhone', gender: 'm', wordCount: 9, score: 17, online: true },
+      p3: { name: 'Vasyl', gender: 'm', wordCount: 15, score: 15, online: true },
+    });
+    const curr = scoringSession({
+      p1: { name: 'iPad', gender: 'm', wordCount: 15, score: 15, online: true },
+      p2: { name: 'iPhone', gender: 'm', wordCount: 9, score: 17, online: true },
+      p3: { name: 'Vasyl', gender: 'm', wordCount: 16, score: 17, online: true },
+    });
+
+    expect(detectPlayToastEvents(prev, curr, 'p2')).toEqual([
+      {
+        type: 'overtook_me',
+        playerId: 'p3',
+        name: 'Vasyl',
+        gender: 'm',
+      },
+    ]);
+
+    expect(detectPlayToastEvents(prev, curr, 'p1')).toEqual([
+      {
+        type: 'overtook_me',
+        playerId: 'p3',
+        name: 'Vasyl',
+        gender: 'm',
+      },
+    ]);
   });
 
   it('detects overtakes from word maps before player nodes catch up', () => {
