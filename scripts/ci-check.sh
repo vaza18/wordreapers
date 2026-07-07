@@ -26,4 +26,7 @@ npm run typecheck
 echo "→ Unit tests with coverage gate"
 npm run test:coverage
 
+echo "→ Critical module coverage gate"
+node scripts/check-critical-coverage.mjs
+
 echo "✓ CI checks passed"
