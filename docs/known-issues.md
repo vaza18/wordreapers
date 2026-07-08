@@ -8,6 +8,22 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — Solo/online freeze at 00:00 with add-time modal open
+
+- **Symptom:** On the last seconds of a solo round, opening the add-time picker left the play screen stuck at `00:00` with no taps responding. Online could finish under the local picker before propose.
+- **Cause:** Solo `PlayTimerHeader` called `onTimeUp` → `finishRound` while `AddTimeModal` stayed open, stacking `GameTimeUpModal` under another native `Modal`. Solo `addTime` also added to a past `endsAt` (or no-op after finish). Online finish tick deferred only for RTDB `addTimeVote`, not `showAddTimeModal`.
+- **Fix:** Local `deferTimeUp` / solo cancel-at-zero finish; `addTime` via `computeExtendedTimerEndsAt`; client finish tick uses `shouldDeferClientTimerFinish` (picker or vote). Cross-device durable defer remains `addTimeVote` only.
+- **Test:** `tests/organizer-solo-add-time.test.ts`, `tests/add-time-vote.test.ts`, `tests/game-session-service.test.ts`
+- **Area:** `components/online/PlayTimerHeader.tsx`, `app/online/solo/[gameId].tsx`, `store/organizer-solo-store.ts`, `app/online/play/[gameId].tsx`, `lib/online/voting/add-time-vote.ts`
+
+### 2026-07 — Letter fly-to-draft animation missing after compose-panel refactor
+
+- **Symptom:** Pressing a letter key no longer showed the ghost letter flying into the draft field. After restore, landing x drifted as the draft grew.
+- **Cause:** (1) Commit that removed ConnectivityContext also stripped fly wiring from `OnlinePlayComposePanel`. (2) Landing used a fixed `fontSize * 0.6` advance and ignored `adjustsFontSizeToFit` shrink.
+- **Fix:** Restored fly animation; land using measured draft text width from `onTextLayout` via `draftLetterFlyEndpoints`.
+- **Test:** `tests/draft-letter-fly.test.ts`
+- **Area:** `components/online/OnlinePlayComposePanel.tsx`, `lib/game/draft-letter-fly.ts`
+
 ### 2026-07 — Organizer stuck in rematch lobby when picker starts round 2
 
 - **Symptom:** After round 1, organizer waits in rematch lobby while another opted-in player picks the base word and starts round 2. Organizer stays on the waiting lobby (`Очікуємо, поки … почне гру`); picker may enter play alone. Firebase logs `update at / failed: permission_denied` and later `session_word_maps/... permission_denied` on word submit.

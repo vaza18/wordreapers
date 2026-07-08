@@ -15,6 +15,17 @@ export function shouldDeferTimerFinishForAddTimeVote(
   return addTimeVote != null;
 }
 
+/**
+ * Client finish tick: defer while RTDB vote exists OR local minute picker is open.
+ * Durable cross-device defer is only `addTimeVote` (see `finishGameSessionIfExpired`).
+ */
+export function shouldDeferClientTimerFinish(options: {
+  addTimeVote: AddTimeVote | null | undefined;
+  showAddTimeModal: boolean;
+}): boolean {
+  return options.showAddTimeModal || shouldDeferTimerFinishForAddTimeVote(options.addTimeVote);
+}
+
 export function shouldFinishRoundAfterTimerExpired(
   timerEndsAt: number | null,
   now: number,

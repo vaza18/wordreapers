@@ -87,6 +87,7 @@ import {
   sessionPlayerScoresMatchWordMaps,
 } from '@/lib/online/live-standings';
 import { formatPlayRulesLabel } from '@/lib/online/play-rules-label';
+import { shouldDeferClientTimerFinish } from '@/lib/online/voting/add-time-vote';
 import {
   createSubmitWordProfile,
   flushSubmitLatencySummary,
@@ -467,7 +468,15 @@ export default function OnlinePlayScreen() {
   }, [session?.addTimeVote]);
 
   useEffect(() => {
-    if (isPaused || session?.status !== 'playing' || endsAt === null || session?.addTimeVote) {
+    if (
+      isPaused ||
+      session?.status !== 'playing' ||
+      endsAt === null ||
+      shouldDeferClientTimerFinish({
+        addTimeVote: session?.addTimeVote,
+        showAddTimeModal,
+      })
+    ) {
       return undefined;
     }
     const tick = () => {
@@ -488,7 +497,7 @@ export default function OnlinePlayScreen() {
     return () => {
       clearInterval(id);
     };
-  }, [endsAt, gameId, isPaused, session?.addTimeVote, session?.status]);
+  }, [endsAt, gameId, isPaused, session?.addTimeVote, session?.status, showAddTimeModal]);
 
   const deferredWordMaps = useDeferredValue(wordMaps);
   const sessionForWordList = useMemo(() => {

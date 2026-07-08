@@ -4,6 +4,7 @@ import type { ScoredWordEntry, WordScoreBadge, WordScoreKind } from '@/lib/game/
 import { buildStandings, computePlayerScore, resolveUniqueBonusEnabled } from '@/lib/game/scoring';
 import { computeRoundPlayedSecondsFromTimerState } from '@/lib/game/round-duration';
 import type { LocalRoomSetup } from '@/lib/online/local-room-draft';
+import { computeExtendedTimerEndsAt } from '@/lib/online/voting/add-time-vote';
 
 export interface OrganizerSoloWord {
   normalized: string;
@@ -141,7 +142,7 @@ export const useOrganizerSoloStore = create<OrganizerSoloState>((set, get) => ({
     const addSeconds = minutes * 60;
     if (status === 'playing' && endsAt !== null) {
       set({
-        endsAt: endsAt + addMs,
+        endsAt: computeExtendedTimerEndsAt(endsAt, minutes, Date.now()),
         roundTimerBudgetSeconds: (roundTimerBudgetSeconds ?? 0) + addSeconds,
       });
       return;

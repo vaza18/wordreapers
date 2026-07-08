@@ -272,4 +272,29 @@ describe('game-session-service', () => {
     await expect(finishGameSessionIfExpired('ABCD')).resolves.toBe(false);
     expect(session.status).toBe('playing');
   });
+
+  it('does not finish an expired session while an add-time vote is active', async () => {
+    const session = {
+      baseWord: 'тест',
+      status: 'playing' as const,
+      settings: DEFAULT_SESSION_SETTINGS,
+      timerEndsAt: 1_000_000,
+      organizerId: 'org-1',
+      addTimeVote: {
+        proposedBy: 'org-1',
+        proposedAt: 1_900_000,
+        addMinutes: 5,
+        votes: { 'org-1': 'yes' as const },
+      },
+      players: {
+        'org-1': { name: 'Org', wordCount: 0, score: 0, online: true },
+        a: { name: 'A', wordCount: 0, score: 0, online: true },
+      },
+    };
+    getMock.mockResolvedValue({ exists: () => true, val: () => session });
+
+    await expect(finishGameSessionIfExpired('ABCD')).resolves.toBe(false);
+    expect(session.status).toBe('playing');
+    expect(runTransactionMock).not.toHaveBeenCalled();
+  });
 });
