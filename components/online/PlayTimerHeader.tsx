@@ -39,6 +39,8 @@ export type PlayTimerHeaderLocalProps = PlayTimerHeaderBaseProps & {
   endsAt: number | null;
   getRemainingMs: (now: number) => number;
   onTimeUp: () => void;
+  /** When true, skip onTimeUp even if the clock has elapsed (e.g. add-time modal open). */
+  deferTimeUp?: boolean;
   onOpenStatsExplain?: () => void;
 };
 
@@ -92,8 +94,15 @@ export const PlayTimerHeader = memo(function PlayTimerHeader(props: PlayTimerHea
     if (props.clock !== 'local') {
       return;
     }
-    const { endsAt, isPaused, onTimeUp, roundActive } = props;
-    if (!roundActive || isPaused || endsAt === null || now < endsAt || timeUpHandledRef.current) {
+    const { endsAt, isPaused, onTimeUp, roundActive, deferTimeUp } = props;
+    if (
+      !roundActive ||
+      isPaused ||
+      endsAt === null ||
+      now < endsAt ||
+      deferTimeUp ||
+      timeUpHandledRef.current
+    ) {
       return;
     }
     timeUpHandledRef.current = true;

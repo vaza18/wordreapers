@@ -152,7 +152,7 @@ export default function OrganizerSoloPlayScreen() {
     enabled: Boolean(setup?.baseWord && status === 'playing'),
   });
 
-  const timeUpModalVisible = status === 'finished' && isFocused;
+  const timeUpModalVisible = status === 'finished' && isFocused && !showAddTimeModal;
 
   const clearFeedback = useCallback(() => {
     setFeedback(null);
@@ -430,6 +430,7 @@ export default function OrganizerSoloPlayScreen() {
               maxWordCount={roundLexicon?.maxCount ?? null}
               score={playerScore}
               timerAlertMode={timerAlertMode}
+              deferTimeUp={showAddTimeModal}
               onTimeUp={finishRound}
               onOpenGameMenu={() => {
                 setShowGameMenu(true);
@@ -558,6 +559,9 @@ export default function OrganizerSoloPlayScreen() {
         requiresConsensus={false}
         onClose={() => {
           setShowAddTimeModal(false);
+          if (status === 'playing' && getRemainingMs(Date.now()) <= 0) {
+            finishRound();
+          }
         }}
         onSelect={(minutes) => {
           addTime(minutes);

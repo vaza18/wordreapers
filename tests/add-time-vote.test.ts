@@ -6,6 +6,7 @@ import {
   computeExtendedTimerEndsAt,
   shouldApplyAddTimeFromVote,
   shouldClearAddTimeVote,
+  shouldDeferClientTimerFinish,
   shouldDeferTimerFinishForAddTimeVote,
   shouldFinishRoundAfterTimerExpired,
   viewerNeedsAddTimeVote,
@@ -83,6 +84,14 @@ describe('add time vote', () => {
     expect(shouldDeferTimerFinishForAddTimeVote(null)).toBe(false);
     expect(shouldDeferTimerFinishForAddTimeVote(undefined)).toBe(false);
     expect(shouldDeferTimerFinishForAddTimeVote(addTimeVote)).toBe(true);
+  });
+
+  it('defers client finish tick for local picker or add-time vote', () => {
+    expect(shouldDeferClientTimerFinish({ addTimeVote: null, showAddTimeModal: false })).toBe(
+      false,
+    );
+    expect(shouldDeferClientTimerFinish({ addTimeVote: null, showAddTimeModal: true })).toBe(true);
+    expect(shouldDeferClientTimerFinish({ addTimeVote, showAddTimeModal: false })).toBe(true);
   });
 
   it('detects when round timer has expired', () => {

@@ -27,6 +27,18 @@ describe('organizer solo addTime', () => {
     expect(after).toBe((before ?? 0) + 5 * 60_000);
   });
 
+  it('extends from now when the active timer already elapsed', () => {
+    const pastEndsAt = Date.now() - 30_000;
+    useOrganizerSoloStore.setState({ endsAt: pastEndsAt, status: 'playing' });
+    const before = Date.now();
+    useOrganizerSoloStore.getState().addTime(1);
+    const after = useOrganizerSoloStore.getState().endsAt;
+    expect(after).not.toBeNull();
+    expect(after!).toBeGreaterThanOrEqual(before + 60_000 - 50);
+    expect(after!).toBeLessThanOrEqual(Date.now() + 60_000);
+    expect(useOrganizerSoloStore.getState().status).toBe('playing');
+  });
+
   it('extends frozen remaining time while paused', () => {
     useOrganizerSoloStore.getState().pauseRound();
     const before = useOrganizerSoloStore.getState().pausedRemainingMs;
