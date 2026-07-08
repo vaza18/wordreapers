@@ -10,8 +10,11 @@ functions/node_modules/
 credentials.json
 credentials/
 
-# Generated assets (see assets/README.md)
-assets/generated/
+# Generated assets (see assets/README.md). Bundle dictionaries (~1.2 MB gzip); postinstall rebuilds the rest.
+assets/generated/sounds/
+assets/generated/legal-pages/
+assets/generated/icons/
+assets/generated/notebook/
 
 # Generated from docs/legal/*.md and docs/wordreapers_about.md (npm run legal:bundle)
 lib/legal/bundled-legal.ts
