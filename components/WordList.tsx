@@ -186,48 +186,64 @@ function WordListRow({
 
   useEffect(() => {
     if (!animateEntrance) {
-      return;
+      return undefined;
     }
 
-    Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: ROW_ENTRANCE_MS,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateX, {
-        toValue: 0,
-        duration: ROW_ENTRANCE_MS,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]).start(({ finished }) => {
-      if (finished) {
-        onEntranceComplete?.(row.entry.normalized);
+    let cancelled = false;
+    const frameId = requestAnimationFrame(() => {
+      if (cancelled) {
+        return;
+      }
+
+      Animated.parallel([
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: ROW_ENTRANCE_MS,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateX, {
+          toValue: 0,
+          duration: ROW_ENTRANCE_MS,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
+        if (finished && !cancelled) {
+          onEntranceComplete?.(row.entry.normalized);
+        }
+      });
+
+      highlightOpacity.setValue(ROW_HIGHLIGHT_PEAK);
+      Animated.sequence([
+        Animated.delay(ROW_HIGHLIGHT_DELAY_MS),
+        Animated.timing(highlightOpacity, {
+          toValue: 0,
+          duration: ROW_HIGHLIGHT_MS,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      if (showBadge) {
+        Animated.spring(badgeScale, {
+          toValue: 1,
+          friction: 5,
+          tension: 180,
+          delay: ROW_ENTRANCE_MS * 0.35,
+          useNativeDriver: true,
+        }).start();
       }
     });
 
-    highlightOpacity.setValue(ROW_HIGHLIGHT_PEAK);
-    Animated.sequence([
-      Animated.delay(ROW_HIGHLIGHT_DELAY_MS),
-      Animated.timing(highlightOpacity, {
-        toValue: 0,
-        duration: ROW_HIGHLIGHT_MS,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    if (showBadge) {
-      Animated.spring(badgeScale, {
-        toValue: 1,
-        friction: 5,
-        tension: 180,
-        delay: ROW_ENTRANCE_MS * 0.35,
-        useNativeDriver: true,
-      }).start();
-    }
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frameId);
+      opacity.stopAnimation();
+      translateX.stopAnimation();
+      highlightOpacity.stopAnimation();
+      badgeScale.stopAnimation();
+    };
   }, [
     animateEntrance,
     badgeScale,

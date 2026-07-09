@@ -24,10 +24,16 @@ import {
   buildSoloFinishedSession,
   saveSoloFinishedRoundArchive,
 } from '@/lib/online/solo-round-archive';
-import { removeLocalRoomDraft } from '@/lib/online/local-room-draft';
+import {
+  createLocalRoomDraft,
+  removeLocalRoomDraft,
+  updateLocalRoomDraft,
+} from '@/lib/online/local-room-draft';
+import { generateRoomCode } from '@/lib/firebase/room-code';
 import { organizerSoloStandings, useOrganizerSoloStore } from '@/store/organizer-solo-store';
 import { usePlayerStatsStore } from '@/store/player-stats-store';
 import { useProfileStore } from '@/store/profile-store';
+import { useSettingsStore } from '@/store/settings-store';
 
 /**
  * Local results after an organizer solo round (no Firebase).
@@ -40,6 +46,7 @@ export default function OrganizerSoloResultsScreen() {
   const statsRecordedRef = useRef(false);
   const archiveRecordedRef = useRef(false);
   const milestoneMarkedRef = useRef(false);
+  const playAgainNavRef = useRef(false);
   const [showUnlockModal, setShowUnlockModal] = useState(false);
   const [showRetryModal, setShowRetryModal] = useState(false);
   const {
@@ -64,7 +71,7 @@ export default function OrganizerSoloResultsScreen() {
       router.replace({ pathname: '/online/solo/[gameId]', params: { gameId } });
       return;
     }
-    if (status === 'idle') {
+    if (status === 'idle' && !playAgainNavRef.current) {
       router.replace('/');
     }
   }, [gameId, status]);
@@ -234,6 +241,31 @@ export default function OrganizerSoloResultsScreen() {
     router.replace({ pathname: '/online/solo/[gameId]', params: { gameId } });
   };
 
+  const handlePlayAgain = () => {
+    if (!setup) {
+      return;
+    }
+    playAgainNavRef.current = true;
+
+    const settings = useSettingsStore.getState();
+    settings.setGameSetupDuration(setup.durationMinutes);
+    settings.setGameSetupUniqueBonusMode(setup.uniqueBonusMode);
+    settings.setGameSetupAllowProperNouns(setup.allowProperNouns);
+    settings.setGameSetupAllowSlang(setup.allowSlang);
+
+    const profile = useProfileStore.getState();
+    const nextGameId = generateRoomCode();
+    createLocalRoomDraft(nextGameId, {
+      name: profile.name,
+      gender: profile.gender,
+      avatarColorIndex: profile.avatarColorIndex,
+    });
+    updateLocalRoomDraft(nextGameId, { setup });
+
+    clear();
+    router.replace({ pathname: '/online/setup', params: { gameId: nextGameId } });
+  };
+
   const goHome = () => {
     clear();
     removeLocalRoomDraft(gameId);
@@ -313,7 +345,12 @@ export default function OrganizerSoloResultsScreen() {
         showScores={false}
         showWordAuthors={false}
         roundDurationSeconds={viewData.roundDurationSeconds}
-        footer={<PrimaryButton label={t('nav.home')} onPress={goHome} />}
+        footer={
+          <>
+            <PrimaryButton label={t('game.newGameSamePlayers')} onPress={handlePlayAgain} />
+            <PrimaryButton label={t('nav.home')} variant="secondary" onPress={goHome} />
+          </>
+        }
       />
     </>
   );

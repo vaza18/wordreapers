@@ -147,7 +147,7 @@ export function useDraftLetterFly(options: { enabled?: boolean } = {}) {
   const handoffFlyToDraft = useCallback(
     (charIndex: number) => {
       completeCharReveal(charIndex);
-      removeFly(charIndex, false);
+      removeFly(charIndex, true);
     },
     [completeCharReveal, removeFly],
   );

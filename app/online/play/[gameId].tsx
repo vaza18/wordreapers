@@ -433,7 +433,9 @@ export default function OnlinePlayScreen() {
     allowProperNouns,
     allowSlang,
     releaseDictionaryAfterBuild: true,
-    enabled: Boolean(displaySession?.baseWord && displaySession.status === 'playing'),
+    enabled: Boolean(
+      displaySession?.baseWord && (displaySession.status === 'playing' || roundEnded),
+    ),
   });
   const showPointUi = shouldShowPointUi(uniqueBonusEnabled);
 
@@ -520,7 +522,12 @@ export default function OnlinePlayScreen() {
     }
     return getCachedRoundPlayableLexicon(baseWord, allowProperNouns, allowSlang)?.maxCount ?? null;
   }, [allowProperNouns, allowSlang, baseWord]);
-  const maxWordCount = roundLexicon?.maxCount ?? cachedLexiconMaxCount;
+  const maxWordCountLive = roundLexicon?.maxCount ?? cachedLexiconMaxCount;
+  const maxWordCountRef = useRef<number | null>(null);
+  if (maxWordCountLive != null) {
+    maxWordCountRef.current = maxWordCountLive;
+  }
+  const maxWordCount = maxWordCountLive ?? maxWordCountRef.current;
 
   const wordsForDisplay = useMemo(() => {
     const baseWords = roundEndWordsSnapshot ?? myWords;
@@ -1101,7 +1108,7 @@ export default function OnlinePlayScreen() {
       ) : null}
 
       <BottomSheetModal
-        visible={showStandings && !gameMenuBlockedByVote && !roundEnded}
+        visible={showStandings && !gameMenuBlockedByVote}
         onClose={() => {
           setShowStandings(false);
         }}
@@ -1143,13 +1150,13 @@ export default function OnlinePlayScreen() {
         />
       </BottomSheetModal>
 
-      {showGameMenu && !gameMenuBlockedByVote && !roundEnded ? (
+      {showGameMenu && !gameMenuBlockedByVote ? (
         <GameMenuModal
           visible
           endGameLabel={
             hasOnlineOpponentInRound ? t('game.menuProposeEnd') : t('game.menuEndEarly')
           }
-          showEndGame={hasOnlineOpponentInRound}
+          showEndGame={hasOnlineOpponentInRound && !roundEnded}
           onClose={() => {
             setShowGameMenu(false);
           }}
@@ -1165,9 +1172,10 @@ export default function OnlinePlayScreen() {
               setShowEndEarlyConfirm(true);
             }
           }}
-          showPause={!isPaused && !earlyVote && !pauseVote && !addTimeVote}
+          showPause={!isPaused && !earlyVote && !pauseVote && !addTimeVote && !roundEnded}
           pauseLabel={hasOnlineOpponentInRound ? t('game.menuPause') : t('game.menuPauseSolo')}
-          showInvite={canInviteOthers}
+          showInvite={canInviteOthers && !roundEnded}
+          showExit={!roundEnded}
           onInvite={() => {
             setShowGameMenu(false);
             setShowInviteModal(true);

@@ -110,6 +110,12 @@ export const OnlinePlayComposePanel = memo(function OnlinePlayComposePanel({
     flushPendingLaunches();
   }, [draft, flushPendingLaunches]);
 
+  useLayoutEffect(() => {
+    if (draft.length === 0) {
+      clearCharReveals();
+    }
+  }, [clearCharReveals, draft.length]);
+
   const handlePressKey = useCallback(
     (index: number) => {
       queueFlyForKey(index, draft.length);

@@ -6,6 +6,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
+import { getCachedRoundPlayableLexicon } from '@/lib/dictionary/round-playable-lexicon-cache';
 import {
   hasWordInSortedList,
   loadBundledDictionary,
@@ -162,7 +163,7 @@ export default function OrganizerSoloPlayScreen() {
     allowProperNouns: setup?.allowProperNouns ?? false,
     allowSlang: setup?.allowSlang ?? false,
     releaseDictionaryAfterBuild: true,
-    enabled: Boolean(setup?.baseWord && status === 'playing'),
+    enabled: Boolean(setup?.baseWord && (status === 'playing' || status === 'finished')),
   });
 
   const timeUpModalVisible = status === 'finished' && isFocused && !showAddTimeModal;
@@ -184,6 +185,24 @@ export default function OrganizerSoloPlayScreen() {
   const usedKeyIndices = useMemo(() => new Set(draftKeyIndices), [draftKeyIndices]);
   const scoredWords = getScoredWords();
   const displays = words.map((word) => word.display);
+  const cachedLexiconMaxCount = useMemo(() => {
+    if (!setup?.baseWord) {
+      return null;
+    }
+    return (
+      getCachedRoundPlayableLexicon(
+        setup.baseWord,
+        setup.allowProperNouns ?? false,
+        setup.allowSlang ?? false,
+      )?.maxCount ?? null
+    );
+  }, [setup]);
+  const maxWordCountLive = roundLexicon?.maxCount ?? cachedLexiconMaxCount;
+  const maxWordCountRef = useRef<number | null>(null);
+  if (maxWordCountLive != null) {
+    maxWordCountRef.current = maxWordCountLive;
+  }
+  const maxWordCount = maxWordCountLive ?? maxWordCountRef.current;
   const playerScore = computePlayerScore(scoredWords);
   const isPaused = status === 'paused';
   const addTimeRemainingMs = getRemainingMs(Date.now());
@@ -447,7 +466,7 @@ export default function OrganizerSoloPlayScreen() {
               roundActive={status === 'playing'}
               getRemainingMs={getRemainingMs}
               wordCount={scoredWords.length}
-              maxWordCount={roundLexicon?.maxCount ?? null}
+              maxWordCount={maxWordCount}
               score={playerScore}
               timerAlertMode={timerAlertMode}
               deferTimeUp={showAddTimeModal}
@@ -553,7 +572,7 @@ export default function OrganizerSoloPlayScreen() {
       <PlayStatsExplainModal
         visible={showStatsExplain}
         wordCount={scoredWords.length}
-        maxWordCount={roundLexicon?.maxCount ?? null}
+        maxWordCount={maxWordCount}
         showTrainingUnlockHint={trainingHydrated && !hasCompletedTrainingRound}
         onClose={() => {
           setShowStatsExplain(false);
