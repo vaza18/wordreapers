@@ -128,6 +128,22 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 - **Test:** `lib/online/__tests__/live-standings.test.ts`, `tests/session-settings-unique-bonus.test.ts`, `tests/online-invariants.test.ts`
 - **Area:** `lib/online/live-standings.ts`, `lib/firebase/session-settings.ts`
 
+### 2026-07 — Decorative animations ignored OS Reduce Motion
+
+- **Symptom:** Timer pulse, confetti, letter fly, and other decorative animations ran even when the device had Reduce Motion enabled (or when users wanted fewer effects).
+- **Cause:** No centralized visual-effects policy; only legacy per-toggle timer/victory settings without OS accessibility integration.
+- **Fix:** Added `lib/settings/visual-effects.ts` with Auto / Selective / Off modes, `useReduceMotion`, and `useResolvedVisualEffects`; wired all decorative animation consumers to resolved flags.
+- **Test:** `tests/visual-effects.test.ts`
+- **Area:** `lib/settings/visual-effects.ts`, `store/settings-store.ts`, `hooks/useReduceMotion.ts`, `hooks/useResolvedVisualEffects.ts`
+
+### 2026-07 — Confetti fired before OS Reduce Motion was read
+
+- **Symptom:** With Reduce Motion on and visual effects in Auto, victory confetti still played on results screens.
+- **Cause:** `useReduceMotion` defaulted to `false` before `AccessibilityInfo.isReduceMotionEnabled()` resolved; `celebrate()` ran on first paint and `hasCelebratedRef` blocked the corrected path.
+- **Fix:** Treat unknown OS state as reduce motion enabled in `resolveVisualEffects`; gate `VictoryConfettiHost` on `victoryCelebration`.
+- **Test:** `tests/visual-effects.test.ts` (`null` OS state)
+- **Area:** `hooks/useReduceMotion.ts`, `lib/settings/visual-effects.ts`, `components/VictoryConfetti.tsx`
+
 ---
 
 ## Template (copy for new entries)
