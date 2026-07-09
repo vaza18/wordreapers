@@ -166,7 +166,7 @@ function PauseBody({
             const player = session.players[row.playerId];
             const isMe = row.playerId === myUid;
             const presence = player?.online
-              ? t('game.pauseStatusInRound')
+              ? t('game.playerOnline')
               : player?.hasLeft
                 ? formatPlayerLeftLabel(t, playerGenderForDisplay(session, myUid, row.playerId))
                 : t('game.playerOffline');
