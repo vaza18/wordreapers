@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { Platform } from 'react-native';
 
 import { useNotebookRowHeight } from '@/hooks/useNotebookRowHeight';
 
@@ -14,12 +15,15 @@ export function useVirtualWordListProps() {
     [rowHeight],
   );
 
+  const isAndroid = Platform.OS === 'android';
+
   return {
     rowHeight,
     getItemLayout,
     initialNumToRender: 24,
-    maxToRenderPerBatch: 16,
-    windowSize: 7,
+    maxToRenderPerBatch: isAndroid ? 10 : 16,
+    windowSize: isAndroid ? 5 : 7,
     updateCellsBatchingPeriod: 50,
+    removeClippedSubviews: isAndroid,
   };
 }

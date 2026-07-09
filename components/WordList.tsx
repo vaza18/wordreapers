@@ -2,6 +2,14 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject
 import { Animated, Easing, FlatList, StyleSheet, Text, View } from 'react-native';
 
 import { scheduleIdleWork } from '@/lib/app/schedule-idle-work';
+import { removeEntranceNormalized } from '@/lib/ui/word-list-entrance';
+import {
+  ACCEPTED_WORD_SCROLL_OPTIONS,
+  PREFIX_NAV_SCROLL_OPTIONS,
+  PREFIX_SCROLL_DEBOUNCE_MS,
+  type WordListScrollOptions,
+} from '@/lib/ui/word-list-scroll-behavior';
+import { shouldSkipWordListRowRerender } from '@/lib/ui/word-list-row-memo';
 
 import { ScrollableWordPanel } from '@/components/ScrollableWordPanel';
 import {
@@ -85,6 +93,7 @@ function scrollFlatListToRow(
   index: number,
   rowHeight: number,
   shouldContinue: () => boolean,
+  options: WordListScrollOptions = ACCEPTED_WORD_SCROLL_OPTIONS,
 ): void {
   const offset = rowScrollOffset(index, rowHeight);
 
@@ -92,8 +101,13 @@ function scrollFlatListToRow(
     if (!shouldContinue() || !listRef.current) {
       return;
     }
-    listRef.current.scrollToOffset({ offset, animated: true });
+    listRef.current.scrollToOffset({ offset, animated: options.animated });
   };
+
+  if (!options.retries) {
+    scheduleIdleWork(run);
+    return;
+  }
 
   scheduleIdleWork(() => {
     requestAnimationFrame(() => {
@@ -146,6 +160,7 @@ function WordListRow({
   styles,
   notebookRow,
   animateEntrance,
+  onEntranceComplete,
 }: {
   row: WordRow;
   prefix: string;
@@ -154,6 +169,7 @@ function WordListRow({
   styles: ReturnType<typeof createStyles>;
   notebookRow: ReturnType<typeof createNotebookRowLineStyle>;
   animateEntrance: boolean;
+  onEntranceComplete?: (normalized: string) => void;
 }) {
   const split = splitDisplayByNormalizedPrefix(row.display, prefix);
   const showBadge = showScoreBadges && row.entry.badge === 'x2';
@@ -180,7 +196,11 @@ function WordListRow({
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
-    ]).start();
+    ]).start(({ finished }) => {
+      if (finished) {
+        onEntranceComplete?.(row.entry.normalized);
+      }
+    });
 
     highlightOpacity.setValue(ROW_HIGHLIGHT_PEAK);
     Animated.sequence([
@@ -202,7 +222,16 @@ function WordListRow({
         useNativeDriver: true,
       }).start();
     }
-  }, [animateEntrance, badgeScale, highlightOpacity, opacity, showBadge, translateX]);
+  }, [
+    animateEntrance,
+    badgeScale,
+    highlightOpacity,
+    onEntranceComplete,
+    opacity,
+    row.entry.normalized,
+    showBadge,
+    translateX,
+  ]);
 
   return (
     <Animated.View
@@ -237,7 +266,7 @@ function WordListRow({
   );
 }
 
-const MemoWordListRow = memo(WordListRow);
+const MemoWordListRow = memo(WordListRow, shouldSkipWordListRowRerender);
 
 /**
  * Alphabetically sorted accepted words with x2/x0 badges, draft prefix highlight, auto-scroll.
@@ -264,6 +293,7 @@ export const WordList = memo(function WordList({
   const scrollTargetRef = useRef<string | null>(null);
   const scrollGenerationRef = useRef(0);
   const lastScrollRequestIdRef = useRef(0);
+  const prefixScrollDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pendingAcceptedScroll, setPendingAcceptedScroll] = useState(false);
   const [entranceNormalizes, setEntranceNormalizes] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -285,6 +315,10 @@ export const WordList = memo(function WordList({
   const viewportHeight = panelScroll.scrollMetrics.viewportHeight;
   const fillerRowCount = notebookFillerRowCount(rows.length, viewportHeight, spacing.sm, rowHeight);
   const canScroll = notebookListCanScroll(rows.length, viewportHeight, spacing.sm, rowHeight);
+
+  const handleEntranceComplete = useCallback((normalized: string) => {
+    setEntranceNormalizes((current) => removeEntranceNormalized(current, normalized));
+  }, []);
 
   const queueScrollToNormalized = useCallback((normalized: string) => {
     scrollGenerationRef.current += 1;
@@ -349,7 +383,20 @@ export const WordList = memo(function WordList({
       return;
     }
 
-    scrollFlatListToRow(listRef, index, rowHeight, () => true);
+    if (prefixScrollDebounceRef.current) {
+      clearTimeout(prefixScrollDebounceRef.current);
+    }
+    prefixScrollDebounceRef.current = setTimeout(() => {
+      prefixScrollDebounceRef.current = null;
+      scrollFlatListToRow(listRef, index, rowHeight, () => true, PREFIX_NAV_SCROLL_OPTIONS);
+    }, PREFIX_SCROLL_DEBOUNCE_MS);
+
+    return () => {
+      if (prefixScrollDebounceRef.current) {
+        clearTimeout(prefixScrollDebounceRef.current);
+        prefixScrollDebounceRef.current = null;
+      }
+    };
   }, [prefix, rowHeight, rowSignature, rows, scrollable]);
 
   useEffect(() => {
@@ -401,9 +448,18 @@ export const WordList = memo(function WordList({
         styles={styles}
         notebookRow={notebookRow}
         animateEntrance={entranceNormalizes.has(row.entry.normalized)}
+        onEntranceComplete={handleEntranceComplete}
       />
     ),
-    [entranceNormalizes, notebookRow, prefix, showOverlapPeers, showScoreBadges, styles],
+    [
+      entranceNormalizes,
+      handleEntranceComplete,
+      notebookRow,
+      prefix,
+      showOverlapPeers,
+      showScoreBadges,
+      styles,
+    ],
   );
 
   if (!scrollable) {
@@ -419,6 +475,7 @@ export const WordList = memo(function WordList({
             styles={styles}
             notebookRow={notebookRow}
             animateEntrance={entranceNormalizes.has(row.entry.normalized)}
+            onEntranceComplete={handleEntranceComplete}
           />
         ))}
       </View>
@@ -437,7 +494,7 @@ export const WordList = memo(function WordList({
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           scrollEnabled={canScroll || pendingAcceptedScroll}
-          removeClippedSubviews={false}
+          removeClippedSubviews={virtualList.removeClippedSubviews}
           onScroll={panelScroll.onScroll}
           onScrollBeginDrag={() => {
             dismissWordOverlapTooltips();

@@ -16,6 +16,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 - **Test:** `tests/organizer-solo-add-time.test.ts`, `tests/add-time-vote.test.ts`, `tests/game-session-service.test.ts`
 - **Area:** `components/online/PlayTimerHeader.tsx`, `app/online/solo/[gameId].tsx`, `store/organizer-solo-store.ts`, `app/online/play/[gameId].tsx`, `lib/online/voting/add-time-vote.ts`
 
+### 2026-07 — Letter fly animation degrades with large accepted-word lists
+
+- **Symptom:** After ~60 accepted words, the ghost letter fly-to-draft animation became nearly invisible on Android (and faster on iOS). Worsened with more words.
+- **Cause:** Each draft keystroke re-rendered the word list, ran triple animated FlatList prefix scrolls, and invalidated all visible rows; fly animation competed for UI thread time. `usedKeyIndices` was recreated every render, breaking `LetterKeyboard` memo. `entranceNormalizes` grew without pruning.
+- **Fix:** Memoized `DraftLetterFlyOverlay` with animation stop/generation guard; prefix-aware row memo; debounced non-animated prefix scroll; pruned entrance set after row animation; Android FlatList tuning (`removeClippedSubviews`, smaller window).
+- **Test:** `tests/word-list-row-memo.test.ts`, `tests/word-list-entrance.test.ts`
+- **Area:** `components/online/OnlinePlayComposePanel.tsx`, `components/WordList.tsx`, `hooks/useVirtualWordListProps.ts`
+
 ### 2026-07 — Letter fly-to-draft animation missing after compose-panel refactor
 
 - **Symptom:** Pressing a letter key no longer showed the ghost letter flying into the draft field. After restore, landing x drifted as the draft grew.
