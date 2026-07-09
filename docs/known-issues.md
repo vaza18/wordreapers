@@ -24,13 +24,13 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 - **Test:** `tests/word-list-row-memo.test.ts`, `tests/word-list-entrance.test.ts`
 - **Area:** `components/online/OnlinePlayComposePanel.tsx`, `components/WordList.tsx`, `hooks/useVirtualWordListProps.ts`
 
-### 2026-07 — Letter fly-to-draft animation missing after compose-panel refactor
+### 2026-07 — Draft letter fly-to-draft animation (compose panel)
 
-- **Symptom:** Pressing a letter key no longer showed the ghost letter flying into the draft field. After restore, landing x drifted as the draft grew.
-- **Cause:** (1) Commit that removed ConnectivityContext also stripped fly wiring from `OnlinePlayComposePanel`. (2) Landing used a fixed `fontSize * 0.6` advance and ignored `adjustsFontSizeToFit` shrink.
-- **Fix:** Restored fly animation; land using measured draft text width from `onTextLayout` via `draftLetterFlyEndpoints`.
-- **Test:** `tests/draft-letter-fly.test.ts`
-- **Area:** `components/online/OnlinePlayComposePanel.tsx`, `lib/game/draft-letter-fly.ts`
+- **Symptom:** Ghost fly missing or wrong landing; rapid typing cancelled flies; draft glyphs stuck transparent; vertical misalignment when draft shrinks.
+- **Cause:** Reveal tied to fly completion; shared animation state; width-based landing ignored `adjustsFontSizeToFit` and `letterSpacing`; `Text` filled full draft row height so flex centering had no effect.
+- **Fix:** Independent reveal timer + instant handoff at `DRAFT_FLY_DURATION_MS`; per-char concurrent flies; landing from measured draft `Text` + `draftFlyGlyphTopLeftFromLineLayout`; flex-centered draft wrapper; start point aligned to key label geometry.
+- **Test:** `tests/draft-fly-layout.test.ts`, `tests/draft-letter-fly.test.ts`, `tests/draft-letter-reveal.test.ts`, `tests/draft-text-scale.test.ts`
+- **Area:** `hooks/useDraftLetterFly.ts`, `lib/game/draft-fly-layout.ts`, `components/DraftDisplayText.tsx`, `components/online/OnlinePlayComposePanel.tsx`
 
 ### 2026-07 — Organizer stuck in rematch lobby when picker starts round 2
 

@@ -60,12 +60,15 @@ function LetterKeyButton({
         }}
         onPressOut={onPressOut}
         onPress={() => {
-          if (!used && onKeyMeasure) {
+          if (used) {
+            return;
+          }
+          onPressKey(index);
+          if (onKeyMeasure) {
             viewRef.current?.measureInWindow((x, y, width, height) => {
               onKeyMeasure(index, { x, y, width, height });
             });
           }
-          onPressKey(index);
         }}
         style={[
           styles.key,
