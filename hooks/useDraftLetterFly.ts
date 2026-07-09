@@ -52,7 +52,8 @@ function remainingFlyMs(startedAt: number): number {
 }
 
 /** Ghost-letter fly animation state for the compose panel. */
-export function useDraftLetterFly() {
+export function useDraftLetterFly(options: { enabled?: boolean } = {}) {
+  const enabled = options.enabled ?? true;
   const revealingIndicesRef = useRef(new Set<number>());
   const pendingFliesRef = useRef<PendingFly[]>([]);
   const pendingLaunchesRef = useRef(new Map<number, PendingFlyLaunch>());
@@ -212,9 +213,15 @@ export function useDraftLetterFly() {
     }
   }, []);
 
-  const queueFlyForKey = useCallback((keyIndex: number, charIndex: number) => {
-    pendingFliesRef.current.push({ keyIndex, charIndex });
-  }, []);
+  const queueFlyForKey = useCallback(
+    (keyIndex: number, charIndex: number) => {
+      if (!enabled) {
+        return;
+      }
+      pendingFliesRef.current.push({ keyIndex, charIndex });
+    },
+    [enabled],
+  );
 
   const beginCharReveal = useCallback(
     (charIndex: number) => {
@@ -303,14 +310,20 @@ export function useDraftLetterFly() {
 
   const stageFlyLaunch = useCallback(
     (launch: PendingFlyLaunch) => {
+      if (!enabled) {
+        return;
+      }
       beginCharReveal(launch.charIndex);
       pendingLaunchesRef.current.set(launch.charIndex, launch);
     },
-    [beginCharReveal],
+    [beginCharReveal, enabled],
   );
 
   const syncFlyTargetsFromLayout = useCallback(
     (layout: DraftLineLayout) => {
+      if (!enabled) {
+        return;
+      }
       for (const [charIndex, launch] of [...pendingLaunchesRef.current.entries()]) {
         if (layout.charCount <= charIndex) {
           continue;
@@ -325,7 +338,7 @@ export function useDraftLetterFly() {
         }
       }
     },
-    [launchFly, retargetFly],
+    [enabled, launchFly, retargetFly],
   );
 
   const resolvePendingFly = useCallback((keyIndex: number, draftLength: number) => {
@@ -351,9 +364,15 @@ export function useDraftLetterFly() {
     [cancelCharReveal, removeFly],
   );
 
-  const isCharRevealing = useCallback((charIndex: number): boolean => {
-    return revealingIndicesRef.current.has(charIndex);
-  }, []);
+  const isCharRevealing = useCallback(
+    (charIndex: number): boolean => {
+      if (!enabled) {
+        return false;
+      }
+      return revealingIndicesRef.current.has(charIndex);
+    },
+    [enabled],
+  );
 
   return {
     activeFlies,

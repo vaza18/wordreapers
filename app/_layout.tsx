@@ -136,7 +136,9 @@ export default function RootLayout() {
     (state) => state.hydrateAppearancePreference,
   );
   const hydrateFeedbackPreferences = useSettingsStore((state) => state.hydrateFeedbackPreferences);
-  const hydrateEffectsPreferences = useSettingsStore((state) => state.hydrateEffectsPreferences);
+  const hydrateVisualEffectsPreferences = useSettingsStore(
+    (state) => state.hydrateVisualEffectsPreferences,
+  );
   const hydrateGameSetupPreferences = useSettingsStore(
     (state) => state.hydrateGameSetupPreferences,
   );
@@ -166,7 +168,11 @@ export default function RootLayout() {
             LOCAL_BOOTSTRAP_TIMEOUT_MS,
             'feedback',
           ),
-          withBootstrapTimeout(hydrateEffectsPreferences(), LOCAL_BOOTSTRAP_TIMEOUT_MS, 'effects'),
+          withBootstrapTimeout(
+            hydrateVisualEffectsPreferences(),
+            LOCAL_BOOTSTRAP_TIMEOUT_MS,
+            'visualEffects',
+          ),
           withBootstrapTimeout(
             hydrateGameSetupPreferences(),
             LOCAL_BOOTSTRAP_TIMEOUT_MS,
@@ -200,7 +206,7 @@ export default function RootLayout() {
   }, [
     hydrateAppearancePreference,
     hydrateFeedbackPreferences,
-    hydrateEffectsPreferences,
+    hydrateVisualEffectsPreferences,
     hydrateGameSetupPreferences,
     hydrateProfile,
     hydratePlayerStats,

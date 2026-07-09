@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Animated, Easing, FlatList, StyleSheet, Text, View } from 'react-native';
 
-import { scheduleIdleWork } from '@/lib/app/schedule-idle-work';
+import { useResolvedVisualEffects } from '@/hooks/useResolvedVisualEffects';
 import { removeEntranceNormalized } from '@/lib/ui/word-list-entrance';
 import {
   ACCEPTED_WORD_SCROLL_OPTIONS,
@@ -34,6 +34,12 @@ import {
 } from '@/lib/ui/word-list-scroll';
 import type { ScoredWordEntry } from '@/lib/game/scoring';
 import type { WordOverlapPeer } from '@/lib/game/word-overlap-peers';
+import { scheduleIdleWork } from '@/lib/app/schedule-idle-work';
+
+const STATIC_SCROLL_OPTIONS: WordListScrollOptions = {
+  animated: false,
+  retries: false,
+};
 
 interface WordListProps {
   entries: readonly (ScoredWordEntry & { overlapPeers?: readonly WordOverlapPeer[] })[];
@@ -285,6 +291,8 @@ export const WordList = memo(function WordList({
   const notebookRow = useNotebookRowLineStyle();
   const rowHeight = useNotebookRowHeight();
   const virtualList = useVirtualWordListProps();
+  const { generalMotion } = useResolvedVisualEffects();
+  const acceptScrollOptions = generalMotion ? ACCEPTED_WORD_SCROLL_OPTIONS : STATIC_SCROLL_OPTIONS;
   const prefix = normalizeUk(draftPrefix);
   const listRef = useRef<FlatList<WordRow>>(null);
   const rowsRef = useRef<readonly WordRow[]>([]);
@@ -320,19 +328,24 @@ export const WordList = memo(function WordList({
     setEntranceNormalizes((current) => removeEntranceNormalized(current, normalized));
   }, []);
 
-  const queueScrollToNormalized = useCallback((normalized: string) => {
-    scrollGenerationRef.current += 1;
-    scrollTargetRef.current = normalized;
-    setPendingAcceptedScroll(true);
-    setEntranceNormalizes((current) => {
-      if (current.has(normalized)) {
-        return current;
+  const queueScrollToNormalized = useCallback(
+    (normalized: string) => {
+      scrollGenerationRef.current += 1;
+      scrollTargetRef.current = normalized;
+      setPendingAcceptedScroll(true);
+      if (generalMotion) {
+        setEntranceNormalizes((current) => {
+          if (current.has(normalized)) {
+            return current;
+          }
+          const next = new Set(current);
+          next.add(normalized);
+          return next;
+        });
       }
-      const next = new Set(current);
-      next.add(normalized);
-      return next;
-    });
-  }, []);
+    },
+    [generalMotion],
+  );
 
   const flushPendingScroll = useCallback(() => {
     const target = scrollTargetRef.current;
@@ -353,8 +366,9 @@ export const WordList = memo(function WordList({
       index,
       rowHeight,
       () => scrollGenerationRef.current === generation,
+      acceptScrollOptions,
     );
-  }, [rowHeight, scrollable]);
+  }, [acceptScrollOptions, rowHeight, scrollable]);
 
   const handleContentSizeChange = useCallback(
     (width: number, height: number) => {
@@ -447,12 +461,13 @@ export const WordList = memo(function WordList({
         showOverlapPeers={showOverlapPeers}
         styles={styles}
         notebookRow={notebookRow}
-        animateEntrance={entranceNormalizes.has(row.entry.normalized)}
+        animateEntrance={generalMotion && entranceNormalizes.has(row.entry.normalized)}
         onEntranceComplete={handleEntranceComplete}
       />
     ),
     [
       entranceNormalizes,
+      generalMotion,
       handleEntranceComplete,
       notebookRow,
       prefix,
@@ -474,7 +489,7 @@ export const WordList = memo(function WordList({
             showOverlapPeers={showOverlapPeers}
             styles={styles}
             notebookRow={notebookRow}
-            animateEntrance={entranceNormalizes.has(row.entry.normalized)}
+            animateEntrance={generalMotion && entranceNormalizes.has(row.entry.normalized)}
             onEntranceComplete={handleEntranceComplete}
           />
         ))}

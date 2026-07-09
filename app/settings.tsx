@@ -28,15 +28,12 @@ import {
   DEFAULT_WORD_ACCEPTED_FEEDBACK,
 } from '@/lib/settings/feedback-mode';
 import { DEFAULT_GAME_SETUP_PREFERENCES } from '@/lib/settings/game-setup-preferences';
+import { DEFAULT_VISUAL_EFFECTS, type VisualEffectsMode } from '@/lib/settings/visual-effects';
 import { isFirebaseConfigured } from '@/lib/firebase/config';
 import { useFirebaseStore } from '@/store/firebase-store';
 import { usePlayerStatsStore } from '@/store/player-stats-store';
 import { useProfileStore } from '@/store/profile-store';
-import {
-  DEFAULT_TIMER_VISUAL_COUNTDOWN,
-  DEFAULT_VICTORY_EFFECTS,
-  useSettingsStore,
-} from '@/store/settings-store';
+import { useSettingsStore, type VisualEffectsToggleKey } from '@/store/settings-store';
 
 const APPEARANCE_OPTIONS: {
   value: AppearanceMode;
@@ -46,6 +43,19 @@ const APPEARANCE_OPTIONS: {
   { value: 'auto', labelKey: 'settings.appearanceAuto', Icon: AppearanceAutoIcon },
   { value: 'light', labelKey: 'settings.appearanceLight', Icon: SunIcon },
   { value: 'dark', labelKey: 'settings.appearanceDark', Icon: MoonIcon },
+];
+
+const VISUAL_EFFECTS_MODE_OPTIONS: { value: VisualEffectsMode; labelKey: string }[] = [
+  { value: 'auto', labelKey: 'settings.visualEffectsAuto' },
+  { value: 'selective', labelKey: 'settings.visualEffectsSelective' },
+  { value: 'off', labelKey: 'settings.visualEffectsOff' },
+];
+
+const VISUAL_EFFECTS_TOGGLES: { key: VisualEffectsToggleKey; labelKey: string }[] = [
+  { key: 'timerPulse', labelKey: 'settings.timerVisualCountdown' },
+  { key: 'victoryCelebration', labelKey: 'settings.victoryEffects' },
+  { key: 'letterPress', labelKey: 'settings.letterPressEffects' },
+  { key: 'letterFly', labelKey: 'settings.letterFlyEffects' },
 ];
 
 function createStyles(colors: ThemeColors) {
@@ -101,14 +111,13 @@ export default function SettingsScreen() {
   const buttonFeedback = useSettingsStore((state) => state.buttonFeedback);
   const wordAcceptedFeedback = useSettingsStore((state) => state.wordAcceptedFeedback);
   const timerAlertMode = useSettingsStore((state) => state.timerAlertMode);
-  const timerVisualCountdown = useSettingsStore((state) => state.timerVisualCountdown);
-  const victoryEffects = useSettingsStore((state) => state.victoryEffects);
+  const visualEffects = useSettingsStore((state) => state.visualEffects);
   const setAppearanceMode = useSettingsStore((state) => state.setAppearanceMode);
   const setButtonFeedback = useSettingsStore((state) => state.setButtonFeedback);
   const setWordAcceptedFeedback = useSettingsStore((state) => state.setWordAcceptedFeedback);
   const setTimerAlertMode = useSettingsStore((state) => state.setTimerAlertMode);
-  const setTimerVisualCountdown = useSettingsStore((state) => state.setTimerVisualCountdown);
-  const setVictoryEffects = useSettingsStore((state) => state.setVictoryEffects);
+  const setVisualEffectsMode = useSettingsStore((state) => state.setVisualEffectsMode);
+  const setVisualEffectsToggle = useSettingsStore((state) => state.setVisualEffectsToggle);
 
   const [clearDialogVisible, setClearDialogVisible] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -125,8 +134,7 @@ export default function SettingsScreen() {
         buttonFeedback: DEFAULT_BUTTON_FEEDBACK,
         wordAcceptedFeedback: DEFAULT_WORD_ACCEPTED_FEEDBACK,
         timerAlertMode: DEFAULT_TIMER_ALERT_FEEDBACK,
-        timerVisualCountdown: DEFAULT_TIMER_VISUAL_COUNTDOWN,
-        victoryEffects: DEFAULT_VICTORY_EFFECTS,
+        visualEffects: DEFAULT_VISUAL_EFFECTS,
         gameSetup: DEFAULT_GAME_SETUP_PREFERENCES,
       });
       useFirebaseStore.getState().setConnection({
@@ -187,16 +195,29 @@ export default function SettingsScreen() {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{t('settings.effectsSection')}</Text>
-        <SettingSwitch
-          label={t('settings.timerVisualCountdown')}
-          value={timerVisualCountdown}
-          onChange={setTimerVisualCountdown}
+        <SegmentedControl
+          options={VISUAL_EFFECTS_MODE_OPTIONS.map((option) => ({
+            value: option.value,
+            label: t(option.labelKey),
+          }))}
+          value={visualEffects.mode}
+          onChange={setVisualEffectsMode}
         />
-        <SettingSwitch
-          label={t('settings.victoryEffects')}
-          value={victoryEffects}
-          onChange={setVictoryEffects}
-        />
+        {visualEffects.mode === 'auto' ? (
+          <Text style={styles.note}>{t('settings.visualEffectsAutoNote')}</Text>
+        ) : null}
+        {visualEffects.mode === 'selective'
+          ? VISUAL_EFFECTS_TOGGLES.map((toggle) => (
+              <SettingSwitch
+                key={toggle.key}
+                label={t(toggle.labelKey)}
+                value={visualEffects[toggle.key]}
+                onChange={(enabled) => {
+                  setVisualEffectsToggle(toggle.key, enabled);
+                }}
+              />
+            ))
+          : null}
       </View>
 
       <View style={styles.section}>

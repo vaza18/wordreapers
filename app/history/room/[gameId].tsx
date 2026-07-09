@@ -22,7 +22,7 @@ import {
   didPlayerLeadRoomAggregate,
   filterMultiplayerArchivesForGame,
 } from '@/lib/online/room-history-aggregate';
-import { useSettingsStore } from '@/store/settings-store';
+import { useResolvedVisualEffects } from '@/hooks/useResolvedVisualEffects';
 import { useVictoryConfettiStore } from '@/store/victory-confetti-store';
 
 /**
@@ -63,7 +63,7 @@ export default function RoomHistoryScreen() {
     return computeRoomHistoryAggregate(gameId, roundArchives, myUid);
   }, [gameId, myUid, roundArchives]);
 
-  const victoryEffects = useSettingsStore((state) => state.victoryEffects);
+  const { victoryCelebration } = useResolvedVisualEffects();
   const celebrate = useVictoryConfettiStore((state) => state.celebrate);
   const hasCelebratedRef = useRef(false);
 
@@ -79,12 +79,12 @@ export default function RoomHistoryScreen() {
   }, [gameId]);
 
   useEffect(() => {
-    if (loading || !showVictoryConfetti || !victoryEffects || hasCelebratedRef.current) {
+    if (loading || !showVictoryConfetti || !victoryCelebration || hasCelebratedRef.current) {
       return;
     }
     hasCelebratedRef.current = true;
     celebrate();
-  }, [celebrate, loading, showVictoryConfetti, victoryEffects]);
+  }, [celebrate, loading, showVictoryConfetti, victoryCelebration]);
 
   const screenOptions = useMemo(
     () => ({

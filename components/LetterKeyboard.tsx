@@ -25,6 +25,7 @@ interface LetterKeyButtonProps {
   borderRadius: number;
   labelFontSize: number;
   styles: ReturnType<typeof createStyles>;
+  pressScaleEnabled: boolean;
   onPressKey: (index: number) => void;
   onKeyMeasure?: (index: number, rect: KeyRect) => void;
   accessibilityLabel: string;
@@ -38,11 +39,12 @@ function LetterKeyButton({
   borderRadius,
   labelFontSize,
   styles,
+  pressScaleEnabled,
   onPressKey,
   onKeyMeasure,
   accessibilityLabel,
 }: LetterKeyButtonProps) {
-  const { scale, onPressIn, onPressOut } = usePressScale(KEY_PRESS_SCALE);
+  const { scale, onPressIn, onPressOut } = usePressScale(KEY_PRESS_SCALE, pressScaleEnabled);
   const viewRef = useRef<View>(null);
 
   return (
@@ -96,6 +98,7 @@ interface LetterKeyboardProps {
   keys: readonly LetterKey[];
   /** Key indices already pressed for the current draft (each physical key toggles once). */
   usedKeyIndices: ReadonlySet<number>;
+  pressScaleEnabled?: boolean;
   onPressKey: (index: number) => void;
   /** Reports the pressed key's window rect, for the ghost-letter fly animation. */
   onKeyMeasure?: (index: number, rect: KeyRect) => void;
@@ -136,6 +139,7 @@ function createStyles(colors: ThemeColors) {
 export const LetterKeyboard = memo(function LetterKeyboard({
   keys,
   usedKeyIndices,
+  pressScaleEnabled = true,
   onPressKey,
   onKeyMeasure,
   keySize,
@@ -166,6 +170,7 @@ export const LetterKeyboard = memo(function LetterKeyboard({
             borderRadius={borderRadius}
             labelFontSize={labelFontSize}
             styles={styles}
+            pressScaleEnabled={pressScaleEnabled}
             onPressKey={onPressKey}
             onKeyMeasure={onKeyMeasure}
             accessibilityLabel={

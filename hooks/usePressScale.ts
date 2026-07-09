@@ -7,10 +7,18 @@ const DEFAULT_PRESS_SCALE = 0.9;
  * Spring press-scale for tactile buttons (letter keys, compose actions).
  * Returns the animated value plus press handlers to wire onto a Pressable.
  */
-export function usePressScale(pressedScale: number = DEFAULT_PRESS_SCALE) {
+export function usePressScale(pressedScale: number = DEFAULT_PRESS_SCALE, enabled = true) {
   const scale = useRef(new Animated.Value(1)).current;
 
   return useMemo(() => {
+    if (!enabled) {
+      return {
+        scale,
+        onPressIn: () => {},
+        onPressOut: () => {},
+      };
+    }
+
     const animateTo = (toValue: number) => {
       Animated.spring(scale, {
         toValue,
@@ -24,5 +32,5 @@ export function usePressScale(pressedScale: number = DEFAULT_PRESS_SCALE) {
       onPressIn: () => animateTo(pressedScale),
       onPressOut: () => animateTo(1),
     };
-  }, [pressedScale, scale]);
+  }, [enabled, pressedScale, scale]);
 }

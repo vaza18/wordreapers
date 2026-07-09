@@ -4,6 +4,7 @@ import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-nativ
 
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useResolvedVisualEffects } from '@/hooks/useResolvedVisualEffects';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { ConditionalModal } from '@/lib/ui/conditional-modal';
 import { modalCardChrome, modalOverlayBackground } from '@/lib/ui/modal-chrome';
@@ -78,13 +79,15 @@ export function CenterDialogModal({
   animateEntrance = false,
 }: CenterDialogModalProps) {
   const styles = useThemedStyles(createStyles);
+  const { generalMotion } = useResolvedVisualEffects();
+  const effectiveAnimateEntrance = animateEntrance && generalMotion;
   const close = onRequestClose ?? onSecondary ?? onPrimary;
   const canDismissOnBackdrop = dismissOnBackdrop;
-  const scale = useRef(new Animated.Value(animateEntrance ? 0.92 : 1)).current;
-  const opacity = useRef(new Animated.Value(animateEntrance ? 0 : 1)).current;
+  const scale = useRef(new Animated.Value(effectiveAnimateEntrance ? 0.92 : 1)).current;
+  const opacity = useRef(new Animated.Value(effectiveAnimateEntrance ? 0 : 1)).current;
 
   useEffect(() => {
-    if (!visible || !animateEntrance) {
+    if (!visible || !effectiveAnimateEntrance) {
       return;
     }
     scale.setValue(0.92);
@@ -103,11 +106,11 @@ export function CenterDialogModal({
         useNativeDriver: true,
       }),
     ]).start();
-  }, [animateEntrance, opacity, scale, visible]);
+  }, [effectiveAnimateEntrance, opacity, scale, visible]);
 
   const card = (
     <Animated.View
-      style={[styles.card, animateEntrance ? { opacity, transform: [{ scale }] } : null]}
+      style={[styles.card, effectiveAnimateEntrance ? { opacity, transform: [{ scale }] } : null]}
       onStartShouldSetResponder={() => true}
     >
       <Text style={styles.title}>{title}</Text>

@@ -12,6 +12,7 @@ import { useComposePanelLayout } from '@/hooks/useComposePanelLayout';
 import { useDraftLetterFly, type PendingFlyLaunch } from '@/hooks/useDraftLetterFly';
 import { useLetterKeyboardLayout } from '@/hooks/useLetterKeyboardLayout';
 import { usePressScale } from '@/hooks/usePressScale';
+import { useResolvedVisualEffects } from '@/hooks/useResolvedVisualEffects';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { DRAFT_DISPLAY_LETTER_SPACING } from '@/constants/compose-draft';
@@ -62,6 +63,7 @@ export const OnlinePlayComposePanel = memo(function OnlinePlayComposePanel({
       ),
     [composeKeySize, fontScale, screenWidth],
   );
+  const { letterPress, letterFly } = useResolvedVisualEffects();
   const usedKeyIndices = useMemo(() => new Set(draftKeyIndices), [draftKeyIndices]);
   const draftDisplay = toDisplayUpper(draft) || ' ';
 
@@ -82,7 +84,7 @@ export const OnlinePlayComposePanel = memo(function OnlinePlayComposePanel({
     clearCharReveals,
     prunePendingFromCharIndex,
     isCharRevealing,
-  } = useDraftLetterFly();
+  } = useDraftLetterFly({ enabled: letterFly });
 
   const flushPendingLaunches = useCallback(() => {
     if (pendingLaunchQueueRef.current.length === 0) {
@@ -153,8 +155,8 @@ export const OnlinePlayComposePanel = memo(function OnlinePlayComposePanel({
     ],
   );
 
-  const clearScale = usePressScale(COMPOSE_KEY_PRESS_SCALE);
-  const backspaceScale = usePressScale(COMPOSE_KEY_PRESS_SCALE);
+  const clearScale = usePressScale(COMPOSE_KEY_PRESS_SCALE, letterPress);
+  const backspaceScale = usePressScale(COMPOSE_KEY_PRESS_SCALE, letterPress);
 
   const handleClearDraft = useCallback(() => {
     clearCharReveals();
@@ -258,8 +260,9 @@ export const OnlinePlayComposePanel = memo(function OnlinePlayComposePanel({
       <LetterKeyboard
         keys={letterKeys}
         usedKeyIndices={usedKeyIndices}
+        pressScaleEnabled={letterPress}
         onPressKey={handlePressKey}
-        onKeyMeasure={handleKeyMeasure}
+        onKeyMeasure={letterFly ? handleKeyMeasure : undefined}
         keySize={composeKeySize}
         gap={gap}
       />

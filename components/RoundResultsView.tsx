@@ -40,18 +40,23 @@ import { buildResultsWordList } from '@/lib/game/results-missing-words';
 import { formatRoundDuration } from '@/lib/game/round-duration';
 import { formatUkWords, ukWordForm } from '@/lib/i18n/uk-plural';
 import { dismissWordOverlapTooltips } from '@/lib/ui/word-overlap-tooltip';
-import { useSettingsStore } from '@/store/settings-store';
+import { useResolvedVisualEffects } from '@/hooks/useResolvedVisualEffects';
 
 type ResultsTab = 'all' | 'players';
 
 const HEADLINE_ENTRANCE_MS = 320;
 
-function ResultsHeadline({ text }: { text: string }) {
+function ResultsHeadline({ text, motionEnabled }: { text: string; motionEnabled: boolean }) {
   const styles = useThemedStyles(createStyles);
-  const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(10)).current;
+  const opacity = useRef(new Animated.Value(motionEnabled ? 0 : 1)).current;
+  const translateY = useRef(new Animated.Value(motionEnabled ? 10 : 0)).current;
 
   useEffect(() => {
+    if (!motionEnabled) {
+      opacity.setValue(1);
+      translateY.setValue(0);
+      return;
+    }
     Animated.parallel([
       Animated.timing(opacity, {
         toValue: 1,
@@ -66,7 +71,7 @@ function ResultsHeadline({ text }: { text: string }) {
         useNativeDriver: true,
       }),
     ]).start();
-  }, [opacity, text, translateY]);
+  }, [motionEnabled, opacity, text, translateY]);
 
   return (
     <Animated.Text style={[styles.headline, { opacity, transform: [{ translateY }] }]}>
@@ -126,7 +131,7 @@ export function RoundResultsView({
 }: RoundResultsViewProps) {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
-  const victoryEffects = useSettingsStore((state) => state.victoryEffects);
+  const { victoryCelebration, generalMotion } = useResolvedVisualEffects();
   const rowHeight = useNotebookRowHeight();
   const { t } = useTranslation();
   const [tab, setTab] = useState<ResultsTab>('all');
@@ -201,7 +206,7 @@ export function RoundResultsView({
     setFooterHeight((prev) => (prev === nextHeight ? prev : nextHeight));
   }, []);
   const isWinner = winnerOverride ?? isViewerWinner(playerRankGroups, highlightPlayerId);
-  const showVictoryConfetti = victoryEffects && isWinner;
+  const showVictoryConfetti = victoryCelebration && isWinner;
   const celebrate = useVictoryConfettiStore((state) => state.celebrate);
   const hasCelebratedRef = useRef(false);
 
@@ -216,7 +221,7 @@ export function RoundResultsView({
     <>
       <Screen scroll={false} style={styles.screen}>
         <View style={styles.header}>
-          {headline ? <ResultsHeadline text={headline} /> : null}
+          {headline ? <ResultsHeadline text={headline} motionEnabled={generalMotion} /> : null}
 
           <View style={styles.tabs}>
             <TabButton
