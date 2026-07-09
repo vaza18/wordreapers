@@ -1,5 +1,4 @@
 import { createReadStream } from 'node:fs';
-import { readdirSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
 import path from 'node:path';
@@ -7,12 +6,10 @@ import { fileURLToPath } from 'node:url';
 
 import { letterCount, normalizeUk } from '../../lib/dictionary/normalize.js';
 import {
-  assertNoPlainTxtWordLists,
-  dictBuildIdFromGz,
-  removeStaleTxtArtifacts,
+  dictBuildIdFromText,
+  removeStaleGzArtifacts,
   wordListBody,
-  writeGzText,
-} from '../../lib/dictionary/gzip-artifacts.js';
+} from '../../lib/dictionary/word-list-artifacts.js';
 import { ensureDictionaryDirs, UK_LOCALE } from '../../lib/dictionary/index.js';
 import { ukDictionaryPaths } from '../../lib/dictionary/paths-node.js';
 import {
@@ -130,13 +127,13 @@ function buildWhitelists(
     target.set(normalized, surface);
   }
 
-  for (const [normalized, surface] of generalSource) {
+  for (const [normalized, surface] of Array.from(generalSource)) {
     tryAdd(general, normalized, surface);
   }
-  for (const [normalized, surface] of properSource) {
+  for (const [normalized, surface] of Array.from(properSource)) {
     tryAdd(proper, normalized, surface);
   }
-  for (const [normalized, surface] of slangSource) {
+  for (const [normalized, surface] of Array.from(slangSource)) {
     tryAdd(slang, normalized, surface);
   }
 
@@ -218,12 +215,12 @@ async function buildFromVesum(
 }
 
 function sortedKeys(map: Map<string, string>): string[] {
-  return [...map.keys()].sort((a, b) => a.localeCompare(b, 'uk'));
+  return Array.from(map.keys()).sort((a, b) => a.localeCompare(b, 'uk'));
 }
 
 function buildNormalization(canonical: Map<string, string>): Record<string, string> {
   return Object.fromEntries(
-    [...canonical.entries()].filter(([normalized, display]) => normalized !== display),
+    Array.from(canonical.entries()).filter(([normalized, display]) => normalized !== display),
   );
 }
 
@@ -253,11 +250,13 @@ function buildBaseWords(
     entries.add(normalized);
   }
 
-  return [...entries].sort((a, b) => a.localeCompare(b, 'uk'));
+  return Array.from(entries).sort((a, b) => a.localeCompare(b, 'uk'));
 }
 
-async function writeGzWordList(filePath: string, words: string[]): Promise<Buffer> {
-  return writeGzText(filePath, wordListBody(words));
+async function writeWordList(filePath: string, words: string[]): Promise<string> {
+  const body = wordListBody(words);
+  await writeFile(filePath, body, 'utf8');
+  return body;
 }
 
 async function main(): Promise<void> {
@@ -290,31 +289,31 @@ async function main(): Promise<void> {
   ensureDictionaryDirs(ROOT, UK_LOCALE);
 
   const mainWords = sortedKeys(main);
-  const allCanonical = new Map([
-    ...main,
-    ...supplementProperNouns,
-    ...supplementSlang,
-    ...whitelistGeneral,
-    ...whitelistProper,
-    ...whitelistSlang,
+  const allCanonical = new Map<string, string>([
+    ...Array.from(main),
+    ...Array.from(supplementProperNouns),
+    ...Array.from(supplementSlang),
+    ...Array.from(whitelistGeneral),
+    ...Array.from(whitelistProper),
+    ...Array.from(whitelistSlang),
   ]);
   const normalization = buildNormalization(allCanonical);
   const baseWords = buildBaseWords(main, supplementProperNouns, geographicalProperNouns);
-  const baseWordGeoCount = [...geographicalProperNouns].filter(
+  const baseWordGeoCount = Array.from(geographicalProperNouns).filter(
     (normalized) =>
       letterCount(supplementProperNouns.get(normalized) ?? normalized) >= MIN_BASE_WORD_LENGTH &&
       !main.has(normalized),
   ).length;
 
-  const mainGz = await writeGzWordList(paths.dictionary, mainWords);
-  await writeGzWordList(paths.supplementProperNouns, sortedKeys(supplementProperNouns));
-  await writeGzWordList(paths.supplementSlang, sortedKeys(supplementSlang));
-  await writeGzWordList(paths.whitelistGeneral, sortedKeys(whitelistGeneral));
-  await writeGzWordList(paths.whitelistProperNouns, sortedKeys(whitelistProper));
-  await writeGzWordList(paths.whitelistSlang, sortedKeys(whitelistSlang));
+  const mainDictionaryBody = await writeWordList(paths.dictionary, mainWords);
+  await writeWordList(paths.supplementProperNouns, sortedKeys(supplementProperNouns));
+  await writeWordList(paths.supplementSlang, sortedKeys(supplementSlang));
+  await writeWordList(paths.whitelistGeneral, sortedKeys(whitelistGeneral));
+  await writeWordList(paths.whitelistProperNouns, sortedKeys(whitelistProper));
+  await writeWordList(paths.whitelistSlang, sortedKeys(whitelistSlang));
   await writeFile(paths.normalization, `${JSON.stringify(normalization, null, 2)}\n`, 'utf8');
-  await writeGzWordList(paths.baseWords, baseWords);
-  removeStaleTxtArtifacts(paths);
+  await writeWordList(paths.baseWords, baseWords);
+  removeStaleGzArtifacts(paths);
 
   let manifest: Record<string, unknown> = {};
   try {
@@ -327,7 +326,7 @@ async function main(): Promise<void> {
     ...manifest,
     locale: UK_LOCALE,
     builtAt: new Date().toISOString(),
-    dictBuildId: dictBuildIdFromGz(mainGz),
+    dictBuildId: dictBuildIdFromText(mainDictionaryBody),
     wordCount: mainWords.length,
     supplementProperNounCount: supplementProperNouns.size,
     supplementSlangCount: supplementSlang.size,
@@ -349,8 +348,6 @@ async function main(): Promise<void> {
     sourceFile: VESUM_TXT,
   };
   await writeFile(paths.meta, `${JSON.stringify(meta, null, 2)}\n`, 'utf8');
-
-  assertNoPlainTxtWordLists(paths.dir, readdirSync(paths.dir));
 
   console.log(`Lines read: ${stats.linesRead.toLocaleString()}`);
   console.log(`Accepted entries: ${stats.entriesAccepted.toLocaleString()}`);

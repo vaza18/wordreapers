@@ -4,9 +4,9 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const dictionaryGz = join(root, 'assets/generated/dictionaries/uk-uk/dictionary.txt.gz');
+const dictionaryTxt = join(root, 'assets/generated/dictionaries/uk-uk/dictionary.txt');
 
-if (existsSync(dictionaryGz)) {
+if (existsSync(dictionaryTxt)) {
   process.exit(0);
 }
 

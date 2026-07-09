@@ -6,7 +6,6 @@ import {
   parseBaseWords,
   type BaseWord,
 } from './dictionary-index.js';
-import { readGzText } from './gzip-artifacts.js';
 import { dictionaryPaths, type DictionaryPaths, ukDictionaryPaths } from './paths-node.js';
 import { UK_LOCALE } from './locale.js';
 
@@ -34,17 +33,17 @@ export function loadDictionaryUk(root: string): DictionaryIndex {
  * Load the dictionary from explicit artifact paths (Node.js).
  */
 export function loadDictionaryFromPaths(paths: DictionaryPaths): DictionaryIndex {
-  const dictionaryText = readGzText(paths.dictionary);
+  const dictionaryText = readFileSync(paths.dictionary, 'utf8');
   const normalizationJson = readFileSync(paths.normalization, 'utf8');
   return createDictionaryIndex(dictionaryText, normalizationJson);
 }
 
 /**
- * Load sorted base-word candidates from `base_words.txt.gz` (Node.js).
+ * Load sorted base-word candidates from `base_words.txt` (Node.js).
  */
 export function loadBaseWords(root: string, locale: string): BaseWord[] {
   const { baseWords } = dictionaryPaths(root, locale);
-  return parseBaseWords(readGzText(baseWords));
+  return parseBaseWords(readFileSync(baseWords, 'utf8'));
 }
 
 /**

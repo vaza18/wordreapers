@@ -4,7 +4,7 @@ const { getDefaultConfig } = require('expo/metro-config');
 /** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname);
 
-config.resolver.assetExts.push('txt', 'gz');
+config.resolver.assetExts.push('txt');
 
 /** npm may nest react-native@0.86 as a peer-dep artifact under react-native@0.81; never bundle it. */
 const nestedReactNative = /node_modules[/\\]react-native[/\\]node_modules[/\\]react-native[/\\].*/;

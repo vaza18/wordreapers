@@ -8,7 +8,7 @@ export const DICTIONARIES_DIR = GENERATED_DICTIONARIES_DIR;
 /**
  * Absolute paths to generated dictionary artifacts for one locale.
  *
- * Word lists ship as gzip (`*.txt.gz`); plain `.txt` exists only on device disk cache after extract.
+ * Word lists ship as plain `.txt` (APK/AAB compress them at pack time).
  */
 export interface DictionaryPaths {
   dir: string;
@@ -25,23 +25,12 @@ export interface DictionaryPaths {
   whitelistGeneralSource: string;
   whitelistProperSource: string;
   whitelistSlangSource: string;
-  /** Legacy plain paths removed by build / disk-cache cleanup. */
-  dictionaryLegacyTxt: string;
-  baseWordsLegacyTxt: string;
-  supplementProperNounsLegacyTxt: string;
-  supplementSlangLegacyTxt: string;
-  whitelistGeneralLegacyTxt: string;
-  whitelistProperNounsLegacyTxt: string;
-  whitelistSlangLegacyTxt: string;
+  /** Legacy gzip paths removed by build after plain-text migration. */
+  dictionaryGz: string;
+  baseWordsGz: string;
+  supplementProperNounsGz: string;
+  supplementSlangGz: string;
+  whitelistGeneralGz: string;
+  whitelistProperNounsGz: string;
+  whitelistSlangGz: string;
 }
-
-/** Basenames of plain text files written to on-device dictionary cache. */
-export const DICTIONARY_CACHE_PLAIN_FILES = {
-  dictionary: 'dictionary.txt',
-  baseWords: 'base_words.txt',
-  supplementProperNouns: 'supplement_proper_nouns.txt',
-  supplementSlang: 'supplement_slang.txt',
-  whitelistGeneral: 'whitelist_general.txt',
-  whitelistProperNouns: 'whitelist_proper_nouns.txt',
-  whitelistSlang: 'whitelist_slang.txt',
-} as const;
