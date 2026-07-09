@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  hasMultiplayerRound,
   hasOptedIntoNextRound,
   isActiveLivePlayer,
   rematchWaitingPlayerPatch,
@@ -83,5 +84,70 @@ describe('rematchWaitingPlayerPatch', () => {
       online: false,
       hasLeft: false,
     });
+  });
+});
+
+describe('hasMultiplayerRound', () => {
+  it('is false for round 1 with only the organizer in roster', () => {
+    expect(
+      hasMultiplayerRound(
+        gameSession({
+          players: {
+            org: { name: 'Org', wordCount: 0, score: 0, online: true },
+          },
+        }),
+        'org',
+      ),
+    ).toBe(false);
+  });
+
+  it('stays true after another player leaves round 1', () => {
+    expect(
+      hasMultiplayerRound(
+        gameSession({
+          players: {
+            org: { name: 'Org', wordCount: 1, score: 1, online: true },
+            guest: {
+              name: 'Guest',
+              wordCount: 1,
+              score: 1,
+              online: false,
+              hasLeft: true,
+            },
+          },
+        }),
+        'org',
+      ),
+    ).toBe(true);
+  });
+
+  it('uses liveRoundPlayerUids for rematch rounds', () => {
+    expect(
+      hasMultiplayerRound(
+        gameSession({
+          baseWordRound: 1,
+          liveRoundPlayerUids: ['org'],
+          players: {
+            org: { name: 'Org', wordCount: 0, score: 0, online: true },
+            passive: { name: 'Passive', wordCount: 0, score: 0, online: false },
+          },
+        }),
+        'org',
+      ),
+    ).toBe(false);
+    expect(
+      hasMultiplayerRound(
+        gameSession({
+          baseWordRound: 1,
+          liveRoundPlayerUids: ['org', 'p2'],
+          players: {
+            org: { name: 'Org', wordCount: 0, score: 0, online: true },
+            p2: { name: 'P2', wordCount: 0, score: 0, online: false, hasLeft: true },
+            passive: { name: 'Passive', wordCount: 0, score: 0, online: false },
+          },
+        }),
+        'org',
+      ),
+    ).toBe(true);
   });
 });

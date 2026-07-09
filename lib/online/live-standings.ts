@@ -4,7 +4,7 @@ import { buildStandingsFromSessionWordMaps, type PlayerStandings } from '../game
 
 import {
   finishedRoundParticipantIds,
-  liveParticipantIds,
+  playingRoundStandingsParticipantIds,
 } from './presence/live-round-membership.js';
 
 type SessionForStandings = Pick<
@@ -14,7 +14,7 @@ type SessionForStandings = Pick<
 
 function standingsParticipantIds(session: SessionForStandings): string[] {
   if (session.status === 'playing') {
-    return liveParticipantIds(session as GameSession);
+    return playingRoundStandingsParticipantIds(session as GameSession);
   }
   return finishedRoundParticipantIds(session);
 }

@@ -11,6 +11,7 @@ import { BottomSheetModal } from '@/components/BottomSheetModal';
 import { GameMenuModal } from '@/components/GameMenuModal';
 import { OnlinePlayActiveBody } from '@/components/online/OnlinePlayActiveBody';
 import { OnlinePlayTimerHeader } from '@/components/online/OnlinePlayTimerHeader';
+import { PlayStatsExplainModal } from '@/components/online/PlayStatsExplainModal';
 import { PlayDialogsStack } from '@/components/online/PlayDialogsStack';
 import { PlayVoteLayer } from '@/components/online/PlayVoteLayer';
 import { PauseRoundModal } from '@/components/PauseRoundModal';
@@ -55,6 +56,7 @@ import {
   hasOnlineOpponent,
   onlineActiveOpponentNames,
 } from '@/lib/online/presence/session-presence';
+import { hasMultiplayerRound } from '@/lib/online/presence/live-round-membership';
 import { onlineResultsRoute } from '@/lib/online/online-results-route';
 import { isReviewingPriorRoundOnPlayScreen } from '@/lib/online/session/is-reviewing-prior-round-on-play';
 import { resolveRoundEndSessionSnapshot } from '@/lib/online/session/resolve-round-end-session-snapshot';
@@ -82,6 +84,7 @@ import {
 } from '@/lib/firebase/session-votes-service';
 import { buildOnlineWordListDisplay } from '@/lib/online/online-word-display';
 import { displayPlayerName } from '@/lib/online/public-lobby/display-player-name';
+import { playerGenderForDisplay } from '@/lib/online/public-lobby/session-identity';
 import {
   buildLiveStandingsFromSession,
   sessionPlayerScoresMatchWordMaps,
@@ -94,6 +97,7 @@ import {
 } from '@/lib/online/submit-word-profile';
 import { buildLetterKeys } from '@/lib/game/letter-keyboard';
 import { formatStandingRowMeta } from '@/lib/game/format-play-stats';
+import { formatPlayerLeftLabel } from '@/lib/game/vote-status-label';
 import { acceptWord } from '@/lib/game/play-word';
 import {
   playWordErrorMessage,
@@ -160,6 +164,7 @@ export default function OnlinePlayScreen() {
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showEndEarlyConfirm, setShowEndEarlyConfirm] = useState(false);
   const [showAddTimeModal, setShowAddTimeModal] = useState(false);
+  const [showStatsExplain, setShowStatsExplain] = useState(false);
   const [backgroundSyncing, setBackgroundSyncing] = useState(false);
   const [optimisticWords, setOptimisticWords] = useState<Map<string, StoredPlayerWord>>(new Map());
   const [scrollRequest, setScrollRequest] = useState<{ normalized: string; id: number } | null>(
@@ -576,6 +581,9 @@ export default function OnlinePlayScreen() {
   const openStandings = useCallback(() => {
     setShowStandings(true);
   }, []);
+  const openStatsExplain = useCallback(() => {
+    setShowStatsExplain(true);
+  }, []);
 
   useEffect(() => {
     if (!gameId || !myUid || !session || session.status !== 'playing' || !wordMaps) {
@@ -611,7 +619,8 @@ export default function OnlinePlayScreen() {
 
   const displayRanks = useMemo(() => assignDisplayRanks(standings), [standings]);
   const playerRank = displayRankForPlayer(standings, myUid);
-  const hasOpponent = standings.length >= 2;
+  const hasMultiplayerRoundUi =
+    displaySession != null && myUid ? hasMultiplayerRound(displaySession, myUid) : false;
   const playRulesLabel = formatPlayRulesLabel(t, displaySession?.settings);
 
   const clearFeedback = useCallback(() => {
@@ -1057,15 +1066,16 @@ export default function OnlinePlayScreen() {
             wordCount={playerWordCount}
             maxWordCount={maxWordCount}
             score={playerScore}
-            showRank={hasOpponent}
+            showRank={hasMultiplayerRoundUi}
             showScore={showPointUi}
             roundEnded={roundEnded}
             canProposeAddTime={canProposeAddTime}
-            hasOpponent={hasOpponent}
+            hasOpponent={hasMultiplayerRoundUi}
             timerAlertMode={timerAlertMode}
             onOpenGameMenu={openGameMenu}
             onOpenAddTimeModal={openAddTimeModal}
             onOpenStandings={openStandings}
+            onOpenStatsExplain={openStatsExplain}
           />
 
           <OnlinePlayActiveBody
@@ -1081,8 +1091,8 @@ export default function OnlinePlayScreen() {
             feedback={feedback}
             feedbackVariant={feedbackVariant}
             backgroundSyncing={backgroundSyncing}
-            showScoreBadges={showPointUi && hasOpponent}
-            showOverlapPeers={hasOpponent}
+            showScoreBadges={showPointUi && hasMultiplayerRoundUi}
+            showOverlapPeers={hasMultiplayerRoundUi}
             onPressKey={pressKey}
             onClearDraft={clearDraft}
             onBackspaceDraft={backspaceDraft}
@@ -1103,16 +1113,24 @@ export default function OnlinePlayScreen() {
             ? displayPlayerName(player, myUid, row.playerId, session)
             : row.playerId;
           const isMe = row.playerId === myUid;
+          const presence = player?.online
+            ? t('game.playerOnline')
+            : player?.hasLeft
+              ? formatPlayerLeftLabel(t, playerGenderForDisplay(session, myUid, row.playerId))
+              : t('game.playerOffline');
           return (
             <View key={row.playerId} style={styles.standingRow}>
               <Text style={styles.standingRank}>{displayRanks.get(row.playerId) ?? index + 1}</Text>
-              <Text style={styles.standingName}>
-                {name}
-                {isMe ? ` ${t('game.resultsYou')}` : ''}
-              </Text>
-              <Text style={styles.standingMeta}>
-                {formatStandingRowMeta(row.wordCount, showPointUi ? row.score : null)}
-              </Text>
+              <View style={styles.standingMain}>
+                <Text style={styles.standingName} numberOfLines={1}>
+                  {name}
+                  {isMe ? ` ${t('game.resultsYou')}` : ''}
+                </Text>
+                <Text style={styles.standingMeta}>
+                  {presence} ·{' '}
+                  {formatStandingRowMeta(row.wordCount, showPointUi ? row.score : null)}
+                </Text>
+              </View>
             </View>
           );
         })}
@@ -1260,6 +1278,16 @@ export default function OnlinePlayScreen() {
         />
       ) : null}
 
+      <PlayStatsExplainModal
+        visible={showStatsExplain}
+        wordCount={playerWordCount}
+        maxWordCount={maxWordCount}
+        showTrainingUnlockHint={false}
+        onClose={() => {
+          setShowStatsExplain(false);
+        }}
+      />
+
       <PlayDialogsStack
         t={t}
         roundEnded={roundEnded}
@@ -1270,7 +1298,7 @@ export default function OnlinePlayScreen() {
         addTimeRemainingMs={
           showAddTimeModal && endsAt != null ? Math.max(0, endsAt - getServerNow()) : 0
         }
-        hasOpponent={hasOpponent}
+        hasOpponent={hasOnlineOpponentInRound}
         onCloseAddTime={() => {
           setShowAddTimeModal(false);
         }}
@@ -1340,8 +1368,12 @@ function createStyles(colors: ThemeColors) {
       fontWeight: '700',
       color: colors.accent,
     },
-    standingName: {
+    standingMain: {
       flex: 1,
+      minWidth: 0,
+      gap: 2,
+    },
+    standingName: {
       fontSize: 15,
       color: colors.textPrimary,
     },
