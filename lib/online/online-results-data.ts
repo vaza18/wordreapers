@@ -79,6 +79,7 @@ export function buildOnlineResultsView(
 
   const headline = formatResultsHeadline(t, directory, standings, uniqueBonusEnabled);
   const isSolo = isSoloStandings(standings);
+  const resolvedSettings = resolveGameSessionSettingsForSession(session);
 
   return {
     headline,
@@ -90,6 +91,8 @@ export function buildOnlineResultsView(
     uniqueBonusEnabled,
     roundDurationSeconds,
     isSolo,
+    allowProperNouns: resolvedSettings.allowProperNouns,
+    allowSlang: resolvedSettings.allowSlang,
   };
 }
 

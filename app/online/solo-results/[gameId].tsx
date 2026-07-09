@@ -1,12 +1,14 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, View } from 'react-native';
 
 import { CenterDialogModal } from '@/components/CenterDialogModal';
-import { PrimaryButton } from '@/components/PrimaryButton';
+import { StackHeaderTitle } from '@/components/StackHeaderTitle';
 import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
+import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
 import { RoundResultsView } from '@/components/RoundResultsView';
+import { RoundResultsFooterActions } from '@/components/RoundResultsFooterActions';
 import { useTheme } from '@/hooks/useTheme';
 import { formatResultsHeadline } from '@/lib/game/results-headline';
 import { createSoloResultsDirectory } from '@/lib/game/results-directory';
@@ -30,6 +32,7 @@ import {
   updateLocalRoomDraft,
 } from '@/lib/online/local-room-draft';
 import { generateRoomCode } from '@/lib/firebase/room-code';
+import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
 import { organizerSoloStandings, useOrganizerSoloStore } from '@/store/organizer-solo-store';
 import { usePlayerStatsStore } from '@/store/player-stats-store';
 import { useProfileStore } from '@/store/profile-store';
@@ -155,12 +158,14 @@ export default function OrganizerSoloResultsScreen() {
       roundDurationSeconds,
     });
     const headline = formatResultsHeadline(t, directory, standings, false);
+    const wordsPerMinute = playerRankGroups[0]?.players[0]?.wordsPerMinute ?? null;
     return {
       headline,
       globalWords,
       playerRankGroups,
       totalDistinctWords: globalWords.length,
       roundDurationSeconds,
+      wordsPerMinute,
     };
   }, [
     avatarColorIndex,
@@ -266,11 +271,22 @@ export default function OrganizerSoloResultsScreen() {
     router.replace({ pathname: '/online/setup', params: { gameId: nextGameId } });
   };
 
-  const goHome = () => {
+  const goHome = useCallback(() => {
     clear();
     removeLocalRoomDraft(gameId);
     router.replace('/');
-  };
+  }, [clear, gameId]);
+
+  const onBack = useSyncedStackBack(goHome);
+
+  const screenOptions = useMemo(
+    () => ({
+      ...stackHeaderBack(onBack),
+      headerTitle: () => <StackHeaderTitle title={setup?.baseWordDisplay ?? ''} />,
+      headerTitleAlign: 'center' as const,
+    }),
+    [onBack, setup?.baseWordDisplay],
+  );
 
   if (!setup || !viewData) {
     return (
@@ -289,7 +305,7 @@ export default function OrganizerSoloResultsScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: t('game.resultsTitle') }} />
+      <Stack.Screen options={screenOptions} />
       <CenterDialogModal
         visible={showUnlockModal}
         title={t('training.unlockedTitle')}
@@ -344,12 +360,19 @@ export default function OrganizerSoloResultsScreen() {
         winnerOverride={showUnlockModal}
         showScores={false}
         showWordAuthors={false}
+        showBaseWordInMeta={false}
+        showTabs={false}
+        wordsPerMinuteInMeta={viewData.wordsPerMinute}
+        allowProperNouns={setup.allowProperNouns}
+        allowSlang={setup.allowSlang}
         roundDurationSeconds={viewData.roundDurationSeconds}
         footer={
-          <>
-            <PrimaryButton label={t('game.newGameSamePlayers')} onPress={handlePlayAgain} />
-            <PrimaryButton label={t('nav.home')} variant="secondary" onPress={goHome} />
-          </>
+          <RoundResultsFooterActions
+            primaryLabel={t('game.newGameSamePlayers')}
+            onPrimaryPress={handlePlayAgain}
+            secondaryLabel={t('nav.home')}
+            onSecondaryPress={goHome}
+          />
         }
       />
     </>

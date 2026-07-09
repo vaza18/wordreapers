@@ -472,6 +472,8 @@ export default function OnlineLeftRoundScreen() {
         defaultExpandedPlayerId={myUid}
         showScores={viewData.uniqueBonusEnabled}
         showWordAuthors={!viewData.isSolo}
+        allowProperNouns={viewData.allowProperNouns}
+        allowSlang={viewData.allowSlang}
         roundDurationSeconds={viewData.roundDurationSeconds}
         missingWordsToggleDisabled={roundStillActive}
         footer={

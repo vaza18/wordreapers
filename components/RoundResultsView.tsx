@@ -38,6 +38,7 @@ import type { GlobalResultWordRow, PlayerResultRankGroup } from '@/lib/game/resu
 import { isViewerWinner } from '@/lib/game/is-viewer-winner';
 import { buildResultsWordList } from '@/lib/game/results-missing-words';
 import { formatRoundDuration } from '@/lib/game/round-duration';
+import { formatResultsLexiconOptionsSuffix } from '@/lib/online/play-rules-label';
 import { formatUkWords, ukWordForm } from '@/lib/i18n/uk-plural';
 import { dismissWordOverlapTooltips } from '@/lib/ui/word-overlap-tooltip';
 import { useResolvedVisualEffects } from '@/hooks/useResolvedVisualEffects';
@@ -95,6 +96,12 @@ export interface RoundResultsViewProps {
   footer?: ReactNode;
   /** When base word is shown in the stack header, hide it from the meta line. */
   showBaseWordInMeta?: boolean;
+  /** Hide «Всі слова» / «По гравцях» tabs (solo training). */
+  showTabs?: boolean;
+  /** When set, show words/min in the stats line (solo training). */
+  wordsPerMinuteInMeta?: number | null;
+  allowProperNouns?: boolean;
+  allowSlang?: boolean;
   showScores?: boolean;
   showWordAuthors?: boolean;
   roundDurationSeconds?: number;
@@ -108,7 +115,7 @@ export interface RoundResultsViewProps {
 }
 
 /**
- * Shared round results UI — tabs «Всі слова» / «По гравцях» (local + online).
+ * Shared round results UI — headline, stats, tabs, notebook, missing-words toggle, footer.
  */
 export function RoundResultsView({
   headline,
@@ -123,6 +130,10 @@ export function RoundResultsView({
   defaultExpandedPlayerId,
   footer,
   showBaseWordInMeta = true,
+  showTabs = true,
+  wordsPerMinuteInMeta = null,
+  allowProperNouns = false,
+  allowSlang = false,
   showScores = false,
   showWordAuthors = true,
   roundDurationSeconds,
@@ -149,7 +160,6 @@ export function RoundResultsView({
   const panelScroll = useScrollablePanelMetrics();
   const roundDurationLabel =
     roundDurationSeconds != null ? formatRoundDuration(roundDurationSeconds) : null;
-  const canShowMissingToggle = Boolean(roundLexicon) && !lexiconLoading;
   const wordsMetaLabel = useMemo(() => {
     if (showBaseWordInMeta) {
       return maxPlayableWords != null && maxPlayableWords > 0
@@ -173,6 +183,25 @@ export function RoundResultsView({
         })
       : formatUkWords(totalDistinctWords);
   }, [baseWordDisplay, maxPlayableWords, showBaseWordInMeta, t, totalDistinctWords]);
+  const statsLabel = useMemo(() => {
+    const parts = [wordsMetaLabel];
+    if (wordsPerMinuteInMeta != null) {
+      parts.push(t('game.resultsWordsPerMinuteShort', { rate: wordsPerMinuteInMeta }));
+    }
+    if (roundDurationLabel) {
+      parts.push(t('game.resultsRoundDuration', { duration: roundDurationLabel }));
+    }
+    const lexiconSuffix = formatResultsLexiconOptionsSuffix(t, {
+      allowProperNouns,
+      allowSlang,
+    });
+    if (lexiconSuffix) {
+      parts.push(lexiconSuffix);
+    }
+    return parts.join(' · ');
+  }, [allowProperNouns, allowSlang, roundDurationLabel, t, wordsMetaLabel, wordsPerMinuteInMeta]);
+  const activeTab: ResultsTab = showTabs ? tab : 'all';
+  const canShowMissingToggle = Boolean(roundLexicon) && !lexiconLoading;
   const allWordRows = useMemo(
     () => buildResultsWordList(globalWords, roundLexicon, deferredShowMissingWords),
     [deferredShowMissingWords, globalWords, roundLexicon],
@@ -180,13 +209,13 @@ export function RoundResultsView({
   const viewportHeight = panelScroll.scrollMetrics.viewportHeight;
   const contentHeight = panelScroll.scrollMetrics.contentHeight;
   const fillerRowCount =
-    tab === 'all'
+    activeTab === 'all'
       ? notebookFillerRowCount(allWordRows.length, viewportHeight, spacing.md, rowHeight)
       : 0;
   const playersRuledHeight =
-    tab === 'players' && viewportHeight > 0 ? Math.max(viewportHeight, playerBodyHeight) : 0;
+    activeTab === 'players' && viewportHeight > 0 ? Math.max(viewportHeight, playerBodyHeight) : 0;
   const canScroll =
-    tab === 'all'
+    activeTab === 'all'
       ? notebookListCanScroll(allWordRows.length, viewportHeight, spacing.md, rowHeight)
       : viewportHeight > 0 && contentHeight > viewportHeight + SCROLL_OVERFLOW_THRESHOLD;
 
@@ -223,46 +252,33 @@ export function RoundResultsView({
         <View style={styles.header}>
           {headline ? <ResultsHeadline text={headline} motionEnabled={generalMotion} /> : null}
 
-          <View style={styles.tabs}>
-            <TabButton
-              label={t('game.resultsTabAll')}
-              active={tab === 'all'}
-              onPress={() => {
-                setTab('all');
-                setPlayerBodyHeight(0);
-              }}
-            />
-            <TabButton
-              label={t('game.resultsTabPlayers')}
-              active={tab === 'players'}
-              onPress={() => {
-                setTab('players');
-                setPlayerBodyHeight(0);
-              }}
-            />
-          </View>
+          <Text style={styles.stats}>{statsLabel}</Text>
 
-          <Text style={styles.stats}>
-            {wordsMetaLabel}
-            {roundDurationLabel
-              ? ` · ${t('game.resultsRoundDuration', { duration: roundDurationLabel })}`
-              : null}
-          </Text>
-          {tab === 'all' && canShowMissingToggle ? (
-            <SettingSwitch
-              variant="compact"
-              label={t('game.showMissingWords')}
-              value={showMissingWords}
-              onChange={setShowMissingWords}
-              disabled={missingWordsToggleDisabled}
-              onDisabledPress={missingWordsToggleDisabled ? onMissingWordsDisabledPress : undefined}
-            />
+          {showTabs ? (
+            <View style={styles.tabs}>
+              <TabButton
+                label={t('game.resultsTabAll')}
+                active={tab === 'all'}
+                onPress={() => {
+                  setTab('all');
+                  setPlayerBodyHeight(0);
+                }}
+              />
+              <TabButton
+                label={t('game.resultsTabPlayers')}
+                active={tab === 'players'}
+                onPress={() => {
+                  setTab('players');
+                  setPlayerBodyHeight(0);
+                }}
+              />
+            </View>
           ) : null}
         </View>
 
         <ScrollableWordPanel style={styles.wordPanel} scrollbar={panelScroll.scrollbar}>
           <View style={styles.panelScrollViewport} onLayout={panelScroll.onViewportLayout}>
-            {tab === 'all' ? (
+            {activeTab === 'all' ? (
               <>
                 <ResultsGlobalWordList
                   rows={allWordRows}
@@ -320,6 +336,19 @@ export function RoundResultsView({
             )}
           </View>
         </ScrollableWordPanel>
+
+        {activeTab === 'all' && canShowMissingToggle ? (
+          <View style={styles.missingWordsBar}>
+            <SettingSwitch
+              variant="compact"
+              label={t('game.showMissingWords')}
+              value={showMissingWords}
+              onChange={setShowMissingWords}
+              disabled={missingWordsToggleDisabled}
+              onDisabledPress={missingWordsToggleDisabled ? onMissingWordsDisabledPress : undefined}
+            />
+          </View>
+        ) : null}
 
         {footer ? (
           <View style={styles.actions} onLayout={onFooterLayout}>
@@ -415,7 +444,11 @@ function createStyles(colors: ThemeColors) {
     },
     wordPanel: {
       marginHorizontal: spacing.md,
-      marginBottom: spacing.sm,
+    },
+    missingWordsBar: {
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.sm,
+      paddingBottom: spacing.sm,
     },
     panelScrollViewport: {
       flex: 1,
