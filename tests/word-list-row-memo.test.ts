@@ -18,6 +18,8 @@ function rowProps(overrides: Partial<WordListRowMemoProps> = {}): WordListRowMem
     styles: stableStyles,
     notebookRow: stableNotebookRow,
     animateEntrance: false,
+    showAcceptedHighlight: false,
+    highlightFadeEnabled: true,
     ...overrides,
   };
 }
@@ -57,6 +59,12 @@ describe('shouldSkipWordListRowRerender', () => {
   it('re-renders when animateEntrance toggles', () => {
     const prev = rowProps({ animateEntrance: false });
     const next = rowProps({ animateEntrance: true });
+    expect(shouldSkipWordListRowRerender(prev, next)).toBe(false);
+  });
+
+  it('re-renders when accepted highlight toggles', () => {
+    const prev = rowProps({ showAcceptedHighlight: false });
+    const next = rowProps({ showAcceptedHighlight: true });
     expect(shouldSkipWordListRowRerender(prev, next)).toBe(false);
   });
 });

@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject
 import { Animated, Easing, FlatList, StyleSheet, Text, View } from 'react-native';
 
 import { useResolvedVisualEffects } from '@/hooks/useResolvedVisualEffects';
+import { planAcceptedWordHighlight } from '@/lib/ui/accepted-word-highlight';
 import { removeEntranceNormalized } from '@/lib/ui/word-list-entrance';
 import {
   ACCEPTED_WORD_SCROLL_OPTIONS,
@@ -154,9 +155,6 @@ function splitDisplayByNormalizedPrefix(
 
 const ROW_ENTRANCE_OFFSET = 12;
 const ROW_ENTRANCE_MS = 220;
-const ROW_HIGHLIGHT_PEAK = 0.75;
-const ROW_HIGHLIGHT_DELAY_MS = 120;
-const ROW_HIGHLIGHT_MS = 4000;
 
 function WordListRow({
   row,
@@ -166,7 +164,10 @@ function WordListRow({
   styles,
   notebookRow,
   animateEntrance,
+  showAcceptedHighlight,
+  highlightFadeEnabled,
   onEntranceComplete,
+  onHighlightComplete,
 }: {
   row: WordRow;
   prefix: string;
@@ -175,7 +176,10 @@ function WordListRow({
   styles: ReturnType<typeof createStyles>;
   notebookRow: ReturnType<typeof createNotebookRowLineStyle>;
   animateEntrance: boolean;
+  showAcceptedHighlight: boolean;
+  highlightFadeEnabled: boolean;
   onEntranceComplete?: (normalized: string) => void;
+  onHighlightComplete?: (normalized: string) => void;
 }) {
   const split = splitDisplayByNormalizedPrefix(row.display, prefix);
   const showBadge = showScoreBadges && row.entry.badge === 'x2';
@@ -214,17 +218,6 @@ function WordListRow({
         }
       });
 
-      highlightOpacity.setValue(ROW_HIGHLIGHT_PEAK);
-      Animated.sequence([
-        Animated.delay(ROW_HIGHLIGHT_DELAY_MS),
-        Animated.timing(highlightOpacity, {
-          toValue: 0,
-          duration: ROW_HIGHLIGHT_MS,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ]).start();
-
       if (showBadge) {
         Animated.spring(badgeScale, {
           toValue: 1,
@@ -241,13 +234,11 @@ function WordListRow({
       cancelAnimationFrame(frameId);
       opacity.stopAnimation();
       translateX.stopAnimation();
-      highlightOpacity.stopAnimation();
       badgeScale.stopAnimation();
     };
   }, [
     animateEntrance,
     badgeScale,
-    highlightOpacity,
     onEntranceComplete,
     opacity,
     row.entry.normalized,
@@ -255,19 +246,75 @@ function WordListRow({
     translateX,
   ]);
 
+  useEffect(() => {
+    if (!showAcceptedHighlight) {
+      highlightOpacity.setValue(0);
+      return undefined;
+    }
+
+    const plan = planAcceptedWordHighlight(highlightFadeEnabled);
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    const frameId = requestAnimationFrame(() => {
+      if (cancelled) {
+        return;
+      }
+
+      highlightOpacity.setValue(plan.peakOpacity);
+
+      if (plan.fadeMs !== null) {
+        Animated.sequence([
+          Animated.delay(plan.holdMs),
+          Animated.timing(highlightOpacity, {
+            toValue: 0,
+            duration: plan.fadeMs,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]).start(({ finished }) => {
+          if (finished && !cancelled) {
+            onHighlightComplete?.(row.entry.normalized);
+          }
+        });
+        return;
+      }
+
+      timeoutId = setTimeout(() => {
+        if (cancelled) {
+          return;
+        }
+        highlightOpacity.setValue(0);
+        onHighlightComplete?.(row.entry.normalized);
+      }, plan.holdMs);
+    });
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frameId);
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+      }
+      highlightOpacity.stopAnimation();
+      highlightOpacity.setValue(0);
+    };
+  }, [
+    highlightFadeEnabled,
+    highlightOpacity,
+    onHighlightComplete,
+    row.entry.normalized,
+    showAcceptedHighlight,
+  ]);
+
   return (
-    <Animated.View
-      style={[
-        notebookRow.row,
-        styles.row,
-        split ? styles.rowPrefixMatch : null,
-        { opacity, transform: [{ translateX }] },
-      ]}
-    >
-      <Animated.View
-        pointerEvents="none"
-        style={[styles.rowHighlight, { opacity: highlightOpacity }]}
-      />
+    <Animated.View style={[notebookRow.row, styles.row, { opacity, transform: [{ translateX }] }]}>
+      {split ? <View pointerEvents="none" style={styles.rowPrefixHighlight} /> : null}
+      {showAcceptedHighlight ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.rowHighlight, { opacity: highlightOpacity }]}
+        />
+      ) : null}
       {split ? (
         <Text style={styles.word}>
           <Text style={styles.wordPrefixStrong}>{split.prefix}</Text>
@@ -322,6 +369,9 @@ export const WordList = memo(function WordList({
   const [entranceNormalizes, setEntranceNormalizes] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  const [highlightNormalizes, setHighlightNormalizes] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
 
   const rows = useMemo(
     () =>
@@ -344,11 +394,23 @@ export const WordList = memo(function WordList({
     setEntranceNormalizes((current) => removeEntranceNormalized(current, normalized));
   }, []);
 
+  const handleHighlightComplete = useCallback((normalized: string) => {
+    setHighlightNormalizes((current) => removeEntranceNormalized(current, normalized));
+  }, []);
+
   const queueScrollToNormalized = useCallback(
     (normalized: string) => {
       scrollGenerationRef.current += 1;
       scrollTargetRef.current = normalized;
       setPendingAcceptedScroll(true);
+      setHighlightNormalizes((current) => {
+        if (current.has(normalized)) {
+          return current;
+        }
+        const next = new Set(current);
+        next.add(normalized);
+        return next;
+      });
       if (generalMotion) {
         setEntranceNormalizes((current) => {
           if (current.has(normalized)) {
@@ -478,13 +540,18 @@ export const WordList = memo(function WordList({
         styles={styles}
         notebookRow={notebookRow}
         animateEntrance={generalMotion && entranceNormalizes.has(row.entry.normalized)}
+        showAcceptedHighlight={highlightNormalizes.has(row.entry.normalized)}
+        highlightFadeEnabled={generalMotion}
         onEntranceComplete={handleEntranceComplete}
+        onHighlightComplete={handleHighlightComplete}
       />
     ),
     [
       entranceNormalizes,
       generalMotion,
       handleEntranceComplete,
+      handleHighlightComplete,
+      highlightNormalizes,
       notebookRow,
       prefix,
       showOverlapPeers,
@@ -506,7 +573,10 @@ export const WordList = memo(function WordList({
             styles={styles}
             notebookRow={notebookRow}
             animateEntrance={generalMotion && entranceNormalizes.has(row.entry.normalized)}
+            showAcceptedHighlight={highlightNormalizes.has(row.entry.normalized)}
+            highlightFadeEnabled={generalMotion}
             onEntranceComplete={handleEntranceComplete}
+            onHighlightComplete={handleHighlightComplete}
           />
         ))}
       </View>
@@ -575,11 +645,10 @@ function createStyles(colors: ThemeColors) {
       overflow: 'visible',
       zIndex: 1,
     },
-    rowPrefixMatch: {
+    rowPrefixHighlight: {
+      ...StyleSheet.absoluteFillObject,
       backgroundColor: colors.prefixHighlightBg,
       borderRadius: radii.sm,
-      marginHorizontal: -spacing.xs,
-      paddingHorizontal: spacing.sm,
     },
     rowHighlight: {
       ...StyleSheet.absoluteFillObject,

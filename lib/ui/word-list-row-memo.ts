@@ -12,6 +12,8 @@ export type WordListRowMemoProps = {
   styles: unknown;
   notebookRow: unknown;
   animateEntrance: boolean;
+  showAcceptedHighlight: boolean;
+  highlightFadeEnabled: boolean;
 };
 
 /**
@@ -38,6 +40,12 @@ export function shouldSkipWordListRowRerender(
     return false;
   }
   if (prev.animateEntrance !== next.animateEntrance) {
+    return false;
+  }
+  if (prev.showAcceptedHighlight !== next.showAcceptedHighlight) {
+    return false;
+  }
+  if (prev.highlightFadeEnabled !== next.highlightFadeEnabled) {
     return false;
   }
 
