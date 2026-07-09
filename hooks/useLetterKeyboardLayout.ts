@@ -2,10 +2,8 @@ import { useCallback, useState } from 'react';
 import { type LayoutChangeEvent, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import {
-  computeLetterKeyLayout,
-  LETTER_KEYBOARD_HORIZONTAL_PADDING,
-} from '@/lib/game/letter-keyboard';
+import { LETTER_KEYBOARD_HORIZONTAL_PADDING } from '@/constants/letter-keyboard';
+import { computeLetterKeyLayout } from '@/lib/game/letter-keyboard';
 
 /** Reuse last measured compose width so keyboard geometry is stable on screen mount. */
 let lastMeasuredKeyboardContentWidth: number | null = null;

@@ -11,9 +11,9 @@ import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 
 import { lightColors } from '../constants/theme.js';
+import { LETTER_KEY_FONT_WEIGHT } from '../constants/letter-keyboard.js';
 import {
   letterKeyProportions,
-  LETTER_KEY_FONT_WEIGHT,
   tileInsetForCell,
   tileSizeForCell,
 } from '../lib/game/letter-key-style.js';

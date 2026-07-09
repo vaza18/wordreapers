@@ -1,15 +1,12 @@
-import { spacing } from '../../constants/theme.js';
-import { TABLET_LAYOUT_MIN_WIDTH } from '../typography/font-scale.js';
+import { spacing } from '@/constants/theme';
+import {
+  LETTER_KEYBOARD_HORIZONTAL_PADDING,
+  LETTER_KEYBOARD_PHONE_COLUMNS,
+  LETTER_KEY_REFERENCE_KEY_SIZE,
+  LETTER_KEY_TABLET_MIN_WIDTH,
+  LETTER_KEY_TABLET_MM,
+} from '@/constants/letter-keyboard';
 import { normalizeUk, toDisplayUpper } from '../dictionary/normalize.js';
-
-/** Max letter keys per row on phones (tablets use fixed key size + natural wrap). */
-export const LETTER_KEYBOARD_PHONE_COLUMNS = 6;
-/** Horizontal padding on play screen (matches play container). */
-export const LETTER_KEYBOARD_HORIZONTAL_PADDING = spacing.md * 2;
-/** Use laptop-like key sizing from this width (points). */
-export const LETTER_KEY_TABLET_MIN_WIDTH = TABLET_LAYOUT_MIN_WIDTH;
-/** Target letter-key edge on tablets (~MacBook 1u keycap). */
-export const LETTER_KEY_TABLET_MM = 15;
 
 const MM_PER_INCH = 25.4;
 /** Baseline logical px per inch (React Native dp). */
@@ -28,8 +25,10 @@ export const LETTER_KEY_TABLET_SIZE = mmToLayoutDp(LETTER_KEY_TABLET_MM);
  */
 export function computeLetterKeyGap(keySize: number): number {
   const referenceGap = spacing.xs;
-  const phoneReferenceKeySize = 56;
-  return Math.max(referenceGap, Math.round(keySize * (referenceGap / phoneReferenceKeySize)));
+  return Math.max(
+    referenceGap,
+    Math.round(keySize * (referenceGap / LETTER_KEY_REFERENCE_KEY_SIZE)),
+  );
 }
 
 /** Options for {@link computeLetterKeySize} and {@link computeLetterKeyLayout}. */

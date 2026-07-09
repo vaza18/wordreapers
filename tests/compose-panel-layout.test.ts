@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { COMPOSE_BACKSPACE_GLYPH_CAP, COMPOSE_DRAFT_MAX_FILL } from '../constants/compose-draft.js';
 import {
   composeBackspaceGlyphSize,
   composeClearIconSize,
@@ -10,7 +11,9 @@ import { computeLetterKeySize } from '../lib/game/letter-keyboard.js';
 describe('composeDraftFontSize', () => {
   it('caps draft text to the compose key height', () => {
     const keySize = computeLetterKeySize(800);
-    expect(composeDraftFontSize(keySize, 1, 800)).toBeLessThanOrEqual(Math.round(keySize * 0.58));
+    expect(composeDraftFontSize(keySize, 1, 800)).toBeLessThanOrEqual(
+      Math.round(keySize * COMPOSE_DRAFT_MAX_FILL),
+    );
   });
 });
 
@@ -18,7 +21,7 @@ describe('composeBackspaceGlyphSize', () => {
   it('caps the backspace glyph to the key square', () => {
     const keySize = computeLetterKeySize(800);
     expect(composeBackspaceGlyphSize(keySize, 4, 800)).toBeLessThanOrEqual(
-      Math.round(keySize * 0.58),
+      Math.round(keySize * COMPOSE_BACKSPACE_GLYPH_CAP),
     );
   });
 

@@ -6,11 +6,13 @@ import {
   computeLetterKeyLayout,
   computeLetterKeySize,
   letterKeyboardRowWidth,
-  LETTER_KEYBOARD_PHONE_COLUMNS,
-  LETTER_KEY_TABLET_MIN_WIDTH,
   LETTER_KEY_TABLET_SIZE,
   mmToLayoutDp,
 } from '../lib/game/letter-keyboard.js';
+import {
+  LETTER_KEYBOARD_PHONE_COLUMNS,
+  LETTER_KEY_TABLET_MIN_WIDTH,
+} from '../constants/letter-keyboard.js';
 
 describe('buildLetterKeys', () => {
   it('includes apostrophe in key value so draft input shows it', () => {
