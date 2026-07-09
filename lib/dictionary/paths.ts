@@ -18,12 +18,21 @@ export interface DictionaryPaths {
   normalization: string;
   supplementProperNouns: string;
   supplementSlang: string;
+  whitelistGeneral: string;
+  whitelistProperNouns: string;
+  whitelistSlang: string;
   blocklist: string;
+  whitelistGeneralSource: string;
+  whitelistProperSource: string;
+  whitelistSlangSource: string;
   /** Legacy plain paths removed by build / disk-cache cleanup. */
   dictionaryLegacyTxt: string;
   baseWordsLegacyTxt: string;
   supplementProperNounsLegacyTxt: string;
   supplementSlangLegacyTxt: string;
+  whitelistGeneralLegacyTxt: string;
+  whitelistProperNounsLegacyTxt: string;
+  whitelistSlangLegacyTxt: string;
 }
 
 /** Basenames of plain text files written to on-device dictionary cache. */
@@ -32,4 +41,7 @@ export const DICTIONARY_CACHE_PLAIN_FILES = {
   baseWords: 'base_words.txt',
   supplementProperNouns: 'supplement_proper_nouns.txt',
   supplementSlang: 'supplement_slang.txt',
+  whitelistGeneral: 'whitelist_general.txt',
+  whitelistProperNouns: 'whitelist_proper_nouns.txt',
+  whitelistSlang: 'whitelist_slang.txt',
 } as const;

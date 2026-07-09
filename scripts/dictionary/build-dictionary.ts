@@ -39,6 +39,12 @@ interface BuildStats {
   supplementSlang: number;
 }
 
+interface WhitelistBuildStats {
+  skippedInMain: number;
+  skippedBlocklist: number;
+  skippedDuplicate: number;
+}
+
 function addCanonical(
   canonical: Map<string, string>,
   normalized: string,
@@ -58,19 +64,83 @@ function addCanonical(
   }
 }
 
-async function loadBlocklist(blocklistPath: string): Promise<Set<string>> {
+async function loadWordListEntries(filePath: string): Promise<Map<string, string>> {
   try {
-    const raw = await readFile(blocklistPath, 'utf8');
-    return new Set(
-      raw
-        .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line && !line.startsWith('#'))
-        .map((word) => normalizeUk(word)),
-    );
+    const raw = await readFile(filePath, 'utf8');
+    const entries = new Map<string, string>();
+    for (const line of raw.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) {
+        continue;
+      }
+      const surface = trimmed.toLowerCase();
+      const normalized = normalizeUk(surface);
+      if (!normalized) {
+        continue;
+      }
+      entries.set(normalized, surface);
+    }
+    return entries;
   } catch {
-    return new Set();
+    return new Map();
   }
+}
+
+async function loadBlocklist(blocklistPath: string): Promise<Set<string>> {
+  const entries = await loadWordListEntries(blocklistPath);
+  return new Set(entries.keys());
+}
+
+function buildWhitelists(
+  main: ReadonlyMap<string, string>,
+  blocklist: ReadonlySet<string>,
+  generalSource: ReadonlyMap<string, string>,
+  properSource: ReadonlyMap<string, string>,
+  slangSource: ReadonlyMap<string, string>,
+): {
+  general: Map<string, string>;
+  proper: Map<string, string>;
+  slang: Map<string, string>;
+  stats: WhitelistBuildStats;
+} {
+  const general = new Map<string, string>();
+  const proper = new Map<string, string>();
+  const slang = new Map<string, string>();
+  const stats: WhitelistBuildStats = {
+    skippedInMain: 0,
+    skippedBlocklist: 0,
+    skippedDuplicate: 0,
+  };
+  const claimed = new Set<string>();
+
+  function tryAdd(target: Map<string, string>, normalized: string, surface: string): void {
+    if (main.has(normalized)) {
+      stats.skippedInMain += 1;
+      return;
+    }
+    if (blocklist.has(normalized)) {
+      stats.skippedBlocklist += 1;
+      return;
+    }
+    if (claimed.has(normalized)) {
+      stats.skippedDuplicate += 1;
+      return;
+    }
+    claimed.add(normalized);
+    target.set(normalized, surface);
+  }
+
+  for (const [normalized, surface] of generalSource) {
+    tryAdd(general, normalized, surface);
+  }
+  for (const [normalized, surface] of properSource) {
+    tryAdd(proper, normalized, surface);
+  }
+  for (const [normalized, surface] of slangSource) {
+    tryAdd(slang, normalized, surface);
+  }
+
+  return { general, proper, slang, stats };
 }
 
 async function buildFromVesum(
@@ -205,10 +275,29 @@ async function main(): Promise<void> {
   const { main, supplementProperNouns, geographicalProperNouns, supplementSlang, stats } =
     await buildFromVesum(VESUM_TXT, blocklist);
 
+  const [generalSource, properSource, slangSource] = await Promise.all([
+    loadWordListEntries(paths.whitelistGeneralSource),
+    loadWordListEntries(paths.whitelistProperSource),
+    loadWordListEntries(paths.whitelistSlangSource),
+  ]);
+  const {
+    general: whitelistGeneral,
+    proper: whitelistProper,
+    slang: whitelistSlang,
+    stats: whitelistStats,
+  } = buildWhitelists(main, blocklist, generalSource, properSource, slangSource);
+
   ensureDictionaryDirs(ROOT, UK_LOCALE);
 
   const mainWords = sortedKeys(main);
-  const allCanonical = new Map([...main, ...supplementProperNouns, ...supplementSlang]);
+  const allCanonical = new Map([
+    ...main,
+    ...supplementProperNouns,
+    ...supplementSlang,
+    ...whitelistGeneral,
+    ...whitelistProper,
+    ...whitelistSlang,
+  ]);
   const normalization = buildNormalization(allCanonical);
   const baseWords = buildBaseWords(main, supplementProperNouns, geographicalProperNouns);
   const baseWordGeoCount = [...geographicalProperNouns].filter(
@@ -220,6 +309,9 @@ async function main(): Promise<void> {
   const mainGz = await writeGzWordList(paths.dictionary, mainWords);
   await writeGzWordList(paths.supplementProperNouns, sortedKeys(supplementProperNouns));
   await writeGzWordList(paths.supplementSlang, sortedKeys(supplementSlang));
+  await writeGzWordList(paths.whitelistGeneral, sortedKeys(whitelistGeneral));
+  await writeGzWordList(paths.whitelistProperNouns, sortedKeys(whitelistProper));
+  await writeGzWordList(paths.whitelistSlang, sortedKeys(whitelistSlang));
   await writeFile(paths.normalization, `${JSON.stringify(normalization, null, 2)}\n`, 'utf8');
   await writeGzWordList(paths.baseWords, baseWords);
   removeStaleTxtArtifacts(paths);
@@ -239,6 +331,15 @@ async function main(): Promise<void> {
     wordCount: mainWords.length,
     supplementProperNounCount: supplementProperNouns.size,
     supplementSlangCount: supplementSlang.size,
+    whitelistGeneralCount: whitelistGeneral.size,
+    whitelistProperNounCount: whitelistProper.size,
+    whitelistSlangCount: whitelistSlang.size,
+    whitelistSkippedInMain: whitelistStats.skippedInMain,
+    whitelistSkippedBlocklist: whitelistStats.skippedBlocklist,
+    whitelistSkippedDuplicate: whitelistStats.skippedDuplicate,
+    whitelistGeneralSource: paths.whitelistGeneralSource,
+    whitelistProperSource: paths.whitelistProperSource,
+    whitelistSlangSource: paths.whitelistSlangSource,
     normalizationEntryCount: Object.keys(normalization).length,
     baseWordCount: baseWords.length,
     baseWordGeoCount,
@@ -256,6 +357,18 @@ async function main(): Promise<void> {
   console.log(`Main dictionary: ${mainWords.length.toLocaleString()}`);
   console.log(`Supplement proper nouns: ${supplementProperNouns.size.toLocaleString()}`);
   console.log(`Supplement slang: ${supplementSlang.size.toLocaleString()}`);
+  console.log(`Whitelist general: ${whitelistGeneral.size.toLocaleString()}`);
+  console.log(`Whitelist proper nouns: ${whitelistProper.size.toLocaleString()}`);
+  console.log(`Whitelist slang: ${whitelistSlang.size.toLocaleString()}`);
+  if (
+    whitelistStats.skippedInMain > 0 ||
+    whitelistStats.skippedBlocklist > 0 ||
+    whitelistStats.skippedDuplicate > 0
+  ) {
+    console.log(
+      `Whitelist skipped (in main: ${whitelistStats.skippedInMain}, blocklist: ${whitelistStats.skippedBlocklist}, duplicate: ${whitelistStats.skippedDuplicate})`,
+    );
+  }
   console.log(`Excluded blocklist: ${stats.excludedBlocklist.toLocaleString()}`);
   console.log(`Normalization map: ${Object.keys(normalization).length.toLocaleString()}`);
   console.log(

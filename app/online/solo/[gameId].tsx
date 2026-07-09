@@ -10,6 +10,7 @@ import {
   hasWordInSortedList,
   loadBundledDictionary,
   loadBundledSupplements,
+  loadBundledWhitelists,
 } from '@/services/dictionary-service';
 import { AddTimeModal } from '@/components/AddTimeModal';
 import { GameMenuModal } from '@/components/GameMenuModal';
@@ -91,6 +92,9 @@ export default function OrganizerSoloPlayScreen() {
   const [dictionary, setDictionary] = useState<DictionaryIndex | null>(null);
   const [properNouns, setProperNouns] = useState<string[]>([]);
   const [slang, setSlang] = useState<string[]>([]);
+  const [whitelistGeneral, setWhitelistGeneral] = useState<string[]>([]);
+  const [whitelistProper, setWhitelistProper] = useState<string[]>([]);
+  const [whitelistSlang, setWhitelistSlang] = useState<string[]>([]);
   const [supplementsReady, setSupplementsReady] = useState(false);
   const [draft, setDraft] = useState('');
   const [draftKeyIndices, setDraftKeyIndices] = useState<number[]>([]);
@@ -131,16 +135,25 @@ export default function OrganizerSoloPlayScreen() {
   }, [gameId]);
 
   useEffect(() => {
-    void Promise.all([loadBundledDictionary(), loadBundledSupplements()]).then(
-      ([dict, supplements]) => {
-        setDictionary(dict);
-        setProperNouns(supplements.properNouns);
-        setSlang(supplements.slang);
-        setSupplementsReady(true);
-      },
-    );
+    void Promise.all([
+      loadBundledDictionary(),
+      loadBundledSupplements(),
+      loadBundledWhitelists(),
+    ]).then(([dict, supplements, whitelists]) => {
+      setDictionary(dict);
+      setProperNouns(supplements.properNouns);
+      setSlang(supplements.slang);
+      setWhitelistGeneral(whitelists.general);
+      setWhitelistProper(whitelists.properNouns);
+      setWhitelistSlang(whitelists.slang);
+      setSupplementsReady(true);
+    });
     return () => {
-      void Promise.all([loadBundledDictionary(), loadBundledSupplements()]);
+      void Promise.all([
+        loadBundledDictionary(),
+        loadBundledSupplements(),
+        loadBundledWhitelists(),
+      ]);
     };
   }, []);
 
@@ -274,8 +287,12 @@ export default function OrganizerSoloPlayScreen() {
         deps: {
           hasInDictionary: (word) =>
             dictionary.hasWord(word) ||
-            (setup.allowProperNouns && hasWordInSortedList(properNouns, word)) ||
-            (setup.allowSlang && hasWordInSortedList(slang, word)),
+            hasWordInSortedList(whitelistGeneral, word) ||
+            (setup.allowProperNouns &&
+              (hasWordInSortedList(properNouns, word) ||
+                hasWordInSortedList(whitelistProper, word))) ||
+            (setup.allowSlang &&
+              (hasWordInSortedList(slang, word) || hasWordInSortedList(whitelistSlang, word))),
         },
         lookupDisplayUpper: (word) =>
           roundLexicon?.displays.get(word) ??
@@ -318,6 +335,9 @@ export default function OrganizerSoloPlayScreen() {
       slang,
       supplementsReady,
       t,
+      whitelistGeneral,
+      whitelistProper,
+      whitelistSlang,
       wordAcceptedFeedback,
       words,
     ],

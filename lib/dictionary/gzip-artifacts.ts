@@ -41,6 +41,9 @@ export function removeStaleTxtArtifacts(paths: DictionaryPaths): void {
     paths.baseWordsLegacyTxt,
     paths.supplementProperNounsLegacyTxt,
     paths.supplementSlangLegacyTxt,
+    paths.whitelistGeneralLegacyTxt,
+    paths.whitelistProperNounsLegacyTxt,
+    paths.whitelistSlangLegacyTxt,
   ];
   for (const filePath of legacy) {
     try {

@@ -31,6 +31,12 @@ const WORD_LIST_ASSETS: ReadonlyArray<{
     plainName: DICTIONARY_CACHE_PLAIN_FILES.supplementProperNouns,
   },
   { assetKey: 'supplementSlang', plainName: DICTIONARY_CACHE_PLAIN_FILES.supplementSlang },
+  { assetKey: 'whitelistGeneral', plainName: DICTIONARY_CACHE_PLAIN_FILES.whitelistGeneral },
+  {
+    assetKey: 'whitelistProperNouns',
+    plainName: DICTIONARY_CACHE_PLAIN_FILES.whitelistProperNouns,
+  },
+  { assetKey: 'whitelistSlang', plainName: DICTIONARY_CACHE_PLAIN_FILES.whitelistSlang },
 ];
 
 type CacheManifest = {
@@ -106,6 +112,20 @@ function bundledDictBuildId(): string {
   return meta.dictBuildId ?? 'unknown';
 }
 
+const REQUIRED_CACHE_PLAIN_FILES = WORD_LIST_ASSETS.map((asset) => asset.plainName);
+
+function isCacheManifestCurrent(
+  manifest: CacheManifest | null,
+  appVersion: string | null,
+  dictBuildId: string,
+): boolean {
+  if (!manifest || manifest.appVersion !== appVersion || manifest.dictBuildId !== dictBuildId) {
+    return false;
+  }
+  const cached = new Set(manifest.files);
+  return REQUIRED_CACHE_PLAIN_FILES.every((plainName) => cached.has(plainName));
+}
+
 async function extractBundledWordListsToDisk(): Promise<void> {
   const root = cacheRootUri();
   await deleteAsync(root, { idempotent: true });
@@ -140,7 +160,7 @@ export async function ensureDictionaryDiskCache(): Promise<void> {
       const { version: appVersion } = getAppVersionInfo();
       const dictBuildId = bundledDictBuildId();
       const manifest = await readCacheManifest();
-      if (manifest?.appVersion === appVersion && manifest.dictBuildId === dictBuildId) {
+      if (isCacheManifestCurrent(manifest, appVersion, dictBuildId)) {
         return;
       }
       await extractBundledWordListsToDisk();

@@ -18,11 +18,20 @@ export function dictionaryPaths(root: string, locale: string): DictionaryPaths {
     normalization: join(dir, 'normalization.json'),
     supplementProperNouns: join(dir, gzipWordListFilename('supplement_proper_nouns')),
     supplementSlang: join(dir, gzipWordListFilename('supplement_slang')),
+    whitelistGeneral: join(dir, gzipWordListFilename('whitelist_general')),
+    whitelistProperNouns: join(dir, gzipWordListFilename('whitelist_proper_nouns')),
+    whitelistSlang: join(dir, gzipWordListFilename('whitelist_slang')),
     blocklist: join(root, 'scripts', 'dictionary', `blocklist-${locale}.txt`),
+    whitelistGeneralSource: join(root, 'scripts', 'dictionary', `whitelist-${locale}-general.txt`),
+    whitelistProperSource: join(root, 'scripts', 'dictionary', `whitelist-${locale}-proper.txt`),
+    whitelistSlangSource: join(root, 'scripts', 'dictionary', `whitelist-${locale}-slang.txt`),
     dictionaryLegacyTxt: join(dir, 'dictionary.txt'),
     baseWordsLegacyTxt: join(dir, 'base_words.txt'),
     supplementProperNounsLegacyTxt: join(dir, 'supplement_proper_nouns.txt'),
     supplementSlangLegacyTxt: join(dir, 'supplement_slang.txt'),
+    whitelistGeneralLegacyTxt: join(dir, 'whitelist_general.txt'),
+    whitelistProperNounsLegacyTxt: join(dir, 'whitelist_proper_nouns.txt'),
+    whitelistSlangLegacyTxt: join(dir, 'whitelist_slang.txt'),
   };
 }
 

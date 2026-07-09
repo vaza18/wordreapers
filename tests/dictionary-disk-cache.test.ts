@@ -37,6 +37,9 @@ vi.mock('../lib/dictionary/bundled-dictionary-assets.js', () => ({
     baseWords: 2,
     supplementProperNouns: 3,
     supplementSlang: 4,
+    whitelistGeneral: 5,
+    whitelistProperNouns: 6,
+    whitelistSlang: 7,
   },
 }));
 
@@ -80,7 +83,7 @@ describe('dictionary-disk-cache', () => {
           appVersion: '1.0.0',
           dictBuildId: 'build-1',
           extractedAt: 'now',
-          files: [],
+          files: Object.values(DICTIONARY_CACHE_PLAIN_FILES),
         });
       }
       return 'word-list';
@@ -89,5 +92,32 @@ describe('dictionary-disk-cache', () => {
     const { readCachedDictionaryText } = await import('../lib/dictionary/dictionary-disk-cache.js');
     const text = await readCachedDictionaryText(DICTIONARY_CACHE_PLAIN_FILES.dictionary);
     expect(text).toBe('word-list');
+  });
+
+  it('re-extracts when manifest is missing new whitelist files', async () => {
+    readAsStringAsync.mockImplementation(async (uri: string) => {
+      if (String(uri).endsWith('cache-manifest.json')) {
+        return JSON.stringify({
+          appVersion: '1.0.0',
+          dictBuildId: 'build-1',
+          extractedAt: 'now',
+          files: [
+            DICTIONARY_CACHE_PLAIN_FILES.dictionary,
+            DICTIONARY_CACHE_PLAIN_FILES.baseWords,
+            DICTIONARY_CACHE_PLAIN_FILES.supplementProperNouns,
+            DICTIONARY_CACHE_PLAIN_FILES.supplementSlang,
+          ],
+        });
+      }
+      throw new Error('missing');
+    });
+
+    const { ensureDictionaryDiskCache: ensureCache } =
+      await import('../lib/dictionary/dictionary-disk-cache.js');
+    await ensureCache();
+
+    expect(deleteAsync).toHaveBeenCalled();
+    expect(makeDirectoryAsync).toHaveBeenCalled();
+    expect(writeAsStringAsync).toHaveBeenCalled();
   });
 });

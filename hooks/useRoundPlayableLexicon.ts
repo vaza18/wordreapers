@@ -15,6 +15,7 @@ import {
 import {
   loadBundledDictionary,
   loadBundledSupplements,
+  loadBundledWhitelists,
   releaseBundledDictionaryCaches,
 } from '@/services/dictionary-service';
 
@@ -92,9 +93,10 @@ export function useRoundPlayableLexicon({
     const cancelIdleWork = scheduleIdleWork(() => {
       void (async () => {
         try {
-          const [dictionary, supplements] = await Promise.all([
+          const [dictionary, supplements, whitelists] = await Promise.all([
             loadBundledDictionary(),
             loadBundledSupplements(),
+            loadBundledWhitelists(),
           ]);
           if (cancelled) {
             return;
@@ -102,7 +104,13 @@ export function useRoundPlayableLexicon({
           const built = buildRoundPlayableLexiconFromDictionary(
             baseWord,
             dictionary,
-            { proper: supplements.properNouns, slang: supplements.slang },
+            {
+              proper: supplements.properNouns,
+              slang: supplements.slang,
+              whitelistGeneral: whitelists.general,
+              whitelistProper: whitelists.properNouns,
+              whitelistSlang: whitelists.slang,
+            },
             { allowProperNouns, allowSlang },
           );
           setCachedRoundPlayableLexicon(baseWord, allowProperNouns, allowSlang, built);

@@ -25,10 +25,23 @@ Each locale is one folder (BCP 47 tag). Example for Ukrainian:
 | `uk-uk/normalization.json`             | `normalized → canonical` **only where forms differ** (≈1700 apostrophe entries)              |
 | `uk-uk/supplement_proper_nouns.txt.gz` | Optional lookup when `allowProperNouns` is enabled                                           |
 | `uk-uk/supplement_slang.txt.gz`        | Optional lookup when `allowSlang` is enabled                                                 |
+| `uk-uk/whitelist_general.txt.gz`       | Manual additions missing from VESUM main tier — always active                                |
+| `uk-uk/whitelist_proper_nouns.txt.gz`  | Manual proper nouns missing from VESUM supplements — when `allowProperNouns` is enabled      |
+| `uk-uk/whitelist_slang.txt.gz`         | Manual slang missing from VESUM supplements — when `allowSlang` is enabled                   |
 
-**Runtime lookup (Tier 1):** main dictionary always; supplements only when the matching round option is on (both default **off**).
+**Runtime lookup (Tier 1):** main dictionary + whitelist general always; VESUM supplements and whitelist proper/slang only when the matching round option is on (both default **off**).
 
-**Round Playable Lexicon (runtime, not in build output):** [`lib/dictionary/round-playable-lexicon.ts`](../../lib/dictionary/round-playable-lexicon.ts) filters the same dictionary files for all words playable from a base word’s letter multiset (`allowProperNouns` / `allowSlang` gates supplements). Used for lobby max hint, play-screen found/max counter, faster validation, results «show missing words», and local finished-archive snapshot (`playableLexicon`, archive v3). Cached in memory per `baseWord|proper|slang`.
+**Manual whitelist sources** (committed in git, one normalized word per line, `#` comments):
+
+| Source file                                      | Generated artifact              |
+| ------------------------------------------------ | ------------------------------- |
+| `scripts/dictionary/whitelist-uk-uk-general.txt` | `whitelist_general.txt.gz`      |
+| `scripts/dictionary/whitelist-uk-uk-proper.txt`  | `whitelist_proper_nouns.txt.gz` |
+| `scripts/dictionary/whitelist-uk-uk-slang.txt`   | `whitelist_slang.txt.gz`        |
+
+Build rules: skip words already in main dictionary, skip blocklist, dedupe with general > proper > slang priority. Whitelist words are **not** merged into `dictionary.txt.gz`.
+
+**Round Playable Lexicon (runtime, not in build output):** [`lib/dictionary/round-playable-lexicon.ts`](../../lib/dictionary/round-playable-lexicon.ts) filters the same dictionary files for all words playable from a base word’s letter multiset (`allowProperNouns` / `allowSlang` gates supplements and whitelist proper/slang). Used for lobby max hint, play-screen found/max counter, faster validation, results «show missing words», and local finished-archive snapshot (`playableLexicon`, archive v3). Cached in memory per `baseWord|proper|slang`.
 
 **Main dictionary filters** (see `lib/dictionary/vesum-tags.ts`):
 
@@ -36,6 +49,7 @@ Each locale is one folder (BCP 47 tag). Example for Ukrainian:
 - exclude `:prop`, `:abbr`, `:pron:` (займенники), `:slang`
 - exclude stylistic non-standard tags: `:arch`, `:subst`, `:bad`, `:vulg`, `:obsc` (VESUM has no surzhyk tag; `:obsc` = obscene, e.g. «хуїльйон»; `:arch` drops e.g. «утка», standard «качка» stays)
 - manual blocklist: `scripts/dictionary/blocklist-uk-uk.txt` (e.g. «утка», «чорний»/«чорна» as offensive noun senses)
+- manual whitelist: `scripts/dictionary/whitelist-uk-uk-{general,proper,slang}.txt` (words missing from VESUM; see table above)
 
 Future example: `en-us/` with the same four files for English (US).
 

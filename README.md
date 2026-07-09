@@ -40,6 +40,9 @@ assets/generated/dictionaries/
     normalization.json        # no apostrophe → canonical form (~1,700 entries)
     supplement_proper_nouns.txt.gz
     supplement_slang.txt.gz
+    whitelist_general.txt.gz
+    whitelist_proper_nouns.txt.gz
+    whitelist_slang.txt.gz
 ```
 
 At runtime the app extracts plain `.txt` files once per app version into the device cache; the bundle ships gzip only (~1.2 MB vs ~5.7 MB uncompressed).
@@ -47,6 +50,7 @@ At runtime the app extracts plain `.txt` files once per app version into the dev
 Future locales get their own subdirectories, e.g. `assets/generated/dictionaries/en-us/`.
 
 Manual exclusions: `scripts/dictionary/blocklist-uk-uk.txt` (committed, one word per line).
+Manual whitelist (words missing from VESUM): `scripts/dictionary/whitelist-uk-uk-{general,proper,slang}.txt`.
 
 Paths are defined in [`lib/dictionary/paths.ts`](lib/dictionary/paths.ts).
 

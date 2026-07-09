@@ -5,4 +5,7 @@ export const BUNDLED_DICTIONARY_GZ_MODULES = {
   baseWords: require('../../assets/generated/dictionaries/uk-uk/base_words.txt.gz'),
   supplementProperNouns: require('../../assets/generated/dictionaries/uk-uk/supplement_proper_nouns.txt.gz'),
   supplementSlang: require('../../assets/generated/dictionaries/uk-uk/supplement_slang.txt.gz'),
+  whitelistGeneral: require('../../assets/generated/dictionaries/uk-uk/whitelist_general.txt.gz'),
+  whitelistProperNouns: require('../../assets/generated/dictionaries/uk-uk/whitelist_proper_nouns.txt.gz'),
+  whitelistSlang: require('../../assets/generated/dictionaries/uk-uk/whitelist_slang.txt.gz'),
 } as const;

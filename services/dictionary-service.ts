@@ -12,6 +12,9 @@ let cachedMain: DictionaryIndex | null = null;
 let cachedBaseWords: BaseWord[] | null = null;
 let cachedSupplementProper: string[] | null = null;
 let cachedSupplementSlang: string[] | null = null;
+let cachedWhitelistGeneral: string[] | null = null;
+let cachedWhitelistProper: string[] | null = null;
+let cachedWhitelistSlang: string[] | null = null;
 
 /**
  * Load the main dictionary index from the on-device cache (populated from bundled `.gz` once per version).
@@ -57,6 +60,36 @@ export async function loadBundledSupplements(): Promise<{
 }
 
 /**
+ * Load whitelist word lists (manual additions missing from VESUM).
+ */
+export async function loadBundledWhitelists(): Promise<{
+  general: string[];
+  properNouns: string[];
+  slang: string[];
+}> {
+  if (cachedWhitelistGeneral && cachedWhitelistProper && cachedWhitelistSlang) {
+    return {
+      general: cachedWhitelistGeneral,
+      properNouns: cachedWhitelistProper,
+      slang: cachedWhitelistSlang,
+    };
+  }
+  const [generalText, properText, slangText] = await Promise.all([
+    readCachedDictionaryText(DICTIONARY_CACHE_PLAIN_FILES.whitelistGeneral),
+    readCachedDictionaryText(DICTIONARY_CACHE_PLAIN_FILES.whitelistProperNouns),
+    readCachedDictionaryText(DICTIONARY_CACHE_PLAIN_FILES.whitelistSlang),
+  ]);
+  cachedWhitelistGeneral = parseBaseWords(generalText);
+  cachedWhitelistProper = parseBaseWords(properText);
+  cachedWhitelistSlang = parseBaseWords(slangText);
+  return {
+    general: cachedWhitelistGeneral,
+    properNouns: cachedWhitelistProper,
+    slang: cachedWhitelistSlang,
+  };
+}
+
+/**
  * Warm dictionary disk cache during app bootstrap (non-blocking; deferred via scheduleIdleWork).
  */
 export { ensureDictionaryDiskCache } from '@/lib/dictionary/dictionary-disk-cache';
@@ -69,6 +102,9 @@ export function releaseBundledDictionaryCaches(): void {
   cachedBaseWords = null;
   cachedSupplementProper = null;
   cachedSupplementSlang = null;
+  cachedWhitelistGeneral = null;
+  cachedWhitelistProper = null;
+  cachedWhitelistSlang = null;
 }
 
 /** Sync peek when assets were already loaded (e.g. lobby lexicon build). */
@@ -85,6 +121,22 @@ export function getBundledSupplementsIfLoaded(): {
     return null;
   }
   return { properNouns: cachedSupplementProper, slang: cachedSupplementSlang };
+}
+
+/** Sync peek for whitelist lists when already in memory. */
+export function getBundledWhitelistsIfLoaded(): {
+  general: string[];
+  properNouns: string[];
+  slang: string[];
+} | null {
+  if (!cachedWhitelistGeneral || !cachedWhitelistProper || !cachedWhitelistSlang) {
+    return null;
+  }
+  return {
+    general: cachedWhitelistGeneral,
+    properNouns: cachedWhitelistProper,
+    slang: cachedWhitelistSlang,
+  };
 }
 
 /**
