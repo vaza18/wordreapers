@@ -21,6 +21,7 @@ interface GameMenuModalProps {
   showEndGame?: boolean;
   pauseLabel?: string;
   showInvite?: boolean;
+  showExit?: boolean;
   exitLabel?: string;
 }
 
@@ -41,6 +42,7 @@ export function GameMenuModal({
   showEndGame = true,
   pauseLabel,
   showInvite = false,
+  showExit = true,
   exitLabel,
 }: GameMenuModalProps) {
   const styles = useThemedStyles(createStyles);
@@ -88,13 +90,17 @@ export function GameMenuModal({
             <PrimaryButton label={t('nav.settings')} variant="secondary" onPress={onOpenSettings} />
           ) : null}
 
-          <View style={styles.divider} />
+          {showExit ? (
+            <>
+              <View style={styles.divider} />
 
-          <PrimaryButton
-            label={exitLabel ?? t('game.menuExit')}
-            variant="secondary"
-            onPress={onExit}
-          />
+              <PrimaryButton
+                label={exitLabel ?? t('game.menuExit')}
+                variant="secondary"
+                onPress={onExit}
+              />
+            </>
+          ) : null}
         </View>
       </Pressable>
     </Modal>

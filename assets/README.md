@@ -16,4 +16,4 @@
 
 Legacy SVG grid mockups: `npm run icons:generate` → `docs/store/icon-mockups/` only.
 
-The `assets/generated/` tree is gitignored. After clone: `npm install` builds sounds and dictionaries when missing (~1.2 MB gzip in app bundle).
+The `assets/generated/` tree is gitignored. After clone: `npm install` builds sounds and dictionaries when missing (~8 MB plain `.txt` word lists; APK/AAB compress at pack time).

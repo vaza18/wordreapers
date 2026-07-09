@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, useWindowDimensions, View } from 'react-native';
 
+import { useResolvedVisualEffects } from '@/hooks/useResolvedVisualEffects';
 import { useVictoryConfettiStore } from '@/store/victory-confetti-store';
 
 const PARTICLE_COUNT = 92;
@@ -176,18 +177,25 @@ export function VictoryConfetti() {
  */
 export function VictoryConfettiHost() {
   const burstId = useVictoryConfettiStore((state) => state.burstId);
+  const { victoryCelebration } = useResolvedVisualEffects();
   const [activeBurst, setActiveBurst] = useState(0);
 
   useEffect(() => {
-    if (burstId === 0) {
+    if (burstId === 0 || !victoryCelebration) {
       return undefined;
     }
     setActiveBurst(burstId);
     const timer = setTimeout(() => setActiveBurst(0), BURST_LIFETIME_MS);
     return () => clearTimeout(timer);
-  }, [burstId]);
+  }, [burstId, victoryCelebration]);
 
-  if (activeBurst === 0) {
+  useEffect(() => {
+    if (!victoryCelebration) {
+      setActiveBurst(0);
+    }
+  }, [victoryCelebration]);
+
+  if (activeBurst === 0 || !victoryCelebration) {
     return null;
   }
   return <VictoryConfetti key={activeBurst} />;

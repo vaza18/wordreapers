@@ -14,7 +14,11 @@ import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { formatRoomCodeDisplay } from '@/lib/firebase/format-room-code';
-import { loadBundledDictionary, loadBundledSupplements } from '@/services/dictionary-service';
+import {
+  loadBundledDictionary,
+  loadBundledSupplements,
+  loadBundledWhitelists,
+} from '@/services/dictionary-service';
 import {
   readGameSessionSnapshot,
   rejoinExistingPlayer,
@@ -276,7 +280,11 @@ export default function LobbyScreen() {
     setStarting(true);
     setError(null);
     try {
-      await Promise.all([loadBundledDictionary(), loadBundledSupplements()]);
+      await Promise.all([
+        loadBundledDictionary(),
+        loadBundledSupplements(),
+        loadBundledWhitelists(),
+      ]);
       await startGameSession(gameId, myUid);
       const snapshot = await readGameSessionSnapshot(gameId);
       if (!snapshot || snapshot.status !== 'playing') {

@@ -5,6 +5,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { PlaySessionToastStack } from '@/components/PlaySessionToast';
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { RoundResultsFooterActions } from '@/components/RoundResultsFooterActions';
 import { RoundResultsView } from '@/components/RoundResultsView';
 import { isViewerWinner } from '@/lib/game/is-viewer-winner';
 import { useResultsRematchToast } from '@/hooks/useResultsRematchToast';
@@ -376,26 +377,23 @@ export default function OnlineResultsScreen() {
         showBaseWordInMeta={false}
         showScores={viewData.uniqueBonusEnabled}
         showWordAuthors={!viewData.isSolo}
+        allowProperNouns={viewData.allowProperNouns}
+        allowSlang={viewData.allowSlang}
         roundDurationSeconds={viewData.roundDurationSeconds}
         winnerOverride={!viewData.isSolo && isViewerWinner(viewData.playerRankGroups, myUid)}
         footer={
-          <>
-            {rematchError ? <Text style={styles.error}>{rematchError}</Text> : null}
-            <PrimaryButton
-              label={t('game.newGameSamePlayers')}
-              disabled={rematchLoading}
-              onPress={() => {
-                void handlePlayAgain();
-              }}
-            />
-            <PrimaryButton
-              label={t('nav.home')}
-              variant="secondary"
-              onPress={() => {
-                void handleHome();
-              }}
-            />
-          </>
+          <RoundResultsFooterActions
+            primaryLabel={t('game.newGameSamePlayers')}
+            primaryDisabled={rematchLoading}
+            onPrimaryPress={() => {
+              void handlePlayAgain();
+            }}
+            secondaryLabel={t('nav.home')}
+            onSecondaryPress={() => {
+              void handleHome();
+            }}
+            topContent={rematchError ? <Text style={styles.error}>{rematchError}</Text> : null}
+          />
         }
       />
       <PlaySessionToastStack toasts={rematchToasts} topOffset={spacing.md} />

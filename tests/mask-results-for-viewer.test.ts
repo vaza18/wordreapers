@@ -14,6 +14,8 @@ function viewData(): RoundResultsViewData {
     uniqueBonusEnabled: true,
     roundDurationSeconds: 600,
     isSolo: false,
+    allowProperNouns: false,
+    allowSlang: false,
     globalWords: [
       {
         normalized: 'рот',

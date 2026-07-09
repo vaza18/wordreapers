@@ -152,6 +152,8 @@ export default function ArchivedRoundResultsScreen() {
         showBaseWordInMeta={false}
         showScores={viewData.uniqueBonusEnabled}
         showWordAuthors={!viewData.isSolo}
+        allowProperNouns={viewData.allowProperNouns}
+        allowSlang={viewData.allowSlang}
         roundDurationSeconds={viewData.roundDurationSeconds}
         winnerOverride={
           !viewData.isSolo && isViewerWinner(viewData.playerRankGroups, highlightPlayerId)

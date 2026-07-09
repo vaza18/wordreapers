@@ -10,7 +10,7 @@ functions/node_modules/
 credentials.json
 credentials/
 
-# Generated assets (see assets/README.md). Bundle dictionaries (~1.2 MB gzip); postinstall rebuilds the rest.
+# Generated assets (see assets/README.md). Bundle dictionaries (~8 MB plain .txt); postinstall rebuilds the rest.
 assets/generated/sounds/
 assets/generated/legal-pages/
 assets/generated/icons/

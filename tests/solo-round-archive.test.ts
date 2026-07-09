@@ -44,4 +44,22 @@ describe('saveSoloFinishedRoundArchive', () => {
     expect(archive?.session.players.solo?.name).toBe('Василь');
     expect(archive?.playerWords.solo?.тес?.display).toBe('ТЕС');
   });
+
+  it('keeps prior solo rounds when a new room code is used for the next round', async () => {
+    const setup = {
+      baseWord: 'тест',
+      baseWordDisplay: 'ТЕСТ',
+      durationMinutes: 5,
+      uniqueBonusMode: 'off' as const,
+      allowProperNouns: false,
+      allowSlang: false,
+    };
+    const profile = { name: 'Василь', gender: 'm' as const, avatarColorIndex: 1 };
+
+    await saveSoloFinishedRoundArchive('ABCDE', setup, [], false, profile);
+    await saveSoloFinishedRoundArchive('FGHJK', setup, [], false, profile);
+
+    expect((await getFinishedRoundArchive('ABCDE', 0))?.gameId).toBe('ABCDE');
+    expect((await getFinishedRoundArchive('FGHJK', 0))?.gameId).toBe('FGHJK');
+  });
 });

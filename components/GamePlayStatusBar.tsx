@@ -11,7 +11,7 @@ import {
   formatPlayStatsAccessible,
   formatPlayStatsCompactSegments,
 } from '@/lib/game/format-play-stats';
-import { useSettingsStore } from '@/store/settings-store';
+import { useResolvedVisualEffects } from '@/hooks/useResolvedVisualEffects';
 
 /** Matches timer line box + chrome so menu and stats buttons align with the timer chip. */
 const ACTION_BUTTON_HEIGHT = 44;
@@ -155,28 +155,28 @@ export const GamePlayStatusBar = memo(function GamePlayStatusBar({
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const timerVisualCountdown = useSettingsStore((state) => state.timerVisualCountdown);
-  const timerPulse = useRef(new Animated.Value(1)).current;
+  const timerPulse = useResolvedVisualEffects().timerPulse;
+  const timerPulseAnim = useRef(new Animated.Value(1)).current;
   const horizontal = Math.max(insets.left, insets.right, spacing.md);
 
-  const shouldPulseTimer = timerCritical && timerVisualCountdown;
+  const shouldPulseTimer = timerCritical && timerPulse;
 
   useEffect(() => {
     if (!shouldPulseTimer) {
-      timerPulse.stopAnimation();
-      timerPulse.setValue(1);
+      timerPulseAnim.stopAnimation();
+      timerPulseAnim.setValue(1);
       return undefined;
     }
 
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(timerPulse, {
+        Animated.timing(timerPulseAnim, {
           toValue: 1.08,
           duration: 420,
           easing: Easing.inOut(Easing.quad),
           useNativeDriver: true,
         }),
-        Animated.timing(timerPulse, {
+        Animated.timing(timerPulseAnim, {
           toValue: 1,
           duration: 420,
           easing: Easing.inOut(Easing.quad),
@@ -188,7 +188,7 @@ export const GamePlayStatusBar = memo(function GamePlayStatusBar({
     return () => {
       loop.stop();
     };
-  }, [shouldPulseTimer, timerPulse]);
+  }, [shouldPulseTimer, timerPulseAnim]);
 
   const statsInput = {
     rank,
@@ -234,7 +234,7 @@ export const GamePlayStatusBar = memo(function GamePlayStatusBar({
       style={[
         styles.timer,
         timerUrgent ? styles.timerUrgent : null,
-        shouldPulseTimer ? { transform: [{ scale: timerPulse }] } : null,
+        shouldPulseTimer ? { transform: [{ scale: timerPulseAnim }] } : null,
       ]}
     >
       {timerLabel}

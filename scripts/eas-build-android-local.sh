@@ -5,7 +5,7 @@ set -euo pipefail
 source "$(cd "$(dirname "$0")" && pwd)/eas-build-env.sh" "npm run build:android"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-if [[ ! -f "$ROOT/assets/generated/dictionaries/uk-uk/dictionary.txt.gz" ]]; then
+if [[ ! -f "$ROOT/assets/generated/dictionaries/uk-uk/dictionary.txt" ]]; then
   echo "Building uk-uk dictionary before EAS archive (missing assets/generated/dictionaries/)…" >&2
   npm run dict:all --prefix "$ROOT"
 fi

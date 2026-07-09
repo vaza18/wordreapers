@@ -11,6 +11,9 @@ import { buildResultsWordList } from '../lib/game/results-missing-words';
 const MAIN = ['порт', 'рот', 'топ', 'компютер', 'мотор'];
 const PROPER = ['київ'];
 const SLANG = ['няшка'];
+const WHITELIST_GENERAL = ['ара'];
+const WHITELIST_PROPER = ['львів'];
+const WHITELIST_SLANG = ['кайф'];
 
 describe('buildRoundPlayableLexicon', () => {
   it('counts main-dictionary words for компютер', () => {
@@ -42,6 +45,47 @@ describe('buildRoundPlayableLexicon', () => {
     );
     expect(lexicon.words.has('няшка')).toBe(false);
     expect(lexicon.words.has('київ')).toBe(false);
+  });
+
+  it('includes general whitelist without optional settings', () => {
+    const lexicon = buildRoundPlayableLexicon(
+      'пара',
+      { main: MAIN, whitelistGeneral: WHITELIST_GENERAL },
+      { allowProperNouns: false, allowSlang: false },
+    );
+    expect(lexicon.words.has('ара')).toBe(true);
+  });
+
+  it('includes whitelist proper only when allowProperNouns', () => {
+    const off = buildRoundPlayableLexicon(
+      'львівви',
+      { main: MAIN, whitelistProper: WHITELIST_PROPER },
+      { allowProperNouns: false, allowSlang: false },
+    );
+    expect(off.words.has('львів')).toBe(false);
+
+    const on = buildRoundPlayableLexicon(
+      'львівви',
+      { main: MAIN, whitelistProper: WHITELIST_PROPER },
+      { allowProperNouns: true, allowSlang: false },
+    );
+    expect(on.words.has('львів')).toBe(true);
+  });
+
+  it('includes whitelist slang only when allowSlang', () => {
+    const off = buildRoundPlayableLexicon(
+      'кайфок',
+      { main: MAIN, whitelistSlang: WHITELIST_SLANG },
+      { allowProperNouns: false, allowSlang: false },
+    );
+    expect(off.words.has('кайф')).toBe(false);
+
+    const on = buildRoundPlayableLexicon(
+      'кайфок',
+      { main: MAIN, whitelistSlang: WHITELIST_SLANG },
+      { allowProperNouns: false, allowSlang: true },
+    );
+    expect(on.words.has('кайф')).toBe(true);
   });
 
   it('round-trips snapshot', () => {

@@ -16,7 +16,6 @@ import { spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import i18n, { initI18n } from '@/i18n';
 import { LOCAL_BOOTSTRAP_TIMEOUT_MS, withBootstrapTimeout } from '@/lib/app/bootstrap-timeout';
-import { scheduleIdleWork } from '@/lib/app/schedule-idle-work';
 import { warmUpFeedbackModules } from '@/lib/feedback/game-feedback';
 import { enableAccessibleTypography } from '@/lib/typography/enable-accessible-typography';
 import { subscribeImmersiveStatusBar } from '@/lib/system-ui';
@@ -25,7 +24,6 @@ enableAccessibleTypography();
 import { useRoundFinishedNotificationRouting } from '@/hooks/useRoundFinishedNotificationRouting';
 import { useOnlineSyncCoordinator } from '@/hooks/useOnlineSyncCoordinator';
 import { purgeStaleActiveRoundCaches } from '@/lib/online/session/cache-active-round';
-import { ensureDictionaryDiskCache } from '@/services/dictionary-service';
 import { usePlayerStatsStore } from '@/store/player-stats-store';
 import { useProfileStore } from '@/store/profile-store';
 import { useSettingsStore } from '@/store/settings-store';
@@ -136,7 +134,9 @@ export default function RootLayout() {
     (state) => state.hydrateAppearancePreference,
   );
   const hydrateFeedbackPreferences = useSettingsStore((state) => state.hydrateFeedbackPreferences);
-  const hydrateEffectsPreferences = useSettingsStore((state) => state.hydrateEffectsPreferences);
+  const hydrateVisualEffectsPreferences = useSettingsStore(
+    (state) => state.hydrateVisualEffectsPreferences,
+  );
   const hydrateGameSetupPreferences = useSettingsStore(
     (state) => state.hydrateGameSetupPreferences,
   );
@@ -166,7 +166,11 @@ export default function RootLayout() {
             LOCAL_BOOTSTRAP_TIMEOUT_MS,
             'feedback',
           ),
-          withBootstrapTimeout(hydrateEffectsPreferences(), LOCAL_BOOTSTRAP_TIMEOUT_MS, 'effects'),
+          withBootstrapTimeout(
+            hydrateVisualEffectsPreferences(),
+            LOCAL_BOOTSTRAP_TIMEOUT_MS,
+            'visualEffects',
+          ),
           withBootstrapTimeout(
             hydrateGameSetupPreferences(),
             LOCAL_BOOTSTRAP_TIMEOUT_MS,
@@ -189,18 +193,11 @@ export default function RootLayout() {
         LOCAL_BOOTSTRAP_TIMEOUT_MS,
         'purgeCaches',
       );
-      scheduleIdleWork(() => {
-        void ensureDictionaryDiskCache().catch((error) => {
-          if (__DEV__) {
-            console.warn('Dictionary disk cache warmup failed:', error);
-          }
-        });
-      });
     })();
   }, [
     hydrateAppearancePreference,
     hydrateFeedbackPreferences,
-    hydrateEffectsPreferences,
+    hydrateVisualEffectsPreferences,
     hydrateGameSetupPreferences,
     hydrateProfile,
     hydratePlayerStats,

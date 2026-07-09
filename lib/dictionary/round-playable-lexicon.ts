@@ -23,6 +23,9 @@ export interface RoundPlayableLexiconSources {
   main: readonly string[];
   proper?: readonly string[];
   slang?: readonly string[];
+  whitelistGeneral?: readonly string[];
+  whitelistProper?: readonly string[];
+  whitelistSlang?: readonly string[];
 }
 
 /** Options when filtering dictionary sources into a round lexicon. */
@@ -61,8 +64,13 @@ export function buildRoundPlayableLexicon(
 
   const lists: ReadonlyArray<readonly string[]> = [
     sources.main,
+    ...(sources.whitelistGeneral ? ([sources.whitelistGeneral] as const) : []),
     ...(options.allowProperNouns && sources.proper ? ([sources.proper] as const) : []),
+    ...(options.allowProperNouns && sources.whitelistProper
+      ? ([sources.whitelistProper] as const)
+      : []),
     ...(options.allowSlang && sources.slang ? ([sources.slang] as const) : []),
+    ...(options.allowSlang && sources.whitelistSlang ? ([sources.whitelistSlang] as const) : []),
   ];
 
   const words = new Set<string>();
@@ -133,11 +141,17 @@ export function fromPlayableLexiconSnapshot(
   };
 }
 
-/** Build lexicon using a loaded {@link DictionaryIndex} and supplement lists. */
+/** Build lexicon using a loaded {@link DictionaryIndex} and supplement/whitelist lists. */
 export function buildRoundPlayableLexiconFromDictionary(
   baseWord: string,
   dictionary: DictionaryIndex,
-  supplements: { proper: readonly string[]; slang: readonly string[] },
+  lists: {
+    proper: readonly string[];
+    slang: readonly string[];
+    whitelistGeneral: readonly string[];
+    whitelistProper: readonly string[];
+    whitelistSlang: readonly string[];
+  },
   options: Pick<
     BuildRoundPlayableLexiconOptions,
     'allowProperNouns' | 'allowSlang' | 'minWordLength'
@@ -147,8 +161,11 @@ export function buildRoundPlayableLexiconFromDictionary(
     baseWord,
     {
       main: dictionary.readonlyWords(),
-      proper: supplements.proper,
-      slang: supplements.slang,
+      proper: lists.proper,
+      slang: lists.slang,
+      whitelistGeneral: lists.whitelistGeneral,
+      whitelistProper: lists.whitelistProper,
+      whitelistSlang: lists.whitelistSlang,
     },
     {
       ...options,

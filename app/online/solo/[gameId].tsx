@@ -6,10 +6,12 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
+import { getCachedRoundPlayableLexicon } from '@/lib/dictionary/round-playable-lexicon-cache';
 import {
   hasWordInSortedList,
   loadBundledDictionary,
   loadBundledSupplements,
+  loadBundledWhitelists,
 } from '@/services/dictionary-service';
 import { AddTimeModal } from '@/components/AddTimeModal';
 import { GameMenuModal } from '@/components/GameMenuModal';
@@ -91,6 +93,9 @@ export default function OrganizerSoloPlayScreen() {
   const [dictionary, setDictionary] = useState<DictionaryIndex | null>(null);
   const [properNouns, setProperNouns] = useState<string[]>([]);
   const [slang, setSlang] = useState<string[]>([]);
+  const [whitelistGeneral, setWhitelistGeneral] = useState<string[]>([]);
+  const [whitelistProper, setWhitelistProper] = useState<string[]>([]);
+  const [whitelistSlang, setWhitelistSlang] = useState<string[]>([]);
   const [supplementsReady, setSupplementsReady] = useState(false);
   const [draft, setDraft] = useState('');
   const [draftKeyIndices, setDraftKeyIndices] = useState<number[]>([]);
@@ -131,16 +136,25 @@ export default function OrganizerSoloPlayScreen() {
   }, [gameId]);
 
   useEffect(() => {
-    void Promise.all([loadBundledDictionary(), loadBundledSupplements()]).then(
-      ([dict, supplements]) => {
-        setDictionary(dict);
-        setProperNouns(supplements.properNouns);
-        setSlang(supplements.slang);
-        setSupplementsReady(true);
-      },
-    );
+    void Promise.all([
+      loadBundledDictionary(),
+      loadBundledSupplements(),
+      loadBundledWhitelists(),
+    ]).then(([dict, supplements, whitelists]) => {
+      setDictionary(dict);
+      setProperNouns(supplements.properNouns);
+      setSlang(supplements.slang);
+      setWhitelistGeneral(whitelists.general);
+      setWhitelistProper(whitelists.properNouns);
+      setWhitelistSlang(whitelists.slang);
+      setSupplementsReady(true);
+    });
     return () => {
-      void Promise.all([loadBundledDictionary(), loadBundledSupplements()]);
+      void Promise.all([
+        loadBundledDictionary(),
+        loadBundledSupplements(),
+        loadBundledWhitelists(),
+      ]);
     };
   }, []);
 
@@ -149,7 +163,7 @@ export default function OrganizerSoloPlayScreen() {
     allowProperNouns: setup?.allowProperNouns ?? false,
     allowSlang: setup?.allowSlang ?? false,
     releaseDictionaryAfterBuild: true,
-    enabled: Boolean(setup?.baseWord && status === 'playing'),
+    enabled: Boolean(setup?.baseWord && (status === 'playing' || status === 'finished')),
   });
 
   const timeUpModalVisible = status === 'finished' && isFocused && !showAddTimeModal;
@@ -171,6 +185,24 @@ export default function OrganizerSoloPlayScreen() {
   const usedKeyIndices = useMemo(() => new Set(draftKeyIndices), [draftKeyIndices]);
   const scoredWords = getScoredWords();
   const displays = words.map((word) => word.display);
+  const cachedLexiconMaxCount = useMemo(() => {
+    if (!setup?.baseWord) {
+      return null;
+    }
+    return (
+      getCachedRoundPlayableLexicon(
+        setup.baseWord,
+        setup.allowProperNouns ?? false,
+        setup.allowSlang ?? false,
+      )?.maxCount ?? null
+    );
+  }, [setup]);
+  const maxWordCountLive = roundLexicon?.maxCount ?? cachedLexiconMaxCount;
+  const maxWordCountRef = useRef<number | null>(null);
+  if (maxWordCountLive != null) {
+    maxWordCountRef.current = maxWordCountLive;
+  }
+  const maxWordCount = maxWordCountLive ?? maxWordCountRef.current;
   const playerScore = computePlayerScore(scoredWords);
   const isPaused = status === 'paused';
   const addTimeRemainingMs = getRemainingMs(Date.now());
@@ -274,8 +306,12 @@ export default function OrganizerSoloPlayScreen() {
         deps: {
           hasInDictionary: (word) =>
             dictionary.hasWord(word) ||
-            (setup.allowProperNouns && hasWordInSortedList(properNouns, word)) ||
-            (setup.allowSlang && hasWordInSortedList(slang, word)),
+            hasWordInSortedList(whitelistGeneral, word) ||
+            (setup.allowProperNouns &&
+              (hasWordInSortedList(properNouns, word) ||
+                hasWordInSortedList(whitelistProper, word))) ||
+            (setup.allowSlang &&
+              (hasWordInSortedList(slang, word) || hasWordInSortedList(whitelistSlang, word))),
         },
         lookupDisplayUpper: (word) =>
           roundLexicon?.displays.get(word) ??
@@ -318,6 +354,9 @@ export default function OrganizerSoloPlayScreen() {
       slang,
       supplementsReady,
       t,
+      whitelistGeneral,
+      whitelistProper,
+      whitelistSlang,
       wordAcceptedFeedback,
       words,
     ],
@@ -427,7 +466,7 @@ export default function OrganizerSoloPlayScreen() {
               roundActive={status === 'playing'}
               getRemainingMs={getRemainingMs}
               wordCount={scoredWords.length}
-              maxWordCount={roundLexicon?.maxCount ?? null}
+              maxWordCount={maxWordCount}
               score={playerScore}
               timerAlertMode={timerAlertMode}
               deferTimeUp={showAddTimeModal}
@@ -533,7 +572,7 @@ export default function OrganizerSoloPlayScreen() {
       <PlayStatsExplainModal
         visible={showStatsExplain}
         wordCount={scoredWords.length}
-        maxWordCount={roundLexicon?.maxCount ?? null}
+        maxWordCount={maxWordCount}
         showTrainingUnlockHint={trainingHydrated && !hasCompletedTrainingRound}
         onClose={() => {
           setShowStatsExplain(false);

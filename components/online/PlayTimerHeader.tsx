@@ -109,8 +109,6 @@ export const PlayTimerHeader = memo(function PlayTimerHeader(props: PlayTimerHea
     onTimeUp();
   }, [now, props]);
 
-  const menuDisabled = props.clock === 'server' && props.roundEnded;
-
   return (
     <GamePlayStatusBar
       timerLabel={remainingLabel}
@@ -125,7 +123,7 @@ export const PlayTimerHeader = memo(function PlayTimerHeader(props: PlayTimerHea
       showRank={props.clock === 'server' ? props.showRank : false}
       showScore={props.clock === 'server' ? props.showScore : false}
       menuLabel={t('game.menu')}
-      onMenuPress={menuDisabled ? undefined : props.onOpenGameMenu}
+      onMenuPress={props.onOpenGameMenu}
       onAddTimePress={
         props.clock === 'server'
           ? props.canProposeAddTime
@@ -135,16 +133,14 @@ export const PlayTimerHeader = memo(function PlayTimerHeader(props: PlayTimerHea
       }
       addTimeAccessibilityLabel={t('game.addTimeTitle')}
       onStandingsPress={
-        props.clock === 'server' && props.hasOpponent && !props.roundEnded
-          ? props.onOpenStandings
-          : undefined
+        props.clock === 'server' && props.hasOpponent ? props.onOpenStandings : undefined
       }
       standingsAccessibilityLabel={t('game.standings')}
       onStatsPress={
         props.clock === 'local'
           ? props.onOpenStatsExplain
           : // Multiplayer before anyone joins mirrors solo: tap the stats to explain them.
-            !props.hasOpponent && !props.roundEnded
+            !props.hasOpponent
             ? props.onOpenStatsExplain
             : undefined
       }

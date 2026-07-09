@@ -112,4 +112,26 @@ describe('buildLiveStandingsFromSession', () => {
     const standings = buildLiveStandingsFromSession(s);
     expect(standings.map((row) => row.playerId).sort()).toEqual(['a', 'org']);
   });
+
+  it('includes a player who left mid-round but scored while round is still playing', () => {
+    const s = session({
+      players: {
+        org: { name: 'Орг', score: 1, wordCount: 1, avatarColorIndex: 0, online: true },
+        guest: {
+          name: 'Гість',
+          score: 1,
+          wordCount: 1,
+          avatarColorIndex: 1,
+          online: false,
+          hasLeft: true,
+        },
+      },
+      wordPlayers: {
+        вина: { org: true, guest: true },
+      },
+    });
+
+    const standings = buildLiveStandingsFromSession(s);
+    expect(standings.map((row) => row.playerId).sort()).toEqual(['guest', 'org']);
+  });
 });

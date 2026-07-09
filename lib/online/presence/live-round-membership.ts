@@ -132,6 +132,36 @@ export function liveParticipantOpponentIds(session: GameSession, myUid: string):
   return liveParticipantIds(session).filter((id) => id !== myUid);
 }
 
+/**
+ * True when this round ever had another participant (joined roster / live round),
+ * including players who left before the round ended. Used for multiplayer play UI
+ * (standings chip, x2 badges, overlap avatars) — not for vote consensus.
+ */
+export function hasMultiplayerRound(
+  session: Pick<GameSession, 'baseWordRound' | 'liveRoundPlayerUids' | 'players'>,
+  myUid: string,
+): boolean {
+  if ((session.baseWordRound ?? 0) === 0) {
+    return Object.keys(session.players).some((id) => id !== myUid);
+  }
+  return (session.liveRoundPlayerUids ?? []).some((id) => id !== myUid);
+}
+
+/** Live participants plus players who left mid-round but scored in this round. */
+export function playingRoundStandingsParticipantIds(session: GameSession): string[] {
+  const ids = new Set(liveParticipantIds(session));
+  for (const playerId of Object.keys(session.players)) {
+    if (ids.has(playerId)) {
+      continue;
+    }
+    const player = session.players[playerId];
+    if (player?.hasLeft === true && isFinishedRoundStandingsParticipant(session, playerId)) {
+      ids.add(playerId);
+    }
+  }
+  return [...ids];
+}
+
 // INVARIANT (see docs/known-issues.md — 2026-07 False “alone in game” toast): expected roster members count even when briefly offline.
 /**
  * Still rostered for this live round and has not voluntarily left (may be briefly offline).

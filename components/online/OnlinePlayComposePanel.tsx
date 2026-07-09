@@ -1,25 +1,30 @@
-import { memo, useCallback, useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { memo, useCallback, useLayoutEffect, useMemo, useRef } from 'react';
+import { Animated, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { ClearDraftIcon } from '@/components/ComposeActionIcons';
+import { DraftDisplayText } from '@/components/DraftDisplayText';
+import { DraftLetterFlyOverlay } from '@/components/DraftLetterFlyOverlay';
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { LetterKeyboard, type KeyRect } from '@/components/LetterKeyboard';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useComposePanelLayout } from '@/hooks/useComposePanelLayout';
+import { useDraftLetterFly, type PendingFlyLaunch } from '@/hooks/useDraftLetterFly';
 import { useLetterKeyboardLayout } from '@/hooks/useLetterKeyboardLayout';
 import { usePressScale } from '@/hooks/usePressScale';
+import { useResolvedVisualEffects } from '@/hooks/useResolvedVisualEffects';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
+import { DRAFT_DISPLAY_LETTER_SPACING } from '@/constants/compose-draft';
 import { toDisplayUpper } from '@/lib/dictionary/normalize';
-import { draftLetterFlyEndpoints } from '@/lib/game/draft-letter-fly';
 import type { LetterKey } from '@/lib/game/letter-keyboard';
+import { letterKeyFontSizeForKeySize } from '@/lib/game/letter-key-style';
+import { playableGlyphFontSize } from '@/lib/typography/font-scale';
 import { centeredSquareTextStyle } from '@/lib/ui/centered-square-text';
 
 const COMPOSE_HIT_SLOP = 6;
 const COMPOSE_KEY_PRESS_SCALE = 0.9;
-const DRAFT_LETTER_SPACING = 1;
-const FLY_DURATION_MS = 240;
+const DRAFT_LETTER_SPACING = DRAFT_DISPLAY_LETTER_SPACING;
 
 export interface OnlinePlayComposePanelProps {
   draft: string;
@@ -44,77 +49,159 @@ export const OnlinePlayComposePanel = memo(function OnlinePlayComposePanel({
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const { width: screenWidth, fontScale } = useWindowDimensions();
   const { onLayout, keySize: composeKeySize, gap } = useLetterKeyboardLayout();
   const { draftFontSize, backspaceGlyphSize, clearIconSize } =
     useComposePanelLayout(composeKeySize);
-  const usedKeyIndices = new Set(draftKeyIndices);
+  const keyLabelFontSize = useMemo(
+    () =>
+      playableGlyphFontSize(
+        letterKeyFontSizeForKeySize(composeKeySize),
+        fontScale,
+        screenWidth,
+        composeKeySize,
+      ),
+    [composeKeySize, fontScale, screenWidth],
+  );
+  const { letterPress, letterFly } = useResolvedVisualEffects();
+  const usedKeyIndices = useMemo(() => new Set(draftKeyIndices), [draftKeyIndices]);
+  const draftDisplay = toDisplayUpper(draft) || ' ';
 
   const panelRef = useRef<View>(null);
-  const draftBoxRef = useRef<View>(null);
-  const measuredDraftWidthRef = useRef(0);
-  const flyPosition = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
-  const flyOpacity = useRef(new Animated.Value(0)).current;
-  const [flyLetter, setFlyLetter] = useState<string | null>(null);
+  const draftTextRef = useRef<Text>(null);
+  const draftLengthRef = useRef(draft.length);
+  draftLengthRef.current = draft.length;
+  const pendingLaunchQueueRef = useRef<PendingFlyLaunch[]>([]);
+
+  const {
+    activeFlies,
+    revealVersion,
+    stageFlyLaunch,
+    syncFlyTargetsFromLayout,
+    queueFlyForKey,
+    resolvePendingFly,
+    cancelCharAnimations,
+    clearCharReveals,
+    prunePendingFromCharIndex,
+    isCharRevealing,
+  } = useDraftLetterFly({ enabled: letterFly });
+
+  const flushPendingLaunches = useCallback(() => {
+    if (pendingLaunchQueueRef.current.length === 0) {
+      return;
+    }
+    const draftLength = draftLengthRef.current;
+    const ready: PendingFlyLaunch[] = [];
+    const waiting: PendingFlyLaunch[] = [];
+    for (const launch of pendingLaunchQueueRef.current) {
+      if (draftLength > launch.charIndex) {
+        ready.push(launch);
+      } else {
+        waiting.push(launch);
+      }
+    }
+    pendingLaunchQueueRef.current = waiting;
+    for (const launch of ready) {
+      stageFlyLaunch(launch);
+    }
+  }, [stageFlyLaunch]);
+
+  useLayoutEffect(() => {
+    flushPendingLaunches();
+  }, [draft, flushPendingLaunches]);
+
+  useLayoutEffect(() => {
+    if (draft.length === 0) {
+      clearCharReveals();
+    }
+  }, [clearCharReveals, draft.length]);
+
+  const handlePressKey = useCallback(
+    (index: number) => {
+      queueFlyForKey(index, draft.length);
+      onPressKey(index);
+    },
+    [draft.length, onPressKey, queueFlyForKey],
+  );
 
   const handleKeyMeasure = useCallback(
     (index: number, rect: KeyRect) => {
-      const label = letterKeys[index]?.label;
-      const panel = panelRef.current;
-      const box = draftBoxRef.current;
-      if (!label || !panel || !box) {
+      const pending = resolvePendingFly(index, draftLengthRef.current);
+      if (!pending) {
         return;
       }
+
+      const label = letterKeys[index]?.label;
+      const panel = panelRef.current;
+      if (!label || !panel) {
+        return;
+      }
+
       panel.measureInWindow((panelX, panelY) => {
-        box.measureInWindow((boxX, boxY, boxWidth, boxHeight) => {
-          const { start, end } = draftLetterFlyEndpoints({
-            keyRect: rect,
-            panelOrigin: { x: panelX, y: panelY },
-            draftBox: { x: boxX, y: boxY, width: boxWidth, height: boxHeight },
-            measuredDraftWidth: measuredDraftWidthRef.current,
-            draftFontSize,
-            draftPaddingHorizontal: spacing.md,
-          });
-          flyPosition.setValue(start);
-          flyOpacity.setValue(1);
-          setFlyLetter(label);
-          Animated.parallel([
-            Animated.timing(flyPosition, {
-              toValue: end,
-              duration: FLY_DURATION_MS,
-              easing: Easing.out(Easing.cubic),
-              useNativeDriver: true,
-            }),
-            Animated.timing(flyOpacity, {
-              toValue: 0,
-              duration: FLY_DURATION_MS,
-              easing: Easing.in(Easing.quad),
-              useNativeDriver: true,
-            }),
-          ]).start(({ finished }) => {
-            if (finished) {
-              setFlyLetter(null);
-            }
-          });
+        pendingLaunchQueueRef.current.push({
+          charIndex: pending.charIndex,
+          label,
+          keyRect: rect,
+          hostOrigin: { x: panelX, y: panelY },
+          draftFontSize,
+          keyLabelFontSize,
+          draftLineHeight: composeKeySize,
+          letterSpacing: DRAFT_LETTER_SPACING,
+        });
+        flushPendingLaunches();
+      });
+    },
+    [
+      draftFontSize,
+      flushPendingLaunches,
+      keyLabelFontSize,
+      letterKeys,
+      composeKeySize,
+      resolvePendingFly,
+    ],
+  );
+
+  const clearScale = usePressScale(COMPOSE_KEY_PRESS_SCALE, letterPress);
+  const backspaceScale = usePressScale(COMPOSE_KEY_PRESS_SCALE, letterPress);
+
+  const handleClearDraft = useCallback(() => {
+    clearCharReveals();
+    onClearDraft();
+  }, [clearCharReveals, onClearDraft]);
+
+  const handleBackspaceDraft = useCallback(() => {
+    const removeIndex = draft.length - 1;
+    if (removeIndex >= 0) {
+      cancelCharAnimations(removeIndex);
+      prunePendingFromCharIndex(removeIndex);
+    }
+    onBackspaceDraft();
+  }, [cancelCharAnimations, draft.length, onBackspaceDraft, prunePendingFromCharIndex]);
+
+  const handleDraftTextLayout = useCallback(
+    (layout: { width: number; capHeight: number; lineHeight: number; lineTopOffset: number }) => {
+      if (draft.length === 0) {
+        return;
+      }
+      const text = draftTextRef.current;
+      if (!text) {
+        return;
+      }
+      text.measureInWindow((textX, textY) => {
+        syncFlyTargetsFromLayout({
+          width: layout.width,
+          capHeight: layout.capHeight,
+          charCount: draft.length,
+          lineHeight: layout.lineHeight,
+          lineTopOffset: layout.lineTopOffset,
+          containerLineHeight: composeKeySize,
+          letterSpacing: DRAFT_LETTER_SPACING,
+          draftTextOrigin: { x: textX, y: textY },
         });
       });
     },
-    [draftFontSize, flyOpacity, flyPosition, letterKeys],
+    [composeKeySize, draft.length, syncFlyTargetsFromLayout],
   );
-
-  const clearScale = usePressScale(COMPOSE_KEY_PRESS_SCALE);
-  const backspaceScale = usePressScale(COMPOSE_KEY_PRESS_SCALE);
-
-  const handleClearDraft = useCallback(() => {
-    measuredDraftWidthRef.current = 0;
-    onClearDraft();
-  }, [onClearDraft]);
-
-  const handleBackspaceDraft = useCallback(() => {
-    if (draft.length <= 1) {
-      measuredDraftWidthRef.current = 0;
-    }
-    onBackspaceDraft();
-  }, [draft.length, onBackspaceDraft]);
 
   return (
     <View ref={panelRef} style={styles.panel} onLayout={onLayout}>
@@ -136,27 +223,17 @@ export const OnlinePlayComposePanel = memo(function OnlinePlayComposePanel({
             <ClearDraftIcon size={clearIconSize} color={colors.textOnAccent} />
           </FeedbackPressable>
         </Animated.View>
-        <View ref={draftBoxRef} style={[styles.draftBox, { height: composeKeySize }]}>
-          <Text
-            allowFontScaling={false}
-            adjustsFontSizeToFit
-            minimumFontScale={0.45}
-            numberOfLines={1}
-            onTextLayout={(event) => {
-              measuredDraftWidthRef.current =
-                draft.length === 0 ? 0 : (event.nativeEvent.lines[0]?.width ?? 0);
-            }}
-            style={[
-              styles.draftText,
-              {
-                fontSize: draftFontSize,
-                lineHeight: composeKeySize,
-                height: composeKeySize,
-              },
-            ]}
-          >
-            {toDisplayUpper(draft) || ' '}
-          </Text>
+        <View style={[styles.draftBox, { height: composeKeySize }]}>
+          <DraftDisplayText
+            ref={draftTextRef}
+            display={draftDisplay}
+            isCharRevealing={isCharRevealing}
+            revealVersion={revealVersion}
+            onTextLayout={handleDraftTextLayout}
+            style={styles.draftText}
+            fontSize={draftFontSize}
+            height={composeKeySize}
+          />
         </View>
         <Animated.View style={{ transform: [{ scale: backspaceScale.scale }] }}>
           <FeedbackPressable
@@ -189,28 +266,25 @@ export const OnlinePlayComposePanel = memo(function OnlinePlayComposePanel({
       <LetterKeyboard
         keys={letterKeys}
         usedKeyIndices={usedKeyIndices}
-        onPressKey={onPressKey}
-        onKeyMeasure={handleKeyMeasure}
+        pressScaleEnabled={letterPress}
+        onPressKey={handlePressKey}
+        onKeyMeasure={letterFly ? handleKeyMeasure : undefined}
         keySize={composeKeySize}
         gap={gap}
       />
 
-      {flyLetter ? (
-        <Animated.Text
-          pointerEvents="none"
-          allowFontScaling={false}
-          style={[
-            styles.flyLetter,
-            {
-              fontSize: draftFontSize,
-              opacity: flyOpacity,
-              transform: flyPosition.getTranslateTransform(),
-            },
-          ]}
-        >
-          {flyLetter}
-        </Animated.Text>
-      ) : null}
+      {activeFlies.map((fly) => (
+        <DraftLetterFlyOverlay
+          key={`fly-${fly.charIndex}`}
+          flyLetter={fly.letter}
+          flyPosition={fly.position}
+          flyScale={fly.scale}
+          fontSize={fly.fontSize}
+          lineHeight={fly.lineHeight}
+          letterSpacing={fly.letterSpacing}
+          style={styles.flyLetter}
+        />
+      ))}
     </View>
   );
 });
@@ -246,7 +320,6 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: colors.composeDraftBg,
       borderRadius: radii.sm,
       paddingHorizontal: spacing.md,
-      justifyContent: 'center',
       overflow: 'hidden',
     },
     draftText: {
@@ -258,8 +331,8 @@ function createStyles(colors: ThemeColors) {
       position: 'absolute',
       top: 0,
       left: 0,
-      fontWeight: '700',
-      color: colors.penBlue,
+      fontWeight: '600',
+      color: colors.composeDraftText,
     },
   });
 }

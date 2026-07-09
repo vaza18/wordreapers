@@ -22,22 +22,29 @@ import {
   parseFeedbackMode,
   type FeedbackMode,
 } from '@/lib/settings/feedback-mode';
+import {
+  DEFAULT_VISUAL_EFFECTS,
+  LEGACY_TIMER_VISUAL_COUNTDOWN_KEY,
+  LEGACY_VICTORY_EFFECTS_KEY,
+  migrateVisualEffectsFromLegacy,
+  parseVisualEffectsPreferences,
+  VISUAL_EFFECTS_STORAGE_KEY,
+  type VisualEffectsMode,
+  type VisualEffectsPreferences,
+} from '@/lib/settings/visual-effects';
 
 const BUTTON_FEEDBACK_STORAGE_KEY = 'wordreapers.buttonFeedback';
 const LEGACY_KEY_PRESS_FEEDBACK_STORAGE_KEY = 'wordreapers.keyPressFeedback';
 const WORD_ACCEPTED_FEEDBACK_STORAGE_KEY = 'wordreapers.wordAcceptedFeedback';
 const TIMER_ALERT_FEEDBACK_STORAGE_KEY = 'wordreapers.timerAlertFeedback';
-const TIMER_VISUAL_COUNTDOWN_STORAGE_KEY = 'wordreapers.timerVisualCountdown';
-const VICTORY_EFFECTS_STORAGE_KEY = 'wordreapers.victoryEffects';
 
-export const DEFAULT_TIMER_VISUAL_COUNTDOWN = true;
-export const DEFAULT_VICTORY_EFFECTS = true;
+export type VisualEffectsToggleKey = keyof Pick<
+  VisualEffectsPreferences,
+  'timerPulse' | 'victoryCelebration' | 'letterPress' | 'letterFly'
+>;
 
-function parseStoredBoolean(raw: string | null, defaultValue: boolean): boolean {
-  if (raw === null) {
-    return defaultValue;
-  }
-  return raw === 'true';
+async function persistVisualEffects(preferences: VisualEffectsPreferences): Promise<void> {
+  await AsyncStorage.setItem(VISUAL_EFFECTS_STORAGE_KEY, JSON.stringify(preferences));
 }
 
 async function loadFeedbackPreferences(): Promise<{
@@ -85,23 +92,22 @@ export interface SettingsState {
   buttonFeedback: FeedbackMode;
   wordAcceptedFeedback: FeedbackMode;
   timerAlertMode: FeedbackMode;
-  timerVisualCountdown: boolean;
-  victoryEffects: boolean;
+  visualEffects: VisualEffectsPreferences;
   gameSetup: GameSetupPreferences;
   setLocale: (locale: AppLocale) => void;
   setAppearanceMode: (mode: AppearanceMode) => void;
   setButtonFeedback: (mode: FeedbackMode) => void;
   setWordAcceptedFeedback: (mode: FeedbackMode) => void;
   setTimerAlertMode: (mode: FeedbackMode) => void;
-  setTimerVisualCountdown: (enabled: boolean) => void;
-  setVictoryEffects: (enabled: boolean) => void;
+  setVisualEffectsMode: (mode: VisualEffectsMode) => void;
+  setVisualEffectsToggle: (key: VisualEffectsToggleKey, enabled: boolean) => void;
   setGameSetupDuration: (durationMinutes: number) => void;
   setGameSetupUniqueBonusMode: (uniqueBonusMode: UniqueBonusMode) => void;
   setGameSetupAllowProperNouns: (allow: boolean) => void;
   setGameSetupAllowSlang: (allow: boolean) => void;
   hydrateAppearancePreference: () => Promise<void>;
   hydrateFeedbackPreferences: () => Promise<void>;
-  hydrateEffectsPreferences: () => Promise<void>;
+  hydrateVisualEffectsPreferences: () => Promise<void>;
   hydrateGameSetupPreferences: () => Promise<void>;
 }
 
@@ -111,8 +117,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   buttonFeedback: DEFAULT_BUTTON_FEEDBACK,
   wordAcceptedFeedback: DEFAULT_WORD_ACCEPTED_FEEDBACK,
   timerAlertMode: DEFAULT_TIMER_ALERT_FEEDBACK,
-  timerVisualCountdown: DEFAULT_TIMER_VISUAL_COUNTDOWN,
-  victoryEffects: DEFAULT_VICTORY_EFFECTS,
+  visualEffects: DEFAULT_VISUAL_EFFECTS,
   gameSetup: DEFAULT_GAME_SETUP_PREFERENCES,
 
   setLocale: (locale) => {
@@ -139,14 +144,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     void saveFeedbackPreference('timerAlert', mode);
   },
 
-  setTimerVisualCountdown: (enabled) => {
-    set({ timerVisualCountdown: enabled });
-    void AsyncStorage.setItem(TIMER_VISUAL_COUNTDOWN_STORAGE_KEY, String(enabled));
+  setVisualEffectsMode: (mode) => {
+    const visualEffects = { ...get().visualEffects, mode };
+    set({ visualEffects });
+    void persistVisualEffects(visualEffects);
   },
 
-  setVictoryEffects: (enabled) => {
-    set({ victoryEffects: enabled });
-    void AsyncStorage.setItem(VICTORY_EFFECTS_STORAGE_KEY, String(enabled));
+  setVisualEffectsToggle: (key, enabled) => {
+    const visualEffects = { ...get().visualEffects, [key]: enabled };
+    set({ visualEffects });
+    void persistVisualEffects(visualEffects);
   },
 
   setGameSetupDuration: (durationMinutes) => {
@@ -187,15 +194,24 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     });
   },
 
-  hydrateEffectsPreferences: async () => {
-    const [timerVisualRaw, victoryEffectsRaw] = await Promise.all([
-      AsyncStorage.getItem(TIMER_VISUAL_COUNTDOWN_STORAGE_KEY),
-      AsyncStorage.getItem(VICTORY_EFFECTS_STORAGE_KEY),
+  hydrateVisualEffectsPreferences: async () => {
+    const [visualEffectsRaw, legacyTimerRaw, legacyVictoryRaw] = await Promise.all([
+      AsyncStorage.getItem(VISUAL_EFFECTS_STORAGE_KEY),
+      AsyncStorage.getItem(LEGACY_TIMER_VISUAL_COUNTDOWN_KEY),
+      AsyncStorage.getItem(LEGACY_VICTORY_EFFECTS_KEY),
     ]);
-    set({
-      timerVisualCountdown: parseStoredBoolean(timerVisualRaw, DEFAULT_TIMER_VISUAL_COUNTDOWN),
-      victoryEffects: parseStoredBoolean(victoryEffectsRaw, DEFAULT_VICTORY_EFFECTS),
+
+    if (visualEffectsRaw !== null) {
+      set({ visualEffects: parseVisualEffectsPreferences(visualEffectsRaw) });
+      return;
+    }
+
+    const visualEffects = migrateVisualEffectsFromLegacy({
+      timerVisualCountdown: legacyTimerRaw,
+      victoryEffects: legacyVictoryRaw,
     });
+    set({ visualEffects });
+    await persistVisualEffects(visualEffects);
   },
 
   hydrateGameSetupPreferences: async () => {

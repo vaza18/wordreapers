@@ -3,6 +3,7 @@ import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { spacing, type ThemeColors } from '@/constants/theme';
+import { useResolvedVisualEffects } from '@/hooks/useResolvedVisualEffects';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import {
@@ -121,6 +122,7 @@ function ToastBubble({
   fading,
   stackOffsetY,
   anchor,
+  motionEnabled,
   onLayoutHeight,
 }: {
   message: string;
@@ -128,20 +130,33 @@ function ToastBubble({
   fading: boolean;
   stackOffsetY: number;
   anchor: 'top' | 'bottom';
+  motionEnabled: boolean;
   onLayoutHeight: (height: number) => void;
 }) {
   const { colors } = useTheme();
   const playToastStyles = useThemedStyles(createPlayToastStyles);
   const variantStyle = getToastVariantStyles(colors)[variant];
-  const opacity = useRef(new Animated.Value(0)).current;
+  const targetTranslateY = anchor === 'top' ? stackOffsetY : 0;
+  const opacity = useRef(new Animated.Value(motionEnabled ? 0 : 1)).current;
   const translateY = useRef(
-    new Animated.Value(anchor === 'top' ? stackOffsetY - ENTRANCE_OFFSET : ENTRANCE_OFFSET),
+    new Animated.Value(
+      motionEnabled
+        ? anchor === 'top'
+          ? stackOffsetY - ENTRANCE_OFFSET
+          : ENTRANCE_OFFSET
+        : targetTranslateY,
+    ),
   ).current;
 
   useEffect(() => {
+    if (!motionEnabled) {
+      opacity.setValue(1);
+      translateY.setValue(targetTranslateY);
+      return;
+    }
     Animated.parallel([
       Animated.timing(translateY, {
-        toValue: anchor === 'top' ? stackOffsetY : 0,
+        toValue: targetTranslateY,
         duration: STACK_SHIFT_MS,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
@@ -153,10 +168,14 @@ function ToastBubble({
         useNativeDriver: true,
       }),
     ]).start();
-  }, [anchor, opacity, stackOffsetY, translateY]);
+  }, [motionEnabled, opacity, targetTranslateY, translateY]);
 
   useEffect(() => {
     if (!fading) {
+      return;
+    }
+    if (!motionEnabled) {
+      opacity.setValue(0);
       return;
     }
     Animated.timing(opacity, {
@@ -165,7 +184,7 @@ function ToastBubble({
       easing: Easing.in(Easing.quad),
       useNativeDriver: true,
     }).start();
-  }, [fading, opacity]);
+  }, [fading, motionEnabled, opacity]);
 
   return (
     <Animated.View
@@ -208,6 +227,7 @@ export function PlaySessionToastStack({
   bottomOffset,
 }: PlaySessionToastStackProps) {
   const insets = useSafeAreaInsets();
+  const { generalMotion } = useResolvedVisualEffects();
   const playToastStyles = useThemedStyles(createPlayToastStyles);
   const [heightsById, setHeightsById] = useState<Record<string, number>>({});
 
@@ -263,6 +283,7 @@ export function PlaySessionToastStack({
           fading={toast.fading}
           stackOffsetY={offsets[index] ?? 0}
           anchor={anchor}
+          motionEnabled={generalMotion}
           onLayoutHeight={(height) => {
             handleLayoutHeight(toast.id, height);
           }}

@@ -4,6 +4,8 @@ import {
   BASE_WORD_SUGGEST_MAX_LIST_HEIGHT,
   BASE_WORD_SUGGEST_MORE_ROW_HEIGHT,
   BASE_WORD_SUGGEST_ROW_HEIGHT,
+} from '../constants/base-word-suggest.js';
+import {
   scaledBaseWordSuggestMaxListHeight,
   scaledBaseWordSuggestMoreRowHeight,
   scaledBaseWordSuggestRowHeight,

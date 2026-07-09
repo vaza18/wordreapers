@@ -28,3 +28,24 @@ export function formatPlayRulesLabel(
   }
   return parts[0] ?? t('online.playRulesStandard');
 }
+
+/**
+ * Enabled lexicon options for results/history stats (omit when both off).
+ */
+export function formatResultsLexiconOptionsSuffix(
+  t: TranslateFn,
+  settings?: Pick<GameSessionSettings, 'allowProperNouns' | 'allowSlang'> | null,
+): string | null {
+  const allowProperNouns = settings?.allowProperNouns ?? false;
+  const allowSlang = settings?.allowSlang ?? false;
+  if (!allowProperNouns && !allowSlang) {
+    return null;
+  }
+  if (allowProperNouns && allowSlang) {
+    return t('online.playRulesProperAndSlang');
+  }
+  if (allowProperNouns) {
+    return t('online.playRulesProper');
+  }
+  return t('online.playRulesSlang');
+}
