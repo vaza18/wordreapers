@@ -24,52 +24,83 @@ FOUNDATION_EXPORT void WRConfigureFirebaseNative(void);
 `;
 
 /**
+ * Resolve native iOS app paths from Expo's projectName (not a hardcoded folder).
+ * Production builds use `Wordreapers`; Cyrillic display name may sanitize differently.
+ */
+function resolveIosNativeAppPaths(iosRoot, projectName) {
+  if (!projectName || typeof projectName !== 'string') {
+    throw new Error('with-ios-firebase-native-init: missing modRequest.projectName');
+  }
+  const appDir = path.join(iosRoot, projectName);
+  return {
+    projectName,
+    appDir,
+    appDelegatePath: path.join(appDir, 'AppDelegate.swift'),
+    bridgingHeaderPath: path.join(appDir, `${projectName}-Bridging-Header.h`),
+    nativeInitHeaderPath: path.join(appDir, 'FirebaseNativeInit.h'),
+    nativeInitSourcePath: path.join(appDir, 'FirebaseNativeInit.m'),
+  };
+}
+
+/** Strip RNFB Swift App Check / FirebaseApp.configure blocks (not our native-init tag). */
+function stripRnfbSwiftAppCheckInit(contents) {
+  return contents
+    .replace(/\nimport FirebaseCore\n/g, '\n')
+    .replace(
+      /\/\/ @generated begin @react-native-firebase\/app-check-native-init[\s\S]*?\/\/ @generated end @react-native-firebase\/app-check-native-init[^\n]*\n?/g,
+      '',
+    )
+    .replace(
+      /\/\/ @generated begin @react-native-firebase\/app-check(?!-native-init)[\s\S]*?\/\/ @generated end @react-native-firebase\/app-check(?!-native-init)[^\n]*\n?/g,
+      '',
+    )
+    .replace(
+      /\/\/ @generated begin @react-native-firebase\/app-didFinishLaunchingWithOptions[\s\S]*?\/\/ @generated end @react-native-firebase\/app-didFinishLaunchingWithOptions[^\n]*\n?/g,
+      '',
+    )
+    .replace(/RNFBAppCheckModule\.sharedInstance\(\)\s*\n\s*FirebaseApp\.configure\(\)\s*\n?/g, '')
+    .replace(/^\s*FirebaseApp\.configure\(\)\s*\n/gm, '')
+    .replace(/^\s*WRConfigureFirebaseNative\(\)\s*\n/gm, '');
+}
+
+function patchBridgingHeader(header) {
+  let next = header.replace(/#import [<"]RNFBAppCheckModule\.h[>"]\n?/g, '');
+  if (!next.includes('FirebaseNativeInit.h')) {
+    next += '\n#import "FirebaseNativeInit.h"\n';
+  }
+  return next;
+}
+
+/**
  * Native Firebase + App Check bootstrap without Swift bridging-header module maps.
  */
-module.exports = function withIosFirebaseNativeInit(config) {
+function withIosFirebaseNativeInit(config) {
   config = withDangerousMod(config, [
     'ios',
     async (config) => {
       const iosRoot = config.modRequest.platformProjectRoot;
-      const appDir = path.join(iosRoot, 'Slovozbirachi');
-      fs.mkdirSync(appDir, { recursive: true });
-      fs.writeFileSync(path.join(appDir, 'FirebaseNativeInit.h'), FIREBASE_NATIVE_INIT_H);
-      fs.writeFileSync(path.join(appDir, 'FirebaseNativeInit.m'), FIREBASE_NATIVE_INIT_M);
+      const paths = resolveIosNativeAppPaths(iosRoot, config.modRequest.projectName);
+      fs.mkdirSync(paths.appDir, { recursive: true });
+      fs.writeFileSync(paths.nativeInitHeaderPath, FIREBASE_NATIVE_INIT_H);
+      fs.writeFileSync(paths.nativeInitSourcePath, FIREBASE_NATIVE_INIT_M);
 
-      const appDelegatePath = path.join(appDir, 'AppDelegate.swift');
-      if (fs.existsSync(appDelegatePath)) {
-        let contents = fs.readFileSync(appDelegatePath, 'utf8');
-        let cleaned = contents
-          .replace(/\nimport FirebaseCore\n/g, '\n')
-          .replace(/^[^\n]*-native-init[^\n]*\n/gm, '')
-          .replace(
-            /\/\/ @generated begin @react-native-firebase\/app-check[\s\S]*?\/\/ @generated end @react-native-firebase\/app-check\n?/g,
-            '',
-          )
-          .replace(
-            /RNFBAppCheckModule\.sharedInstance\(\)\s*\n\s*FirebaseApp\.configure\(\)\s*\n?/g,
-            '',
-          );
-
+      if (fs.existsSync(paths.appDelegatePath)) {
+        const contents = fs.readFileSync(paths.appDelegatePath, 'utf8');
+        const cleaned = stripRnfbSwiftAppCheckInit(contents);
         const merged = mergeContents({
           tag: APP_CHECK_TAG,
           src: cleaned,
           newSrc: `    ${APP_CHECK_BLOCK}`,
-          anchor: /window = UIWindow\(frame: UIScreen\.main\.bounds\)/,
+          anchor: /factory\.startReactNative\(/,
           offset: 0,
           comment: '//',
         });
-        fs.writeFileSync(appDelegatePath, merged.contents);
+        fs.writeFileSync(paths.appDelegatePath, merged.contents);
       }
 
-      const bridgingHeaderPath = path.join(appDir, 'Slovozbirachi-Bridging-Header.h');
-      if (fs.existsSync(bridgingHeaderPath)) {
-        let header = fs.readFileSync(bridgingHeaderPath, 'utf8');
-        header = header.replace(/#import [<"]RNFBAppCheckModule\.h[>"]\n?/g, '');
-        if (!header.includes('FirebaseNativeInit.h')) {
-          header += '\n#import "FirebaseNativeInit.h"\n';
-        }
-        fs.writeFileSync(bridgingHeaderPath, header);
+      if (fs.existsSync(paths.bridgingHeaderPath)) {
+        const header = fs.readFileSync(paths.bridgingHeaderPath, 'utf8');
+        fs.writeFileSync(paths.bridgingHeaderPath, patchBridgingHeader(header));
       }
 
       return config;
@@ -78,23 +109,24 @@ module.exports = function withIosFirebaseNativeInit(config) {
 
   config = withXcodeProject(config, (config) => {
     const project = config.modResults;
-    const groupKey = project.findPBXGroupKey({ name: 'Slovozbirachi' });
+    const projectName = config.modRequest.projectName;
+    if (!projectName) {
+      return config;
+    }
+    const groupKey = project.findPBXGroupKey({ name: projectName });
     if (!groupKey) {
       return config;
     }
 
     for (const fileName of ['FirebaseNativeInit.h', 'FirebaseNativeInit.m']) {
-      if (project.hasFile(`Slovozbirachi/${fileName}`)) {
+      const relativePath = `${projectName}/${fileName}`;
+      if (project.hasFile(relativePath)) {
         continue;
       }
       if (fileName.endsWith('.m')) {
-        project.addSourceFile(
-          `Slovozbirachi/${fileName}`,
-          { target: project.getFirstTarget().uuid },
-          groupKey,
-        );
+        project.addSourceFile(relativePath, { target: project.getFirstTarget().uuid }, groupKey);
       } else {
-        project.addFile(`Slovozbirachi/${fileName}`, groupKey);
+        project.addFile(relativePath, groupKey);
       }
     }
 
@@ -102,4 +134,9 @@ module.exports = function withIosFirebaseNativeInit(config) {
   });
 
   return config;
-};
+}
+
+module.exports = withIosFirebaseNativeInit;
+module.exports.resolveIosNativeAppPaths = resolveIosNativeAppPaths;
+module.exports.stripRnfbSwiftAppCheckInit = stripRnfbSwiftAppCheckInit;
+module.exports.patchBridgingHeader = patchBridgingHeader;
