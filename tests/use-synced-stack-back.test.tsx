@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from '@testing-library/react';
 
 const setPreventRemove = vi.fn();
-const notifyPreventRemove = vi.fn();
 const beforeRemoveHandlers: Array<
   (event: { data: { action: { type: string } }; preventDefault: () => void }) => void
 > = [];
@@ -21,12 +20,11 @@ const addListener = vi.fn((event: string, handler: (typeof beforeRemoveHandlers)
   };
 });
 
-vi.mock('@react-navigation/native', () => ({
+vi.mock('expo-router/react-navigation', () => ({
   useNavigation: () => ({ addListener }),
   useRoute: () => ({ key: 'route-setup' }),
   usePreventRemoveContext: () => ({
     setPreventRemove,
-    notifyPreventRemove,
     preventedRoutes: {},
   }),
 }));
@@ -52,7 +50,6 @@ describe('useSyncedStackBack', () => {
     render(<HookHost onBack={vi.fn()} />);
 
     expect(setPreventRemove).toHaveBeenCalledWith(expect.any(String), 'route-setup', true);
-    expect(notifyPreventRemove).toHaveBeenCalled();
     expect(beforeRemoveHandlers).toHaveLength(1);
   });
 

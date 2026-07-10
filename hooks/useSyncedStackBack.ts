@@ -1,5 +1,5 @@
-import { useNavigation, usePreventRemoveContext, useRoute } from '@react-navigation/native';
-import { useCallback, useEffect, useId, useInsertionEffect, useRef } from 'react';
+import { useNavigation, usePreventRemoveContext, useRoute } from 'expo-router/react-navigation';
+import { useCallback, useEffect, useId, useRef } from 'react';
 
 const BACK_ACTIONS = new Set(['GO_BACK', 'POP', 'POP_TO']);
 
@@ -9,13 +9,15 @@ const BACK_ACTIONS = new Set(['GO_BACK', 'POP', 'POP_TO']);
  * must run custom logic (e.g. `dismissTo('/')` instead of a single pop).
  *
  * Registers with native-stack prevent-remove context so iOS cannot pop past this
- * screen natively while JS handles back (SDK 55 / react-native-screens 4.23+).
+ * screen natively while JS handles back (SDK 56 / expo-router prevent-remove).
+ * Uses `useEffect` (same as expo-router's `usePreventRemove`) — `setPreventRemove`
+ * updates React state and must not run inside `useInsertionEffect`.
  */
 export function useSyncedStackBack(handler: () => void): () => void {
   const id = useId();
   const navigation = useNavigation();
   const { key: routeKey } = useRoute();
-  const { setPreventRemove, notifyPreventRemove } = usePreventRemoveContext();
+  const { setPreventRemove } = usePreventRemoveContext();
 
   const handlerRef = useRef(handler);
   const skipNextRemoveRef = useRef(false);
@@ -23,21 +25,13 @@ export function useSyncedStackBack(handler: () => void): () => void {
 
   handlerRef.current = handler;
 
-  useInsertionEffect(() => {
+  useEffect(() => {
     setPreventRemove(id, routeKey, true);
 
     return () => {
       setPreventRemove(id, routeKey, false);
     };
   }, [id, routeKey, setPreventRemove]);
-
-  useEffect(() => {
-    notifyPreventRemove();
-
-    return () => {
-      notifyPreventRemove();
-    };
-  }, [id, notifyPreventRemove, routeKey]);
 
   const runBack = useCallback(() => {
     skipNextRemoveRef.current = true;

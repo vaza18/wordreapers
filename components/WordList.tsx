@@ -646,11 +646,11 @@ function createStyles(colors: ThemeColors) {
       zIndex: 1,
     },
     rowPrefixHighlight: {
-      ...StyleSheet.absoluteFillObject,
+      ...StyleSheet.absoluteFill,
       backgroundColor: colors.prefixHighlightBg,
     },
     rowHighlight: {
-      ...StyleSheet.absoluteFillObject,
+      ...StyleSheet.absoluteFill,
       backgroundColor: colors.penBlueMuted,
     },
     word: {

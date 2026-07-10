@@ -21,7 +21,7 @@ function createStyles(colors: ThemeColors) {
       backgroundColor: modalOverlayBackground(colors),
     },
     backdrop: {
-      ...StyleSheet.absoluteFillObject,
+      ...StyleSheet.absoluteFill,
       zIndex: 0,
     },
     sheet: {
