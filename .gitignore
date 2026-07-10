@@ -44,6 +44,7 @@ android/
 # Local EAS build outputs (`eas build --local` / `npm run build:android`)
 build-*.aab
 build-*.apk
+build-*.ipa
 # Coverage reports for tests.
 coverage/
 
