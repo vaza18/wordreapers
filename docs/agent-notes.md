@@ -22,6 +22,7 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 - `firebase` JS: `^12.15.0`; `@firebase/rules-unit-testing`: `^5.0.1`
 - Production: `android.r8.optimizedResourceShrinking=true` via `plugins/with-android-r8-optimizations.cjs`
 - Production Gradle JVM: `-Xmx4g -XX:MaxMetaspaceSize=1g` (same plugin) — local R8 hit `OutOfMemoryError: Metaspace` at Expo default 512m
+- After cancelling a local EAS Android build, stop leftover Gradle daemons before retry (`~/.gradle/.../bin/gradle --stop` or kill `GradleDaemon`). Stale daemon holds `~/.gradle/caches/journal-1` → `Timeout waiting to lock journal cache`. The `mapping.txt` upload error is a follow-on when R8 never ran.
 - iOS Firebase CocoaPods pin: `$FirebaseSDKVersion = '12.15.0'`
 - RN 0.83: `Appearance.setColorScheme('unspecified')` replaces `null` for Auto theme
 - Class repackaging (`-repackageclasses`): deferred until stable production AAB
