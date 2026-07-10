@@ -8,6 +8,23 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 <!-- Add dated notes at the top -->
 
+### 2026-07-10 — Expo SDK 57 upgrade (upgrade/expo-sdk-57)
+
+- Branched from green `upgrade/expo-sdk-56` (SDK 56 `expo-doctor` 21/21)
+- `expo-doctor`: **20/20 passed** (SDK 57)
+- `expo`: `^57.0.0` (`57.0.4` resolved), `react-native`: `0.86.0`, `react`: `19.2.3`, `babel-preset-expo`: `~57.0.0`
+- `@react-native-firebase/app` + `app-check`: `^25.1.0` (unchanged); iOS CocoaPods pin `$FirebaseSDKVersion = '12.15.0'`
+- iOS: `deploymentTarget` `16.4`; `forceStaticLinking: ['RNFBApp', 'RNFBAppCheck']` preserved
+- `app.json` plugins: added `expo-font` + `expo-status-bar` (SDK 57 `expo install --fix` cannot autofix dynamic `app.config.js`)
+- Hermes v1: still default; no direct `react-native-reanimated` (transitive native pods from Expo modules appear in Gradle — do not import in JS)
+- Preserved: R8 optimized shrinking + Gradle JVM 4g/1g; Metro `@firebase/auth` hoist; `REACT_NATIVE_PACKAGER_HOSTNAME=localhost`; no `NODE_ENV` in `eas.json`; no class repackaging
+- CNG: `expo prebuild` cleans by default on SDK 57; regenerate `ios/` / `android/` after upgrade
+- Local EAS Android production AAB OK (SDK 57, versionCode 45): `build-1783691296654.aab` (~81.0 MiB); `mapping.txt` artifact OK (~68.1 MiB → `build-1783691296739.txt`)
+- AAB size (informational): SDK 56 ~80.2 MiB → SDK 57 ~81.0 MiB (+0.8 MiB); not a merge gate
+- EAS cloud Android development (`f415ec84…`, versionCode 44) stayed **in queue** >10+ min — used local production build as the Android gate instead
+- Local iOS: `expo run:ios` **Build Succeeded** (Slovozbirachi / simulator); script may still exit non-zero on simctl/Metro URL open (same class of flake as prior SDKs)
+- iOS EAS development: still needs interactive credentials
+
 ### 2026-07-10 — iOS RNFBAppCheck PCH error (local)
 
 - `.env.local` has `APP_VARIANT=production` → Expo native project name `Wordreapers` (not Cyrillic-sanitized `Slovozbirachi`)

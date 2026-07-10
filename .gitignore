@@ -41,6 +41,9 @@ dist/
 .expo/
 ios/
 android/
+# Local EAS build outputs (`eas build --local` / `npm run build:android`)
+build-*.aab
+build-*.apk
 # Coverage reports for tests.
 coverage/
 

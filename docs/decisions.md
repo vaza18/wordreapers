@@ -62,6 +62,13 @@ Format: **Decision → Alternatives → Why rejected → Date**
 - **Why rejected:** Staying on 55 increases future upgrade debt. Hermes v1 is the SDK 56 default and the project does not use `react-native-reanimated` (known memory regression). Prefer Expo-documented `forceStaticLinking` before disabling prebuilt RNCore. Class repackaging remains deferred; AAB size is not a merge gate. TypeScript 6 accepted via `expo install --fix`; deprecated `baseUrl` removed in favor of prefixed `paths` entries.
 - **Date:** 2026-07 — `package.json`, `app.config.js`, `app.json`, navigation import sites, `tsconfig.json`
 
+## ADR-009: Expo SDK 57 + RN 0.86 toolchain
+
+- **Decision:** Upgrade Expo 56 → 57 (RN 0.86, React 19.2.3 unchanged) on branch `upgrade/expo-sdk-57`, parented from green `upgrade/expo-sdk-56`. Register `expo-font` and `expo-status-bar` config plugins in `app.json` (SDK 57 install autofix cannot write dynamic `app.config.js`). Keep ADR-007 R8 optimized shrinking + Gradle JVM 4g/1g; keep ADR-008 `forceStaticLinking: ['RNFBApp', 'RNFBAppCheck']`, iOS deploymentTarget 16.4, Firebase CocoaPods pin, Metro `@firebase/auth` hoist, `REACT_NATIVE_PACKAGER_HOSTNAME=localhost`; do not put `NODE_ENV=production` in `eas.json`; do not enable `-repackageclasses`.
+- **Alternatives considered:** Stay on SDK 56; wait weeks after SDK 56 production store submit before upgrading; disable prebuilt RNCore; add direct `react-native-reanimated`.
+- **Why rejected:** SDK 57 is Expo’s intentional non-breaking RN 0.85→0.86 bump with no app-code migrations expected. Waiting weeks adds little value after the hard 55→56 work. Prefer existing `forceStaticLinking` over building RN from source. Do not add a direct reanimated dependency (Hermes V1 memory regression still documented); transitive native pods from Expo modules are acceptable as long as JS does not import reanimated.
+- **Date:** 2026-07 — `package.json`, `app.json`
+
 ---
 
 When adding a new ADR: keep it short; link the implementing file; do not duplicate `online-multiplayer-rules.md` tables.
