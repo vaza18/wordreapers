@@ -114,8 +114,7 @@ import {
 import { useFirebaseStore } from '@/store/firebase-store';
 import { useProfileStore } from '@/store/profile-store';
 import { useSettingsStore } from '@/store/settings-store';
-
-const VALIDATION_DEBOUNCE_MS = 1000;
+import { VALIDATION_DEBOUNCE_MS } from '@/constants/game-timing';
 
 const EMPTY_WORD_LIST_ENTRIES: never[] = [];
 const EMPTY_WORD_LIST_DISPLAYS: string[] = [];

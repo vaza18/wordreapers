@@ -41,7 +41,7 @@ Each locale is one folder (BCP 47 tag). Example for Ukrainian:
 
 Build rules: skip words already in main dictionary, skip blocklist, dedupe with general > proper > slang priority. Whitelist words are **not** merged into `dictionary.txt`.
 
-**Round Playable Lexicon (runtime, not in build output):** [`lib/dictionary/round-playable-lexicon.ts`](../../lib/dictionary/round-playable-lexicon.ts) filters the same dictionary files for all words playable from a base word’s letter multiset (`allowProperNouns` / `allowSlang` gates supplements and whitelist proper/slang). Used for lobby max hint, play-screen found/max counter, faster validation, results «show missing words», and local finished-archive snapshot (`playableLexicon`, archive v3). Cached in memory per `baseWord|proper|slang`.
+**Round Playable Lexicon (runtime, not in build output):** [`lib/dictionary/round-playable-lexicon.ts`](../../lib/dictionary/round-playable-lexicon.ts) filters the same dictionary files for all words playable from a base word’s letter multiset (`allowProperNouns` / `allowSlang` gates supplements and whitelist proper/slang). Prefetched in the background on setup / pick-word ([`round-playable-lexicon-prefetch.ts`](../../lib/dictionary/round-playable-lexicon-prefetch.ts)), then reused for lobby max hint, play-screen found/max counter, faster validation, results «show missing words», and local finished-archive snapshot (`playableLexicon`, archive v3). Cached in memory per `baseWord|proper|slang`.
 
 **Main dictionary filters** (see `lib/dictionary/vesum-tags.ts`):
 

@@ -56,8 +56,7 @@ import {
 } from '@/store/organizer-solo-store';
 import { useProfileStore } from '@/store/profile-store';
 import { useSettingsStore } from '@/store/settings-store';
-
-const VALIDATION_DEBOUNCE_MS = 1000;
+import { VALIDATION_DEBOUNCE_MS } from '@/constants/game-timing';
 
 /**
  * Organizer solo round — local only until invite publishes to Firebase.

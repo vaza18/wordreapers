@@ -22,6 +22,15 @@ export function setCachedRoundPlayableLexicon(
   lexiconCache.set(lexiconCacheKey(baseWord, allowProperNouns, allowSlang), lexicon);
 }
 
+/** Remove one cached lexicon (e.g. when the player abandons a base word). */
+export function removeCachedRoundPlayableLexicon(
+  baseWord: string,
+  allowProperNouns: boolean,
+  allowSlang: boolean,
+): void {
+  lexiconCache.delete(lexiconCacheKey(baseWord, allowProperNouns, allowSlang));
+}
+
 /** Clear all cached round lexicons (e.g. after dictionary bundle update). */
 export function clearRoundPlayableLexiconCache(): void {
   lexiconCache.clear();

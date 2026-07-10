@@ -282,6 +282,7 @@
     "showMissingWords": "Показати незнайдені слова",
     "showMissingWordsAfterRound": "Ця опція зʼявиться після завершення раунду",
     "playableWordsLoading": "Рахуємо слова…",
+    "playableWordsNeedBaseWord": "Обери базове слово",
     "resultsRoundDuration": "Тривалість: {{duration}}",
     "resultsWordsPerMinuteShort": "{{rate}} сл/хв",
     "resultsAuthorFirst": "{{name}} 1й",
