@@ -7,6 +7,7 @@ import {
   BaseWordSuggestDropdown,
   type BaseWordSuggestItem,
 } from '@/components/BaseWordSuggestDropdown';
+import { PlayableWordsCountHint } from '@/components/PlayableWordsCountHint';
 import { RoundSettingsFields } from '@/components/RoundSettingsFields';
 import { SetupModeButton } from '@/components/SetupModeButton';
 import { ShuffleBaseWordButton } from '@/components/ShuffleBaseWordButton';
@@ -15,6 +16,10 @@ import { GroupPlayersIcon, SoloPlayerIcon } from '@/components/PlayerModeIcons';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useHeaderIconButtonLayout } from '@/hooks/useHeaderIconButtonLayout';
+import {
+  useSetupPlayableLexiconHint,
+  type SetupLexiconCommitMode,
+} from '@/hooks/useSetupPlayableLexiconHint';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useTrainingMilestone } from '@/hooks/useTrainingMilestone';
@@ -88,6 +93,7 @@ export default function OnlineSetupScreen() {
   const [dictionary, setDictionary] = useState<DictionaryIndex | null>(null);
   const [baseWords, setBaseWords] = useState<string[]>([]);
   const [baseWordInput, setBaseWordInput] = useState('');
+  const [lexiconCommitMode, setLexiconCommitMode] = useState<SetupLexiconCommitMode>('typing');
   const [baseWordFocused, setBaseWordFocused] = useState(false);
   const [organizerUid, setOrganizerUid] = useState<string | null>(null);
   const [playerCount, setPlayerCount] = useState(1);
@@ -97,6 +103,12 @@ export default function OnlineSetupScreen() {
   dictionaryRef.current = dictionary;
   const { hydrated: trainingHydrated, hasCompletedTrainingRound } = useTrainingMilestone();
   const multiplayerLocked = trainingHydrated && !hasCompletedTrainingRound;
+  const { status: lexiconHintStatus, maxCount: lexiconMaxCount } = useSetupPlayableLexiconHint({
+    baseWordInput,
+    allowProperNouns,
+    allowSlang,
+    commitMode: lexiconCommitMode,
+  });
 
   const showInviteDisabledHint = () => {
     Alert.alert(t('app.name'), t('online.inviteOthersLockedHint'));
@@ -139,6 +151,7 @@ export default function OnlineSetupScreen() {
       if (!setupHydratedRef.current) {
         setupHydratedRef.current = true;
         if (session.baseWord) {
+          setLexiconCommitMode('immediate');
           setBaseWordInput(
             dictionaryRef.current?.lookupDisplayUpper(session.baseWord) ??
               session.baseWord.toUpperCase(),
@@ -172,6 +185,7 @@ export default function OnlineSetupScreen() {
         setBaseWords(words);
         const initial = randomBaseWord(words);
         if (initial) {
+          setLexiconCommitMode('immediate');
           setBaseWordInput(dict.lookupDisplayUpper(initial) ?? toDisplayUpper(initial));
         }
         setLoading(false);
@@ -368,44 +382,59 @@ export default function OnlineSetupScreen() {
         <Text style={styles.rotationHint}>{t('online.setupRotationHint')}</Text>
 
         <Text style={styles.sectionLabel}>{t('game.baseWord')}</Text>
-        <View style={styles.baseWordField}>
-          <View style={styles.baseWordRow}>
-            <TextInput
-              autoCapitalize="characters"
-              autoCorrect={false}
-              style={[
-                styles.input,
-                { height: headerButtonSize },
-                showSuggestDropdown ? styles.inputActive : null,
-              ]}
-              value={baseWordInput}
-              onChangeText={setBaseWordInput}
-              onFocus={() => setBaseWordFocused(true)}
-              onBlur={() => {
-                setTimeout(() => setBaseWordFocused(false), 200);
-              }}
-              placeholder={t('game.baseWordPlaceholder')}
-            />
-            <ShuffleBaseWordButton
-              onPress={() => {
-                const next = randomBaseWord(baseWords);
-                if (next && dictionary) {
-                  setBaseWordInput(dictionary.lookupDisplayUpper(next) ?? toDisplayUpper(next));
-                }
-              }}
-            />
+        <View style={styles.baseWordBlock}>
+          <View style={styles.baseWordField}>
+            <View style={styles.baseWordRow}>
+              <TextInput
+                autoCapitalize="characters"
+                autoCorrect={false}
+                style={[
+                  styles.input,
+                  { height: headerButtonSize },
+                  showSuggestDropdown ? styles.inputActive : null,
+                ]}
+                value={baseWordInput}
+                onChangeText={(text) => {
+                  setLexiconCommitMode('typing');
+                  setBaseWordInput(text);
+                }}
+                onFocus={() => setBaseWordFocused(true)}
+                onBlur={() => {
+                  setTimeout(() => setBaseWordFocused(false), 200);
+                }}
+                placeholder={t('game.baseWordPlaceholder')}
+              />
+              <ShuffleBaseWordButton
+                onPress={() => {
+                  const next = randomBaseWord(baseWords);
+                  if (next && dictionary) {
+                    setLexiconCommitMode('immediate');
+                    setBaseWordInput(dictionary.lookupDisplayUpper(next) ?? toDisplayUpper(next));
+                  }
+                }}
+              />
+            </View>
+            {showSuggestDropdown ? (
+              <BaseWordSuggestDropdown
+                items={suggestionResult.items}
+                totalCount={suggestionResult.total}
+                moreLabel={suggestMoreLabel}
+                onSelect={(display) => {
+                  setLexiconCommitMode('immediate');
+                  setBaseWordInput(display);
+                  setBaseWordFocused(false);
+                }}
+              />
+            ) : null}
           </View>
-          {showSuggestDropdown ? (
-            <BaseWordSuggestDropdown
-              items={suggestionResult.items}
-              totalCount={suggestionResult.total}
-              moreLabel={suggestMoreLabel}
-              onSelect={(display) => {
-                setBaseWordInput(display);
-                setBaseWordFocused(false);
-              }}
-            />
-          ) : null}
+
+          <View style={styles.baseWordHints}>
+            <Text style={styles.baseWordHint}>{t('game.baseWordHint')}</Text>
+            <PlayableWordsCountHint status={lexiconHintStatus} maxCount={lexiconMaxCount} />
+            {baseWordDictionaryRequired ? (
+              <Text style={styles.baseWordHint}>{t('online.publicRoomNeedsSafeBaseWord')}</Text>
+            ) : null}
+          </View>
         </View>
 
         <RoundSettingsFields
@@ -420,9 +449,6 @@ export default function OnlineSetupScreen() {
           dictionaryOptionsLocked={dictionaryOptionsLocked}
           dictionaryOptionsLockedHint={t('online.dictionaryOptionsLockedHint')}
         />
-        {baseWordDictionaryRequired ? (
-          <Text style={styles.rotationHint}>{t('online.publicRoomNeedsSafeBaseWord')}</Text>
-        ) : null}
 
         <View style={styles.actions}>
           {fromLobby ? (
@@ -501,6 +527,18 @@ function createStyles(colors: ThemeColors) {
     },
     baseWordField: {
       zIndex: 10,
+    },
+    baseWordBlock: {
+      gap: 2,
+    },
+    baseWordHints: {
+      gap: 2,
+    },
+    baseWordHint: {
+      fontSize: 12,
+      lineHeight: 16,
+      color: colors.textTertiary,
+      textAlign: 'center',
     },
     baseWordRow: {
       flexDirection: 'row',

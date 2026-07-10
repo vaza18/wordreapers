@@ -1,4 +1,5 @@
 import { DEFAULT_BUTTON_FEEDBACK, type FeedbackMode } from '../settings/feedback-mode.js';
+import { replayFromStart } from './replay-from-start.js';
 
 import keyPressSound from '../../assets/generated/sounds/key-press.wav';
 import wordAcceptedSound from '../../assets/generated/sounds/word-accepted.wav';
@@ -155,12 +156,9 @@ function playButtonSoundNow(): void {
   if (!keyPlayer) {
     return;
   }
-  try {
-    void keyPlayer.seekTo(0);
-    keyPlayer.play();
-  } catch {
+  void replayFromStart(keyPlayer).catch(() => {
     // Ignore playback errors.
-  }
+  });
 }
 
 function playWordSound(): void {
@@ -177,12 +175,9 @@ function playWordSoundNow(): void {
   if (!wordPlayer) {
     return;
   }
-  try {
-    void wordPlayer.seekTo(0);
-    wordPlayer.play();
-  } catch {
+  void replayFromStart(wordPlayer).catch(() => {
     // Ignore playback errors.
-  }
+  });
 }
 
 /**

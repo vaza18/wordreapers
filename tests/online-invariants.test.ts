@@ -21,7 +21,10 @@ import {
   rematchWaitingPlayerPatch,
 } from '../lib/online/presence/live-round-membership.js';
 import { resolvePostJoinRoute } from '../lib/online/post-join-route.js';
-import { shouldToastRosterPlayerJoined } from '../lib/online/play-toast-events.js';
+import {
+  detectPlayToastEvents,
+  shouldToastRosterPlayerJoined,
+} from '../lib/online/play-toast-events.js';
 import {
   isLobbyVisiblePlayer,
   isRematchWaitingLobby,
@@ -239,6 +242,31 @@ describe('online invariants (canonical spec)', () => {
         { baseWordRound: 1, liveRoundPlayerUids: ['org', 'peer'] },
       );
       expect(shouldToastRosterPlayerJoined(prev, curr, 'peer')).toBe(false);
+    });
+
+    it('toasts returned (not joined) when a live-round peer comes back online', () => {
+      const prev = playingSession(
+        {
+          org: { name: 'Org', wordCount: 0, score: 0, online: true },
+          peer: { name: 'Peer', gender: 'm', wordCount: 0, score: 0, online: false },
+        },
+        { baseWordRound: 1, liveRoundPlayerUids: ['org', 'peer'] },
+      );
+      const curr = playingSession(
+        {
+          org: { name: 'Org', wordCount: 0, score: 0, online: true },
+          peer: { name: 'Peer', gender: 'm', wordCount: 0, score: 0, online: true },
+        },
+        { baseWordRound: 1, liveRoundPlayerUids: ['org', 'peer'] },
+      );
+      expect(detectPlayToastEvents(prev, curr, 'org')).toEqual([
+        {
+          type: 'player_returned',
+          playerId: 'peer',
+          name: 'Peer',
+          gender: 'm',
+        },
+      ]);
     });
 
     it('marks offline when viewing prior round while live advanced', () => {

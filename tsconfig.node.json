@@ -9,7 +9,6 @@
     "resolveJsonModule": true,
     "noEmit": true,
     "jsx": "react-native",
-    "baseUrl": ".",
     "types": ["node"],
     "paths": {
       "@/*": ["./*"]

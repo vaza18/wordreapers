@@ -50,8 +50,7 @@ export type PlayerScoreUpdatePlan =
     };
 
 export type PlanPlayerScoreUpdateResult =
-  | { ok: true; plan: PlayerScoreUpdatePlan }
-  | { ok: false; error: ApplyWordSubmitError };
+  { ok: true; plan: PlayerScoreUpdatePlan } | { ok: false; error: ApplyWordSubmitError };
 
 /**
  * Transaction body for `session_word_maps/{gameId}/wordPlayers/{normalized}`.

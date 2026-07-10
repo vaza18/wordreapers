@@ -19,8 +19,8 @@ export function readSystemColorScheme(): SystemColorScheme | null {
  * Resets any forced in-app scheme so trait collection matches the device.
  */
 export function syncSystemAppearanceFollow(): void {
-  // RN maps null/undefined to "follow system" at the native layer.
-  Appearance.setColorScheme(null);
+  // RN 0.83+: 'unspecified' follows the OS preference (null is no longer accepted).
+  Appearance.setColorScheme('unspecified');
 }
 
 /**

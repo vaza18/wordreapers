@@ -18,7 +18,7 @@ const addListener = vi.fn((event: string, handler: (typeof beforeRemoveHandlers)
   };
 });
 
-vi.mock('@react-navigation/native', () => ({
+vi.mock('expo-router/react-navigation', () => ({
   useNavigation: () => ({
     addListener,
     getState: () => ({

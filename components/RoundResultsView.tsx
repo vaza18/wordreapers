@@ -455,7 +455,7 @@ function createStyles(colors: ThemeColors) {
       minHeight: 0,
     },
     missingListPending: {
-      ...StyleSheet.absoluteFillObject,
+      ...StyleSheet.absoluteFill,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: colors.notebookPaper,

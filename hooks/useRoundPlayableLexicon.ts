@@ -1,9 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import { scheduleIdleWork } from '@/lib/app/schedule-idle-work';
-
 import {
-  buildRoundPlayableLexiconFromDictionary,
   fromPlayableLexiconSnapshot,
   type PlayableLexiconSnapshot,
   type RoundPlayableLexicon,
@@ -13,11 +10,13 @@ import {
   setCachedRoundPlayableLexicon,
 } from '@/lib/dictionary/round-playable-lexicon-cache';
 import {
-  loadBundledDictionary,
-  loadBundledSupplements,
-  loadBundledWhitelists,
-  releaseBundledDictionaryCaches,
-} from '@/services/dictionary-service';
+  getRoundPlayableLexiconPrefetchStatus,
+  requestRoundPlayableLexiconPrefetch,
+  subscribeRoundPlayableLexiconPrefetch,
+} from '@/lib/dictionary/round-playable-lexicon-prefetch';
+import { lexiconCacheKey } from '@/lib/dictionary/round-playable-lexicon';
+import { normalizeUk } from '@/lib/dictionary/normalize';
+import { releaseBundledDictionaryCaches } from '@/services/dictionary-service';
 
 export interface UseRoundPlayableLexiconOptions {
   baseWord: string;
@@ -37,6 +36,7 @@ export interface UseRoundPlayableLexiconResult {
 
 /**
  * Build or restore the playable-word lexicon for a round (deferred, cached).
+ * Shares in-flight work with setup/pick-word prefetch so navigation reuses the same build.
  */
 export function useRoundPlayableLexicon({
   baseWord,
@@ -76,6 +76,9 @@ export function useRoundPlayableLexicon({
     if (cached) {
       setLexicon(cached);
       setLoading(false);
+      if (releaseDictionaryAfterBuild) {
+        releaseBundledDictionaryCaches();
+      }
       return;
     }
 
@@ -84,55 +87,62 @@ export function useRoundPlayableLexicon({
       setCachedRoundPlayableLexicon(baseWord, allowProperNouns, allowSlang, restored);
       setLexicon(restored);
       setLoading(false);
+      if (releaseDictionaryAfterBuild) {
+        releaseBundledDictionaryCaches();
+      }
       return;
     }
 
-    let cancelled = false;
+    const normalized = normalizeUk(baseWord);
+    const key = lexiconCacheKey(normalized, allowProperNouns, allowSlang);
     setLoading(true);
 
-    const cancelIdleWork = scheduleIdleWork(() => {
-      void (async () => {
-        try {
-          const [dictionary, supplements, whitelists] = await Promise.all([
-            loadBundledDictionary(),
-            loadBundledSupplements(),
-            loadBundledWhitelists(),
-          ]);
-          if (cancelled) {
-            return;
-          }
-          const built = buildRoundPlayableLexiconFromDictionary(
-            baseWord,
-            dictionary,
-            {
-              proper: supplements.properNouns,
-              slang: supplements.slang,
-              whitelistGeneral: whitelists.general,
-              whitelistProper: whitelists.properNouns,
-              whitelistSlang: whitelists.slang,
-            },
-            { allowProperNouns, allowSlang },
-          );
-          setCachedRoundPlayableLexicon(baseWord, allowProperNouns, allowSlang, built);
-          if (releaseDictionaryAfterBuild) {
-            releaseBundledDictionaryCaches();
-          }
-          if (!cancelled) {
-            setLexicon(built);
-            setLoading(false);
-          }
-        } catch {
-          if (!cancelled) {
-            setLexicon(null);
-            setLoading(false);
-          }
+    const applyReady = () => {
+      const ready = getCachedRoundPlayableLexicon(baseWord, allowProperNouns, allowSlang);
+      if (ready) {
+        setLexicon(ready);
+        setLoading(false);
+        if (releaseDictionaryAfterBuild) {
+          releaseBundledDictionaryCaches();
         }
-      })();
+        return true;
+      }
+      return false;
+    };
+
+    if (applyReady()) {
+      return;
+    }
+
+    const unsubscribe = subscribeRoundPlayableLexiconPrefetch((status) => {
+      if (status.kind === 'ready' && status.key === key) {
+        applyReady();
+        return;
+      }
+      if (status.kind === 'error' && status.key === key) {
+        setLexicon(null);
+        setLoading(false);
+        return;
+      }
+      if (status.kind === 'loading' && status.key === key) {
+        setLoading(true);
+      }
     });
 
+    const current = getRoundPlayableLexiconPrefetchStatus();
+    if (
+      !(current.kind === 'loading' && current.key === key) &&
+      !(current.kind === 'ready' && current.key === key)
+    ) {
+      requestRoundPlayableLexiconPrefetch({
+        baseWord,
+        allowProperNouns,
+        allowSlang,
+      });
+    }
+
     return () => {
-      cancelled = true;
-      cancelIdleWork();
+      unsubscribe();
     };
   }, [
     allowProperNouns,

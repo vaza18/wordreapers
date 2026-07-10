@@ -4,7 +4,20 @@ import { Platform } from 'react-native';
 import { useNotebookRowHeight } from '@/hooks/useNotebookRowHeight';
 
 /** FlatList tuning for fixed-height notebook word rows (play + results). */
-export function useVirtualWordListProps() {
+export type VirtualWordListProps = {
+  rowHeight: number;
+  getItemLayout: (
+    _data: unknown,
+    index: number,
+  ) => { length: number; offset: number; index: number };
+  initialNumToRender: number;
+  maxToRenderPerBatch: number;
+  windowSize: number;
+  updateCellsBatchingPeriod: number;
+  removeClippedSubviews: boolean;
+};
+
+export function useVirtualWordListProps(): VirtualWordListProps {
   const rowHeight = useNotebookRowHeight();
   const getItemLayout = useCallback(
     (_data: unknown, index: number) => ({

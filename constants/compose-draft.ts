@@ -1,6 +1,14 @@
 /** Ghost-letter move duration; draft reveal and fly removal happen at this instant. */
 export const DRAFT_FLY_DURATION_MS = 300;
 
+/**
+ * Hide draft glyphs while the fly ghost is in flight.
+ * Do not use `transparent` / `rgba(0,0,0,0)` — on Android RN 0.81+ those encode as
+ * color `0`, which Text treats as undefined and falls back to a visible color.
+ * @see https://github.com/facebook/react-native/issues/53343
+ */
+export const DRAFT_REVEALING_CHAR_COLOR = '#FFFFFF00';
+
 /** Typical glyph width ratio for centering a single letter in a square key. */
 export const DRAFT_FLY_GLYPH_WIDTH_RATIO = 0.6;
 

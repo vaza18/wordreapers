@@ -1,5 +1,5 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { useIsFocused } from '@react-navigation/native';
+import { useIsFocused } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
@@ -56,8 +56,7 @@ import {
 } from '@/store/organizer-solo-store';
 import { useProfileStore } from '@/store/profile-store';
 import { useSettingsStore } from '@/store/settings-store';
-
-const VALIDATION_DEBOUNCE_MS = 1000;
+import { VALIDATION_DEBOUNCE_MS } from '@/constants/game-timing';
 
 /**
  * Organizer solo round — local only until invite publishes to Firebase.
@@ -634,7 +633,7 @@ function createStyles(colors: ThemeColors) {
       gap: spacing.sm,
     },
     publishingOverlay: {
-      ...StyleSheet.absoluteFillObject,
+      ...StyleSheet.absoluteFill,
       backgroundColor: modalOverlayBackground(colors),
       alignItems: 'center',
       justifyContent: 'center',

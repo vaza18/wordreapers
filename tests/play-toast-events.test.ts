@@ -244,7 +244,7 @@ describe('detectPlayToastEvents', () => {
     ]);
   });
 
-  it('does not toast alone when another live-round participant is briefly offline', () => {
+  it('toasts offline without alone when another live-round participant backgrounds', () => {
     const prev = session(
       {
         p1: { name: 'iPad', gender: 'm', wordCount: 0, score: 0, online: true },
@@ -264,10 +264,17 @@ describe('detectPlayToastEvents', () => {
       { baseWordRound: 1, liveRoundPlayerUids: ['p1', 'p2'] },
     );
 
-    expect(detectPlayToastEvents(prev, curr, 'p1')).toEqual([]);
+    expect(detectPlayToastEvents(prev, curr, 'p1')).toEqual([
+      {
+        type: 'player_went_offline',
+        playerId: 'p2',
+        name: 'Василь',
+        gender: 'm',
+      },
+    ]);
   });
 
-  it('does not toast alone at round 1 start when lobby opponent is briefly offline', () => {
+  it('toasts offline/returned at round 1 without alone_in_game', () => {
     const liveRound = {
       baseWordRound: 0,
       liveRoundPlayerUids: ['org', 'guest'] as string[],
@@ -291,8 +298,41 @@ describe('detectPlayToastEvents', () => {
       liveRound,
     );
 
-    expect(detectPlayToastEvents(bothOnline, guestOffline, 'org')).toEqual([]);
+    expect(detectPlayToastEvents(bothOnline, guestOffline, 'org')).toEqual([
+      {
+        type: 'player_went_offline',
+        playerId: 'guest',
+        name: 'Guest',
+        gender: 'm',
+      },
+    ]);
+    expect(detectPlayToastEvents(guestOffline, bothOnline, 'org')).toEqual([
+      {
+        type: 'player_returned',
+        playerId: 'guest',
+        name: 'Guest',
+        gender: 'm',
+      },
+    ]);
     expect(detectPlayToastEvents(guestOffline, bothOnline, 'guest')).toEqual([]);
+  });
+
+  it('does not treat voluntary leave as went_offline', () => {
+    const prev = session({
+      org: { name: 'Org', wordCount: 0, score: 0, online: true },
+      a: { name: 'A', gender: 'f', wordCount: 0, score: 0, online: true },
+    });
+    const curr = session({
+      org: { name: 'Org', wordCount: 0, score: 0, online: true },
+      a: { name: 'A', gender: 'f', wordCount: 0, score: 0, online: false, hasLeft: true },
+    });
+
+    expect(
+      detectPlayToastEvents(prev, curr, 'org').filter((e) => e.type === 'player_went_offline'),
+    ).toEqual([]);
+    expect(detectPlayToastEvents(prev, curr, 'org').some((e) => e.type === 'player_left')).toBe(
+      true,
+    );
   });
 
   it('toasts alone again when a rejoined opponent leaves a second time', () => {
@@ -817,7 +857,7 @@ describe('detectPlayToastEvents', () => {
     expect(detectPlayToastEvents(prev, curr, 'p3')).toEqual([]);
   });
 
-  it('does not toast lobby participants when presence syncs at round start', () => {
+  it('toasts offline/returned for live-round presence flips without player_joined', () => {
     const liveRound = { baseWordRound: 1, liveRoundPlayerUids: ['org', 'guest'] as string[] };
     const bootstrap = session(
       {
@@ -847,8 +887,22 @@ describe('detectPlayToastEvents', () => {
       liveRound,
     );
 
-    expect(detectPlayToastEvents(bootstrap, guestOffline, 'org')).toEqual([]);
-    expect(detectPlayToastEvents(guestOffline, guestOnlineAgain, 'org')).toEqual([]);
+    expect(detectPlayToastEvents(bootstrap, guestOffline, 'org')).toEqual([
+      {
+        type: 'player_went_offline',
+        playerId: 'guest',
+        name: 'Guest',
+        gender: 'm',
+      },
+    ]);
+    expect(detectPlayToastEvents(guestOffline, guestOnlineAgain, 'org')).toEqual([
+      {
+        type: 'player_returned',
+        playerId: 'guest',
+        name: 'Guest',
+        gender: 'm',
+      },
+    ]);
     expect(detectPlayToastEvents(bootstrap, guestOnlineAgain, 'org')).toEqual([]);
   });
 

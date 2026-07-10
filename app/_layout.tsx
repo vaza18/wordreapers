@@ -52,7 +52,7 @@ function RootStack() {
 
   return (
     <I18nextProvider i18n={i18n}>
-      <StatusBar hidden translucent />
+      <StatusBar hidden />
       <Stack
         screenOptions={{
           ...stackScreenOptions,

@@ -8,8 +8,14 @@ import {
   type DatabaseReference,
   type Unsubscribe,
 } from 'firebase/database';
+import { AppState } from 'react-native';
 
 import { runRtdbTransaction } from './rtdb-transaction.js';
+import { shouldMarkPresenceOnline } from '../online/presence/app-presence-state.js';
+import {
+  beginPresenceWrite,
+  isPresenceWriteCurrent,
+} from '../online/presence/presence-write-queue.js';
 
 import { isOrphanGameSessionShell, orphanShellHasPlayer } from '../online/orphan-game-session.js';
 import type { PlayerProfile } from '../profile/player-profile.js';
@@ -32,10 +38,7 @@ import { appendLiveRoundPlayerUid } from './live-round-player-uids.js';
 import { rematchWaitingPlayerPatch } from '../online/presence/live-round-membership.js';
 import { shouldOrganizerAbandonWaitingRoom } from '../online/should-organizer-abandon-waiting-room.js';
 import { computeRoundPlayedSecondsAtFinish } from '../game/round-duration.js';
-import {
-  resolveEarlyFinishVoteIfExpired,
-  resolveResumeVoteIfExpired,
-} from './session-votes-service.js';
+import { reconcileOpenSessionVotes } from './session-votes-service.js';
 import {
   clearAllPlayerWords,
   clearWaitingLobbyPlayerWordsAsOrganizer,
@@ -177,10 +180,26 @@ async function setPlayerOnlinePresence(gameId: string, uid: string): Promise<voi
   if (isVoluntaryLeaveInFlight(normalized, uid)) {
     return;
   }
+  if (!shouldMarkPresenceOnline(AppState.currentState)) {
+    return;
+  }
+  const generation = beginPresenceWrite(normalized, uid, 'online');
   const node = playerRef(normalized, uid);
   try {
     await onDisconnect(node).cancel();
+    if (!isPresenceWriteCurrent(normalized, uid, generation, 'online')) {
+      return;
+    }
+    if (
+      isVoluntaryLeaveInFlight(normalized, uid) ||
+      !shouldMarkPresenceOnline(AppState.currentState)
+    ) {
+      return;
+    }
     await update(node, { online: true });
+    if (!isPresenceWriteCurrent(normalized, uid, generation, 'online')) {
+      return;
+    }
     await onDisconnect(node).update({ online: false });
     await reconcileLobbyPickerState(normalized);
   } catch (error) {
@@ -245,18 +264,33 @@ export async function clearSessionRootForRecreate(gameId: string, uid: string): 
 }
 
 /**
- * Clear RTDB presence when leaving the results screen (unblocks coordinated cleanup).
+ * Clear RTDB presence (background, results view, exit). Does not set `hasLeft`.
+ * Reconciles open in-round votes so peers are not left waiting on an offline voter.
  */
 export async function markPlayerOffline(gameId: string, uid: string): Promise<void> {
   const normalized = normalizeRoomCode(gameId);
+  const generation = beginPresenceWrite(normalized, uid, 'offline');
   const node = playerRef(normalized, uid);
   try {
     await cancelPlayerOnDisconnect(normalized, uid);
+    if (!isPresenceWriteCurrent(normalized, uid, generation, 'offline')) {
+      return;
+    }
     const snapshot = await get(node);
     if (!snapshot.exists()) {
       return;
     }
+    if (!isPresenceWriteCurrent(normalized, uid, generation, 'offline')) {
+      return;
+    }
     await update(node, { online: false });
+    try {
+      await reconcileOpenSessionVotes(normalized);
+    } catch (error) {
+      if (__DEV__) {
+        console.warn('markPlayerOffline vote reconcile', error);
+      }
+    }
   } catch (error) {
     if (isFirebasePermissionDenied(error)) {
       return;
@@ -790,8 +824,12 @@ export function subscribeGameSession(
 /**
  * Mark player online and register onDisconnect → offline.
  * Skips players who voluntarily left (`hasLeft`); use `rejoinExistingPlayer` to opt back in.
+ * No-ops while the app is backgrounded so auto-rejoin cannot resurrect presence after AppState offline.
  */
 export async function markPlayerOnline(gameId: string, uid: string): Promise<void> {
+  if (!shouldMarkPresenceOnline(AppState.currentState)) {
+    return;
+  }
   const normalized = normalizeRoomCode(gameId);
   if (isVoluntaryLeaveInFlight(normalized, uid)) {
     return;
@@ -806,6 +844,9 @@ export async function markPlayerOnline(gameId: string, uid: string): Promise<voi
     if (player.hasLeft === true) {
       return;
     }
+    if (!shouldMarkPresenceOnline(AppState.currentState)) {
+      return;
+    }
     await setPlayerOnlinePresence(normalized, uid);
   } catch (error) {
     if (isFirebasePermissionDenied(error)) {
@@ -816,12 +857,13 @@ export async function markPlayerOnline(gameId: string, uid: string): Promise<voi
 }
 
 /**
- * Re-mark online whenever RTDB reconnects (e.g. after phone lock / background).
+ * Re-mark online when RTDB reconnects, but only while the app is in the foreground.
+ * Background reconnect must not resurrect `online` after intentional AppState offline.
  */
 export function subscribePlayerOnlinePresence(gameId: string, uid: string): Unsubscribe {
   const connectedRef = ref(getFirebaseDatabase(), '.info/connected');
   return onValue(connectedRef, (snapshot) => {
-    if (snapshot.val() === true) {
+    if (snapshot.val() === true && shouldMarkPresenceOnline(AppState.currentState)) {
       void markPlayerOnline(gameId, uid);
     }
   });
@@ -976,8 +1018,7 @@ export async function leaveGameSession(gameId: string, uid: string): Promise<voi
       }
     }
     try {
-      await resolveEarlyFinishVoteIfExpired(normalized);
-      await resolveResumeVoteIfExpired(normalized);
+      await reconcileOpenSessionVotes(normalized);
     } catch (error) {
       if (__DEV__) {
         console.warn('leaveGameSession vote cleanup', error);

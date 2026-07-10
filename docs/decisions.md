@@ -48,6 +48,27 @@ Format: **Decision → Alternatives → Why rejected → Date**
 - **Why rejected:** Product spec requires x2 when 3+ join at any stage; disabling mid-round after someone leaves would unfairly strip points already earned under x2 rules.
 - **Date:** 2026-06 (updated 2026-07) — `lib/firebase/session-settings.ts`, `uniqueBonusEnabledForActiveRound()`
 
+## ADR-007: Expo SDK 55 + AGP 8.12 optimized resource shrinking
+
+- **Decision:** Upgrade Expo 54 → 55 (RN 0.83, AGP 8.12) on branch `upgrade/expo-sdk-55`. Enable `android.r8.optimizedResourceShrinking=true` for production builds only via a custom config plugin; keep existing R8 minify + shrinkResources from `expo-build-properties`. Raise production `org.gradle.jvmargs` to `-Xmx4g -XX:MaxMetaspaceSize=1g` (Expo default 2g/512m OOMs Metaspace during local R8).
+- **Alternatives considered:** Stay on SDK 54; jump to SDK 56 / AGP 9 for default class repackaging; enable `-repackageclasses` immediately; leave Gradle JVM defaults and rely on EAS cloud only.
+- **Why rejected:** SDK 55 is the recommended path for AGP 8.12 without broader template churn. AGP 9 / SDK 56 is a larger jump. Class repackaging is deferred until a stable production AAB is verified (Play Console indicator is secondary to build stability). `NODE_ENV=production` in `eas.json` was removed — it caused `npm ci` to omit devDependencies and fail `postinstall` (`tsx` for `legal:bundle`). Local `eas build --local` failed at `:app:minifyReleaseWithR8` with `OutOfMemoryError: Metaspace` under 512 MiB.
+- **Date:** 2026-07 — `app.config.js`, `plugins/with-android-r8-optimizations.cjs`
+
+## ADR-008: Expo SDK 56 + RN 0.85 toolchain
+
+- **Decision:** Upgrade Expo 55 → 56 (RN 0.85, React 19.2.3, Hermes v1 default, AGP 9.x) on branch `upgrade/expo-sdk-56`. Bump iOS deployment target to 16.4; add `forceStaticLinking: ['RNFBApp', 'RNFBAppCheck']` for RNFirebase with RN prebuilt core. Migrate app `@react-navigation/*` imports to `expo-router` / `expo-router/react-navigation` (SDK 56 forks React Navigation). Move splash config from legacy `app.json` `splash` to `expo-splash-screen` plugin. Keep ADR-007 R8 optimized shrinking + Gradle JVM 4g/1g; keep Metro `@firebase/auth` hoist and `REACT_NATIVE_PACKAGER_HOSTNAME=localhost`; do not put `NODE_ENV=production` in `eas.json`.
+- **Alternatives considered:** Stay on SDK 55; opt out of Hermes v1; disable prebuilt RNCore via `buildReactNativeFromSource` / `RCT_USE_PREBUILT_RNCORE=0` immediately; enable `-repackageclasses` for Play size indicators.
+- **Why rejected:** Staying on 55 increases future upgrade debt. Hermes v1 is the SDK 56 default and the project does not use `react-native-reanimated` (known memory regression). Prefer Expo-documented `forceStaticLinking` before disabling prebuilt RNCore. Class repackaging remains deferred; AAB size is not a merge gate. TypeScript 6 accepted via `expo install --fix`; deprecated `baseUrl` removed in favor of prefixed `paths` entries.
+- **Date:** 2026-07 — `package.json`, `app.config.js`, `app.json`, navigation import sites, `tsconfig.json`
+
+## ADR-009: Expo SDK 57 + RN 0.86 toolchain
+
+- **Decision:** Upgrade Expo 56 → 57 (RN 0.86, React 19.2.3 unchanged) on branch `upgrade/expo-sdk-57`, parented from green `upgrade/expo-sdk-56`. Register `expo-font` and `expo-status-bar` config plugins in `app.json` (SDK 57 install autofix cannot write dynamic `app.config.js`). Keep ADR-007 R8 optimized shrinking + Gradle JVM 4g/1g; keep ADR-008 `forceStaticLinking: ['RNFBApp', 'RNFBAppCheck']`, iOS deploymentTarget 16.4, Firebase CocoaPods pin, Metro `@firebase/auth` hoist, `REACT_NATIVE_PACKAGER_HOSTNAME=localhost`; do not put `NODE_ENV=production` in `eas.json`; do not enable `-repackageclasses`.
+- **Alternatives considered:** Stay on SDK 56; wait weeks after SDK 56 production store submit before upgrading; disable prebuilt RNCore; add direct `react-native-reanimated`.
+- **Why rejected:** SDK 57 is Expo’s intentional non-breaking RN 0.85→0.86 bump with no app-code migrations expected. Waiting weeks adds little value after the hard 55→56 work. Prefer existing `forceStaticLinking` over building RN from source. Do not add a direct reanimated dependency (Hermes V1 memory regression still documented); transitive native pods from Expo modules are acceptable as long as JS does not import reanimated.
+- **Date:** 2026-07 — `package.json`, `app.json`
+
 ---
 
 When adding a new ADR: keep it short; link the implementing file; do not duplicate `online-multiplayer-rules.md` tables.

@@ -57,8 +57,8 @@ if [ -n "$DEVICE_UDID" ]; then
 else
   apply_ios_simulator_patches "$ROOT"
   # expo run:ios --no-bundler uses a headless URL creator that defaults to LAN IP;
-  # force localhost so simctl opens exp+…/?url=http://127.0.0.1:8081
-  export REACT_NATIVE_PACKAGER_HOSTNAME=127.0.0.1
+  # force localhost (not 127.0.0.1) — Metro on Node 22 listens on IPv6 ::1 only
+  export REACT_NATIVE_PACKAGER_HOSTNAME=localhost
 fi
 
 if [ "${IOS_DEVICE_FRESH:-}" = "1" ]; then
@@ -91,7 +91,7 @@ fi
 if [ "$expo_exit" -ne 0 ] && [ -z "$DEVICE_UDID" ]; then
   echo ""
   echo "Build may have succeeded but Simulator timed out opening the dev-client URL (simctl openurl)."
-  echo "→ In the Metro terminal press i, or open Simulator → Wordreapers → pick http://127.0.0.1:8081"
+  echo "→ In the Metro terminal press i, or open Simulator → Wordreapers → pick http://localhost:8081"
   if [ -d "$ROOT/ios/build/Build/Products/Debug-iphonesimulator" ] || \
     find "$HOME/Library/Developer/Xcode/DerivedData" -maxdepth 5 -name 'Debug-iphonesimulator' -type d 2>/dev/null | grep -q .; then
     expo_exit=0
