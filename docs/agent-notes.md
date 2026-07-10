@@ -21,6 +21,7 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 - `expo`: `~55.0.0`, `react-native`: `0.83.6`, `react`: `19.2.0`
 - `firebase` JS: `^12.15.0`; `@firebase/rules-unit-testing`: `^5.0.1`
 - Production: `android.r8.optimizedResourceShrinking=true` via `plugins/with-android-r8-optimizations.cjs`
+- Production Gradle JVM: `-Xmx4g -XX:MaxMetaspaceSize=1g` (same plugin) — local R8 hit `OutOfMemoryError: Metaspace` at Expo default 512m
 - iOS Firebase CocoaPods pin: `$FirebaseSDKVersion = '12.15.0'`
 - RN 0.83: `Appearance.setColorScheme('unspecified')` replaces `null` for Auto theme
 - Class repackaging (`-repackageclasses`): deferred until stable production AAB

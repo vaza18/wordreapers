@@ -50,9 +50,9 @@ Format: **Decision → Alternatives → Why rejected → Date**
 
 ## ADR-007: Expo SDK 55 + AGP 8.12 optimized resource shrinking
 
-- **Decision:** Upgrade Expo 54 → 55 (RN 0.83, AGP 8.12) on branch `upgrade/expo-sdk-55`. Enable `android.r8.optimizedResourceShrinking=true` for production builds only via a custom config plugin; keep existing R8 minify + shrinkResources from `expo-build-properties`.
-- **Alternatives considered:** Stay on SDK 54; jump to SDK 56 / AGP 9 for default class repackaging; enable `-repackageclasses` immediately.
-- **Why rejected:** SDK 55 is the recommended path for AGP 8.12 without broader template churn. AGP 9 / SDK 56 is a larger jump. Class repackaging is deferred until a stable production AAB is verified (Play Console indicator is secondary to build stability). `NODE_ENV=production` in `eas.json` was removed — it caused `npm ci` to omit devDependencies and fail `postinstall` (`tsx` for `legal:bundle`).
+- **Decision:** Upgrade Expo 54 → 55 (RN 0.83, AGP 8.12) on branch `upgrade/expo-sdk-55`. Enable `android.r8.optimizedResourceShrinking=true` for production builds only via a custom config plugin; keep existing R8 minify + shrinkResources from `expo-build-properties`. Raise production `org.gradle.jvmargs` to `-Xmx4g -XX:MaxMetaspaceSize=1g` (Expo default 2g/512m OOMs Metaspace during local R8).
+- **Alternatives considered:** Stay on SDK 54; jump to SDK 56 / AGP 9 for default class repackaging; enable `-repackageclasses` immediately; leave Gradle JVM defaults and rely on EAS cloud only.
+- **Why rejected:** SDK 55 is the recommended path for AGP 8.12 without broader template churn. AGP 9 / SDK 56 is a larger jump. Class repackaging is deferred until a stable production AAB is verified (Play Console indicator is secondary to build stability). `NODE_ENV=production` in `eas.json` was removed — it caused `npm ci` to omit devDependencies and fail `postinstall` (`tsx` for `legal:bundle`). Local `eas build --local` failed at `:app:minifyReleaseWithR8` with `OutOfMemoryError: Metaspace` under 512 MiB.
 - **Date:** 2026-07 — `app.config.js`, `plugins/with-android-r8-optimizations.cjs`
 
 ---
