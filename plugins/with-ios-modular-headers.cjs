@@ -10,7 +10,7 @@ const SDK_MARKER = `$FirebaseSDKVersion = '${SDK_VERSION}'`;
 const HEADERS_MARKER = 'use_modular_headers!';
 const POST_INSTALL_TAG = 'wordreapers-ios-post-install';
 const POST_INSTALL_PATCH = `    # Align pod deployment targets (PromisesObjC privacy pods ship iOS 9.0).
-    deployment_target = podfile_properties['ios.deploymentTarget'] || '15.1'
+    deployment_target = podfile_properties['ios.deploymentTarget'] || '16.4'
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |bc|
         bc.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = deployment_target

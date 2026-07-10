@@ -7,11 +7,6 @@
     "scheme": "wordreapers",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icons/app-icon.png",
-    "splash": {
-      "image": "./assets/icons/app-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#7b5323"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.wordreapers.app",
@@ -42,6 +37,14 @@
       "expo-router",
       "expo-localization",
       "expo-asset",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/icons/app-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#7b5323"
+        }
+      ],
       [
         "expo-audio",
         {

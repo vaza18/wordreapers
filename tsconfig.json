@@ -2,7 +2,6 @@
   "extends": "expo/tsconfig.base.json",
   "compilerOptions": {
     "strict": true,
-    "baseUrl": ".",
     "jsx": "react-native",
     "module": "preserve",
     "moduleResolution": "bundler",
@@ -35,6 +34,8 @@
     "lib/profile/**/*.ts",
     "lib/feedback/**/*.ts",
     "lib/settings/**/*.ts",
+    "lib/navigation/**/*.ts",
+    "lib/navigation/**/*.tsx",
     "types/assets.d.ts",
     "types/firebase-auth-rn.d.ts",
     "types/react-native-firebase-app-check.d.ts",

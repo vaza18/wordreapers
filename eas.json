@@ -5,8 +5,7 @@
   },
   "build": {
     "base": {
-      "node": "22.13.0",
-      "corepack": true
+      "node": "22.13.0"
     },
     "development": {
       "extends": "base",

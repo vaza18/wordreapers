@@ -31,15 +31,18 @@ module.exports = ({ config }) => {
     './plugins/with-firebase-extra.cjs',
     './plugins/without-ios-push-entitlement.cjs',
     './plugins/with-ios-modular-headers.cjs',
+    // Must be listed *before* RNFB plugins: Expo dangerous mods run last-registered first,
+    // so this plugin's strip/replace of App Check Swift init runs after RNFB writes it.
+    './plugins/with-ios-firebase-native-init.cjs',
     '@react-native-firebase/app',
     '@react-native-firebase/app-check',
-    './plugins/with-ios-firebase-native-init.cjs',
     [
       'expo-build-properties',
       {
         ios: {
           useFrameworks: 'static',
-          deploymentTarget: '15.1',
+          deploymentTarget: '16.4',
+          forceStaticLinking: ['RNFBApp', 'RNFBAppCheck'],
         },
         ...(isProductionBuild
           ? {
