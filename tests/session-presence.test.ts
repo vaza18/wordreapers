@@ -96,7 +96,7 @@ describe('hasOnlineOpponent', () => {
     ).toBe(false);
   });
 
-  it('is true when an opponent is offline but has scored this round', () => {
+  it('is false when an opponent is offline even if they scored this round', () => {
     expect(
       hasOnlineOpponent(
         session({
@@ -105,7 +105,19 @@ describe('hasOnlineOpponent', () => {
         }),
         'me',
       ),
-    ).toBe(true);
+    ).toBe(false);
+  });
+
+  it('is false when an opponent left (hasLeft) even with scores', () => {
+    expect(
+      hasOnlineOpponent(
+        session({
+          me: { name: 'Me', wordCount: 0, score: 0, online: true },
+          a: { name: 'A', wordCount: 2, score: 3, online: false, hasLeft: true },
+        }),
+        'me',
+      ),
+    ).toBe(false);
   });
 
   it('is true when another player is online', () => {

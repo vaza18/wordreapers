@@ -4,13 +4,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from '@testing-library/react';
 
 const markPlayerOnline = vi.fn();
+const markPlayerOffline = vi.fn();
 const subscribePlayerOnlinePresence = vi.fn();
 const voluntaryLeaveWaitingLobbyIfMember = vi.fn();
 const consumePresenceHandoff = vi.fn();
 const appStateHandlers: Array<(state: string) => void> = [];
+let currentAppState = 'active';
 
 vi.mock('react-native', () => ({
   AppState: {
+    get currentState() {
+      return currentAppState;
+    },
     addEventListener: (_event: string, handler: (state: string) => void) => {
       appStateHandlers.push(handler);
       return { remove: () => {} };
@@ -20,6 +25,7 @@ vi.mock('react-native', () => ({
 
 vi.mock('../lib/firebase/game-session-service.js', () => ({
   markPlayerOnline: (...args: unknown[]) => markPlayerOnline(...args),
+  markPlayerOffline: (...args: unknown[]) => markPlayerOffline(...args),
   subscribePlayerOnlinePresence: (...args: unknown[]) => subscribePlayerOnlinePresence(...args),
   voluntaryLeaveWaitingLobbyIfMember: (...args: unknown[]) =>
     voluntaryLeaveWaitingLobbyIfMember(...args),
@@ -40,7 +46,9 @@ describe('usePlayerOnlinePresence', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     appStateHandlers.length = 0;
+    currentAppState = 'active';
     markPlayerOnline.mockResolvedValue(undefined);
+    markPlayerOffline.mockResolvedValue(undefined);
     subscribePlayerOnlinePresence.mockReturnValue(vi.fn());
     voluntaryLeaveWaitingLobbyIfMember.mockResolvedValue(undefined);
     consumePresenceHandoff.mockReturnValue(false);
@@ -54,6 +62,12 @@ describe('usePlayerOnlinePresence', () => {
 
     appStateHandlers[0]?.('active');
     expect(markPlayerOnline).toHaveBeenCalledTimes(2);
+  });
+
+  it('marks player offline on background', () => {
+    render(<HookHost gameId="ABCD" uid="org" />);
+    appStateHandlers[0]?.('background');
+    expect(markPlayerOffline).toHaveBeenCalledWith('ABCD', 'org');
   });
 
   it('voluntarily leaves waiting lobby on unmount without handoff', () => {

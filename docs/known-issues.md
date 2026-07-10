@@ -16,6 +16,22 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 - **Test:** `tests/game-feedback-replay.test.ts`
 - **Area:** `lib/feedback/replay-from-start.ts`, `lib/feedback/game-feedback.ts`
 
+### 2026-07 — Pause vote waits on player who backgrounded the app
+
+- **Symptom:** After one player sent the app to the home screen or locked the phone (without force-killing), peers still saw them as «в грі» and pause / other votes waited for their response.
+- **Cause:** `usePlayerOnlinePresence` only re-marked `online` on AppState `active`; background did not call `markPlayerOffline`. While the RTDB socket stayed alive, `onDisconnect` did not fire. Open `pauseVote` also had no reconcile when the required set became empty.
+- **Fix:** AppState `background` → `markPlayerOffline` (no `hasLeft`); reconnect → online only if AppState is `active`; `reconcileOpenSessionVotes` after offline/leave and on peer play screen; toasts `player_went_offline` / `player_returned`; UI label «не в грі».
+- **Test:** `tests/app-presence-state.test.ts`, `tests/play-toast-events.test.ts`, `tests/session-votes-service.test.ts`, `tests/online-invariants.test.ts`
+- **Area:** `lib/online/presence/use-player-online-presence.ts`, `lib/online/presence/app-presence-state.ts`, `lib/firebase/game-session-service.ts`, `lib/firebase/session-votes-service.ts`, `hooks/useReconcileOpenVotesOnPresence.ts`
+
+### 2026-07 — After leave→rejoin→background, peer sees «не в грі» then «знову в грі»
+
+- **Symptom:** Player leaves the round early, returns, then backgrounds the app. Peer briefly gets «не в грі» and immediately «знову в грі»; standings still show «в грі». Entering a word then backgrounding did not reproduce.
+- **Cause:** Background sets `online: false` without `hasLeft`, which makes `shouldRejoin` true. After leave→rejoin the play screen remounts with a fresh `stalePresenceReconcileRef`, so the first background always ran `reconcilePlayerPresence` → `rejoinExistingPlayer` / `markPlayerOnline` and resurrected presence. Continuous sessions often already had the reconcile ref set, masking the bug.
+- **Fix:** Skip presence reconcile / `markPlayerOnline` while AppState is not `active`; presence write queue so offline cancels in-flight online writes.
+- **Test:** `tests/reconcile-player-presence.test.ts`, `tests/presence-write-queue.test.ts`, `tests/app-presence-state.test.ts`, `tests/live-round-screen-actions.test.ts`
+- **Area:** `lib/online/presence/reconcile-player-presence.ts`, `hooks/useLiveRoundPlayScreen.ts`, `lib/online/presence/presence-write-queue.ts`, `lib/firebase/game-session-service.ts`
+
 ### 2026-07 — Draft letter visible during fly on Android (RN transparent color)
 
 - **Symptom:** With letter-fly effects on, the draft glyph appears immediately (opaque) when the fly starts instead of staying hidden until handoff. Reproduced on Android 1.4.0 (build 41); iOS simulator looked correct.

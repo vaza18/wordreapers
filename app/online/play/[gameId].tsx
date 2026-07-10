@@ -29,6 +29,7 @@ import { usePlaySessionSubscriptions } from '@/hooks/usePlaySessionSubscriptions
 import { usePlaySessionToasts } from '@/hooks/usePlaySessionToasts';
 import { useResultsRematchToast } from '@/hooks/useResultsRematchToast';
 import { useVoteExpiryResolver } from '@/hooks/useVoteExpiryResolver';
+import { useReconcileOpenVotesOnPresence } from '@/hooks/useReconcileOpenVotesOnPresence';
 import { useTrainingMilestone } from '@/hooks/useTrainingMilestone';
 import { toDisplayUpper } from '@/lib/dictionary/normalize';
 import { getCachedRoundPlayableLexicon } from '@/lib/dictionary/round-playable-lexicon-cache';
@@ -456,6 +457,8 @@ export default function OnlinePlayScreen() {
     pauseActive: isPaused,
     playing: session?.status === 'playing',
   });
+
+  useReconcileOpenVotesOnPresence(gameId, session, !resultsNavigatedRef.current);
 
   useEffect(() => {
     if (

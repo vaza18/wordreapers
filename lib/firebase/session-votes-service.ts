@@ -538,6 +538,46 @@ export async function resolveResumeVoteIfExpired(gameId: string): Promise<void> 
 }
 
 /**
+ * Activate pause when all remaining online required voters have agreed
+ * (including when the required set becomes empty after someone goes offline).
+ */
+export async function resolvePauseVoteIfReady(gameId: string): Promise<void> {
+  await runSessionVoteTransaction(
+    gameId,
+    (session) => {
+      const vote = session.pauseVote;
+      if (!vote || session.pauseState?.active) {
+        return undefined;
+      }
+
+      const required = earlyFinishRequiredVoterIds(session, vote.proposedBy);
+      if (anyRequiredVotedNo(vote, required)) {
+        session.pauseVote = null;
+        return session;
+      }
+
+      if (shouldActivatePauseFromVote(session, vote)) {
+        return activatePauseState(session);
+      }
+
+      return undefined;
+    },
+    { requirePlaying: true },
+  );
+}
+
+/**
+ * After presence changes (background offline / voluntary leave), re-evaluate open votes
+ * so remaining players are not stuck waiting on offline required voters.
+ */
+export async function reconcileOpenSessionVotes(gameId: string): Promise<void> {
+  await resolvePauseVoteIfReady(gameId);
+  await resolveEarlyFinishVoteIfExpired(gameId);
+  await resolveAddTimeVoteIfExpired(gameId);
+  await resolveResumeVoteIfExpired(gameId);
+}
+
+/**
  * Proposer display name for vote banners.
  */
 export function voteProposerName(

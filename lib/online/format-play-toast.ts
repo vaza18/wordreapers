@@ -59,6 +59,14 @@ export function formatPlayToastEvent(
         rank: event.rank,
       });
     }
+    case 'player_went_offline': {
+      const { name, gender } = toastPlayerLabel(session, viewerUid, event.playerId);
+      return tGendered(t, 'game.toastPlayerWentOffline', gender, { name });
+    }
+    case 'player_returned': {
+      const { name, gender } = toastPlayerLabel(session, viewerUid, event.playerId);
+      return tGendered(t, 'game.toastPlayerReturned', gender, { name });
+    }
     case 'alone_in_game':
       return tGendered(t, 'game.toastAloneInGame', viewerGender);
     case 'overtook_me': {

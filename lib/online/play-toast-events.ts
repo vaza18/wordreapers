@@ -24,6 +24,18 @@ export type PlayToastEvent =
       gender: PlayerGender;
       rank: number;
     }
+  | {
+      type: 'player_went_offline';
+      playerId: string;
+      name: string;
+      gender: PlayerGender;
+    }
+  | {
+      type: 'player_returned';
+      playerId: string;
+      name: string;
+      gender: PlayerGender;
+    }
   | { type: 'alone_in_game' }
   | {
       type: 'overtook_me';
@@ -105,6 +117,33 @@ export function shouldToastRosterPlayerJoined(
   return false;
 }
 
+/**
+ * Foreground return in the same live round (background offline → online), not leave/rejoin or mid-round join.
+ */
+export function shouldToastPlayerReturned(
+  prev: GameSession,
+  curr: GameSession,
+  playerId: string,
+): boolean {
+  const prevPlayer = prev.players[playerId];
+  if (!prevPlayer || prevPlayer.hasLeft === true || prevPlayer.online === true) {
+    return false;
+  }
+  if (!isInLiveRound(prev, playerId) || !isActiveLivePlayer(curr, playerId)) {
+    return false;
+  }
+  const prevUids = liveRoundUidList(prev);
+  const currUids = liveRoundUidList(curr);
+  if (
+    (prev.baseWordRound ?? 0) > 0 &&
+    !prevUids.includes(playerId) &&
+    currUids.includes(playerId)
+  ) {
+    return false;
+  }
+  return true;
+}
+
 function detectRosterEvents(prev: GameSession, curr: GameSession, myUid: string): PlayToastEvent[] {
   const events: PlayToastEvent[] = [];
   const prevRanks = assignDisplayRanks(buildLiveStandingsFromSession(prev));
@@ -117,6 +156,7 @@ function detectRosterEvents(prev: GameSession, curr: GameSession, myUid: string)
 
     const wasPresent = Boolean(prev.players[playerId]);
     const wasRosterActive = wasPresent && isRosterActive(prev, playerId);
+    const prevPlayer = prev.players[playerId];
 
     if (wasRosterActive && player.hasLeft === true && player.online !== true) {
       events.push({
@@ -126,6 +166,33 @@ function detectRosterEvents(prev: GameSession, curr: GameSession, myUid: string)
         gender: playerGender(curr, playerId),
         rank:
           prevRanks.get(playerId) ?? currRanks.get(playerId) ?? Object.keys(curr.players).length,
+      });
+      continue;
+    }
+
+    // Background / disconnect offline (not voluntary leave) while still in the live round.
+    if (
+      prevPlayer &&
+      isActiveLivePlayer(prev, playerId) &&
+      player.online !== true &&
+      player.hasLeft !== true &&
+      isInLiveRound(curr, playerId)
+    ) {
+      events.push({
+        type: 'player_went_offline',
+        playerId,
+        name: player.name,
+        gender: playerGender(curr, playerId),
+      });
+      continue;
+    }
+
+    if (shouldToastPlayerReturned(prev, curr, playerId)) {
+      events.push({
+        type: 'player_returned',
+        playerId,
+        name: player.name,
+        gender: playerGender(curr, playerId),
       });
       continue;
     }
