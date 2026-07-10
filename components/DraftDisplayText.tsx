@@ -1,7 +1,7 @@
 import { forwardRef, memo } from 'react';
 import { Text, View, type StyleProp, type TextStyle } from 'react-native';
 
-import { DRAFT_MIN_FONT_SCALE } from '@/constants/compose-draft';
+import { DRAFT_MIN_FONT_SCALE, DRAFT_REVEALING_CHAR_COLOR } from '@/constants/compose-draft';
 
 export interface DraftDisplayTextProps {
   display: string;
@@ -20,7 +20,7 @@ export interface DraftDisplayTextProps {
 }
 
 /**
- * Draft string with optional per-glyph hide (transparent color until fly reveal completes).
+ * Draft string with optional per-glyph hide (Android-safe transparent color until fly completes).
  */
 export const DraftDisplayText = memo(
   forwardRef<Text, DraftDisplayTextProps>(function DraftDisplayText(
@@ -52,7 +52,7 @@ export const DraftDisplayText = memo(
           {display.split('').map((character, index) => {
             if (isCharRevealing(index)) {
               return (
-                <Text key={`draft-char-${index}`} style={{ color: 'transparent' }}>
+                <Text key={`draft-char-${index}`} style={{ color: DRAFT_REVEALING_CHAR_COLOR }}>
                   {character}
                 </Text>
               );
