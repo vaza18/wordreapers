@@ -1,20 +1,26 @@
 # Shared helpers for scripts/run-ios.sh (sourced, not executed).
 
 metro_ready() {
-  curl -sf "http://127.0.0.1:8081/status" >/dev/null 2>&1
+  curl -sf "http://localhost:8081/status" >/dev/null 2>&1 \
+    || curl -sf "http://127.0.0.1:8081/status" >/dev/null 2>&1
 }
 
 metro_manifest_ready() {
   curl -sfI -X HEAD \
     -H 'expo-platform: ios' \
     -H 'accept: application/expo+json,application/json' \
-    'http://127.0.0.1:8081/' \
-    | grep -qi 'HTTP/1.1 200'
+    'http://localhost:8081/' \
+    | grep -qi 'HTTP/1.1 200' \
+    || curl -sfI -X HEAD \
+      -H 'expo-platform: ios' \
+      -H 'accept: application/expo+json,application/json' \
+      'http://127.0.0.1:8081/' \
+      | grep -qi 'HTTP/1.1 200'
 }
 
 ensure_metro() {
   if ! metro_ready; then
-    echo "Metro is not running on http://127.0.0.1:8081"
+    echo "Metro is not running on http://localhost:8081"
     echo ""
     echo "Start Metro in a separate terminal first, then re-run this command:"
     echo "  npm start          # iOS Simulator (uses localhost)"
@@ -26,14 +32,14 @@ ensure_metro() {
   fi
 
   if metro_manifest_ready; then
-    echo "Metro is ready on http://127.0.0.1:8081"
+    echo "Metro is ready on http://localhost:8081"
     return 0
   fi
 
   echo "Waiting for Metro dev server…"
   for _ in $(seq 1 30); do
     if metro_manifest_ready; then
-      echo "Metro is ready on http://127.0.0.1:8081"
+      echo "Metro is ready on http://localhost:8081"
       return 0
     fi
     sleep 1

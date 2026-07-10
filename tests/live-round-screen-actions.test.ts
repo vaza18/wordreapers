@@ -96,6 +96,38 @@ describe('resolvePlayScreenActions', () => {
       }).shouldRedirectToLobby,
     ).toBe(false);
   });
+
+  it('requests rejoin when live-round player is offline without hasLeft', () => {
+    const session = playingSession({
+      org: { name: 'Org', wordCount: 0, score: 0, online: false },
+      p2: { name: 'P2', wordCount: 0, score: 0, online: true },
+    });
+    expect(
+      resolvePlayScreenActions({
+        session,
+        myUid: 'org',
+        roundEnded: false,
+        frozenBaseWordRound: null,
+        leavingIntentionally: false,
+      }).shouldRejoin,
+    ).toBe(true);
+  });
+
+  it('does not request rejoin after voluntary leave', () => {
+    const session = playingSession({
+      org: { name: 'Org', wordCount: 0, score: 0, online: false, hasLeft: true },
+      p2: { name: 'P2', wordCount: 0, score: 0, online: true },
+    });
+    expect(
+      resolvePlayScreenActions({
+        session,
+        myUid: 'org',
+        roundEnded: false,
+        frozenBaseWordRound: null,
+        leavingIntentionally: false,
+      }).shouldRejoin,
+    ).toBe(false);
+  });
 });
 
 describe('resolveLobbyScreenActions', () => {

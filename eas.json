@@ -5,8 +5,7 @@
   },
   "build": {
     "base": {
-      "node": "22.13.0",
-      "corepack": true
+      "node": "22.13.0"
     },
     "development": {
       "extends": "base",
@@ -36,8 +35,7 @@
         "buildArtifactPaths": ["android/app/build/outputs/mapping/**/mapping.txt"]
       },
       "env": {
-        "APP_VARIANT": "production",
-        "NODE_ENV": "production"
+        "APP_VARIANT": "production"
       }
     }
   },

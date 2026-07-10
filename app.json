@@ -2,16 +2,11 @@
   "expo": {
     "name": "Словозбирачі",
     "slug": "wordreapers",
-    "version": "1.3.5",
+    "version": "1.4.0",
     "orientation": "portrait",
     "scheme": "wordreapers",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icons/app-icon.png",
-    "splash": {
-      "image": "./assets/icons/app-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#7b5323"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.wordreapers.app",
@@ -37,15 +32,21 @@
         "backgroundColor": "#1579f1"
       }
     },
-    "androidStatusBar": {
-      "hidden": true,
-      "translucent": true
-    },
     "plugins": [
       "expo-dev-client",
       "expo-router",
       "expo-localization",
       "expo-asset",
+      "expo-font",
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/icons/app-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#7b5323"
+        }
+      ],
       [
         "expo-audio",
         {

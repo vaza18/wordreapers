@@ -8,6 +8,46 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — iOS key-press sound only every other tap
+
+- **Symptom:** With button feedback set to sound/both, iOS (simulator and device) plays the key click only on every other press, even when tapping slowly. Haptics fire every press; Android sound is fine.
+- **Cause:** `playButtonSoundNow` called `seekTo(0)` without awaiting, then `play()` immediately. On iOS AVPlayer stays at the end after a finished clip, so `play()` before seek completes is a silent no-op; the deferred seek leaves the player at 0 for the next tap.
+- **Fix:** `replayFromStart` awaits `seekTo(0)` then calls `play()` (button and word sounds).
+- **Test:** `tests/game-feedback-replay.test.ts`
+- **Area:** `lib/feedback/replay-from-start.ts`, `lib/feedback/game-feedback.ts`
+
+### 2026-07 — Pause vote waits on player who backgrounded the app
+
+- **Symptom:** After one player sent the app to the home screen or locked the phone (without force-killing), peers still saw them as «в грі» and pause / other votes waited for their response.
+- **Cause:** `usePlayerOnlinePresence` only re-marked `online` on AppState `active`; background did not call `markPlayerOffline`. While the RTDB socket stayed alive, `onDisconnect` did not fire. Open `pauseVote` also had no reconcile when the required set became empty.
+- **Fix:** AppState `background` → `markPlayerOffline` (no `hasLeft`); reconnect → online only if AppState is `active`; `reconcileOpenSessionVotes` after offline/leave and on peer play screen; toasts `player_went_offline` / `player_returned`; UI label «не в грі».
+- **Test:** `tests/app-presence-state.test.ts`, `tests/play-toast-events.test.ts`, `tests/session-votes-service.test.ts`, `tests/online-invariants.test.ts`
+- **Area:** `lib/online/presence/use-player-online-presence.ts`, `lib/online/presence/app-presence-state.ts`, `lib/firebase/game-session-service.ts`, `lib/firebase/session-votes-service.ts`, `hooks/useReconcileOpenVotesOnPresence.ts`
+
+### 2026-07 — After leave→rejoin→background, peer sees «не в грі» then «знову в грі»
+
+- **Symptom:** Player leaves the round early, returns, then backgrounds the app. Peer briefly gets «не в грі» and immediately «знову в грі»; standings still show «в грі». Entering a word then backgrounding did not reproduce.
+- **Cause:** Background sets `online: false` without `hasLeft`, which makes `shouldRejoin` true. After leave→rejoin the play screen remounts with a fresh `stalePresenceReconcileRef`, so the first background always ran `reconcilePlayerPresence` → `rejoinExistingPlayer` / `markPlayerOnline` and resurrected presence. Continuous sessions often already had the reconcile ref set, masking the bug.
+- **Fix:** Skip presence reconcile / `markPlayerOnline` while AppState is not `active`; presence write queue so offline cancels in-flight online writes.
+- **Test:** `tests/reconcile-player-presence.test.ts`, `tests/presence-write-queue.test.ts`, `tests/app-presence-state.test.ts`, `tests/live-round-screen-actions.test.ts`
+- **Area:** `lib/online/presence/reconcile-player-presence.ts`, `hooks/useLiveRoundPlayScreen.ts`, `lib/online/presence/presence-write-queue.ts`, `lib/firebase/game-session-service.ts`
+
+### 2026-07 — Draft letter visible during fly on Android (RN transparent color)
+
+- **Symptom:** With letter-fly effects on, the draft glyph appears immediately (opaque) when the fly starts instead of staying hidden until handoff. Reproduced on Android 1.4.0 (build 41); iOS simulator looked correct.
+- **Cause:** `DraftDisplayText` hid revealing glyphs with nested `Text` `color: 'transparent'`. On Android RN 0.81+, color `0` is treated as `UndefinedColor`, so the parent draft color is used and the glyph stays visible. iOS uses a different undefined sentinel, so the bug did not show there.
+- **Fix:** Use `#FFFFFF00` (`DRAFT_REVEALING_CHAR_COLOR`) instead of `transparent` / zero ARGB.
+- **Test:** `tests/draft-letter-reveal.test.ts`, `components/__tests__/DraftDisplayText.test.tsx`
+- **Area:** `components/DraftDisplayText.tsx`, `constants/compose-draft.ts`
+
+### 2026-07 — iOS `RNFBAppCheck` fatal module error after clean prebuild
+
+- **Symptom:** Xcode reports `fatal error: module 'RNFBAppCheck' … is not defined in any loaded module map` while compiling the bridging-header PCH; build may still show `Build Succeeded` with `1 error(s)`. Cleaning DerivedData / `prebuild --clean` does not help.
+- **Cause:** (1) `with-ios-firebase-native-init` hardcoded the native folder `Slovozbirachi`. With `APP_VARIANT=production` (e.g. `.env.local`), Expo `name` is `Wordreapers`, so the plugin wrote `FirebaseNativeInit` into an orphan folder and never patched `Wordreapers-Bridging-Header.h`. (2) Expo dangerous mods run **last-registered first**, so listing the strip plugin _after_ `@react-native-firebase/app-check` let RNFB re-add `#import <RNFBAppCheckModule.h>` / Swift `sharedInstance()` after the strip. Combined with `CLANG_ENABLE_MODULES=NO` on `RNFBAppCheck`, the bridging-header PCH fails.
+- **Fix:** Resolve paths from `modRequest.projectName`; list the native-init plugin _before_ RNFB in `app.config.js`; strip RNFB Swift init and expose ObjC `WRConfigureFirebaseNative()` via the real bridging header.
+- **Test:** `tests/with-ios-firebase-native-init.test.ts`
+- **Area:** `plugins/with-ios-firebase-native-init.cjs`, `app.config.js`
+
 ### 2026-07 — Solo/online freeze at 00:00 with add-time modal open
 
 - **Symptom:** On the last seconds of a solo round, opening the add-time picker left the play screen stuck at `00:00` with no taps responding. Online could finish under the local picker before propose.
@@ -143,6 +183,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 - **Fix:** Treat unknown OS state as reduce motion enabled in `resolveVisualEffects`; gate `VictoryConfettiHost` on `victoryCelebration`.
 - **Test:** `tests/visual-effects.test.ts` (`null` OS state)
 - **Area:** `hooks/useReduceMotion.ts`, `lib/settings/visual-effects.ts`, `components/VictoryConfetti.tsx`
+
+### 2026-07 — «Нова гра» crashed with useInsertionEffect prevent-remove
+
+- **Symptom:** Opening online setup («Нова гра») logged `useInsertionEffect must not schedule updates` and `Can't perform a React state update on a component that hasn't mounted yet` from `useSyncedStackBack`.
+- **Cause:** Prevent-remove registration called `setPreventRemove` (React state) inside `useInsertionEffect`, which React 19 forbids.
+- **Fix:** Register/clear prevent-remove in `useEffect`, matching expo-router's `usePreventRemove`.
+- **Test:** `tests/use-synced-stack-back.test.tsx`
+- **Area:** `hooks/useSyncedStackBack.ts`
 
 ---
 

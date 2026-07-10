@@ -1,4 +1,4 @@
-import type { NativeStackNavigationOptions } from '@react-navigation/native-stack';
+import type { NativeStackNavigationOptions } from 'expo-router';
 
 /** Extra options read by {@link StackHeaderBar}. */
 export type AppStackHeaderOptions = {

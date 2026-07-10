@@ -92,7 +92,7 @@ module.exports = function withIosDeviceMetroHost(config) {
   return withDangerousMod(config, [
     'ios',
     async (config) => {
-      const projectName = config.modRequest.projectName ?? 'Slovozbirachi';
+      const projectName = config.modRequest.projectName ?? 'Wordreapers';
       const appDelegatePath = path.join(
         config.modRequest.platformProjectRoot,
         projectName,

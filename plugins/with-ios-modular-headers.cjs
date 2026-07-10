@@ -5,12 +5,12 @@ const { withDangerousMod } = require('expo/config-plugins');
 const { mergeContents } = require('@expo/config-plugins/build/utils/generateCode');
 
 const MARKER = '$RNFirebaseAsStaticFramework = true';
-const SDK_VERSION = '12.14.0';
+const SDK_VERSION = '12.15.0';
 const SDK_MARKER = `$FirebaseSDKVersion = '${SDK_VERSION}'`;
 const HEADERS_MARKER = 'use_modular_headers!';
 const POST_INSTALL_TAG = 'wordreapers-ios-post-install';
 const POST_INSTALL_PATCH = `    # Align pod deployment targets (PromisesObjC privacy pods ship iOS 9.0).
-    deployment_target = podfile_properties['ios.deploymentTarget'] || '15.1'
+    deployment_target = podfile_properties['ios.deploymentTarget'] || '16.4'
     installer.pods_project.targets.each do |target|
       target.build_configurations.each do |bc|
         bc.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = deployment_target
@@ -37,7 +37,7 @@ const POST_INSTALL_PATCH = `    # Align pod deployment targets (PromisesObjC pri
 
 const PODFILE_PREAMBLE = `# React Native Firebase + expo-build-properties (useFrameworks: static)
 $RNFirebaseAsStaticFramework = true
-# 12.15 RecaptchaProvider + static CocoaPods: GACRecaptchaProvider compile failure; drop when upstream fixes.
+# 12.15 aligns with @react-native-firebase/app@25.1; pin if CocoaPods static build regresses.
 $FirebaseSDKVersion = '${SDK_VERSION}'
 
 prepare_react_native_project!

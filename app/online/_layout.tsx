@@ -18,6 +18,8 @@ export default function OnlineLayout() {
         ...stackScreenOptions,
         ...stackHeaderSettings(),
         contentStyle: { backgroundColor: colors.backgroundSecondary },
+        // Custom back handlers (useSyncedStackBack); avoid iOS long-press back menu multi-pop.
+        headerBackButtonMenuEnabled: false,
       }}
     >
       <Stack.Screen name="join" options={{ title: t('online.joinTitle') }} />

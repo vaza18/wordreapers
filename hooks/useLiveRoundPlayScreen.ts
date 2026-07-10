@@ -1,11 +1,13 @@
 import { router } from 'expo-router';
 import { useEffect, useRef, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AppState } from 'react-native';
 
 import type { GameSessionSnapshot } from '@/lib/firebase/game-session-service';
 import { markPlayerOffline } from '@/lib/firebase/game-session-service';
 import { resolvePlayScreenActions } from '@/lib/online/live-round-screen-actions';
 import { onlineResultsRoute } from '@/lib/online/online-results-route';
+import { shouldMarkPresenceOnline } from '@/lib/online/presence/app-presence-state';
 import { reconcilePlayerPresence } from '@/lib/online/presence/reconcile-player-presence';
 import { usePlayerOnlinePresence } from '@/lib/online/presence/use-player-online-presence';
 import { useProfileStore } from '@/store/profile-store';
@@ -55,6 +57,11 @@ export function useLiveRoundPlayScreen({
 
   useEffect(() => {
     if (!gameId || !myUid || !session || !actions?.shouldRejoin) {
+      return;
+    }
+    // Background offline sets online:false without hasLeft — same shape as presence lag.
+    // Do not auto-rejoin while backgrounded or the player flips back to «в грі».
+    if (!shouldMarkPresenceOnline(AppState.currentState)) {
       return;
     }
     const roundKey = `${session.baseWordRound ?? 0}:${session.timerEndsAt ?? 0}`;

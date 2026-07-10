@@ -9,9 +9,7 @@ export const PUBLIC_SAFE_SESSION_SETTINGS = {
 } as const;
 
 export type CanPublishPublicFailure =
-  | 'NOT_WAITING'
-  | 'BASE_WORD_NOT_ALLOWED_PUBLIC'
-  | 'BASE_WORD_MISSING';
+  'NOT_WAITING' | 'BASE_WORD_NOT_ALLOWED_PUBLIC' | 'BASE_WORD_MISSING';
 
 export type CanPublishPublicResult = { ok: true } | { ok: false; reason: CanPublishPublicFailure };
 

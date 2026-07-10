@@ -1,4 +1,4 @@
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation } from 'expo-router/react-navigation';
 import { useEffect, useRef } from 'react';
 
 import { organizerLeaveWaitingLobby } from '../firebase/game-session-service.js';

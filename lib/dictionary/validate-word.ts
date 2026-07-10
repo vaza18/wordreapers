@@ -29,10 +29,7 @@ export function canSpellWord(word: string, baseMultiset: Map<string, number>): b
 
 /** Validation failure codes returned by {@link validateWord}. */
 export type ValidationErrorCode =
-  | 'TOO_SHORT'
-  | 'IS_BASE_WORD'
-  | 'INVALID_LETTERS'
-  | 'NOT_IN_DICTIONARY';
+  'TOO_SHORT' | 'IS_BASE_WORD' | 'INVALID_LETTERS' | 'NOT_IN_DICTIONARY';
 
 /** Optional rules applied during word validation. */
 export interface ValidateWordOptions {

@@ -99,7 +99,7 @@ function createStyles(colors: ThemeColors) {
       paddingTop: spacing.lg,
     },
     backdrop: {
-      ...StyleSheet.absoluteFillObject,
+      ...StyleSheet.absoluteFill,
     },
     bottomStack: {
       width: '100%',

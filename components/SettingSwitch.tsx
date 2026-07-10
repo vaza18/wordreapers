@@ -50,7 +50,7 @@ function createStyles(colors: ThemeColors) {
       position: 'relative',
     },
     switchOverlay: {
-      ...StyleSheet.absoluteFillObject,
+      ...StyleSheet.absoluteFill,
     },
     stepperBlock: {
       gap: spacing.sm,

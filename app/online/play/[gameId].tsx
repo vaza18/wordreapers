@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useIsFocused } from '@react-navigation/native';
+import { useIsFocused } from 'expo-router/react-navigation';
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, AppState, StyleSheet, Text, View } from 'react-native';
@@ -29,6 +29,7 @@ import { usePlaySessionSubscriptions } from '@/hooks/usePlaySessionSubscriptions
 import { usePlaySessionToasts } from '@/hooks/usePlaySessionToasts';
 import { useResultsRematchToast } from '@/hooks/useResultsRematchToast';
 import { useVoteExpiryResolver } from '@/hooks/useVoteExpiryResolver';
+import { useReconcileOpenVotesOnPresence } from '@/hooks/useReconcileOpenVotesOnPresence';
 import { useTrainingMilestone } from '@/hooks/useTrainingMilestone';
 import { toDisplayUpper } from '@/lib/dictionary/normalize';
 import { getCachedRoundPlayableLexicon } from '@/lib/dictionary/round-playable-lexicon-cache';
@@ -113,8 +114,7 @@ import {
 import { useFirebaseStore } from '@/store/firebase-store';
 import { useProfileStore } from '@/store/profile-store';
 import { useSettingsStore } from '@/store/settings-store';
-
-const VALIDATION_DEBOUNCE_MS = 1000;
+import { VALIDATION_DEBOUNCE_MS } from '@/constants/game-timing';
 
 const EMPTY_WORD_LIST_ENTRIES: never[] = [];
 const EMPTY_WORD_LIST_DISPLAYS: string[] = [];
@@ -456,6 +456,8 @@ export default function OnlinePlayScreen() {
     pauseActive: isPaused,
     playing: session?.status === 'playing',
   });
+
+  useReconcileOpenVotesOnPresence(gameId, session, !resultsNavigatedRef.current);
 
   useEffect(() => {
     if (

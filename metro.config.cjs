@@ -1,23 +1,30 @@
+const fs = require('fs');
 const path = require('path');
 const { getDefaultConfig } = require('expo/metro-config');
 
 /** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname);
 
-config.resolver.assetExts.push('txt');
+// Expo 55 / Node 22 binds Metro to IPv6 (::1); dev URLs must use localhost, not 127.0.0.1.
 
-/** npm may nest react-native@0.86 as a peer-dep artifact under react-native@0.81; never bundle it. */
+config.resolver.assetExts.push('txt');
+/** npm may nest react-native as a peer-dep artifact; never bundle the phantom copy. */
 const nestedReactNative = /node_modules[/\\]react-native[/\\]node_modules[/\\]react-native[/\\].*/;
 config.resolver.blockList = [
   ...(Array.isArray(config.resolver.blockList) ? config.resolver.blockList : []),
   nestedReactNative,
 ];
 
-/** Nested under `firebase`; Metro needs an explicit alias for RN auth persistence. */
-const firebaseAuthRoot = path.resolve(
-  __dirname,
-  'node_modules/firebase/node_modules/@firebase/auth',
-);
+/** Firebase 12 hoists @firebase/auth; older layouts nested it under firebase/. */
+function resolveFirebaseAuthRoot() {
+  const nested = path.resolve(__dirname, 'node_modules/firebase/node_modules/@firebase/auth');
+  if (fs.existsSync(path.join(nested, 'dist/rn/index.js'))) {
+    return nested;
+  }
+  return path.resolve(__dirname, 'node_modules/@firebase/auth');
+}
+
+const firebaseAuthRoot = resolveFirebaseAuthRoot();
 config.resolver.extraNodeModules = {
   ...config.resolver.extraNodeModules,
   '@firebase/auth': firebaseAuthRoot,

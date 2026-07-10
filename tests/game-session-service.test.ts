@@ -51,6 +51,7 @@ vi.mock('../lib/online/organizer-waiting-room.js', () => ({
 }));
 
 vi.mock('../lib/firebase/session-votes-service.js', () => ({
+  reconcileOpenSessionVotes: vi.fn().mockResolvedValue(undefined),
   resolveEarlyFinishVoteIfExpired: vi.fn().mockResolvedValue(undefined),
   resolveResumeVoteIfExpired: vi.fn().mockResolvedValue(undefined),
 }));

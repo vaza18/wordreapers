@@ -30,6 +30,7 @@ import {
   resolveAddTimeVoteIfExpired,
   resolveEarlyFinishVoteIfExpired,
   resolveResumeVoteIfExpired,
+  reconcileOpenSessionVotes,
   voteAddTime,
   voteEarlyFinish,
   votePause,
@@ -420,5 +421,49 @@ describe('session-votes-service', () => {
 
     expect(voteProposerName(session, 'org')).toBe('Організатор');
     expect(voteProposerName(session, 'missing')).toBe('missing');
+  });
+
+  it('activates pause when the last required voter goes offline', async () => {
+    const session = playingSession(
+      {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        guest: { name: 'Guest', wordCount: 0, score: 0, online: false },
+      },
+      {
+        pauseVote: {
+          proposedBy: 'org',
+          proposedAt: SERVER_NOW,
+          votes: { org: 'yes' },
+        },
+      },
+    );
+    installSession(session);
+
+    await reconcileOpenSessionVotes('ABCD');
+
+    expect(session.pauseState?.active).toBe(true);
+    expect(session.pauseVote).toBeNull();
+  });
+
+  it('finishes early-finish vote when the last required voter goes offline', async () => {
+    const session = playingSession(
+      {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        guest: { name: 'Guest', wordCount: 0, score: 0, online: false },
+      },
+      {
+        earlyFinishVote: {
+          proposedBy: 'org',
+          proposedAt: SERVER_NOW,
+          votes: { org: 'yes' },
+        },
+      },
+    );
+    installSession(session);
+
+    await reconcileOpenSessionVotes('ABCD');
+
+    expect(session.status).toBe('finished');
+    expect(session.earlyFinishVote).toBeNull();
   });
 });

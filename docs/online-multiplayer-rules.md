@@ -1,6 +1,6 @@
 # Онлайн-мультиплеєр: узгоджені правила логіки
 
-> Доповнення до [`slovozbyrachy_tz.md`](./slovozbyrachy_tz.md).  
+> Доповнення до [`slovozbyrachy_tz.md`](./slovozbyrachy_tz.md).
 > Описує поведінку кімнати, раундів, rematch, присутності та голосувань — узгоджено під час розробки (червень 2026).
 
 ## Діаграма станів кімнати
@@ -110,16 +110,18 @@ isActiveLivePlayer(session, uid) :=
 | Додатковий час        | Те саме                                                                      |
 | Resume після паузи    | Те саме                                                                      |
 
-| Тип                                                    | Хто **не** голосує                                                                    |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| Proposer                                               | Автоматично «за»                                                                      |
-| `hasLeft === true`                                     | Не в раунді                                                                           |
-| `online === false`                                     | Не в поточному live-раунді (переглядає минулий раунд, не натиснув «Грати ще», вийшов) |
-| Гравець з минулого раунду на замороженому play/results | Навіть якщо в roster                                                                  |
+| Тип                                                    | Хто **не** голосує                                                                                                             |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| Proposer                                               | Автоматично «за»                                                                                                               |
+| `hasLeft === true`                                     | Не в раунді                                                                                                                    |
+| `online === false`                                     | Не в поточному live-раунді (переглядає минулий раунд, не натиснув «Грати ще», вийшов, **або згорнув додаток / вимкнув екран**) |
+| Гравець з минулого раунду на замороженому play/results | Навіть якщо в roster                                                                                                           |
 
 **Таймаут** (30 с): якщо жоден required не відхилив — раунд завершується / голос застосовується.
 
-**Соло в раунді** (`!hasOnlineOpponent` серед active): організатор завершує / ставить на паузу без голосування.
+**Соло в раунді** (`!hasOnlineOpponent`): немає жодного суперника з `online === true` (усі вийшли **або** «не в грі» / background). Тоді меню й дії як у одного гравця: «Пауза» / завершити / «Додати» час без голосування — так само, як коли останній суперник натиснув «Вийти».
+
+**Presence → reconcile vote:** коли required voter стає `online: false` (background або leave), клієнти викликають `reconcileOpenSessionVotes` — відкритий vote застосовується, якщо required-множина порожня або всі «так» (pause / early-finish / add-time / resume).
 
 **Додатковий час — локальний пікер vs голосування:** локальна `AddTimeModal` (вибір хвилин до `proposeAddTime`) дефермить finish **лише на цьому клієнті**. Стійкий defer між пристроями — лише RTDB `addTimeVote` (`finishGameSessionIfExpired` не комітить, поки vote живий). Поки пікер відкритий без vote, інший клієнт усе ще може завершити раунд по таймеру.
 
@@ -127,16 +129,29 @@ isActiveLivePlayer(session, uid) :=
 
 ## 7. Присутність (`online`)
 
-| Правило                       | Деталі                                                                                                                                                        |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Після `finished`**          | Play-екран викликає `markPlayerOffline` для перегляду результатів без live-присутності в наступному раунді.                                                   |
-| **Results + live `playing`**  | Якщо `frozenRound < liveRound` — **`markPlayerOffline`** (перегляд попереднього раунду, не в live). Якщо frozen = live — offline не ставиться.                |
-| **Відправка слова**           | Транзакції score/wordCount **не** змінюють `online` / `hasLeft` (presence окремо через rejoin / presence hook).                                               |
-| **Toast `player_joined`**     | Лише коли гравець стає **active** у live-raунді (`online` + `liveRoundPlayerUids`). Зміна `hasLeft`/roster без opt-in — без toast.                            |
-| **`alone_in_game`**           | Не спрацьовує, якщо в той самий diff хтось увійшов у live-raунд. Offline зі score без `liveRoundPlayerUids` не рахується учасником.                           |
-| **Новий `playing`**           | `usePlayerOnlinePresence` увімкнено лише для active учасника (`!roundEnded` на **своєму** live-раунді).                                                       |
-| **Вимкнення presence**        | При зміні `enabled` **не** ставити `offline` (лише `cancelOnDisconnect`). Offline — через `exitOnlineToHome` / `leaveGameSession` / `markPlayerOffline` явно. |
-| **Перегляд старішого раунду** | На play при `liveRound > frozenRound` — `markPlayerOffline` навіть коли RTDB уже `playing`; на results — те саме.                                             |
+**UI-статуси гравця (три видимі):**
+
+| Підпис       | Умова RTDB                             |
+| ------------ | -------------------------------------- |
+| **в грі**    | `online === true`                      |
+| **не в грі** | `online !== true` і `hasLeft !== true` |
+| **вийшов**   | `hasLeft === true` і `online !== true` |
+
+| Правило                       | Деталі                                                                                                                                                                                          |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **AppState `background`**     | `usePlayerOnlinePresence` → `markPlayerOffline` (`online: false`, **без** `hasLeft`). Екран вимкнено / home / інший додаток — як у тренуванні (`background`, не `inactive`).                    |
+| **AppState `active`**         | `markPlayerOnline` — статус знову «в грі».                                                                                                                                                      |
+| **RTDB reconnect**            | `.info/connected` → `markPlayerOnline` **лише** коли `AppState.currentState === 'active'` (reconnect у фоні не воскрешає online).                                                               |
+| **Auto-rejoin vs background** | `shouldRejoin` (`online:false` без `hasLeft`) **не** викликає `reconcilePlayerPresence` / `markPlayerOnline`, поки AppState не `active` — інакше leave→rejoin→background знову ставить «в грі». |
+| **Після `finished`**          | Play-екран викликає `markPlayerOffline` для перегляду результатів без live-присутності в наступному раунді.                                                                                     |
+| **Results + live `playing`**  | Якщо `frozenRound < liveRound` — **`markPlayerOffline`** (перегляд попереднього раунду, не в live). Якщо frozen = live — offline не ставиться.                                                  |
+| **Відправка слова**           | Транзакції score/wordCount **не** змінюють `online` / `hasLeft` (presence окремо через rejoin / presence hook).                                                                                 |
+| **Toast `player_joined`**     | Лише коли гравець стає **active** у live-раунді (`online` + `liveRoundPlayerUids`). Зміна `hasLeft`/roster без opt-in — без toast.                                                              |
+| **Toast offline / returned**  | Offline без `hasLeft` у live-раунді → «не в грі»; повернення `online` у тому ж раунді → «знову в грі». Не плутати з `player_left` / mid-round join.                                             |
+| **`alone_in_game`**           | Не спрацьовує, якщо в той самий diff хтось увійшов у live-раунд. Offline зі score без `liveRoundPlayerUids` не рахується учасником. **Не** на чистому background-offline.                       |
+| **Новий `playing`**           | `usePlayerOnlinePresence` увімкнено лише для active учасника (`!roundEnded` на **своєму** live-раунді).                                                                                         |
+| **Вимкнення presence**        | При зміні `enabled` **не** ставити `offline` (лише `cancelOnDisconnect`). Offline — через `exitOnlineToHome` / `leaveGameSession` / `markPlayerOffline` явно.                                   |
+| **Перегляд старішого раунду** | На play при `liveRound > frozenRound` — `markPlayerOffline` навіть коли RTDB уже `playing`; на results — те саме.                                                                               |
 
 ---
 
