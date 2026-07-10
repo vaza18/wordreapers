@@ -25,7 +25,7 @@ export function PlayableWordsCountHint({ status, maxCount }: PlayableWordsCountH
   const styles = useThemedStyles(createStyles);
 
   let content: ReactNode = null;
-  if (status === 'empty') {
+  if (status === 'empty' || status === 'tooShort') {
     content = <Text style={styles.hintText}>{t('game.playableWordsNeedBaseWord')}</Text>;
   } else if (status === 'loading') {
     content = (

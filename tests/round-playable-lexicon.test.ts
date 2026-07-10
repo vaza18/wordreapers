@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildRoundPlayableLexicon,
+  buildRoundPlayableLexiconAsync,
   fromPlayableLexiconSnapshot,
   toPlayableLexiconSnapshot,
 } from '../lib/dictionary/round-playable-lexicon';
@@ -86,6 +87,28 @@ describe('buildRoundPlayableLexicon', () => {
       { allowProperNouns: false, allowSlang: true },
     );
     expect(on.words.has('кайф')).toBe(true);
+  });
+
+  it('async build matches sync build and can cancel', async () => {
+    const sync = buildRoundPlayableLexicon(
+      'компютер',
+      { main: MAIN },
+      { allowProperNouns: false, allowSlang: false },
+    );
+    const asyncResult = await buildRoundPlayableLexiconAsync(
+      'компютер',
+      { main: MAIN },
+      { allowProperNouns: false, allowSlang: false, yieldEveryMs: 1 },
+    );
+    expect(asyncResult?.maxCount).toBe(sync.maxCount);
+    expect([...asyncResult!.words].sort()).toEqual([...sync.words].sort());
+
+    const cancelled = await buildRoundPlayableLexiconAsync(
+      'компютер',
+      { main: MAIN },
+      { allowProperNouns: false, allowSlang: false, isCancelled: () => true },
+    );
+    expect(cancelled).toBeNull();
   });
 
   it('round-trips snapshot', () => {

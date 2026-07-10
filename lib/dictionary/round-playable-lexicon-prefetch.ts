@@ -1,6 +1,6 @@
 import { scheduleIdleWork } from '@/lib/app/schedule-idle-work';
 import {
-  buildRoundPlayableLexiconFromDictionary,
+  buildRoundPlayableLexiconFromDictionaryAsync,
   lexiconCacheKey,
 } from '@/lib/dictionary/round-playable-lexicon';
 import {
@@ -163,7 +163,7 @@ export function requestRoundPlayableLexiconPrefetch(
         if (jobGeneration !== generation) {
           return;
         }
-        const built = buildRoundPlayableLexiconFromDictionary(
+        const built = await buildRoundPlayableLexiconFromDictionaryAsync(
           normalized,
           dictionary,
           {
@@ -176,9 +176,10 @@ export function requestRoundPlayableLexiconPrefetch(
           {
             allowProperNouns: params.allowProperNouns,
             allowSlang: params.allowSlang,
+            isCancelled: () => jobGeneration !== generation,
           },
         );
-        if (jobGeneration !== generation) {
+        if (jobGeneration !== generation || !built) {
           return;
         }
         setCachedRoundPlayableLexicon(

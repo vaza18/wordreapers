@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { MIN_BASE_WORD_LENGTH } from '@/constants/base-word';
 import { VALIDATION_DEBOUNCE_MS } from '@/constants/game-timing';
 import { lexiconCacheKey } from '@/lib/dictionary/round-playable-lexicon';
-import { normalizeUk } from '@/lib/dictionary/normalize';
+import { letterCount, normalizeUk } from '@/lib/dictionary/normalize';
 import {
   clearRoundPlayableLexiconPrefetch,
   requestRoundPlayableLexiconPrefetch,
@@ -12,7 +13,7 @@ import {
 
 export type SetupLexiconCommitMode = 'typing' | 'immediate';
 
-export type SetupPlayableLexiconHintStatus = 'empty' | 'loading' | 'ready' | 'error';
+export type SetupPlayableLexiconHintStatus = 'empty' | 'tooShort' | 'loading' | 'ready' | 'error';
 
 export interface UseSetupPlayableLexiconHintOptions {
   baseWordInput: string;
@@ -51,6 +52,7 @@ function mapPrefetchStatus(
 
 /**
  * Prefetch round lexicon on base-word setup screens (debounced for typing).
+ * Skips words shorter than {@link MIN_BASE_WORD_LENGTH}.
  */
 export function useSetupPlayableLexiconHint({
   baseWordInput,
@@ -68,6 +70,14 @@ export function useSetupPlayableLexiconHint({
       prevNormalizedRef.current = '';
       clearRoundPlayableLexiconPrefetch();
       setStatus('empty');
+      setMaxCount(null);
+      return;
+    }
+
+    if (letterCount(normalized) < MIN_BASE_WORD_LENGTH) {
+      prevNormalizedRef.current = normalized;
+      clearRoundPlayableLexiconPrefetch();
+      setStatus('tooShort');
       setMaxCount(null);
       return;
     }
@@ -96,7 +106,10 @@ export function useSetupPlayableLexiconHint({
 
   useEffect(() => {
     const normalized = normalizeUk(baseWordInput);
-    const wantKey = normalized ? lexiconCacheKey(normalized, allowProperNouns, allowSlang) : null;
+    if (!normalized || letterCount(normalized) < MIN_BASE_WORD_LENGTH) {
+      return;
+    }
+    const wantKey = lexiconCacheKey(normalized, allowProperNouns, allowSlang);
 
     return subscribeRoundPlayableLexiconPrefetch((prefetch) => {
       const mapped = mapPrefetchStatus(prefetch, wantKey);

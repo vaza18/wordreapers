@@ -73,8 +73,7 @@ describe('useSetupPlayableLexiconHint', () => {
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1);
-      await Promise.resolve();
-      await Promise.resolve();
+      await vi.runAllTimersAsync();
     });
 
     await act(async () => {
@@ -100,9 +99,7 @@ describe('useSetupPlayableLexiconHint', () => {
     rerender({ baseWordInput: 'КОМПЮТЕР', commitMode: 'immediate' });
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(0);
-      await Promise.resolve();
-      await Promise.resolve();
+      await vi.runAllTimersAsync();
     });
 
     await act(async () => {
@@ -111,5 +108,25 @@ describe('useSetupPlayableLexiconHint', () => {
       });
     });
     expect(result.current.maxCount).toBe(3);
+  });
+
+  it('skips prefetch while base word is shorter than 6 letters', async () => {
+    const { result, rerender } = renderHook(
+      ({ baseWordInput, commitMode }: HintHookProps) =>
+        useSetupPlayableLexiconHint({
+          baseWordInput,
+          allowProperNouns: false,
+          allowSlang: false,
+          commitMode,
+        }),
+      { initialProps: { baseWordInput: '', commitMode: 'typing' as SetupLexiconCommitMode } },
+    );
+
+    rerender({ baseWordInput: 'КОМП', commitMode: 'typing' });
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    expect(result.current.status).toBe('tooShort');
+    expect(result.current.maxCount).toBeNull();
   });
 });

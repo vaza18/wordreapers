@@ -14,6 +14,7 @@ import { ShuffleBaseWordButton } from '@/components/ShuffleBaseWordButton';
 import { Screen } from '@/components/Screen';
 import { GroupPlayersIcon, SoloPlayerIcon } from '@/components/PlayerModeIcons';
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { MIN_BASE_WORD_LENGTH } from '@/constants/base-word';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useHeaderIconButtonLayout } from '@/hooks/useHeaderIconButtonLayout';
 import {
@@ -56,7 +57,6 @@ import { useOrganizerSoloStore } from '@/store/organizer-solo-store';
 import { useSettingsStore } from '@/store/settings-store';
 import { loadBundledBaseWords, loadBundledDictionary } from '@/services/dictionary-service';
 
-const MIN_BASE_WORD_LENGTH = 6;
 const SUGGEST_DROPDOWN_LIMIT = 50;
 
 /**
