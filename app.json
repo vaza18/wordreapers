@@ -37,10 +37,6 @@
         "backgroundColor": "#1579f1"
       }
     },
-    "androidStatusBar": {
-      "hidden": true,
-      "translucent": true
-    },
     "plugins": [
       "expo-dev-client",
       "expo-router",

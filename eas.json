@@ -36,8 +36,7 @@
         "buildArtifactPaths": ["android/app/build/outputs/mapping/**/mapping.txt"]
       },
       "env": {
-        "APP_VARIANT": "production",
-        "NODE_ENV": "production"
+        "APP_VARIANT": "production"
       }
     }
   },

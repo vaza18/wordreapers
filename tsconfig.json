@@ -4,9 +4,11 @@
     "strict": true,
     "baseUrl": ".",
     "jsx": "react-native",
-    "module": "esnext",
+    "module": "preserve",
+    "moduleResolution": "bundler",
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "react-native": ["./node_modules/react-native"]
     }
   },
   "include": [

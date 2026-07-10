@@ -53,6 +53,10 @@ module.exports = ({ config }) => {
     ],
   ];
 
+  if (isProductionBuild) {
+    plugins.push('./plugins/with-android-r8-optimizations.cjs');
+  }
+
   if (!isProductionBuild) {
     plugins.push('./plugins/with-ios-device-metro-host.cjs');
   }
