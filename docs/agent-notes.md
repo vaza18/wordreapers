@@ -8,6 +8,32 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 <!-- Add dated notes at the top -->
 
+### 2026-07-10 — iOS RNFBAppCheck PCH error (local)
+
+- `.env.local` has `APP_VARIANT=production` → Expo native project name `Wordreapers` (not Cyrillic-sanitized `Slovozbirachi`)
+- `with-ios-firebase-native-init` must use `modRequest.projectName`; hardcoded `Slovozbirachi` left bridging header importing `RNFBAppCheckModule.h`
+- Expo dangerous mods: **last plugin in `app.config.js` runs first** — native-init must be listed _before_ `@react-native-firebase/app` / `app-check` so strip runs after RNFB writes
+- After plugin fix: `npx expo prebuild --platform ios`, then `npm run ios` (`scripts/run-ios.sh` → `expo run:ios`; same as `npx expo run:ios`)
+
+### 2026-07-10 — Expo SDK 56 upgrade (upgrade/expo-sdk-56)
+
+- Branched from green `upgrade/expo-sdk-55` (SDK 55 `expo-doctor` 19/19)
+- `expo-doctor`: **21/21 passed** (SDK 56)
+- `expo`: `^56.0.0` (`~56.0.15` resolved), `react-native`: `0.85.3`, `react`: `19.2.3`, `typescript`: `~6.0.3`
+- `@react-native-firebase/app` + `app-check`: `^25.1.0`; iOS CocoaPods pin `$FirebaseSDKVersion = '12.15.0'`
+- iOS: `deploymentTarget` `16.4`; `forceStaticLinking: ['RNFBApp', 'RNFBAppCheck']` for RN 0.85 prebuilt core
+- Splash: legacy `app.json` `splash` → `expo-splash-screen` config plugin (same image/colors)
+- Navigation: `@react-navigation/*` → `expo-router/react-navigation` / `expo-router` types (`NativeStackNavigationOptions`)
+- Hermes v1: default (no opt-out); class repackaging still deferred
+- Preserved from SDK 55: R8 optimized shrinking + Gradle JVM 4g/1g; Metro `@firebase/auth` hoist; `REACT_NATIVE_PACKAGER_HOSTNAME=localhost`; no `NODE_ENV` in `eas.json`
+- EAS: removed `corepack: true` from `eas.json` — it enabled Corepack shims for pnpm/yarn, then EAS retried `npm -g install` and logged non-fatal `EEXIST` noise; project uses npm only (`packageManager: npm@11.6.2` + `eas-build-pre-install`)
+- TypeScript 6: removed deprecated `baseUrl` (paths already use `./` prefixes); no `ignoreDeprecations` needed
+- EAS Android development OK: https://expo.dev/accounts/vaza18/projects/wordreapers/builds/0f4be023-08f2-48c3-86cf-975f89479a75
+- EAS Android production AAB OK (SDK 56, versionCode 43): https://expo.dev/artifacts/eas/pfLc32JBtanzHYRtMI0uOe-flz0lBezXmIR7l-kYRUo.aab
+- AAB size (informational): SDK 55 ~67.6 MiB → SDK 56 ~80.2 MiB (+12.6 MiB); not a merge gate
+- iOS EAS development: still needs interactive credentials (`eas build --platform ios --profile development`)
+- RN 0.85 type cleanups: `StyleSheet.absoluteFillObject` → `absoluteFill`; `StatusBar` dropped `translucent`; `notifyPreventRemove` removed from prevent-remove context (setPreventRemove alone is enough)
+
 ### 2026-07-10 — Expo SDK 54 baseline (before upgrade/expo-sdk-55)
 
 - `expo-doctor`: **18/18 passed** (SDK 54)

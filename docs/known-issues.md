@@ -8,6 +8,22 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — Draft letter visible during fly on Android (RN transparent color)
+
+- **Symptom:** With letter-fly effects on, the draft glyph appears immediately (opaque) when the fly starts instead of staying hidden until handoff. Reproduced on Android 1.4.0 (build 41); iOS simulator looked correct.
+- **Cause:** `DraftDisplayText` hid revealing glyphs with nested `Text` `color: 'transparent'`. On Android RN 0.81+, color `0` is treated as `UndefinedColor`, so the parent draft color is used and the glyph stays visible. iOS uses a different undefined sentinel, so the bug did not show there.
+- **Fix:** Use `#FFFFFF00` (`DRAFT_REVEALING_CHAR_COLOR`) instead of `transparent` / zero ARGB.
+- **Test:** `tests/draft-letter-reveal.test.ts`, `components/__tests__/DraftDisplayText.test.tsx`
+- **Area:** `components/DraftDisplayText.tsx`, `constants/compose-draft.ts`
+
+### 2026-07 — iOS `RNFBAppCheck` fatal module error after clean prebuild
+
+- **Symptom:** Xcode reports `fatal error: module 'RNFBAppCheck' … is not defined in any loaded module map` while compiling the bridging-header PCH; build may still show `Build Succeeded` with `1 error(s)`. Cleaning DerivedData / `prebuild --clean` does not help.
+- **Cause:** (1) `with-ios-firebase-native-init` hardcoded the native folder `Slovozbirachi`. With `APP_VARIANT=production` (e.g. `.env.local`), Expo `name` is `Wordreapers`, so the plugin wrote `FirebaseNativeInit` into an orphan folder and never patched `Wordreapers-Bridging-Header.h`. (2) Expo dangerous mods run **last-registered first**, so listing the strip plugin _after_ `@react-native-firebase/app-check` let RNFB re-add `#import <RNFBAppCheckModule.h>` / Swift `sharedInstance()` after the strip. Combined with `CLANG_ENABLE_MODULES=NO` on `RNFBAppCheck`, the bridging-header PCH fails.
+- **Fix:** Resolve paths from `modRequest.projectName`; list the native-init plugin _before_ RNFB in `app.config.js`; strip RNFB Swift init and expose ObjC `WRConfigureFirebaseNative()` via the real bridging header.
+- **Test:** `tests/with-ios-firebase-native-init.test.ts`
+- **Area:** `plugins/with-ios-firebase-native-init.cjs`, `app.config.js`
+
 ### 2026-07 — Solo/online freeze at 00:00 with add-time modal open
 
 - **Symptom:** On the last seconds of a solo round, opening the add-time picker left the play screen stuck at `00:00` with no taps responding. Online could finish under the local picker before propose.
@@ -143,6 +159,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 - **Fix:** Treat unknown OS state as reduce motion enabled in `resolveVisualEffects`; gate `VictoryConfettiHost` on `victoryCelebration`.
 - **Test:** `tests/visual-effects.test.ts` (`null` OS state)
 - **Area:** `hooks/useReduceMotion.ts`, `lib/settings/visual-effects.ts`, `components/VictoryConfetti.tsx`
+
+### 2026-07 — «Нова гра» crashed with useInsertionEffect prevent-remove
+
+- **Symptom:** Opening online setup («Нова гра») logged `useInsertionEffect must not schedule updates` and `Can't perform a React state update on a component that hasn't mounted yet` from `useSyncedStackBack`.
+- **Cause:** Prevent-remove registration called `setPreventRemove` (React state) inside `useInsertionEffect`, which React 19 forbids.
+- **Fix:** Register/clear prevent-remove in `useEffect`, matching expo-router's `usePreventRemove`.
+- **Test:** `tests/use-synced-stack-back.test.tsx`
+- **Area:** `hooks/useSyncedStackBack.ts`
 
 ---
 
