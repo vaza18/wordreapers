@@ -71,8 +71,7 @@ describe('session-word-maps-service', () => {
 
   it('subscribes to live word maps and emits parsed values', () => {
     let valueListener:
-      | ((snapshot: { exists: () => boolean; val: () => unknown }) => void)
-      | undefined;
+      ((snapshot: { exists: () => boolean; val: () => unknown }) => void) | undefined;
     onValueMock.mockImplementation((_ref, onNext) => {
       valueListener = onNext as typeof valueListener;
       return vi.fn();

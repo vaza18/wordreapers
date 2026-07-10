@@ -44,6 +44,6 @@ describe('syncSystemAppearanceFollow', () => {
   it('clears forced scheme so OS preference applies', async () => {
     const { Appearance } = await import('react-native');
     syncSystemAppearanceFollow();
-    expect(Appearance.setColorScheme).toHaveBeenCalledWith(null);
+    expect(Appearance.setColorScheme).toHaveBeenCalledWith('unspecified');
   });
 });

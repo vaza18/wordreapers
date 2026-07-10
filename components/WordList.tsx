@@ -24,7 +24,7 @@ import { useNotebookRowHeight } from '@/hooks/useNotebookRowHeight';
 import { useNotebookRowLineStyle } from '@/hooks/useNotebookRowLineStyle';
 import { useScrollablePanelMetrics } from '@/hooks/useScrollablePanelMetrics';
 import { useVirtualWordListProps } from '@/hooks/useVirtualWordListProps';
-import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { normalizeUk, toDisplayUpper } from '@/lib/dictionary/normalize';
 import { dismissWordOverlapTooltips } from '@/lib/ui/word-overlap-tooltip';
@@ -589,7 +589,7 @@ export const WordList = memo(function WordList({
         <FlatList
           ref={listRef}
           data={rows}
-          keyExtractor={(row) => row.key}
+          keyExtractor={(row: WordRow) => row.key}
           style={styles.list}
           ListFooterComponent={ruledPaperFooter}
           contentContainerStyle={styles.listContent}
@@ -648,12 +648,10 @@ function createStyles(colors: ThemeColors) {
     rowPrefixHighlight: {
       ...StyleSheet.absoluteFillObject,
       backgroundColor: colors.prefixHighlightBg,
-      borderRadius: radii.sm,
     },
     rowHighlight: {
       ...StyleSheet.absoluteFillObject,
       backgroundColor: colors.penBlueMuted,
-      borderRadius: radii.sm,
     },
     word: {
       flex: 1,
