@@ -8,6 +8,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — iOS key-press sound only every other tap
+
+- **Symptom:** With button feedback set to sound/both, iOS (simulator and device) plays the key click only on every other press, even when tapping slowly. Haptics fire every press; Android sound is fine.
+- **Cause:** `playButtonSoundNow` called `seekTo(0)` without awaiting, then `play()` immediately. On iOS AVPlayer stays at the end after a finished clip, so `play()` before seek completes is a silent no-op; the deferred seek leaves the player at 0 for the next tap.
+- **Fix:** `replayFromStart` awaits `seekTo(0)` then calls `play()` (button and word sounds).
+- **Test:** `tests/game-feedback-replay.test.ts`
+- **Area:** `lib/feedback/replay-from-start.ts`, `lib/feedback/game-feedback.ts`
+
 ### 2026-07 — Draft letter visible during fly on Android (RN transparent color)
 
 - **Symptom:** With letter-fly effects on, the draft glyph appears immediately (opaque) when the fly starts instead of staying hidden until handoff. Reproduced on Android 1.4.0 (build 41); iOS simulator looked correct.
