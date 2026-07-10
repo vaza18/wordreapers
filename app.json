@@ -37,6 +37,8 @@
       "expo-router",
       "expo-localization",
       "expo-asset",
+      "expo-font",
+      "expo-status-bar",
       [
         "expo-splash-screen",
         {
