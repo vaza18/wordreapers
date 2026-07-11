@@ -1,26 +1,25 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const TRAINING_MILESTONE_LEXICON_RATIO = 0.05;
+import { wordsNeeded } from '@/lib/game/solo-round-success';
 
 const TRAINING_MILESTONE_KEY = 'wordreapers.hasCompletedTrainingRound';
 
-/** True when the player found more than 5% of the round lexicon in a solo training round. */
+/**
+ * True when the player reached «Гарний темп» in a solo training round:
+ * `wordCount >= min(ceil(0.05 * lexiconMax), 25)`.
+ */
 export function meetsTrainingMilestone(wordCount: number, lexiconMaxCount: number): boolean {
   if (lexiconMaxCount <= 0 || wordCount <= 0) {
     return false;
   }
-  return wordCount > lexiconMaxCount * TRAINING_MILESTONE_LEXICON_RATIO;
+  return wordCount >= trainingWordsRequired(lexiconMaxCount);
 }
 
 /**
- * Words required to pass the training milestone — the smallest integer strictly
- * greater than 5% of the lexicon, so this matches `meetsTrainingMilestone`.
+ * Words required to unlock multiplayer — same as `wordsNeeded('goodPace', lexiconMax)`.
  */
 export function trainingWordsRequired(lexiconMaxCount: number): number {
-  if (lexiconMaxCount <= 0) {
-    return 1;
-  }
-  return Math.floor(lexiconMaxCount * TRAINING_MILESTONE_LEXICON_RATIO) + 1;
+  return wordsNeeded('goodPace', lexiconMaxCount);
 }
 
 /** Words still needed to unlock multiplayer during training. */

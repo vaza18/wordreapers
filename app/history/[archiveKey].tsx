@@ -11,6 +11,8 @@ import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useOnlineViewerUid } from '@/hooks/useOnlineViewerUid';
 import { isViewerWinner } from '@/lib/game/is-viewer-winner';
+import { resolveRoundSuccessLevel } from '@/lib/game/solo-round-success';
+import { formatSoloSuccessHistoryHeadline } from '@/lib/game/solo-round-success-i18n';
 import type { GameSession } from '@/lib/firebase/types';
 import { stackHeaderWithBackAndSettings } from '@/lib/navigation/stack-header-options';
 import { loadFrozenFinishedRoundFromArchive } from '@/lib/online/session/frozen-finished-round';
@@ -139,7 +141,15 @@ export default function ArchivedRoundResultsScreen() {
     <>
       <Stack.Screen options={screenOptions} />
       <RoundResultsView
-        headline={viewData.headline}
+        headline={
+          viewData.isSolo && roundLexicon && roundLexicon.maxCount > 0
+            ? (formatSoloSuccessHistoryHeadline(
+                t,
+                resolveRoundSuccessLevel(viewData.totalDistinctWords, roundLexicon.maxCount),
+                viewData.totalDistinctWords,
+              ) ?? viewData.headline)
+            : viewData.headline
+        }
         baseWordDisplay={viewData.baseWordDisplay}
         totalDistinctWords={viewData.totalDistinctWords}
         maxPlayableWords={roundLexicon?.maxCount ?? null}
@@ -155,6 +165,7 @@ export default function ArchivedRoundResultsScreen() {
         allowProperNouns={viewData.allowProperNouns}
         allowSlang={viewData.allowSlang}
         roundDurationSeconds={viewData.roundDurationSeconds}
+        soloSuccessLexiconMax={viewData.isSolo ? (roundLexicon?.maxCount ?? null) : null}
         winnerOverride={
           !viewData.isSolo && isViewerWinner(viewData.playerRankGroups, highlightPlayerId)
         }

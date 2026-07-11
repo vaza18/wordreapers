@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import {
   fromPlayableLexiconSnapshot,
+  lexiconCacheKey,
   type PlayableLexiconSnapshot,
   type RoundPlayableLexicon,
 } from '@/lib/dictionary/round-playable-lexicon';
@@ -14,7 +15,6 @@ import {
   requestRoundPlayableLexiconPrefetch,
   subscribeRoundPlayableLexiconPrefetch,
 } from '@/lib/dictionary/round-playable-lexicon-prefetch';
-import { lexiconCacheKey } from '@/lib/dictionary/round-playable-lexicon';
 import { normalizeUk } from '@/lib/dictionary/normalize';
 import { releaseBundledDictionaryCaches } from '@/services/dictionary-service';
 

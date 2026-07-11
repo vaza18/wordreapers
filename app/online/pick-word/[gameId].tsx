@@ -14,6 +14,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { RoundSettingsFields } from '@/components/RoundSettingsFields';
 import { Screen } from '@/components/Screen';
 import { ShuffleBaseWordButton } from '@/components/ShuffleBaseWordButton';
+import { MIN_BASE_WORD_LENGTH } from '@/constants/base-word';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useHeaderIconButtonLayout } from '@/hooks/useHeaderIconButtonLayout';
 import {
@@ -44,7 +45,6 @@ import { handoffPlayerPresence } from '@/lib/online/presence/presence-handoff';
 import { usePlayerOnlinePresence } from '@/lib/online/presence/use-player-online-presence';
 import type { UniqueBonusMode } from '@/lib/game/scoring';
 
-const MIN_BASE_WORD_LENGTH = 6;
 const SUGGEST_DROPDOWN_LIMIT = 50;
 
 /**

@@ -39,9 +39,24 @@
     "progressRemaining": "До розблокування гри з іншими залишилось {{count}} {{wordForm}}",
     "progressUnlocked": "Режим гри з іншими гравцями розблоковано!",
     "retryTitle": "Спробуй ще раз",
-    "retryBody": "Цього разу ти знайшов {{found}} {{foundForm}}. Щоб розблокувати гру з іншими гравцями, знайди щонайменше {{required}} {{requiredForm}} за один раунд.",
+    "retryBody": "Цього разу ти знайшов {{found}} {{foundForm}}. Щоб розблокувати гру з іншими гравцями, знайди щонайменше {{required}} {{requiredForm}} за один раунд (рівень «Гарний темп»).",
     "retryCtaAgain": "Спробувати ще раз",
     "firstWordHint": "Підказка: набери «{{letters}}»"
+  },
+  "soloSuccess": {
+    "levelNone": "",
+    "levelProgress": "Є прогрес",
+    "levelGoodPace": "Гарний темп",
+    "levelStrong": "Сильний результат",
+    "levelTop": "Топ раунду",
+    "levelChampion": "Темп чемпіона",
+    "firstWord": "Знайдіть перше слово",
+    "nextLevel": "До: {{title}} · ще {{count}} {{wordForm}}",
+    "championMax": "Максимум за раунд!",
+    "unlockSuffix": " · до мультиплеєру ще {{count}} {{wordForm}}",
+    "levelUp": "{{medal}}{{title}}",
+    "historyHeadline": "{{medal}}{{title}} · {{words}} {{wordForm}}",
+    "badgeLabel": "{{medal}}{{title}}"
   },
   "profile": {
     "title": "Профіль",

@@ -22,14 +22,20 @@ import { OrganizerSoloTimerHeader } from '@/components/online/OrganizerSoloTimer
 import { PlayStatsExplainModal } from '@/components/online/PlayStatsExplainModal';
 import { TrainingProgressBar } from '@/components/online/TrainingProgressBar';
 import { PauseRoundModal } from '@/components/PauseRoundModal';
+import { PlaySessionToastStack } from '@/components/PlaySessionToast';
+import { SOLO_SUCCESS_CONFETTI_LEVELS } from '@/constants/solo-round-success-constants';
 import { spacing, type ThemeColors } from '@/constants/theme';
 import { modalOverlayBackground } from '@/lib/ui/modal-chrome';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useAutoPauseOnAppBackground } from '@/hooks/useAutoPauseOnAppBackground';
 import { usePlayWordFeedbackDismiss } from '@/hooks/usePlayWordFeedback';
+import { useToastQueue } from '@/hooks/useToastQueue';
 import { useTrainingFirstWordHint } from '@/hooks/useTrainingFirstWordHint';
 import { useTrainingMilestone } from '@/hooks/useTrainingMilestone';
+import { resolveRoundSuccessLevel } from '@/lib/game/solo-round-success';
+import { formatSoloSuccessLevelUpToast } from '@/lib/game/solo-round-success-i18n';
+import { useVictoryConfettiStore } from '@/store/victory-confetti-store';
 import { DictionaryIndex } from '@/lib/dictionary/dictionary-index';
 import { toDisplayUpper } from '@/lib/dictionary/normalize';
 import { playWordAcceptedFeedback } from '@/lib/feedback/game-feedback';
@@ -75,6 +81,9 @@ export default function OrganizerSoloPlayScreen() {
   const { hydrated: trainingHydrated, hasCompletedTrainingRound } = useTrainingMilestone();
   const canInviteOthers = trainingHydrated && hasCompletedTrainingRound;
   const isFocused = useIsFocused();
+  const { toasts, enqueueToasts } = useToastQueue();
+  const celebrate = useVictoryConfettiStore((state) => state.celebrate);
+  const prevSuccessWordCountRef = useRef(0);
 
   const setup = useOrganizerSoloStore((state) => state.setup);
   const status = useOrganizerSoloStore((state) => state.status);
@@ -206,11 +215,36 @@ export default function OrganizerSoloPlayScreen() {
   const isPaused = status === 'paused';
   const addTimeRemainingMs = getRemainingMs(Date.now());
 
-  const showTrainingProgress =
-    trainingHydrated && !hasCompletedTrainingRound && status === 'playing' && !isPaused;
+  const showSuccessBar =
+    status === 'playing' && !isPaused && roundLexicon != null && roundLexicon.maxCount > 0;
+  const showUnlockHint = trainingHydrated && !hasCompletedTrainingRound;
+
+  useEffect(() => {
+    if (!showSuccessBar || !roundLexicon) {
+      return;
+    }
+    const count = scoredWords.length;
+    const prevCount = prevSuccessWordCountRef.current;
+    prevSuccessWordCountRef.current = count;
+    if (count <= prevCount) {
+      return;
+    }
+    const levelId = resolveRoundSuccessLevel(count, roundLexicon.maxCount);
+    const prevLevelId = resolveRoundSuccessLevel(prevCount, roundLexicon.maxCount);
+    if (levelId === 'none' || levelId === prevLevelId) {
+      return;
+    }
+    const message = formatSoloSuccessLevelUpToast(t, levelId);
+    if (message) {
+      enqueueToasts([{ message, variant: 'success' }]);
+    }
+    if (SOLO_SUCCESS_CONFETTI_LEVELS.has(levelId)) {
+      celebrate();
+    }
+  }, [celebrate, enqueueToasts, roundLexicon, scoredWords.length, showSuccessBar, t]);
 
   useTrainingFirstWordHint({
-    enabled: showTrainingProgress && scoredWords.length === 0,
+    enabled: showUnlockHint && showSuccessBar && scoredWords.length === 0,
     wordCount: scoredWords.length,
     draftLength: draft.length,
     sortedWords: roundLexicon?.sortedWords,
@@ -481,11 +515,11 @@ export default function OrganizerSoloPlayScreen() {
               }}
             />
 
-            {showTrainingProgress && roundLexicon ? (
+            {showSuccessBar && roundLexicon ? (
               <TrainingProgressBar
                 wordCount={scoredWords.length}
                 lexiconMax={roundLexicon.maxCount}
-                wordsShort={t('game.wordsShort')}
+                showUnlockHint={showUnlockHint}
               />
             ) : null}
 
@@ -611,6 +645,8 @@ export default function OrganizerSoloPlayScreen() {
           <ActivityIndicator color={colors.accent} size="large" />
         </View>
       ) : null}
+
+      <PlaySessionToastStack toasts={toasts} />
     </>
   );
 }
