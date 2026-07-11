@@ -41,7 +41,7 @@ export interface BuildRoundPlayableLexiconOptions {
 export interface BuildRoundPlayableLexiconAsyncOptions extends BuildRoundPlayableLexiconOptions {
   /** Return true to abort the in-flight build. */
   isCancelled?: () => boolean;
-  /** Yield to the event loop after this many ms of work (default 8). */
+  /** Yield to the event loop after this many ms of work (default 32). */
   yieldEveryMs?: number;
 }
 
@@ -99,6 +99,11 @@ function yieldToEventLoop(): Promise<void> {
     setTimeout(resolve, 0);
   });
 }
+
+/** Words between cancel/time checks — avoids per-word `performance.now()` overhead. */
+const ASYNC_CHECK_EVERY_WORDS = 512;
+/** Default cooperative slice; higher = faster wall-clock, slightly longer UI stalls. */
+const ASYNC_YIELD_EVERY_MS_DEFAULT = 32;
 
 type LexiconBuildState = {
   words: Set<string>;
@@ -193,6 +198,9 @@ export function buildRoundPlayableLexicon(
 
 /**
  * Same as {@link buildRoundPlayableLexicon}, but yields to the event loop so UI stays responsive.
+ *
+ * Note: wall-clock is slower than sync because each yield pays a `setTimeout(0)` scheduling cost.
+ * Keep slices relatively long so a full ~100k-word pass does not spend most of its time waiting.
  */
 export async function buildRoundPlayableLexiconAsync(
   baseWord: string,
@@ -200,16 +208,24 @@ export async function buildRoundPlayableLexiconAsync(
   options: BuildRoundPlayableLexiconAsyncOptions,
 ): Promise<RoundPlayableLexicon | null> {
   const isCancelled = options.isCancelled ?? (() => false);
-  const yieldEveryMs = options.yieldEveryMs ?? 8;
+  const yieldEveryMs = options.yieldEveryMs ?? ASYNC_YIELD_EVERY_MS_DEFAULT;
   const state = createBuildState(baseWord, sources, options);
   let sliceStart = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  let sinceCheck = 0;
 
   for (const list of collectSourceLists(sources, options)) {
     for (let i = 0; i < list.length; i += 1) {
+      considerWord(state, list[i]);
+      sinceCheck += 1;
+
+      if (sinceCheck < ASYNC_CHECK_EVERY_WORDS) {
+        continue;
+      }
+      sinceCheck = 0;
+
       if (isCancelled()) {
         return null;
       }
-      considerWord(state, list[i]);
 
       const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
       if (now - sliceStart >= yieldEveryMs) {
