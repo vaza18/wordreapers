@@ -18,6 +18,7 @@ import {
 } from '@/components/notebook/NotebookLineFiller';
 import { NotebookRuledFill } from '@/components/notebook/NotebookRuledFill';
 import { PlaySessionToastStack } from '@/components/PlaySessionToast';
+import { TrainingProgressBar } from '@/components/online/TrainingProgressBar';
 import {
   SCROLL_OVERFLOW_THRESHOLD,
   useScrollablePanelMetrics,
@@ -38,6 +39,8 @@ import type { GlobalResultWordRow, PlayerResultRankGroup } from '@/lib/game/resu
 import { isViewerWinner } from '@/lib/game/is-viewer-winner';
 import { buildResultsWordList } from '@/lib/game/results-missing-words';
 import { formatRoundDuration } from '@/lib/game/round-duration';
+import { resolveRoundSuccessLevel } from '@/lib/game/solo-round-success';
+import { formatSoloSuccessBadge } from '@/lib/game/solo-round-success-i18n';
 import { formatResultsLexiconOptionsSuffix } from '@/lib/online/play-rules-label';
 import { formatUkWords, ukWordForm } from '@/lib/i18n/uk-plural';
 import { dismissWordOverlapTooltips } from '@/lib/ui/word-overlap-tooltip';
@@ -112,6 +115,11 @@ export interface RoundResultsViewProps {
    * viewer is at rank 1 (multiplayer). Solo passes the training-milestone result.
    */
   winnerOverride?: boolean;
+  /**
+   * When set (>0), show solo success badge + segment bar (offline training /
+   * solo archive). Uses `totalDistinctWords` as the found-word count.
+   */
+  soloSuccessLexiconMax?: number | null;
 }
 
 /**
@@ -139,6 +147,7 @@ export function RoundResultsView({
   roundDurationSeconds,
   missingWordsToggleDisabled = false,
   winnerOverride,
+  soloSuccessLexiconMax = null,
 }: RoundResultsViewProps) {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
@@ -246,13 +255,32 @@ export function RoundResultsView({
     }
   }, [celebrate, showVictoryConfetti]);
 
+  const showSoloSuccess = soloSuccessLexiconMax != null && soloSuccessLexiconMax > 0;
+  const soloSuccessLevel = showSoloSuccess
+    ? resolveRoundSuccessLevel(totalDistinctWords, soloSuccessLexiconMax)
+    : null;
+  const soloSuccessBadge =
+    soloSuccessLevel != null ? formatSoloSuccessBadge(t, soloSuccessLevel) : null;
+
   return (
     <>
       <Screen scroll={false} style={styles.screen}>
         <View style={styles.header}>
+          {soloSuccessBadge ? (
+            <Text style={styles.soloSuccessBadge}>{soloSuccessBadge}</Text>
+          ) : null}
           {headline ? <ResultsHeadline text={headline} motionEnabled={generalMotion} /> : null}
 
           <Text style={styles.stats}>{statsLabel}</Text>
+
+          {showSoloSuccess ? (
+            <TrainingProgressBar
+              wordCount={totalDistinctWords}
+              lexiconMax={soloSuccessLexiconMax}
+              embedded
+              showLevelLabel={false}
+            />
+          ) : null}
 
           {showTabs ? (
             <View style={styles.tabs}>
@@ -408,6 +436,11 @@ function createStyles(colors: ThemeColors) {
       fontSize: 17,
       fontWeight: '600',
       color: colors.accent,
+    },
+    soloSuccessBadge: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: colors.textPrimary,
     },
     tabs: {
       flexDirection: 'row',

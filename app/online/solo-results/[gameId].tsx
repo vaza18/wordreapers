@@ -215,7 +215,7 @@ export default function OrganizerSoloResultsScreen() {
       return;
     }
     if (soloRoundMeetsMilestone) {
-      // First time crossing the 5% gate — unlock multiplayer and celebrate.
+      // First time reaching «Гарний темп» — unlock multiplayer and celebrate.
       void markTrainingRoundCompleted().then(() => {
         refreshTrainingMilestone();
         setShowUnlockModal(true);
@@ -347,7 +347,9 @@ export default function OrganizerSoloResultsScreen() {
         }}
       />
       <RoundResultsView
-        headline={viewData.headline}
+        headline={
+          roundLexicon?.maxCount && roundLexicon.maxCount > 0 ? undefined : viewData.headline
+        }
         baseWordDisplay={setup.baseWordDisplay}
         totalDistinctWords={viewData.totalDistinctWords}
         maxPlayableWords={roundLexicon?.maxCount ?? null}
@@ -366,6 +368,7 @@ export default function OrganizerSoloResultsScreen() {
         allowProperNouns={setup.allowProperNouns}
         allowSlang={setup.allowSlang}
         roundDurationSeconds={viewData.roundDurationSeconds}
+        soloSuccessLexiconMax={roundLexicon?.maxCount ?? null}
         footer={
           <RoundResultsFooterActions
             primaryLabel={t('game.newGameSamePlayers')}

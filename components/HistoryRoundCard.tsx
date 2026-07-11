@@ -5,18 +5,20 @@ import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { toDisplayUpper } from '@/lib/dictionary/normalize';
+import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import { formatResultsHeadline } from '@/lib/game/results-headline';
 import { createOnlineResultsDirectory } from '@/lib/game/results-directory';
-import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import { buildStandingsFromSession } from '@/lib/game/scoring';
 import { isSoloStandings } from '@/lib/game/solo-round';
+import { resolveRoundSuccessLevel } from '@/lib/game/solo-round-success';
+import { formatSoloSuccessHistoryHeadline } from '@/lib/game/solo-round-success-i18n';
 import { formatUkPlayers } from '@/lib/i18n/uk-plural';
-import { didPlayerWinOnlineRound } from '@/lib/profile/player-stats';
 import { formatArchiveSavedAt } from '@/lib/online/format-archive-date';
 import {
   archiveRouteKey,
   type FinishedRoundArchive,
 } from '@/lib/online/session/online-session-archive';
+import { didPlayerWinOnlineRound } from '@/lib/profile/player-stats';
 
 export interface HistoryRoundCardProps {
   archive: FinishedRoundArchive;
@@ -34,8 +36,17 @@ export function HistoryRoundCard({ archive, myUid, onPress }: HistoryRoundCardPr
   const uniqueBonusEnabled = resolveGameSessionSettingsForSession(
     archive.session,
   ).uniqueBonusEnabled;
-  const headline = formatResultsHeadline(t, directory, standings, uniqueBonusEnabled);
   const isSolo = isSoloStandings(standings);
+  const lexiconMax = archive.playableLexicon?.maxCount ?? 0;
+  const soloWordCount = standings[0]?.wordCount ?? 0;
+  const soloLevel =
+    isSolo && lexiconMax > 0 ? resolveRoundSuccessLevel(soloWordCount, lexiconMax) : null;
+  const soloHeadline =
+    soloLevel != null && soloLevel !== 'none'
+      ? formatSoloSuccessHistoryHeadline(t, soloLevel, soloWordCount)
+      : null;
+  const headline =
+    soloHeadline ?? formatResultsHeadline(t, directory, standings, uniqueBonusEnabled);
   const isViewerWinner =
     !isSolo &&
     Boolean(myUid && archive.session.players[myUid]) &&
@@ -119,12 +130,11 @@ function createStyles(colors: ThemeColors) {
       lineHeight: 20,
     },
     cardHeadlineSolo: {
-      fontSize: 14,
       color: colors.textSecondary,
     },
     cardMeta: {
       fontSize: 13,
-      color: colors.textSecondary,
+      color: colors.textTertiary,
     },
   });
 }
