@@ -9,7 +9,7 @@
 | `generated/dictionaries/`            | No     | `npm run dict:all` (also `postinstall` when missing)         |
 | `generated/legal-pages/`             | No     | `npm run legal:pages` (GitHub Pages; not in the app bundle)  |
 
-**Legal pages on GitHub Pages:** workflow `.github/workflows/legal-pages.yml` builds on `main` and `dev`, deploys only from `main`. One-time repo setup: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+**Legal pages on GitHub Pages:** workflow `.github/workflows/legal-pages.yml` builds on `main` and `dev`, deploys only from `main`. One-time repo setup: **Settings → Pages → Build and deployment → Source: GitHub Actions**. Build copies `icons/app-icon-512x512.png` and generates `favicon-32x32.png` + `apple-touch-icon.png` for all pages.
 | Anything else under `assets/` | Yes | — |
 
 **App icon:** replace `icons/app-icon.png`, then run `npm run icons:adaptive` to refresh `adaptive-icon-foreground.png`. Expo uses `app-icon.png` for `icon` and splash; Android adaptive icon uses the generated foreground plus `backgroundColor` in `app.json`.
