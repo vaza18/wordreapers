@@ -11,8 +11,6 @@ import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useOnlineViewerUid } from '@/hooks/useOnlineViewerUid';
 import { isViewerWinner } from '@/lib/game/is-viewer-winner';
-import { resolveRoundSuccessLevel } from '@/lib/game/solo-round-success';
-import { formatSoloSuccessHistoryHeadline } from '@/lib/game/solo-round-success-i18n';
 import type { GameSession } from '@/lib/firebase/types';
 import { stackHeaderWithBackAndSettings } from '@/lib/navigation/stack-header-options';
 import { loadFrozenFinishedRoundFromArchive } from '@/lib/online/session/frozen-finished-round';
@@ -137,19 +135,17 @@ export default function ArchivedRoundResultsScreen() {
     );
   }
 
+  const soloWordsPerMinute = viewData.isSolo
+    ? (viewData.playerRankGroups[0]?.players[0]?.wordsPerMinute ?? null)
+    : null;
+  const soloLexiconMax =
+    viewData.isSolo && roundLexicon && roundLexicon.maxCount > 0 ? roundLexicon.maxCount : null;
+
   return (
     <>
       <Stack.Screen options={screenOptions} />
       <RoundResultsView
-        headline={
-          viewData.isSolo && roundLexicon && roundLexicon.maxCount > 0
-            ? (formatSoloSuccessHistoryHeadline(
-                t,
-                resolveRoundSuccessLevel(viewData.totalDistinctWords, roundLexicon.maxCount),
-                viewData.totalDistinctWords,
-              ) ?? viewData.headline)
-            : viewData.headline
-        }
+        headline={soloLexiconMax != null ? undefined : viewData.headline}
         baseWordDisplay={viewData.baseWordDisplay}
         totalDistinctWords={viewData.totalDistinctWords}
         maxPlayableWords={roundLexicon?.maxCount ?? null}
@@ -160,12 +156,14 @@ export default function ArchivedRoundResultsScreen() {
         highlightPlayerId={highlightPlayerId}
         defaultExpandedPlayerId={highlightPlayerId}
         showBaseWordInMeta={false}
-        showScores={viewData.uniqueBonusEnabled}
+        showScores={viewData.isSolo ? false : viewData.uniqueBonusEnabled}
         showWordAuthors={!viewData.isSolo}
+        showTabs={!viewData.isSolo}
+        wordsPerMinuteInMeta={soloWordsPerMinute}
         allowProperNouns={viewData.allowProperNouns}
         allowSlang={viewData.allowSlang}
         roundDurationSeconds={viewData.roundDurationSeconds}
-        soloSuccessLexiconMax={viewData.isSolo ? (roundLexicon?.maxCount ?? null) : null}
+        soloSuccessLexiconMax={soloLexiconMax}
         winnerOverride={
           !viewData.isSolo && isViewerWinner(viewData.playerRankGroups, highlightPlayerId)
         }
