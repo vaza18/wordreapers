@@ -8,6 +8,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — Background «не в грі» almost never lands on real devices
+
+- **Symptom:** During a live multiplayer round, locking the phone or sending the app to background left the player as «в грі» for peers most of the time (Android ~never worked; iOS ~20%). Votes still waited on them. Training auto-pause on the same devices worked; iOS simulators rarely reproduced.
+- **Cause:** `markPlayerOffline` awaited `onDisconnect().cancel()` and a `get()` before `update({ online: false })`. Cancel removed the disconnect safety net first; on real-device suspension (common right after AppState `background`) the offline write never ran, while the RTDB socket often stayed alive so `onDisconnect` also never fired. Training pause is a synchronous local state change, so it looked fine.
+- **Fix:** Write `online: false` first; cancel onDisconnect and reconcile votes only after that.
+- **Test:** `tests/game-session-service.test.ts` (offline write order; cancel hang still sends update)
+- **Area:** `lib/firebase/game-session-service.ts`
+
 ### 2026-07 — iOS key-press sound only every other tap
 
 - **Symptom:** With button feedback set to sound/both, iOS (simulator and device) plays the key click only on every other press, even when tapping slowly. Haptics fire every press; Android sound is fine.

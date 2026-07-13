@@ -266,24 +266,22 @@ export async function clearSessionRootForRecreate(gameId: string, uid: string): 
 /**
  * Clear RTDB presence (background, results view, exit). Does not set `hasLeft`.
  * Reconciles open in-round votes so peers are not left waiting on an offline voter.
+ *
+ * Critical path: write `online: false` BEFORE canceling onDisconnect. On real devices
+ * (especially Android), the JS runtime often suspends right after AppState `background`.
+ * Canceling first removed the disconnect safety net and left the offline update unsent,
+ * so peers kept seeing «в грі».
  */
 export async function markPlayerOffline(gameId: string, uid: string): Promise<void> {
   const normalized = normalizeRoomCode(gameId);
   const generation = beginPresenceWrite(normalized, uid, 'offline');
   const node = playerRef(normalized, uid);
   try {
-    await cancelPlayerOnDisconnect(normalized, uid);
-    if (!isPresenceWriteCurrent(normalized, uid, generation, 'offline')) {
-      return;
-    }
-    const snapshot = await get(node);
-    if (!snapshot.exists()) {
-      return;
-    }
-    if (!isPresenceWriteCurrent(normalized, uid, generation, 'offline')) {
-      return;
-    }
     await update(node, { online: false });
+    if (!isPresenceWriteCurrent(normalized, uid, generation, 'offline')) {
+      return;
+    }
+    await cancelPlayerOnDisconnect(normalized, uid);
     try {
       await reconcileOpenSessionVotes(normalized);
     } catch (error) {

@@ -126,14 +126,42 @@ describe('game-session-service', () => {
   });
 
   it('marks an existing player offline', async () => {
-    getMock.mockResolvedValue({
-      exists: () => true,
-      val: () => ({ name: 'Org', wordCount: 0, score: 0, online: true }),
+    await markPlayerOffline('ABCD', 'org-1');
+
+    expect(updateMock).toHaveBeenCalledWith(expect.anything(), { online: false });
+  });
+
+  it('writes online:false before canceling onDisconnect so background suspension cannot strip the safety net first', async () => {
+    const order: string[] = [];
+    onDisconnectCancel.mockImplementation(async () => {
+      order.push('cancel');
+    });
+    updateMock.mockImplementation(async () => {
+      order.push('update');
     });
 
     await markPlayerOffline('ABCD', 'org-1');
 
-    expect(updateMock).toHaveBeenCalledWith(expect.anything(), { online: false });
+    expect(order[0]).toBe('update');
+    expect(order.indexOf('update')).toBeLessThan(order.indexOf('cancel'));
+  });
+
+  it('sends the offline write even when onDisconnect cancel never resolves', async () => {
+    let resolveCancel!: () => void;
+    onDisconnectCancel.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveCancel = resolve;
+        }),
+    );
+
+    const pending = markPlayerOffline('ABCD', 'org-1');
+    await vi.waitFor(() => {
+      expect(updateMock).toHaveBeenCalledWith(expect.anything(), { online: false });
+    });
+
+    resolveCancel();
+    await pending;
   });
 
   it('returns null when the room snapshot is missing', async () => {
