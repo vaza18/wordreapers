@@ -90,7 +90,9 @@ export default function OrganizerSoloResultsScreen() {
       statsRecordedRef.current = true;
       const standings = organizerSoloStandings(state);
       const wordsCollected = standings[0]?.wordCount ?? 0;
-      void usePlayerStatsStore.getState().recordOnlineRound(false, wordsCollected);
+      if (wordsCollected > 0) {
+        void usePlayerStatsStore.getState().recordOnlineRound(false, wordsCollected, 'training');
+      }
     }
 
     if (!archiveRecordedRef.current) {

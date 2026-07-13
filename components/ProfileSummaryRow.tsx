@@ -8,8 +8,8 @@ import { PlayerAvatar } from '@/components/PlayerAvatar';
 import { spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import {
-  formatProfileStatsGamesLine,
-  formatProfileStatsWordsLine,
+  formatCompetitionStatsLine,
+  formatTrainingStatsLine,
 } from '@/lib/profile/format-profile-stats';
 import { usePlayerStatsStore } from '@/store/player-stats-store';
 import { useProfileStore } from '@/store/profile-store';
@@ -79,9 +79,8 @@ export function ProfileSummaryRow() {
   const avatarColorIndex = useProfileStore((state) => state.avatarColorIndex);
   const hydrated = useProfileStore((state) => state.hydrated);
   const isComplete = useProfileStore((state) => state.isComplete());
-  const gamesPlayed = usePlayerStatsStore((state) => state.gamesPlayed);
-  const gamesWon = usePlayerStatsStore((state) => state.gamesWon);
-  const wordsCollected = usePlayerStatsStore((state) => state.wordsCollected);
+  const competition = usePlayerStatsStore((state) => state.competition);
+  const training = usePlayerStatsStore((state) => state.training);
   const statsHydrated = usePlayerStatsStore((state) => state.hydrated);
   const hydratePlayerStats = usePlayerStatsStore((state) => state.hydratePlayerStats);
 
@@ -116,8 +115,8 @@ export function ProfileSummaryRow() {
           <Text style={styles.name}>{displayName}</Text>
           {showStats ? (
             <View style={styles.statsCol}>
-              <Text style={styles.stats}>{formatProfileStatsGamesLine(gamesPlayed, gamesWon)}</Text>
-              <Text style={styles.stats}>{formatProfileStatsWordsLine(wordsCollected)}</Text>
+              <Text style={styles.stats}>{formatCompetitionStatsLine(competition)}</Text>
+              <Text style={styles.stats}>{formatTrainingStatsLine(training)}</Text>
             </View>
           ) : null}
         </View>

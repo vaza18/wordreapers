@@ -55,11 +55,39 @@ describe('saveSoloFinishedRoundArchive', () => {
       allowSlang: false,
     };
     const profile = { name: 'Василь', gender: 'm' as const, avatarColorIndex: 1 };
+    const word = {
+      normalized: 'тес',
+      display: 'ТЕС',
+      kind: 'unique' as const,
+      points: 2,
+      badge: null,
+      at: 1,
+    };
 
-    await saveSoloFinishedRoundArchive('ABCDE', setup, [], false, profile);
-    await saveSoloFinishedRoundArchive('FGHJK', setup, [], false, profile);
+    await saveSoloFinishedRoundArchive('ABCDE', setup, [word], false, profile);
+    await saveSoloFinishedRoundArchive('FGHJK', setup, [word], false, profile);
 
     expect((await getFinishedRoundArchive('ABCDE', 0))?.gameId).toBe('ABCDE');
     expect((await getFinishedRoundArchive('FGHJK', 0))?.gameId).toBe('FGHJK');
+  });
+
+  it('does not archive training rounds with zero accepted words', async () => {
+    const saved = await saveSoloFinishedRoundArchive(
+      'empty1',
+      {
+        baseWord: 'тест',
+        baseWordDisplay: 'ТЕСТ',
+        durationMinutes: 5,
+        uniqueBonusMode: 'off',
+        allowProperNouns: false,
+        allowSlang: false,
+      },
+      [],
+      false,
+      { name: 'Василь', gender: 'm', avatarColorIndex: 1 },
+    );
+
+    expect(saved).toBe(false);
+    expect(await getFinishedRoundArchive('empty1', 0)).toBeNull();
   });
 });

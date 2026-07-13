@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  formatCompetitionStatsLine,
   formatProfileStatsGamesLine,
   formatProfileStatsSummary,
   formatProfileStatsWordsLine,
+  formatTrainingStatsLine,
 } from '@/lib/profile/format-profile-stats';
 
 describe('formatProfileStatsGamesLine', () => {
@@ -27,5 +29,27 @@ describe('formatProfileStatsSummary', () => {
     expect(formatProfileStatsSummary(8, 8, 185)).toBe('8 ігор · 8 перемог · 185 слів');
     expect(formatProfileStatsSummary(1, 1, 1)).toBe('1 гра · 1 перемога · 1 слово');
     expect(formatProfileStatsSummary(10, 5, 158)).toBe('10 ігор · 5 перемог · 158 слів');
+  });
+});
+
+describe('formatCompetitionStatsLine', () => {
+  it('labels competition games, wins, and words', () => {
+    expect(formatCompetitionStatsLine({ gamesPlayed: 2, gamesWon: 1, wordsCollected: 6 })).toBe(
+      'Змагання: 2 гри · 1 перемога · 6 слів',
+    );
+    expect(formatCompetitionStatsLine({ gamesPlayed: 1, gamesWon: 1, wordsCollected: 1 })).toBe(
+      'Змагання: 1 гра · 1 перемога · 1 слово',
+    );
+  });
+});
+
+describe('formatTrainingStatsLine', () => {
+  it('labels training rounds and words without wins', () => {
+    expect(formatTrainingStatsLine({ roundsPlayed: 1, wordsCollected: 8 })).toBe(
+      'Тренування: 1 раунд · 8 слів',
+    );
+    expect(formatTrainingStatsLine({ roundsPlayed: 5, wordsCollected: 21 })).toBe(
+      'Тренування: 5 раундів · 21 слово',
+    );
   });
 });

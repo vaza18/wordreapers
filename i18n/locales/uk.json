@@ -183,6 +183,10 @@
   "history": {
     "title": "Історія раундів",
     "empty": "Ще немає завершених онлайн-раундів на цьому пристрої.",
+    "emptyFilter": "Немає записів у цьому фільтрі.",
+    "filterAll": "Усі",
+    "filterCompetition": "Змагання",
+    "filterTraining": "Тренування",
     "roomCode": "Кімната {{code}}",
     "roomTitle": "Історія кімнати {{code}}",
     "roomMeta": "Кімната {{code}} • гравців: {{playerCount}} • раундів: {{roundCount}}",

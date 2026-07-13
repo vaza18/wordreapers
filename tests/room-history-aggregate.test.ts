@@ -6,6 +6,7 @@ import {
   buildHistoryListEntries,
   computeRoomHistoryAggregate,
   didPlayerLeadRoomAggregate,
+  filterHistoryListEntries,
   filterMultiplayerArchivesForGame,
 } from '@/lib/online/room-history-aggregate';
 
@@ -219,6 +220,24 @@ describe('buildHistoryListEntries', () => {
     expect(entries).toHaveLength(2);
     expect(entries.every((entry) => entry.kind === 'round')).toBe(true);
   });
+
+  it('omits solo archives with zero accepted words', () => {
+    const archives = [
+      multiplayerArchive('EMPTY', 0, 100, {
+        solo: { name: 'Solo', wordCount: 0, score: 0, online: true },
+      }),
+      multiplayerArchive('SOLO1', 0, 50, {
+        solo: { name: 'Solo', wordCount: 3, score: 3, online: true },
+      }),
+    ];
+
+    const entries = buildHistoryListEntries(archives);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.kind).toBe('round');
+    if (entries[0]?.kind === 'round') {
+      expect(entries[0].archive.gameId).toBe('SOLO1');
+    }
+  });
 });
 
 describe('room leader helpers', () => {
@@ -247,6 +266,40 @@ describe('room leader helpers', () => {
     ]);
     expect(didPlayerLeadRoomAggregate('artem', aggregate)).toBe(true);
     expect(didPlayerLeadRoomAggregate('vasyl', aggregate)).toBe(false);
+  });
+});
+
+describe('filterHistoryListEntries', () => {
+  it('keeps competition room/round entries and solo training separately', () => {
+    const archives = [
+      multiplayerArchive('K123', 1, 300, {
+        'uid-a': { name: 'A', wordCount: 5, score: 10, online: true },
+        'uid-b': { name: 'B', wordCount: 2, score: 4, online: true },
+      }),
+      multiplayerArchive('K123', 0, 200, {
+        'uid-a': { name: 'A', wordCount: 3, score: 6, online: true },
+        'uid-b': { name: 'B', wordCount: 4, score: 8, online: true },
+      }),
+      multiplayerArchive('SOLO1', 0, 100, {
+        solo: { name: 'Solo', wordCount: 8, score: 8, online: true },
+      }),
+    ];
+    const entries = buildHistoryListEntries(archives);
+    expect(entries).toHaveLength(2);
+
+    const all = filterHistoryListEntries(entries, 'all');
+    expect(all).toHaveLength(2);
+
+    const competition = filterHistoryListEntries(entries, 'competition');
+    expect(competition).toHaveLength(1);
+    expect(competition[0]?.kind).toBe('room');
+
+    const training = filterHistoryListEntries(entries, 'training');
+    expect(training).toHaveLength(1);
+    expect(training[0]?.kind).toBe('round');
+    if (training[0]?.kind === 'round') {
+      expect(training[0].archive.gameId).toBe('SOLO1');
+    }
   });
 });
 

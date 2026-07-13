@@ -50,7 +50,7 @@ describe('finalizeOnlineRoundForPlayer', () => {
     await finalizeOnlineRoundForPlayer('ABCD', 0, 'org', standings);
 
     expect(markOnlineRoundProcessed).toHaveBeenCalledWith('ABCD:0');
-    expect(recordOnlineRound).toHaveBeenCalledWith(true, 3);
+    expect(recordOnlineRound).toHaveBeenCalledWith(true, 3, 'competition');
     expect(incrementCloudPlayerStatsIfRegistered).toHaveBeenCalledWith(true);
     expect(clearActiveRoundCacheForSession).toHaveBeenCalledWith('ABCD', 0);
   });

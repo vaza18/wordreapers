@@ -1,9 +1,10 @@
 import { buildStandingsFromSession } from '@/lib/game/scoring';
 import { isSoloStandings } from '@/lib/game/solo-round';
 import {
+  DEFAULT_SPLIT_PLAYER_STATS,
   didPlayerWinOnlineRound,
   normalizeProfilePlayerName,
-  type PlayerStats,
+  type SplitPlayerStats,
 } from '@/lib/profile/player-stats';
 import type { FinishedRoundArchive } from '@/lib/online/session/online-session-archive';
 
@@ -12,11 +13,10 @@ export function computeArchivedPlayerStats(
   archives: readonly FinishedRoundArchive[],
   playerUid: string,
   profileName: string,
-): PlayerStats {
+): SplitPlayerStats {
   const nameKey = normalizeProfilePlayerName(profileName);
-  let gamesPlayed = 0;
-  let gamesWon = 0;
-  let wordsCollected = 0;
+  const competition = { ...DEFAULT_SPLIT_PLAYER_STATS.competition };
+  const training = { ...DEFAULT_SPLIT_PLAYER_STATS.training };
 
   for (const archive of archives) {
     const standings = buildStandingsFromSession(archive.session);
@@ -30,8 +30,12 @@ export function computeArchivedPlayerStats(
       if (normalizeProfilePlayerName(soloPlayer.name) !== nameKey) {
         continue;
       }
-      gamesPlayed += 1;
-      wordsCollected += soloPlayer.wordCount ?? 0;
+      const soloWords = soloPlayer.wordCount ?? 0;
+      if (soloWords <= 0) {
+        continue;
+      }
+      training.roundsPlayed += 1;
+      training.wordsCollected += soloWords;
       continue;
     }
 
@@ -39,12 +43,12 @@ export function computeArchivedPlayerStats(
     if (!player) {
       continue;
     }
-    gamesPlayed += 1;
-    wordsCollected += player.wordCount ?? 0;
+    competition.gamesPlayed += 1;
+    competition.wordsCollected += player.wordCount ?? 0;
     if (didPlayerWinOnlineRound(playerUid, standings)) {
-      gamesWon += 1;
+      competition.gamesWon += 1;
     }
   }
 
-  return { gamesPlayed, gamesWon, wordsCollected };
+  return { competition, training };
 }
