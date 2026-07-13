@@ -45,6 +45,7 @@ android/
 build-*.aab
 build-*.apk
 build-*.ipa
+build-*.txt
 # Coverage reports for tests.
 coverage/
 

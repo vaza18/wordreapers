@@ -162,11 +162,6 @@ export default function JoinRoomScreen() {
         ) : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {loading ? <ActivityIndicator color={colors.accent} /> : null}
-        <PrimaryButton
-          label={t('online.joinAction')}
-          disabled={joinLocked || loading || !isValidRoomCode(normalizeRoomCode(code))}
-          onPress={handleJoin}
-        />
 
         {canScanQr ? (
           <>
@@ -198,6 +193,12 @@ export default function JoinRoomScreen() {
             />
           </>
         ) : null}
+
+        <PrimaryButton
+          label={t('online.joinAction')}
+          disabled={joinLocked || loading || !isValidRoomCode(normalizeRoomCode(code))}
+          onPress={handleJoin}
+        />
 
         <View style={styles.publicSection}>
           <View style={styles.sectionDivider} />
