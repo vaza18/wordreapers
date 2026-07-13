@@ -8,6 +8,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — Process death on left screen loses «Повернутись до гри»
+
+- **Symptom:** After voluntary leave from a live multiplayer round, staying on the left screen (rejoin still available) and letting the OS kill the app opened home on relaunch — rejoin was no longer one tap away.
+- **Cause:** Left-screen parking was only in navigation memory; cold start had solo/paused resume but no pointer for `/online/left`.
+- **Fix:** Persist `leftOnlineResume`; cold start opens left after solo/paused checks when the RTDB room/player still exist (playing or finished). Clear on Home or successful rejoin.
+- **Test:** `tests/left-online-resume.test.ts`, `tests/resume-interrupted-round.test.ts`
+- **Area:** `lib/online/session/left-online-resume.ts`, `lib/app/resolve-interrupted-round-resume.ts`, `app/online/left/[gameId].tsx`
+
 ### 2026-07 — Process death wipes paused training / dinner multiplayer pause
 
 - **Symptom:** Leaving the app during a training round (or a mutually paused multiplayer round) and returning later opened the home screen with the round gone.

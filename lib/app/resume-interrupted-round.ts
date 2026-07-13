@@ -8,6 +8,10 @@ import { normalizeRoomCode } from '../firebase/room-code.js';
 import type { GameSession } from '../firebase/types.js';
 import { createLocalRoomDraft, updateLocalRoomDraft } from '../online/local-room-draft.js';
 import {
+  clearLeftOnlineResume,
+  loadLeftOnlineResume,
+} from '../online/session/left-online-resume.js';
+import {
   clearPausedOnlineResume,
   loadPausedOnlineResume,
 } from '../online/session/paused-online-resume.js';
@@ -61,9 +65,11 @@ export async function resolveInterruptedRoundResumeDefault(): Promise<Interrupte
   return resolveInterruptedRoundResume({
     loadSolo: loadSoloRoundSnapshot,
     applySolo: applySoloSnapshot,
-    loadOnlinePointer: loadPausedOnlineResume,
+    loadPausedPointer: loadPausedOnlineResume,
+    clearPausedPointer: clearPausedOnlineResume,
+    loadLeftPointer: loadLeftOnlineResume,
+    clearLeftPointer: clearLeftOnlineResume,
     fetchSession: fetchGameSession,
     getUid: () => useFirebaseStore.getState().uid,
-    clearOnlinePointer: clearPausedOnlineResume,
   });
 }

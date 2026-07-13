@@ -76,6 +76,13 @@ Format: **Decision → Alternatives → Why rejected → Date**
 - **Why rejected:** Full persist writes too often and mixes concerns. Unpaused multiplayer must keep a shared server timer. Auto-route matches “return to dinner pause” UX; snapshots clear on finish/explicit leave (no TTL).
 - **Date:** 2026-07 — `lib/game/solo-round-snapshot.ts`, `lib/online/session/paused-online-resume.ts`, `lib/app/resolve-interrupted-round-resume.ts`
 
+## ADR-011: Persist left-round screen across process death
+
+- **Decision:** While the viewer is on `/online/left` after voluntary leave, persist `wordreapers.leftOnlineResume`. Cold-start priority: solo → paused online → left screen. Restore opens left (with «Повернутись до гри» if still playing), not auto-rejoin into play. Keep the pointer when the round finished so left can show results; clear on Home or successful rejoin / missing room.
+- **Alternatives considered:** Auto-rejoin into play; home CTA only; reuse paused pointer with a `kind` field.
+- **Why rejected:** Intentional leave must not silently re-enter the round. Separate pointer keeps pause vs leave semantics clear.
+- **Date:** 2026-07 — `lib/online/session/left-online-resume.ts`, `lib/app/resolve-interrupted-round-resume.ts`
+
 ---
 
 When adding a new ADR: keep it short; link the implementing file; do not duplicate `online-multiplayer-rules.md` tables.

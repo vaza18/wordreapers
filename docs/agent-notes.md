@@ -11,7 +11,8 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 ### 2026-07-13 — Round resume after process death
 
 - Solo snapshot key `wordreapers.soloRoundSnapshot`; always restored as paused; persist on pause/word/addTime/background.
-- Online pointer only when `pauseState.active`; cold start verifies RTDB. Unpaused live multiplayer is never auto-resumed.
+- Online paused pointer only when `pauseState.active`; cold start verifies RTDB. Unpaused live multiplayer is never auto-resumed.
+- Left-round pointer `wordreapers.leftOnlineResume`; cold start opens `/online/left` (not auto-rejoin). Priority: solo → paused → left.
 
 ### 2026-07-10 — Expo SDK 57 upgrade (upgrade/expo-sdk-57)
 

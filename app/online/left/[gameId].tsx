@@ -22,6 +22,13 @@ import {
   persistFinishedRoundFromFirebase,
 } from '@/lib/online/session/complete-pending-round-archive';
 import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
+import { normalizeRoomCode } from '@/lib/firebase/room-code';
+import {
+  clearLeftOnlineResume,
+  loadLeftOnlineResume,
+  syncLeftOnlineResumePointer,
+} from '@/lib/online/session/left-online-resume';
+import { clearPausedOnlineResume } from '@/lib/online/session/paused-online-resume';
 import {
   freezeFinishedRound,
   loadFrozenFinishedRoundFromArchive,
@@ -139,6 +146,19 @@ export default function OnlineLeftRoundScreen() {
   );
 
   useEffect(() => {
+    if (!gameId) {
+      return;
+    }
+    void (async () => {
+      const pointer = await loadLeftOnlineResume();
+      if (!pointer || normalizeRoomCode(pointer.gameId) !== normalizeRoomCode(gameId)) {
+        return;
+      }
+      setLeftAtBaseWordRound((prev) => prev ?? pointer.baseWordRound);
+    })();
+  }, [gameId]);
+
+  useEffect(() => {
     if (
       skipAutoLeaveRef.current ||
       rejoinLoading ||
@@ -158,6 +178,14 @@ export default function OnlineLeftRoundScreen() {
       return round;
     });
   }, [gameId, myUid, rejoinLoading, session?.baseWordRound, session?.status]);
+
+  useEffect(() => {
+    if (!gameId || !myUid || leftAtBaseWordRound == null || !session?.players[myUid]) {
+      return;
+    }
+    void clearPausedOnlineResume();
+    void syncLeftOnlineResumePointer(gameId, myUid, leftAtBaseWordRound, session);
+  }, [gameId, leftAtBaseWordRound, myUid, session]);
 
   const liveWordsSignature = useMemo(() => {
     const parts: string[] = [];
@@ -357,10 +385,12 @@ export default function OnlineLeftRoundScreen() {
     try {
       const { name, gender, avatarColorIndex } = useProfileStore.getState();
       const joined = await rejoinOnlineRound(gameId, { name, gender, avatarColorIndex });
+      await clearLeftOnlineResume();
       router.replace(resolvePostJoinRoute(joined, myUid, gameId));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (message === 'ROUND_ALREADY_FINISHED') {
+        await clearLeftOnlineResume();
         router.replace(onlineResultsRoute(gameId, leftAtBaseWordRound ?? undefined));
         return;
       }
