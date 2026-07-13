@@ -331,6 +331,7 @@
     "resultsWordsMetaWithMax": "{{count}} з {{max}} {{wordsLabel}}",
     "showMissingWords": "Показати незнайдені слова",
     "showMissingWordsAfterRound": "Ця опція зʼявиться після завершення раунду",
+    "openDefinitionA11y": "Відкрити тлумачення слова {{word}}",
     "playableWordsLoading": "Рахуємо слова…",
     "playableWordsNeedBaseWord": "Обери базове слово",
     "resultsRoundDuration": "Тривалість: {{duration}}",

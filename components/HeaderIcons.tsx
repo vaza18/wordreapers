@@ -135,3 +135,23 @@ export function RefreshIcon({ size = 20, color }: HeaderIconProps) {
     </Svg>
   );
 }
+
+/** Open book — external dictionary / definition lookup. */
+export function DictionaryBookIcon({ size = 18, color }: HeaderIconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M4 5.5A2.5 2.5 0 0 1 6.5 3H12v16H6.5A2.5 2.5 0 0 0 4 21.5V5.5Z"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M20 5.5A2.5 2.5 0 0 0 17.5 3H12v16h5.5a2.5 2.5 0 0 1 2.5 2.5V5.5Z"
+        stroke={color}
+        strokeWidth={1.75}
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
