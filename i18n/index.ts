@@ -30,6 +30,11 @@ export async function initI18n(): Promise<typeof i18n> {
   if (initialized) {
     return i18n;
   }
+  // Lib/tests may have already bootstrapped resources; still attach react-i18next once.
+  if (i18n.isInitialized) {
+    initialized = true;
+    return i18n;
+  }
 
   const stored = await AsyncStorage.getItem(LOCALE_STORAGE_KEY);
   const initialLocale =

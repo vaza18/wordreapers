@@ -155,7 +155,10 @@ function voluntaryLeaveKey(gameId: string, uid: string): string {
   return `${normalizeRoomCode(gameId)}:${uid}`;
 }
 
-/** Blocks mark-online races while a player is voluntarily leaving the waiting lobby. */
+/**
+ * Blocks mark-online / mark-offline races while a voluntary leave is in flight
+ * (waiting lobby or intentional leave from a live round before hasLeft is written).
+ */
 export function beginVoluntaryLeave(gameId: string, uid: string): void {
   const key = voluntaryLeaveKey(gameId, uid);
   voluntaryLeaveInFlight.set(key, (voluntaryLeaveInFlight.get(key) ?? 0) + 1);
@@ -266,24 +269,27 @@ export async function clearSessionRootForRecreate(gameId: string, uid: string): 
 /**
  * Clear RTDB presence (background, results view, exit). Does not set `hasLeft`.
  * Reconciles open in-round votes so peers are not left waiting on an offline voter.
+ *
+ * Critical path: write `online: false` BEFORE canceling onDisconnect. On real devices
+ * (especially Android), the JS runtime often suspends right after AppState `background`.
+ * Canceling first removed the disconnect safety net and left the offline update unsent,
+ * so peers kept seeing «в грі».
  */
 export async function markPlayerOffline(gameId: string, uid: string): Promise<void> {
   const normalized = normalizeRoomCode(gameId);
+  // Intentional leave navigates away before leaveGameSession writes hasLeft; skip the
+  // intermediate online:false-only write so peers do not toast «не в грі» then «залишив гру».
+  if (isVoluntaryLeaveInFlight(normalized, uid)) {
+    return;
+  }
   const generation = beginPresenceWrite(normalized, uid, 'offline');
   const node = playerRef(normalized, uid);
   try {
-    await cancelPlayerOnDisconnect(normalized, uid);
-    if (!isPresenceWriteCurrent(normalized, uid, generation, 'offline')) {
-      return;
-    }
-    const snapshot = await get(node);
-    if (!snapshot.exists()) {
-      return;
-    }
-    if (!isPresenceWriteCurrent(normalized, uid, generation, 'offline')) {
-      return;
-    }
     await update(node, { online: false });
+    if (!isPresenceWriteCurrent(normalized, uid, generation, 'offline')) {
+      return;
+    }
+    await cancelPlayerOnDisconnect(normalized, uid);
     try {
       await reconcileOpenSessionVotes(normalized);
     } catch (error) {
@@ -1048,6 +1054,9 @@ export async function voluntaryLeaveWaitingLobbyIfMember(
   uid: string,
 ): Promise<void> {
   const normalized = normalizeRoomCode(gameId);
+  if (isVoluntaryLeaveInFlight(normalized, uid)) {
+    return;
+  }
   try {
     const snapshot = await get(sessionRef(normalized));
     if (!snapshot.exists()) {

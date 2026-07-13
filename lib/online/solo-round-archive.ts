@@ -71,7 +71,11 @@ export async function saveSoloFinishedRoundArchive(
   profile: PlayerProfile,
   finishedAtMs?: number,
   roundPlayedSeconds?: number,
-): Promise<void> {
+): Promise<boolean> {
+  // Empty training rounds clutter history and inflate «раундів» without progress.
+  if (words.length === 0) {
+    return false;
+  }
   const session = buildSoloFinishedSession(
     setup,
     words,
@@ -82,4 +86,5 @@ export async function saveSoloFinishedRoundArchive(
   );
   const archiveWords = buildSoloFinishedArchiveWords(words);
   await saveFinishedRoundArchive(gameId, session, archiveWords);
+  return true;
 }

@@ -7,6 +7,7 @@ import {
   didProfilePlayerWinLocalRound,
   normalizeProfilePlayerName,
   parsePlayerStats,
+  parseSplitPlayerStats,
   shouldCountLocalRoundForProfile,
 } from '../lib/profile/player-stats.js';
 import { isProfileComplete, parsePlayerProfile } from '../lib/profile/player-profile.js';
@@ -90,6 +91,29 @@ describe('player-stats', () => {
       gamesPlayed: 2,
       gamesWon: 0,
       wordsCollected: 5,
+    });
+  });
+
+  it('maps legacy flat stats to competition-only split', () => {
+    expect(
+      parseSplitPlayerStats(JSON.stringify({ gamesPlayed: 3, gamesWon: 1, wordsCollected: 10 })),
+    ).toEqual({
+      competition: { gamesPlayed: 3, gamesWon: 1, wordsCollected: 10 },
+      training: { roundsPlayed: 0, wordsCollected: 0 },
+    });
+  });
+
+  it('parses split competition and training payloads', () => {
+    expect(
+      parseSplitPlayerStats(
+        JSON.stringify({
+          competition: { gamesPlayed: 2, gamesWon: 1, wordsCollected: 6 },
+          training: { roundsPlayed: 4, wordsCollected: 12 },
+        }),
+      ),
+    ).toEqual({
+      competition: { gamesPlayed: 2, gamesWon: 1, wordsCollected: 6 },
+      training: { roundsPlayed: 4, wordsCollected: 12 },
     });
   });
 

@@ -2,6 +2,8 @@ import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import sharp from 'sharp';
+
 import { GENERATED_LEGAL_PAGES_DIR } from '../lib/assets/generated-paths.js';
 import { markdownHeadingSlug } from '../lib/legal/markdown-links.js';
 
@@ -9,6 +11,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = join(root, GENERATED_LEGAL_PAGES_DIR);
 const iconSource = join(root, 'assets/icons/app-icon-512x512.png');
 const iconFileName = 'app-icon-512x512.png';
+const faviconFileName = 'favicon-32x32.png';
+const appleTouchIconFileName = 'apple-touch-icon.png';
 const storeBadgeSources = [
   { source: 'assets/store-badges/google-play-uk.svg', fileName: 'google-play-uk.svg' },
   { source: 'assets/store-badges/app-store-uk.svg', fileName: 'app-store-uk.svg' },
@@ -243,6 +247,9 @@ function wrapPage(slug: string, title: string, body: string, subtitle?: string):
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${title}</title>
+  <link rel="icon" href="${faviconFileName}" type="image/png" sizes="32x32" />
+  <link rel="icon" href="${iconFileName}" type="image/png" sizes="512x512" />
+  <link rel="apple-touch-icon" href="${appleTouchIconFileName}" sizes="180x180" />
   <style>${STYLES}</style>
 </head>
 <body>
@@ -255,8 +262,16 @@ ${renderSiteFooter()}
 </html>`;
 }
 
+async function writeFavicons(): Promise<void> {
+  await sharp(iconSource).resize(32, 32).png().toFile(join(outDir, faviconFileName));
+  await sharp(iconSource).resize(180, 180).png().toFile(join(outDir, appleTouchIconFileName));
+  console.log('Wrote', join(outDir, faviconFileName));
+  console.log('Wrote', join(outDir, appleTouchIconFileName));
+}
+
 mkdirSync(outDir, { recursive: true });
 copyFileSync(iconSource, join(outDir, iconFileName));
+await writeFavicons();
 for (const { source, fileName } of storeBadgeSources) {
   copyFileSync(join(root, source), join(outDir, fileName));
 }

@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { WordList } from '@/components/WordList';
@@ -96,6 +97,7 @@ export const OnlinePlayWordListSection = memo(function OnlinePlayWordListSection
   showScoreBadges,
   showOverlapPeers,
 }: OnlinePlayWordListSectionProps) {
+  const { t } = useTranslation();
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
   const chipColors = feedbackChipStyle(colors, feedbackVariant);
@@ -131,7 +133,7 @@ export const OnlinePlayWordListSection = memo(function OnlinePlayWordListSection
           <View
             style={styles.syncIndicatorSlot}
             pointerEvents="none"
-            accessibilityLabel="Синхронізація з сервером"
+            accessibilityLabel={t('game.syncingA11y')}
             accessibilityRole="progressbar"
           >
             <ActivityIndicator size="small" color={colors.accent} />

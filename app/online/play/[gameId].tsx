@@ -37,6 +37,8 @@ import { playWordAcceptedFeedback } from '@/lib/feedback/game-feedback';
 import { ensureAnonymousAuth } from '@/lib/firebase/auth';
 import { getServerNow } from '@/lib/firebase/server-clock';
 import {
+  beginVoluntaryLeave,
+  endVoluntaryLeave,
   finishGameSession,
   finishGameSessionIfExpired,
   leaveGameSession,
@@ -53,6 +55,12 @@ import {
   purgeStaleActiveRoundCaches,
   tryRestoreActiveRoundCache,
 } from '@/lib/online/session/cache-active-round';
+import {
+  clearPausedOnlineResume,
+  loadPausedOnlineResume,
+  syncPausedOnlineResumePointer,
+} from '@/lib/online/session/paused-online-resume';
+import { normalizeRoomCode } from '@/lib/firebase/room-code';
 import {
   hasOnlineOpponent,
   onlineActiveOpponentNames,
@@ -221,16 +229,21 @@ export default function OnlinePlayScreen() {
       return;
     }
     leavingIntentionallyRef.current = true;
+    // Block presence-unmount offline before navigate so peers do not toast «не в грі»
+    // between play unmount and leaveGameSession's atomic hasLeft write.
+    beginVoluntaryLeave(gameId, myUid);
     void markPendingRoundArchive(gameId, session.baseWordRound ?? 0, myUid);
     navigateAfterLeave();
     void (async () => {
       try {
-        await cacheActiveRoundProgress(gameId, myUid, session, myWordsRef.current);
         await leaveGameSession(gameId, myUid);
+        await cacheActiveRoundProgress(gameId, myUid, session, myWordsRef.current);
       } catch (error) {
         if (__DEV__) {
           console.warn('runIntentionalLeave', error);
         }
+      } finally {
+        endVoluntaryLeave(gameId, myUid);
       }
     })();
   }, [gameId, myUid, navigateAfterLeave, session]);
@@ -958,6 +971,29 @@ export default function OnlinePlayScreen() {
       void proposePause(gameId, myUid);
     },
   );
+
+  useEffect(() => {
+    if (!myUid || !session) {
+      return;
+    }
+    if (session.status === 'playing' && session.pauseState?.active) {
+      void syncPausedOnlineResumePointer(gameId, myUid, session);
+      return;
+    }
+    void (async () => {
+      const pointer = await loadPausedOnlineResume();
+      if (pointer && normalizeRoomCode(pointer.gameId) === normalizeRoomCode(gameId)) {
+        await clearPausedOnlineResume();
+      }
+    })();
+  }, [
+    gameId,
+    myUid,
+    session,
+    session?.status,
+    session?.pauseState?.active,
+    session?.baseWordRound,
+  ]);
 
   useEffect(() => {
     if (!hasOnlineOpponentInRound) {

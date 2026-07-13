@@ -1,7 +1,7 @@
 import type { TFunction } from 'i18next';
 
 import { soloSuccessMedal, type SoloSuccessLevelId } from '@/lib/game/solo-round-success';
-import { ukWordForm } from '@/lib/i18n/uk-plural';
+import { formatUkWords } from '@/lib/i18n/uk-plural';
 
 const LEVEL_TITLE_KEYS: Record<Exclude<SoloSuccessLevelId, 'none'>, string> = {
   progress: 'soloSuccess.levelProgress',
@@ -46,8 +46,7 @@ export function formatSoloSuccessHistoryHeadline(
   return t('soloSuccess.historyHeadline', {
     medal: medal ? `${medal} ` : '',
     title,
-    words: wordCount,
-    wordForm: ukWordForm(wordCount),
+    wordsLabel: formatUkWords(wordCount),
   });
 }
 

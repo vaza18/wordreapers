@@ -72,6 +72,7 @@ vi.mock('../lib/firebase/session-ref.js', () => ({
 import {
   abandonWaitingGameSession,
   beginVoluntaryLeave,
+  endVoluntaryLeave,
   finishGameSessionIfExpired,
   gameSessionExists,
   leaveGameSession,
@@ -81,6 +82,7 @@ import {
   rematchFinishedSessionToWaiting,
   startGameSession,
   tryReadGameSessionSnapshot,
+  voluntaryLeaveWaitingLobbyIfMember,
 } from '../lib/firebase/game-session-service.js';
 import { DEFAULT_SESSION_SETTINGS, finishedSession } from './helpers/game-session-fixtures.js';
 
@@ -118,22 +120,86 @@ describe('game-session-service', () => {
 
   it('skips mark online while voluntary leave is in flight', async () => {
     beginVoluntaryLeave('ABCD', 'org-1');
+    try {
+      await markPlayerOnline('ABCD', 'org-1');
 
-    await markPlayerOnline('ABCD', 'org-1');
+      expect(getMock).not.toHaveBeenCalled();
+      expect(updateMock).not.toHaveBeenCalled();
+    } finally {
+      endVoluntaryLeave('ABCD', 'org-1');
+    }
+  });
 
-    expect(getMock).not.toHaveBeenCalled();
-    expect(updateMock).not.toHaveBeenCalled();
+  it('skips mark offline while voluntary leave is in flight', async () => {
+    beginVoluntaryLeave('ABCD', 'guest');
+    try {
+      await markPlayerOffline('ABCD', 'guest');
+
+      expect(updateMock).not.toHaveBeenCalled();
+    } finally {
+      endVoluntaryLeave('ABCD', 'guest');
+    }
+  });
+
+  it('skips presence-unmount offline while voluntary leave is in flight', async () => {
+    getMock.mockResolvedValue({
+      exists: () => true,
+      val: () => ({
+        ...waitingSession,
+        status: 'playing' as const,
+        players: {
+          'org-1': { name: 'Org', wordCount: 0, score: 0, online: true },
+          guest: { name: 'Guest', wordCount: 0, score: 0, online: true },
+        },
+      }),
+    });
+    beginVoluntaryLeave('ABCD', 'guest');
+    try {
+      await voluntaryLeaveWaitingLobbyIfMember('ABCD', 'guest');
+
+      expect(updateMock).not.toHaveBeenCalled();
+    } finally {
+      endVoluntaryLeave('ABCD', 'guest');
+    }
   });
 
   it('marks an existing player offline', async () => {
-    getMock.mockResolvedValue({
-      exists: () => true,
-      val: () => ({ name: 'Org', wordCount: 0, score: 0, online: true }),
+    await markPlayerOffline('ABCD', 'org-1');
+
+    expect(updateMock).toHaveBeenCalledWith(expect.anything(), { online: false });
+  });
+
+  it('writes online:false before canceling onDisconnect so background suspension cannot strip the safety net first', async () => {
+    const order: string[] = [];
+    onDisconnectCancel.mockImplementation(async () => {
+      order.push('cancel');
+    });
+    updateMock.mockImplementation(async () => {
+      order.push('update');
     });
 
     await markPlayerOffline('ABCD', 'org-1');
 
-    expect(updateMock).toHaveBeenCalledWith(expect.anything(), { online: false });
+    expect(order[0]).toBe('update');
+    expect(order.indexOf('update')).toBeLessThan(order.indexOf('cancel'));
+  });
+
+  it('sends the offline write even when onDisconnect cancel never resolves', async () => {
+    let resolveCancel!: () => void;
+    onDisconnectCancel.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveCancel = resolve;
+        }),
+    );
+
+    const pending = markPlayerOffline('ABCD', 'org-1');
+    await vi.waitFor(() => {
+      expect(updateMock).toHaveBeenCalledWith(expect.anything(), { online: false });
+    });
+
+    resolveCancel();
+    await pending;
   });
 
   it('returns null when the room snapshot is missing', async () => {

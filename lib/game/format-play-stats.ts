@@ -1,4 +1,5 @@
-import { formatUkWords } from '../i18n/uk-plural.js';
+import i18n from '@/i18n';
+import { formatUkPoints, formatUkWords } from '../i18n/uk-plural.js';
 
 /** i18n labels for compact and accessible play stats formatting. */
 export interface PlayStatsLabels {
@@ -28,14 +29,16 @@ export interface PlayStatsCompactSegment {
   variant: PlayStatsCompactSegmentVariant;
 }
 
-const DEFAULT_LABELS: PlayStatsLabels = {
-  rankSuffix: 'м',
-  wordsSuffix: 'сл',
-  pointsSuffix: 'оч',
-  placeLabel: (rank) => `${rank} місце`,
-  pointsLabel: (score) =>
-    `${score} ${score === 1 ? 'очко' : score >= 2 && score <= 4 ? 'очки' : 'очок'}`,
-};
+/** Default labels from the active i18n catalog (Ukrainian today). */
+export function defaultPlayStatsLabels(): PlayStatsLabels {
+  return {
+    rankSuffix: i18n.t('game.rankSuffix'),
+    wordsSuffix: i18n.t('game.wordsShort'),
+    pointsSuffix: i18n.t('game.pointsShort'),
+    placeLabel: (rank) => i18n.t('game.placeLabel', { rank }),
+    pointsLabel: (score) => formatUkPoints(score),
+  };
+}
 
 function pushPlayStatsSeparator(segments: PlayStatsCompactSegment[]): void {
   if (segments.length > 0) {
@@ -48,7 +51,10 @@ function pushPlayStatsSeparator(segments: PlayStatsCompactSegment[]): void {
  */
 export function formatPlayStatsCompactSegments(
   input: PlayStatsInput,
-  labels: Pick<PlayStatsLabels, 'rankSuffix' | 'wordsSuffix' | 'pointsSuffix'> = DEFAULT_LABELS,
+  labels: Pick<
+    PlayStatsLabels,
+    'rankSuffix' | 'wordsSuffix' | 'pointsSuffix'
+  > = defaultPlayStatsLabels(),
 ): PlayStatsCompactSegment[] {
   const segments: PlayStatsCompactSegment[] = [];
 
@@ -76,7 +82,10 @@ export function formatPlayStatsCompactSegments(
  */
 export function formatPlayStatsCompact(
   input: PlayStatsInput,
-  labels: Pick<PlayStatsLabels, 'rankSuffix' | 'wordsSuffix' | 'pointsSuffix'> = DEFAULT_LABELS,
+  labels: Pick<
+    PlayStatsLabels,
+    'rankSuffix' | 'wordsSuffix' | 'pointsSuffix'
+  > = defaultPlayStatsLabels(),
 ): string {
   return formatPlayStatsCompactSegments(input, labels)
     .map((segment) => segment.text)
@@ -88,7 +97,7 @@ export function formatPlayStatsCompact(
  */
 export function formatPlayStatsAccessible(
   input: PlayStatsInput,
-  labels: PlayStatsLabels = DEFAULT_LABELS,
+  labels: PlayStatsLabels = defaultPlayStatsLabels(),
 ): string {
   const parts: string[] = [];
   if (input.showRank !== false) {
@@ -96,7 +105,10 @@ export function formatPlayStatsAccessible(
   }
   const wordsPart =
     input.maxWordCount != null && input.maxWordCount > 0
-      ? `${formatUkWords(input.wordCount)} з ${input.maxWordCount}`
+      ? i18n.t('game.wordsOfMax', {
+          words: formatUkWords(input.wordCount),
+          max: input.maxWordCount,
+        })
       : formatUkWords(input.wordCount);
   parts.push(wordsPart);
   if (input.showScore !== false) {
@@ -109,7 +121,7 @@ export function formatPlayStatsAccessible(
 export function formatStandingRowMeta(
   wordCount: number,
   score: number | null,
-  labels: Pick<PlayStatsLabels, 'pointsLabel'> = DEFAULT_LABELS,
+  labels: Pick<PlayStatsLabels, 'pointsLabel'> = defaultPlayStatsLabels(),
 ): string {
   const words = formatUkWords(wordCount);
   if (score == null) {

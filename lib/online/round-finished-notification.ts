@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 
+import i18n from '@/i18n';
 import { loadExpoNotifications } from '../native/load-expo-notifications.js';
 
 import {
@@ -18,7 +19,7 @@ export async function ensureNotificationPermissions(): Promise<boolean> {
 
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('round-results', {
-      name: 'Результати раунду',
+      name: i18n.t('game.roundFinishedNotificationChannel'),
       importance: Notifications.AndroidImportance.DEFAULT,
     });
   }

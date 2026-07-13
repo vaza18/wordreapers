@@ -1,3 +1,5 @@
+import i18n from '@/i18n';
+
 import type { GameSession, GameSessionPlayer } from '../../firebase/types.js';
 
 import { PUBLIC_LOBBY_MAX_PLAYERS } from './constants.js';
@@ -8,7 +10,7 @@ import { rosterJoinOrder, sessionIdentityMasked } from './session-identity.js';
  */
 export function formatPublicAlias(n: number, locale = 'uk-uk'): string {
   if (locale.startsWith('uk')) {
-    return `Гравець ${n}`;
+    return i18n.t('game.playerName', { index: n });
   }
   return `Player ${n}`;
 }

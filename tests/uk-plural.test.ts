@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatUkPlayers, formatUkWords, ukPluralForm, ukWordForm } from '@/lib/i18n/uk-plural';
+import {
+  formatUkPlayers,
+  formatUkRounds,
+  formatUkWords,
+  NBSP,
+  ukPluralForm,
+  ukWordForm,
+} from '@/lib/i18n/uk-plural';
 
 describe('ukPluralForm', () => {
   it('uses one for …1 except teens and penultimate 1', () => {
@@ -30,21 +37,33 @@ describe('ukPluralForm', () => {
 });
 
 describe('formatUkPlayers', () => {
-  it('formats player counts', () => {
-    expect(formatUkPlayers(1)).toBe('1 гравець');
-    expect(formatUkPlayers(2)).toBe('2 гравці');
-    expect(formatUkPlayers(5)).toBe('5 гравців');
-    expect(formatUkPlayers(11)).toBe('11 гравців');
-    expect(formatUkPlayers(21)).toBe('21 гравець');
-    expect(formatUkPlayers(22)).toBe('22 гравці');
+  it('formats player counts with non-breaking space before the unit', () => {
+    expect(formatUkPlayers(1)).toBe(`1${NBSP}гравець`);
+    expect(formatUkPlayers(2)).toBe(`2${NBSP}гравці`);
+    expect(formatUkPlayers(5)).toBe(`5${NBSP}гравців`);
+    expect(formatUkPlayers(11)).toBe(`11${NBSP}гравців`);
+    expect(formatUkPlayers(21)).toBe(`21${NBSP}гравець`);
+    expect(formatUkPlayers(22)).toBe(`22${NBSP}гравці`);
   });
 });
 
 describe('formatUkWords', () => {
-  it('formats word counts', () => {
-    expect(formatUkWords(1)).toBe('1 слово');
-    expect(formatUkWords(2)).toBe('2 слова');
-    expect(formatUkWords(5)).toBe('5 слів');
+  it('formats word counts with Slavic plurals and NBSP', () => {
+    expect(formatUkWords(1)).toBe(`1${NBSP}слово`);
+    expect(formatUkWords(2)).toBe(`2${NBSP}слова`);
+    expect(formatUkWords(5)).toBe(`5${NBSP}слів`);
+    expect(formatUkWords(21)).toBe(`21${NBSP}слово`);
+    expect(formatUkWords(22)).toBe(`22${NBSP}слова`);
+  });
+});
+
+describe('formatUkRounds', () => {
+  it('formats round counts with Slavic plurals and NBSP', () => {
+    expect(formatUkRounds(1)).toBe(`1${NBSP}раунд`);
+    expect(formatUkRounds(2)).toBe(`2${NBSP}раунди`);
+    expect(formatUkRounds(5)).toBe(`5${NBSP}раундів`);
+    expect(formatUkRounds(21)).toBe(`21${NBSP}раунд`);
+    expect(formatUkRounds(22)).toBe(`22${NBSP}раунди`);
   });
 });
 

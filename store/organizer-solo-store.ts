@@ -3,6 +3,11 @@ import { create } from 'zustand';
 import type { ScoredWordEntry, WordScoreBadge, WordScoreKind } from '@/lib/game/scoring';
 import { buildStandings, computePlayerScore, resolveUniqueBonusEnabled } from '@/lib/game/scoring';
 import { computeRoundPlayedSecondsFromTimerState } from '@/lib/game/round-duration';
+import {
+  clearSoloRoundSnapshot,
+  persistSoloRoundSnapshotFromState,
+  type SoloRoundSnapshotV1,
+} from '@/lib/game/solo-round-snapshot';
 import type { LocalRoomSetup } from '@/lib/online/local-room-draft';
 import { computeExtendedTimerEndsAt } from '@/lib/online/voting/add-time-vote';
 
@@ -31,6 +36,8 @@ export interface OrganizerSoloState {
   words: OrganizerSoloWord[];
   published: boolean;
   initFromSetup: (draftId: string, setup: LocalRoomSetup) => void;
+  /** Restore a durable paused snapshot after process death. */
+  hydrateFromSnapshot: (snapshot: SoloRoundSnapshotV1) => void;
   startRound: () => void;
   appendWord: (word: OrganizerSoloWord) => void;
   finishRound: () => void;
@@ -38,6 +45,8 @@ export interface OrganizerSoloState {
   resumeRound: () => void;
   addTime: (minutes: number) => void;
   markPublished: () => void;
+  /** Write durable paused snapshot when an active round exists. */
+  persistSnapshot: () => Promise<boolean>;
   clear: () => void;
   getScoredWords: () => ScoredWordEntry[];
   getScore: () => number;
@@ -69,6 +78,25 @@ export const useOrganizerSoloStore = create<OrganizerSoloState>((set, get) => ({
       setup,
       uniqueBonusEnabled: resolveUniqueBonusEnabled(setup.uniqueBonusMode, 1),
     });
+    void clearSoloRoundSnapshot();
+  },
+
+  hydrateFromSnapshot: (snapshot) => {
+    set({
+      ...initialState,
+      draftId: snapshot.draftId,
+      setup: snapshot.setup,
+      uniqueBonusEnabled: snapshot.uniqueBonusEnabled,
+      endsAt: null,
+      finishedAt: null,
+      finishedRemainingMs: null,
+      pausedRemainingMs: snapshot.pausedRemainingMs,
+      roundTimerBudgetSeconds: snapshot.roundTimerBudgetSeconds,
+      roundPlayedSeconds: snapshot.roundPlayedSeconds,
+      status: 'paused',
+      words: snapshot.words.map((word) => ({ ...word })),
+      published: snapshot.published,
+    });
   },
 
   startRound: () => {
@@ -91,6 +119,7 @@ export const useOrganizerSoloStore = create<OrganizerSoloState>((set, get) => ({
     set((state) => ({
       words: [...state.words, word],
     }));
+    void get().persistSnapshot();
   },
 
   finishRound: () => {
@@ -110,6 +139,7 @@ export const useOrganizerSoloStore = create<OrganizerSoloState>((set, get) => ({
       pausedRemainingMs: null,
       roundPlayedSeconds,
     });
+    void clearSoloRoundSnapshot();
   },
 
   pauseRound: () => {
@@ -122,6 +152,7 @@ export const useOrganizerSoloStore = create<OrganizerSoloState>((set, get) => ({
       pausedRemainingMs: Math.max(0, endsAt - Date.now()),
       endsAt: null,
     });
+    void get().persistSnapshot();
   },
 
   resumeRound: () => {
@@ -134,6 +165,7 @@ export const useOrganizerSoloStore = create<OrganizerSoloState>((set, get) => ({
       endsAt: Date.now() + pausedRemainingMs,
       pausedRemainingMs: null,
     });
+    void get().persistSnapshot();
   },
 
   addTime: (minutes) => {
@@ -145,6 +177,7 @@ export const useOrganizerSoloStore = create<OrganizerSoloState>((set, get) => ({
         endsAt: computeExtendedTimerEndsAt(endsAt, minutes, Date.now()),
         roundTimerBudgetSeconds: (roundTimerBudgetSeconds ?? 0) + addSeconds,
       });
+      void get().persistSnapshot();
       return;
     }
     if (status === 'paused' && pausedRemainingMs !== null) {
@@ -152,6 +185,7 @@ export const useOrganizerSoloStore = create<OrganizerSoloState>((set, get) => ({
         pausedRemainingMs: pausedRemainingMs + addMs,
         roundTimerBudgetSeconds: (roundTimerBudgetSeconds ?? 0) + addSeconds,
       });
+      void get().persistSnapshot();
     }
   },
 
@@ -159,8 +193,25 @@ export const useOrganizerSoloStore = create<OrganizerSoloState>((set, get) => ({
     set({ published: true });
   },
 
+  persistSnapshot: () => {
+    const state = get();
+    return persistSoloRoundSnapshotFromState({
+      draftId: state.draftId,
+      setup: state.setup,
+      uniqueBonusEnabled: state.uniqueBonusEnabled,
+      status: state.status,
+      endsAt: state.endsAt,
+      pausedRemainingMs: state.pausedRemainingMs,
+      roundTimerBudgetSeconds: state.roundTimerBudgetSeconds,
+      roundPlayedSeconds: state.roundPlayedSeconds,
+      words: state.words,
+      published: state.published,
+    });
+  },
+
   clear: () => {
     set({ ...initialState, setup: null });
+    void clearSoloRoundSnapshot();
   },
 
   getScoredWords: () => {

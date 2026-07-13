@@ -1,3 +1,4 @@
+import i18n from '@/i18n';
 import { resolveGameSessionSettings } from '../firebase/session-settings.js';
 import type { GameSession } from '../firebase/types.js';
 import { roundStartMsFromSession } from '../online/stale-player-words.js';
@@ -109,7 +110,7 @@ export function formatRoundDuration(seconds: number): string {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   if (secs === 0) {
-    return `${mins} хв`;
+    return i18n.t('game.durationMinutes', { count: mins });
   }
   return `${mins}:${String(secs).padStart(2, '0')}`;
 }

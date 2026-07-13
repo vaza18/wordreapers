@@ -6,7 +6,7 @@ import type { FinishedRoundArchive } from '@/lib/online/session/online-session-a
 
 const t = ((key: string, params?: Record<string, string | number>) => {
   if (key === 'history.roomStandingWithScores') {
-    return `${params?.rank} місце: ${params?.name} • ${params?.wins} • ${params?.score}оч • ${params?.words}`;
+    return `${params?.rank} місце: ${params?.name} • ${params?.wins} • ${params?.scoreLabel} • ${params?.words}`;
   }
   return `${params?.rank} місце: ${params?.name} • ${params?.wins} • ${params?.words}`;
 }) as Parameters<typeof formatRoomStandingLine>[0];
@@ -44,6 +44,6 @@ describe('formatRoomStandingLine', () => {
     const aggregate = computeRoomHistoryAggregate('K123', archives);
     const row = aggregate.standings[0];
     expect(row).toBeDefined();
-    expect(formatRoomStandingLine(t, aggregate, row!, 1, '', 'card')).toContain('10оч');
+    expect(formatRoomStandingLine(t, aggregate, row!, 1, '', 'card')).toContain('10\u00A0очок');
   });
 });

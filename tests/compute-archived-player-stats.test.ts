@@ -30,7 +30,7 @@ function archive(
 }
 
 describe('computeArchivedPlayerStats', () => {
-  it('counts multiplayer wins, solo training, and words for the profile player', () => {
+  it('splits multiplayer competition from solo training for the profile player', () => {
     const archives: FinishedRoundArchive[] = [
       archive('WIN', {
         'uid-a': { name: 'A', wordCount: 5, score: 10, online: true },
@@ -46,9 +46,8 @@ describe('computeArchivedPlayerStats', () => {
     ];
 
     expect(computeArchivedPlayerStats(archives, 'uid-a', 'Василь')).toEqual({
-      gamesPlayed: 3,
-      gamesWon: 1,
-      wordsCollected: 14,
+      competition: { gamesPlayed: 2, gamesWon: 1, wordsCollected: 6 },
+      training: { roundsPlayed: 1, wordsCollected: 8 },
     });
   });
 
@@ -60,9 +59,35 @@ describe('computeArchivedPlayerStats', () => {
     ];
 
     expect(computeArchivedPlayerStats(archives, 'uid-a', 'Василь')).toEqual({
-      gamesPlayed: 0,
-      gamesWon: 0,
-      wordsCollected: 0,
+      competition: { gamesPlayed: 0, gamesWon: 0, wordsCollected: 0 },
+      training: { roundsPlayed: 0, wordsCollected: 0 },
+    });
+  });
+
+  it('ignores solo archives with zero words', () => {
+    const archives = [
+      archive('EMPTY', {
+        solo: { name: 'Василь', wordCount: 0, score: 0, online: true },
+      }),
+    ];
+
+    expect(computeArchivedPlayerStats(archives, 'uid-a', 'Василь')).toEqual({
+      competition: { gamesPlayed: 0, gamesWon: 0, wordsCollected: 0 },
+      training: { roundsPlayed: 0, wordsCollected: 0 },
+    });
+  });
+
+  it('ignores multiplayer archives where the viewer uid is absent', () => {
+    const archives = [
+      archive('OTHER', {
+        'uid-b': { name: 'B', wordCount: 4, score: 8, online: true },
+        'uid-c': { name: 'C', wordCount: 2, score: 4, online: true },
+      }),
+    ];
+
+    expect(computeArchivedPlayerStats(archives, 'uid-a', 'Василь')).toEqual({
+      competition: { gamesPlayed: 0, gamesWon: 0, wordsCollected: 0 },
+      training: { roundsPlayed: 0, wordsCollected: 0 },
     });
   });
 });

@@ -27,7 +27,7 @@ export async function finalizeOnlineRoundForPlayer(
 
   const won = didPlayerWinOnlineRound(uid, standings);
   const wordsCollected = standings.find((row) => row.playerId === uid)?.wordCount ?? 0;
-  await usePlayerStatsStore.getState().recordOnlineRound(won, wordsCollected);
+  await usePlayerStatsStore.getState().recordOnlineRound(won, wordsCollected, 'competition');
   await incrementCloudPlayerStatsIfRegistered(won);
   await clearActiveRoundCacheForSession(gameId, baseWordRound);
 }

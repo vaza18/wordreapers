@@ -7,7 +7,10 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
+import { FeedbackPressable } from '@/components/FeedbackPressable';
+import { DictionaryBookIcon } from '@/components/HeaderIcons';
 import { ResultWordAuthorAvatars } from '@/components/ResultWordAuthorAvatars';
 import { NotebookLineFiller } from '@/components/notebook/NotebookLineFiller';
 import type { createNotebookRowLineStyle } from '@/lib/notebook/row-line-style';
@@ -15,7 +18,10 @@ import { useNotebookRowLineStyle } from '@/hooks/useNotebookRowLineStyle';
 import { useVirtualWordListProps } from '@/hooks/useVirtualWordListProps';
 import { spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
+import { useTheme } from '@/hooks/useTheme';
+import { buildUkrainianDefinitionUrl } from '@/lib/dictionary/external-definition-url';
 import type { ResultsWordListRow } from '@/lib/game/results-missing-words';
+import { openAppConstructedUrl } from '@/lib/ui/open-app-url';
 
 interface ResultsGlobalWordListProps {
   rows: readonly ResultsWordListRow[];
@@ -42,12 +48,33 @@ function ResultsWordRow({
   styles: ReturnType<typeof createStyles>;
   notebookRow: ReturnType<typeof createNotebookRowLineStyle>;
 }) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+
+  const handleOpenDefinition = useCallback(() => {
+    const url = buildUkrainianDefinitionUrl(row.normalized);
+    if (url) {
+      void openAppConstructedUrl(url);
+    }
+  }, [row.normalized]);
+
   return (
     <View style={[notebookRow.row, styles.row]}>
       <Text style={[styles.word, !row.found ? styles.wordMissing : null]} numberOfLines={1}>
         {row.display}
       </Text>
       <View style={styles.meta}>
+        {!row.found ? (
+          <FeedbackPressable
+            accessibilityRole="button"
+            accessibilityLabel={t('game.openDefinitionA11y', { word: row.display })}
+            hitSlop={8}
+            onPress={handleOpenDefinition}
+            style={styles.definitionButton}
+          >
+            <DictionaryBookIcon size={18} color={colors.textSecondary} />
+          </FeedbackPressable>
+        ) : null}
         {showAuthors && row.found && row.authors ? (
           <ResultWordAuthorAvatars authors={row.authors} showUniqueBadge={showScoreBadges} />
         ) : null}
@@ -157,6 +184,11 @@ function createStyles(colors: ThemeColors) {
       gap: spacing.xs,
       flexShrink: 0,
       overflow: 'visible',
+    },
+    definitionButton: {
+      padding: spacing.xs,
+      justifyContent: 'center',
+      alignItems: 'center',
     },
     x2: {
       fontSize: 12,

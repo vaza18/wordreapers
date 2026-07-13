@@ -1,5 +1,5 @@
 import { router, Stack } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { I18nextProvider } from 'react-i18next';
 import { StatusBar } from 'expo-status-bar';
@@ -15,7 +15,16 @@ import {
 import { spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import i18n, { initI18n } from '@/i18n';
-import { LOCAL_BOOTSTRAP_TIMEOUT_MS, withBootstrapTimeout } from '@/lib/app/bootstrap-timeout';
+import {
+  FIREBASE_BOOTSTRAP_TIMEOUT_MS,
+  LOCAL_BOOTSTRAP_TIMEOUT_MS,
+  withBootstrapTimeout,
+} from '@/lib/app/bootstrap-timeout';
+import {
+  resolveInterruptedRoundResumeDefault,
+  resumeTargetHref,
+  type InterruptedRoundResumeTarget,
+} from '@/lib/app/resume-interrupted-round';
 import { warmUpFeedbackModules } from '@/lib/feedback/game-feedback';
 import { enableAccessibleTypography } from '@/lib/typography/enable-accessible-typography';
 import { subscribeImmersiveStatusBar } from '@/lib/system-ui';
@@ -47,8 +56,17 @@ function BootstrapLoading() {
   );
 }
 
-function RootStack() {
+function RootStack({ resumeTarget }: { resumeTarget: InterruptedRoundResumeTarget | null }) {
   const { colors } = useTheme();
+  const resumedRef = useRef(false);
+
+  useEffect(() => {
+    if (!resumeTarget || resumedRef.current) {
+      return;
+    }
+    resumedRef.current = true;
+    router.replace(resumeTargetHref(resumeTarget));
+  }, [resumeTarget]);
 
   return (
     <I18nextProvider i18n={i18n}>
@@ -127,6 +145,7 @@ function RootStack() {
  */
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
+  const [resumeTarget, setResumeTarget] = useState<InterruptedRoundResumeTarget | null>(null);
   useRoundFinishedNotificationRouting(ready);
   useOnlineSyncCoordinator(ready);
   const setLocale = useSettingsStore((state) => state.setLocale);
@@ -179,6 +198,15 @@ export default function RootLayout() {
           withBootstrapTimeout(hydrateProfile(), LOCAL_BOOTSTRAP_TIMEOUT_MS, 'profile'),
           withBootstrapTimeout(hydratePlayerStats(), LOCAL_BOOTSTRAP_TIMEOUT_MS, 'playerStats'),
         ]);
+
+        const target = await withBootstrapTimeout(
+          resolveInterruptedRoundResumeDefault(),
+          FIREBASE_BOOTSTRAP_TIMEOUT_MS,
+          'resumeInterruptedRound',
+        );
+        if (target) {
+          setResumeTarget(target);
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (__DEV__) {
@@ -211,7 +239,9 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <ThemeProvider>{ready ? <RootStack /> : <BootstrapLoading />}</ThemeProvider>
+      <ThemeProvider>
+        {ready ? <RootStack resumeTarget={resumeTarget} /> : <BootstrapLoading />}
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

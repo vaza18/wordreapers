@@ -29,8 +29,40 @@ export type HistoryListEntry =
   | { kind: 'room'; aggregate: RoomHistoryAggregate }
   | { kind: 'round'; archive: FinishedRoundArchive };
 
-function isMultiplayerArchive(archive: FinishedRoundArchive): boolean {
+export function isMultiplayerArchive(archive: FinishedRoundArchive): boolean {
   return !isSoloStandings(buildStandingsFromSession(archive.session));
+}
+
+/** Solo training with no accepted words — skip in history list (and no longer archived). */
+export function isEmptySoloArchive(archive: FinishedRoundArchive): boolean {
+  if (isMultiplayerArchive(archive)) {
+    return false;
+  }
+  const solo = archive.session.players.solo;
+  return (solo?.wordCount ?? 0) <= 0;
+}
+
+export type HistoryListFilter = 'all' | 'competition' | 'training';
+
+function isCompetitionHistoryEntry(entry: HistoryListEntry): boolean {
+  if (entry.kind === 'room') {
+    return true;
+  }
+  return isMultiplayerArchive(entry.archive);
+}
+
+/** Filter main history list by competition (multiplayer) vs training (solo). */
+export function filterHistoryListEntries(
+  entries: readonly HistoryListEntry[],
+  filter: HistoryListFilter,
+): HistoryListEntry[] {
+  if (filter === 'all') {
+    return [...entries];
+  }
+  if (filter === 'competition') {
+    return entries.filter(isCompetitionHistoryEntry);
+  }
+  return entries.filter((entry) => !isCompetitionHistoryEntry(entry));
 }
 
 /** Room leaderboard uses points when 3+ players and unique bonus mode is auto. */
@@ -211,6 +243,9 @@ export function buildHistoryListEntries(
   const entries: HistoryListEntry[] = [];
 
   for (const archive of sorted) {
+    if (isEmptySoloArchive(archive)) {
+      continue;
+    }
     const aggregate = roomAggregates.get(archive.gameId);
     if (aggregate) {
       if (emittedRooms.has(archive.gameId)) {

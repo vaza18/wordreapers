@@ -18,7 +18,6 @@ import {
 } from '@/components/notebook/NotebookLineFiller';
 import { NotebookRuledFill } from '@/components/notebook/NotebookRuledFill';
 import { PlaySessionToastStack } from '@/components/PlaySessionToast';
-import { TrainingProgressBar } from '@/components/online/TrainingProgressBar';
 import {
   SCROLL_OVERFLOW_THRESHOLD,
   useScrollablePanelMetrics,
@@ -116,8 +115,9 @@ export interface RoundResultsViewProps {
    */
   winnerOverride?: boolean;
   /**
-   * When set (>0), show solo success badge + segment bar (offline training /
-   * solo archive). Uses `totalDistinctWords` as the found-word count.
+   * When set (>0), show solo success badge (offline training / solo archive).
+   * Uses `totalDistinctWords` as the found-word count. No progress bar —
+   * "words until next level" belongs on the live play screen only.
    */
   soloSuccessLexiconMax?: number | null;
 }
@@ -272,15 +272,6 @@ export function RoundResultsView({
           {headline ? <ResultsHeadline text={headline} motionEnabled={generalMotion} /> : null}
 
           <Text style={styles.stats}>{statsLabel}</Text>
-
-          {showSoloSuccess ? (
-            <TrainingProgressBar
-              wordCount={totalDistinctWords}
-              lexiconMax={soloSuccessLexiconMax}
-              embedded
-              showLevelLabel={false}
-            />
-          ) : null}
 
           {showTabs ? (
             <View style={styles.tabs}>
