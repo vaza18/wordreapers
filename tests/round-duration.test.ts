@@ -44,7 +44,7 @@ function finishedSession(
 
 describe('formatRoundDuration', () => {
   it('formats whole minutes in Ukrainian', () => {
-    expect(formatRoundDuration(600)).toBe('10 хв');
+    expect(formatRoundDuration(600)).toBe('10\u00A0хв');
   });
 
   it('formats minutes and seconds as MM:SS', () => {
@@ -118,7 +118,7 @@ describe('computeRoundDurationSeconds', () => {
       ['p2', new Map([['b', { at: 1_240_000 }]])],
     ]);
     expect(computeRoundDurationSeconds(session, byPlayer)).toBe(300);
-    expect(formatRoundDuration(300)).toBe('5 хв');
+    expect(formatRoundDuration(300)).toBe('5\u00A0хв');
   });
 
   it('falls back to word timestamps for legacy sessions without roundPlayedSeconds', () => {

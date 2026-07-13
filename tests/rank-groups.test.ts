@@ -19,13 +19,13 @@ const row = (
 const t = (key: string, params?: Record<string, string | number>) => {
   const table: Record<string, string> = {
     'game.resultsTitle': 'Гра завершена',
-    'game.resultsTieHeadline': `Нічия · ${params?.score} · ${params?.words}`,
-    'game.resultsTieHeadlineWords': `Нічия · ${params?.words}сл`,
-    'game.resultsSoloHeadline': `Solo · ${params?.words}сл`,
-    'game.resultsCoWinnersHeadline': `Co: ${params?.names} · ${params?.score}`,
+    'game.resultsTieHeadline': `Нічия · ${params?.scoreLabel}`,
+    'game.resultsTieHeadlineWords': `Нічия · ${params?.wordsLabel}`,
+    'game.resultsSoloHeadline': `Solo · ${params?.wordsLabel}`,
+    'game.resultsCoWinnersHeadline': `Co: ${params?.names} · ${params?.scoreLabel}`,
     'game.resultsCoWinnersHeadlineWords': `Co: ${params?.names}`,
-    'game.winnerLineNeutral': `Win: ${params?.name} · ${params?.score}`,
-    'game.winnerLineNeutralWords': `Win: ${params?.name} · ${params?.words}сл`,
+    'game.winnerLineNeutral': `Win: ${params?.name} · ${params?.scoreLabel}`,
+    'game.winnerLineNeutralWords': `Win: ${params?.name} · ${params?.wordsLabel}`,
     'game.defaultPlayerName': `P${params?.index}`,
   };
   return table[key] ?? key;
@@ -54,19 +54,19 @@ describe('formatResultsHeadline', () => {
   it('shows solo quip for a single player', () => {
     const standings = [row('player-0', 2, 1)];
     const directory = createLocalResultsDirectory(['Сим'], undefined, t);
-    expect(formatResultsHeadline(t, directory, standings)).toBe('Solo · 1сл');
+    expect(formatResultsHeadline(t, directory, standings)).toBe('Solo · 1\u00A0слово');
   });
 
   it('shows tie without scores when bonus is off', () => {
     const standings = [row('player-0', 0, 0), row('player-1', 0, 0)];
     const directory = createLocalResultsDirectory(['А', 'Б'], undefined, t);
-    expect(formatResultsHeadline(t, directory, standings)).toBe('Нічия · 0сл');
+    expect(formatResultsHeadline(t, directory, standings)).toBe('Нічия · 0\u00A0слів');
   });
 
   it('shows tie with scores when bonus is on', () => {
     const standings = [row('player-0', 0, 0), row('player-1', 0, 0)];
     const directory = createLocalResultsDirectory(['А', 'Б'], undefined, t);
-    expect(formatResultsHeadline(t, directory, standings, true)).toBe('Нічия · 0 · 0');
+    expect(formatResultsHeadline(t, directory, standings, true)).toBe('Нічия · 0\u00A0очок');
   });
 
   it('lists co-winners only when score and word count match', () => {

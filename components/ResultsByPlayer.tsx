@@ -9,6 +9,7 @@ import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import type { PlayerResultRankGroup } from '@/lib/game/results-view';
 import { formatRankWithMedal } from '@/lib/game/format-rank-label';
+import { formatUkPoints, formatUkWords } from '@/lib/i18n/uk-plural';
 
 interface ResultsByPlayerProps {
   rankGroups: readonly PlayerResultRankGroup[];
@@ -81,12 +82,12 @@ export function ResultsByPlayer({
                 {showScores
                   ? t('game.resultsRankTier', {
                       rank,
-                      score: rep?.score ?? 0,
-                      words: rep?.wordCount ?? 0,
+                      scoreLabel: formatUkPoints(rep?.score ?? 0),
+                      wordsLabel: formatUkWords(rep?.wordCount ?? 0),
                     })
                   : t('game.resultsRankTierWords', {
                       rank,
-                      words: rep?.wordCount ?? 0,
+                      wordsLabel: formatUkWords(rep?.wordCount ?? 0),
                     })}
               </Text>
             ) : null}

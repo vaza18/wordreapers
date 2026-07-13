@@ -1,7 +1,7 @@
 import type { TFunction } from 'i18next';
 
 import { formatRankWithMedal } from '@/lib/game/format-rank-label';
-import { formatUkWords, formatUkWins } from '@/lib/i18n/uk-plural';
+import { formatUkPoints, formatUkWords, formatUkWins } from '@/lib/i18n/uk-plural';
 import { roomStandingDisplayName } from '@/lib/online/room-standing-display-name';
 import {
   assignRoomDisplayRanks,
@@ -21,7 +21,7 @@ export function formatRoomStandingLine(
     rank: formatRankWithMedal(rank),
     name: roomStandingDisplayName(row.playerId, aggregate, myUid),
     wins: formatUkWins(row.roundWins),
-    score: row.totalScore,
+    scoreLabel: formatUkPoints(row.totalScore),
     words: formatUkWords(row.totalWords),
   };
 

@@ -1,50 +1,13 @@
-import { ukPluralForm } from '@/lib/i18n/uk-plural';
+import i18n from '@/i18n';
+import { formatUkGames, formatUkRounds, formatUkWins, formatUkWords } from '@/lib/i18n/uk-plural';
 import type { CompetitionPlayerStats, TrainingPlayerStats } from '@/lib/profile/player-stats';
-
-const GAME_FORMS = {
-  one: 'гра',
-  few: 'гри',
-  many: 'ігор',
-} as const;
-
-const WIN_FORMS = {
-  one: 'перемога',
-  few: 'перемоги',
-  many: 'перемог',
-} as const;
-
-const ROUND_FORMS = {
-  one: 'раунд',
-  few: 'раунди',
-  many: 'раундів',
-} as const;
-
-function formatUkGames(count: number): string {
-  return `${count} ${GAME_FORMS[ukPluralForm(count)]}`;
-}
-
-function formatUkWins(count: number): string {
-  return `${count} ${WIN_FORMS[ukPluralForm(count)]}`;
-}
-
-function formatUkRounds(count: number): string {
-  return `${count} ${ROUND_FORMS[ukPluralForm(count)]}`;
-}
-
-function formatUkWords(count: number): string {
-  const form = ukPluralForm(count);
-  if (form === 'one') {
-    return `${count} слово`;
-  }
-  if (form === 'few') {
-    return `${count} слова`;
-  }
-  return `${count} слів`;
-}
 
 /** «8 ігор · 3 перемоги» */
 export function formatProfileStatsGamesLine(gamesPlayed: number, gamesWon: number): string {
-  return `${formatUkGames(gamesPlayed)} · ${formatUkWins(gamesWon)}`;
+  return i18n.t('profileStats.gamesWonLine', {
+    games: formatUkGames(gamesPlayed),
+    wins: formatUkWins(gamesWon),
+  });
 }
 
 /** «185 слів» */
@@ -58,15 +21,26 @@ export function formatProfileStatsSummary(
   gamesWon: number,
   wordsCollected: number,
 ): string {
-  return `${formatProfileStatsGamesLine(gamesPlayed, gamesWon)} · ${formatProfileStatsWordsLine(wordsCollected)}`;
+  return i18n.t('profileStats.summaryLine', {
+    games: formatUkGames(gamesPlayed),
+    wins: formatUkWins(gamesWon),
+    words: formatUkWords(wordsCollected),
+  });
 }
 
 /** «Змагання: 2 ігри · 1 перемога · 6 слів» */
 export function formatCompetitionStatsLine(stats: CompetitionPlayerStats): string {
-  return `Змагання: ${formatUkGames(stats.gamesPlayed)} · ${formatUkWins(stats.gamesWon)} · ${formatUkWords(stats.wordsCollected)}`;
+  return i18n.t('profileStats.competitionLine', {
+    games: formatUkGames(stats.gamesPlayed),
+    wins: formatUkWins(stats.gamesWon),
+    words: formatUkWords(stats.wordsCollected),
+  });
 }
 
 /** «Тренування: 1 раунд · 8 слів» */
 export function formatTrainingStatsLine(stats: TrainingPlayerStats): string {
-  return `Тренування: ${formatUkRounds(stats.roundsPlayed)} · ${formatUkWords(stats.wordsCollected)}`;
+  return i18n.t('profileStats.trainingLine', {
+    rounds: formatUkRounds(stats.roundsPlayed),
+    words: formatUkWords(stats.wordsCollected),
+  });
 }

@@ -1,3 +1,5 @@
+import { formatUkPoints, formatUkWords } from '../i18n/uk-plural.js';
+
 /** Player gender for Ukrainian UI agreement (TZ §5). */
 export type PlayerGender = 'f' | 'm' | null;
 
@@ -46,8 +48,13 @@ export function formatWinnerHeadline(
   params: WinnerLineParams,
   showScores = true,
 ): string {
+  const wordsLabel = formatUkWords(params.words);
   if (showScores) {
-    const withScore = { name: params.name, score: params.score, words: params.words };
+    const withScore = {
+      name: params.name,
+      scoreLabel: formatUkPoints(params.score),
+      wordsLabel,
+    };
     if (gender === 'f') {
       return t('game.winnerLineFemale', withScore);
     }
@@ -57,7 +64,7 @@ export function formatWinnerHeadline(
     return t('game.winnerLineNeutral', withScore);
   }
 
-  const wordsOnly = { name: params.name, words: params.words };
+  const wordsOnly = { name: params.name, wordsLabel };
   if (gender === 'f') {
     return t('game.winnerLineFemaleWords', wordsOnly);
   }

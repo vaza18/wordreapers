@@ -6,6 +6,7 @@ import {
   formatPlayStatsCompactSegments,
   formatStandingRowMeta,
 } from '@/lib/game/format-play-stats';
+import { NBSP } from '@/lib/i18n/uk-plural';
 
 describe('formatPlayStatsCompact', () => {
   it('formats rank, words with max, and score', () => {
@@ -60,7 +61,7 @@ describe('formatPlayStatsAccessible', () => {
         maxWordCount: 571,
         score: 14,
       }),
-    ).toBe('2 місце · 12 слів з 571 · 14 очок');
+    ).toBe(`2${NBSP}місце · 12${NBSP}слів з 571 · 14${NBSP}очок`);
   });
 
   it('formats singular score', () => {
@@ -70,16 +71,16 @@ describe('formatPlayStatsAccessible', () => {
         wordCount: 1,
         score: 1,
       }),
-    ).toBe('1 місце · 1 слово · 1 очко');
+    ).toBe(`1${NBSP}місце · 1${NBSP}слово · 1${NBSP}очко`);
   });
 });
 
 describe('formatStandingRowMeta', () => {
   it('joins words and points with full forms', () => {
-    expect(formatStandingRowMeta(12, 14)).toBe('12 слів · 14 очок');
+    expect(formatStandingRowMeta(12, 14)).toBe(`12${NBSP}слів · 14${NBSP}очок`);
   });
 
   it('returns words only when score is null', () => {
-    expect(formatStandingRowMeta(5, null)).toBe('5 слів');
+    expect(formatStandingRowMeta(5, null)).toBe(`5${NBSP}слів`);
   });
 });

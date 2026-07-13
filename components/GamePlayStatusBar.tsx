@@ -1,4 +1,5 @@
 import { memo, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Animated, Easing, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -152,6 +153,7 @@ export const GamePlayStatusBar = memo(function GamePlayStatusBar({
   statsAccessibilityLabel,
   style,
 }: GamePlayStatusBarProps) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -199,7 +201,7 @@ export const GamePlayStatusBar = memo(function GamePlayStatusBar({
     showScore,
   };
   const statsText = formatPlayStatsCompactSegments(statsInput, {
-    rankSuffix: 'м',
+    rankSuffix: t('game.rankSuffix'),
     wordsSuffix: wordsShort,
     pointsSuffix: pointsShort,
   });

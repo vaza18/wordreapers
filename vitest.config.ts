@@ -19,7 +19,7 @@ export default defineConfig({
       'components/**/__tests__/**/*.test.tsx',
     ],
     exclude: process.env.VITEST_RULES ? [] : ['tests/firebase/database.rules.test.ts'],
-    setupFiles: ['tests/setup/vitest-react-native.setup.ts'],
+    setupFiles: ['tests/setup/vitest-react-native.setup.ts', 'tests/setup/vitest-i18n.setup.ts'],
     coverage: {
       provider: 'v8',
       include: ['lib/**/*.ts', 'functions/src/**/*.ts'],

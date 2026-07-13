@@ -5,6 +5,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
+import { formatUkPlayers, formatUkRounds } from '@/lib/i18n/uk-plural';
 import { formatArchiveDateRange } from '@/lib/online/format-archive-date';
 import { formatRoomStandingLine, roomStandingRanks } from '@/lib/online/format-room-standing-line';
 import {
@@ -44,8 +45,8 @@ export function HistoryRoomAggregateCard({
       <Text style={styles.cardMeta}>
         {t('history.roomMeta', {
           code: aggregate.gameId,
-          playerCount: aggregate.uniquePlayerCount,
-          roundCount: aggregate.roundCount,
+          players: formatUkPlayers(aggregate.uniquePlayerCount),
+          rounds: formatUkRounds(aggregate.roundCount),
         })}
       </Text>
       {topStandings.map((row) => {
