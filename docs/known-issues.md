@@ -8,6 +8,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — Process death wipes paused training / dinner multiplayer pause
+
+- **Symptom:** Leaving the app during a training round (or a mutually paused multiplayer round) and returning later opened the home screen with the round gone.
+- **Cause:** Solo state lived only in in-memory Zustand; multiplayer pause lived in RTDB but cold start did not navigate back to play. Existing `activeOnlineRounds` cache required a live `timerEndsAt` and did not cover paused rooms.
+- **Fix:** Persist a solo paused snapshot and a paused-online resume pointer on background/pause; cold-start bootstrap restores solo first, else verifies RTDB pause and opens play with the pause modal. Unpaused live multiplayer is not auto-resumed.
+- **Test:** `tests/solo-round-snapshot.test.ts`, `tests/paused-online-resume.test.ts`, `tests/resume-interrupted-round.test.ts`
+- **Area:** `lib/game/solo-round-snapshot.ts`, `lib/online/session/paused-online-resume.ts`, `lib/app/resolve-interrupted-round-resume.ts`, `app/_layout.tsx`
+
 ### 2026-07 — Background «не в грі» almost never lands on real devices
 
 - **Symptom:** During a live multiplayer round, locking the phone or sending the app to background left the player as «в грі» for peers most of the time (Android ~never worked; iOS ~20%). Votes still waited on them. Training auto-pause on the same devices worked; iOS simulators rarely reproduced.

@@ -2,7 +2,7 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useIsFocused } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, AppState, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
@@ -95,6 +95,7 @@ export default function OrganizerSoloPlayScreen() {
   const pauseRound = useOrganizerSoloStore((state) => state.pauseRound);
   const resumeRound = useOrganizerSoloStore((state) => state.resumeRound);
   const addTime = useOrganizerSoloStore((state) => state.addTime);
+  const persistSnapshot = useOrganizerSoloStore((state) => state.persistSnapshot);
   const getScoredWords = useOrganizerSoloStore((state) => state.getScoredWords);
   const getRemainingMs = useOrganizerSoloStore((state) => state.getRemainingMs);
 
@@ -254,7 +255,28 @@ export default function OrganizerSoloPlayScreen() {
     onClearHint: clearFeedback,
   });
 
-  useAutoPauseOnAppBackground(status === 'playing', pauseRound);
+  useAutoPauseOnAppBackground(status === 'playing', () => {
+    pauseRound();
+    void useOrganizerSoloStore.getState().persistSnapshot();
+  });
+
+  useEffect(() => {
+    if (status !== 'paused') {
+      return;
+    }
+    void persistSnapshot();
+  }, [persistSnapshot, status, words]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'background' && useOrganizerSoloStore.getState().status === 'paused') {
+        void useOrganizerSoloStore.getState().persistSnapshot();
+      }
+    });
+    return () => {
+      sub.remove();
+    };
+  }, []);
   const playRulesLabel = formatPlayRulesLabel(
     t,
     setup

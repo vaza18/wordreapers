@@ -20,6 +20,7 @@ import type { AllPlayerWords } from './session/clone-player-words.js';
 import { markResultsExitedAndOffline, persistLocalArchive } from './coordinated-session-cleanup.js';
 import { setOrganizerWaitingRoom } from './organizer-waiting-room.js';
 import { cacheActiveRoundProgress } from './session/cache-active-round.js';
+import { clearPausedOnlineResume } from './session/paused-online-resume.js';
 
 export interface ExitOnlineFlowOptions {
   gameId: string;
@@ -94,6 +95,8 @@ async function runExitCleanup(options: ExitOnlineFlowOptions): Promise<void> {
  */
 export async function exitOnlineToHome(options: ExitOnlineFlowOptions): Promise<void> {
   const { gameId, uid, sessionStatus, session, myWords, exitedResults } = options;
+
+  await clearPausedOnlineResume();
 
   if (sessionStatus === 'playing' && session && myWords) {
     await cacheActiveRoundProgress(gameId, uid, session, myWords);

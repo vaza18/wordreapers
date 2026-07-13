@@ -8,6 +8,11 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 <!-- Add dated notes at the top -->
 
+### 2026-07-13 — Round resume after process death
+
+- Solo snapshot key `wordreapers.soloRoundSnapshot`; always restored as paused; persist on pause/word/addTime/background.
+- Online pointer only when `pauseState.active`; cold start verifies RTDB. Unpaused live multiplayer is never auto-resumed.
+
 ### 2026-07-10 — Expo SDK 57 upgrade (upgrade/expo-sdk-57)
 
 - Branched from green `upgrade/expo-sdk-56` (SDK 56 `expo-doctor` 21/21)

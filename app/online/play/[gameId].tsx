@@ -54,6 +54,12 @@ import {
   tryRestoreActiveRoundCache,
 } from '@/lib/online/session/cache-active-round';
 import {
+  clearPausedOnlineResume,
+  loadPausedOnlineResume,
+  syncPausedOnlineResumePointer,
+} from '@/lib/online/session/paused-online-resume';
+import { normalizeRoomCode } from '@/lib/firebase/room-code';
+import {
   hasOnlineOpponent,
   onlineActiveOpponentNames,
 } from '@/lib/online/presence/session-presence';
@@ -958,6 +964,29 @@ export default function OnlinePlayScreen() {
       void proposePause(gameId, myUid);
     },
   );
+
+  useEffect(() => {
+    if (!myUid || !session) {
+      return;
+    }
+    if (session.status === 'playing' && session.pauseState?.active) {
+      void syncPausedOnlineResumePointer(gameId, myUid, session);
+      return;
+    }
+    void (async () => {
+      const pointer = await loadPausedOnlineResume();
+      if (pointer && normalizeRoomCode(pointer.gameId) === normalizeRoomCode(gameId)) {
+        await clearPausedOnlineResume();
+      }
+    })();
+  }, [
+    gameId,
+    myUid,
+    session,
+    session?.status,
+    session?.pauseState?.active,
+    session?.baseWordRound,
+  ]);
 
   useEffect(() => {
     if (!hasOnlineOpponentInRound) {

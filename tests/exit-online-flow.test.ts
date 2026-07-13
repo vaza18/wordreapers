@@ -32,6 +32,10 @@ vi.mock('../lib/online/session/cache-active-round.js', () => ({
   cacheActiveRoundProgress: (...args: unknown[]) => cacheActiveRoundProgress(...args),
 }));
 
+vi.mock('../lib/online/session/paused-online-resume.js', () => ({
+  clearPausedOnlineResume: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('../lib/online/coordinated-session-cleanup.js', () => ({
   persistLocalArchive: (...args: unknown[]) => runExitCleanupMocks.persistLocalArchive(...args),
   markResultsExitedAndOffline: (...args: unknown[]) =>

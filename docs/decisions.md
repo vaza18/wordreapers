@@ -69,6 +69,13 @@ Format: **Decision → Alternatives → Why rejected → Date**
 - **Why rejected:** SDK 57 is Expo’s intentional non-breaking RN 0.85→0.86 bump with no app-code migrations expected. Waiting weeks adds little value after the hard 55→56 work. Prefer existing `forceStaticLinking` over building RN from source. Do not add a direct reanimated dependency (Hermes V1 memory regression still documented); transitive native pods from Expo modules are acceptable as long as JS does not import reanimated.
 - **Date:** 2026-07 — `package.json`, `app.json`
 
+## ADR-010: Persist paused rounds across process death
+
+- **Decision:** On cold start, auto-restore (1) a local training snapshot into `organizer-solo-store` + solo play with pause modal, or else (2) a paused multiplayer room via local resume pointer only when RTDB still has `playing` + `pauseState.active`. Do not auto-navigate into an unpaused live multiplayer round.
+- **Alternatives considered:** Zustand `persist` for all solo state; universal session-resume abstraction; home-screen CTA instead of auto-route; TTL on snapshots.
+- **Why rejected:** Full persist writes too often and mixes concerns. Unpaused multiplayer must keep a shared server timer. Auto-route matches “return to dinner pause” UX; snapshots clear on finish/explicit leave (no TTL).
+- **Date:** 2026-07 — `lib/game/solo-round-snapshot.ts`, `lib/online/session/paused-online-resume.ts`, `lib/app/resolve-interrupted-round-resume.ts`
+
 ---
 
 When adding a new ADR: keep it short; link the implementing file; do not duplicate `online-multiplayer-rules.md` tables.
