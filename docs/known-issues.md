@@ -8,6 +8,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — Intentional leave also toasted «не в грі»
+
+- **Symptom:** When a peer pressed «Вийти» mid-round, remaining players saw both «залишив гру» and «не в грі» (status then correctly showed «вийшов»).
+- **Cause:** `runIntentionalLeave` navigated to `/online/left` before `leaveGameSession` wrote `{ online: false, hasLeft: true }`. Play unmount ran `voluntaryLeaveWaitingLobbyIfMember` → `markPlayerOffline` (`online: false` only), so peers briefly saw the background-offline toast, then the leave toast.
+- **Fix:** Call `beginVoluntaryLeave` before navigate; `markPlayerOffline` / presence-unmount leave no-op while voluntary leave is in flight; write `leaveGameSession` before caching progress.
+- **Test:** `tests/game-session-service.test.ts` (skip offline / unmount offline during voluntary leave)
+- **Area:** `lib/firebase/game-session-service.ts`, `app/online/play/[gameId].tsx`
+
 ### 2026-07 — Process death on left screen loses «Повернутись до гри»
 
 - **Symptom:** After voluntary leave from a live multiplayer round, staying on the left screen (rejoin still available) and letting the OS kill the app opened home on relaunch — rejoin was no longer one tap away.

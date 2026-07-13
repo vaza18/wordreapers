@@ -72,6 +72,7 @@ vi.mock('../lib/firebase/session-ref.js', () => ({
 import {
   abandonWaitingGameSession,
   beginVoluntaryLeave,
+  endVoluntaryLeave,
   finishGameSessionIfExpired,
   gameSessionExists,
   leaveGameSession,
@@ -81,6 +82,7 @@ import {
   rematchFinishedSessionToWaiting,
   startGameSession,
   tryReadGameSessionSnapshot,
+  voluntaryLeaveWaitingLobbyIfMember,
 } from '../lib/firebase/game-session-service.js';
 import { DEFAULT_SESSION_SETTINGS, finishedSession } from './helpers/game-session-fixtures.js';
 
@@ -118,11 +120,47 @@ describe('game-session-service', () => {
 
   it('skips mark online while voluntary leave is in flight', async () => {
     beginVoluntaryLeave('ABCD', 'org-1');
+    try {
+      await markPlayerOnline('ABCD', 'org-1');
 
-    await markPlayerOnline('ABCD', 'org-1');
+      expect(getMock).not.toHaveBeenCalled();
+      expect(updateMock).not.toHaveBeenCalled();
+    } finally {
+      endVoluntaryLeave('ABCD', 'org-1');
+    }
+  });
 
-    expect(getMock).not.toHaveBeenCalled();
-    expect(updateMock).not.toHaveBeenCalled();
+  it('skips mark offline while voluntary leave is in flight', async () => {
+    beginVoluntaryLeave('ABCD', 'guest');
+    try {
+      await markPlayerOffline('ABCD', 'guest');
+
+      expect(updateMock).not.toHaveBeenCalled();
+    } finally {
+      endVoluntaryLeave('ABCD', 'guest');
+    }
+  });
+
+  it('skips presence-unmount offline while voluntary leave is in flight', async () => {
+    getMock.mockResolvedValue({
+      exists: () => true,
+      val: () => ({
+        ...waitingSession,
+        status: 'playing' as const,
+        players: {
+          'org-1': { name: 'Org', wordCount: 0, score: 0, online: true },
+          guest: { name: 'Guest', wordCount: 0, score: 0, online: true },
+        },
+      }),
+    });
+    beginVoluntaryLeave('ABCD', 'guest');
+    try {
+      await voluntaryLeaveWaitingLobbyIfMember('ABCD', 'guest');
+
+      expect(updateMock).not.toHaveBeenCalled();
+    } finally {
+      endVoluntaryLeave('ABCD', 'guest');
+    }
   });
 
   it('marks an existing player offline', async () => {

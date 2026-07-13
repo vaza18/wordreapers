@@ -7,6 +7,7 @@ Micro-invariants for this folder only. Full rules: [`docs/online-multiplayer-rul
 - **Presence handoff** (ADR-004) — in-room navigation (lobby ↔ play ↔ results) must call `handoffPlayerPresence()` before navigate; unmount must not mark offline when handoff is consumed.
 - `online` / `hasLeft` / `liveRoundPlayerUids` drive lobby visibility and round membership — see `live-round-membership.ts`.
 - Voluntary leave: `hasLeft === true` **and** `online === false`. Stale `hasLeft` while `online === true` still counts as active.
+- **Intentional leave ≠ background offline** — `beginVoluntaryLeave` before navigate to left; `markPlayerOffline` / presence-unmount must not write `online: false` alone while leave is in flight (avoids «не в грі» toast before «залишив гру»).
 - **Background ≠ left** — AppState `background` sets `online: false` only; `hasLeft` stays false. Foreground `active` restores online. RTDB reconnect must not remake online while still backgrounded.
 - **Background ≠ shouldRejoin** — `online: false` without `hasLeft` must not run `reconcilePlayerPresence` while AppState is not `active` (leave→rejoin remount otherwise resurrects «в грі»).
 - **Solo UI** — `hasOnlineOpponent` requires peer `online === true` (not score lag). Offline «не в грі» and voluntary leave both yield solo pause/end/add-time labels.
