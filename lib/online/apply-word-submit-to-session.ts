@@ -39,6 +39,9 @@ export type PlayerScoreUpdatePlan =
       uid: string;
       nextScore: number;
       nextWordCount: number;
+      /** RTDB ServerValue.increment delta (avoids lost updates under concurrent submits). */
+      deltaScore: number;
+      deltaWordCount: number;
     }
   | {
       mode: 'peers';
@@ -148,8 +151,10 @@ export function planPlayerScoreUpdate(
 
   const globalCount = globalWordCount(maps.wordPlayers, normalized);
   const prevGlobal = Math.max(0, globalCount - 1);
-  const nextScore = (player.score ?? 0) + entry.points;
-  const nextWordCount = (player.wordCount ?? 0) + 1;
+  const deltaScore = entry.points;
+  const deltaWordCount = 1;
+  const nextScore = (player.score ?? 0) + deltaScore;
+  const nextWordCount = (player.wordCount ?? 0) + deltaWordCount;
 
   if (uniqueBonusEnabled && prevGlobal === 1) {
     const peerScores = Object.keys(maps.wordPlayers?.[normalized] ?? {})
@@ -179,6 +184,8 @@ export function planPlayerScoreUpdate(
       uid,
       nextScore,
       nextWordCount,
+      deltaScore,
+      deltaWordCount,
     },
   };
 }

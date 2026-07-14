@@ -5,7 +5,10 @@ const setMock = vi.fn();
 const removeMock = vi.fn();
 const onValueMock = vi.fn();
 const runTransactionMock = vi.fn();
+const updateMock = vi.fn();
+const incrementMock = vi.fn((n: number) => ({ __increment: n }));
 const rollbackWordMapsShardMock = vi.fn();
+const rollbackWordSubmitArtifactsMock = vi.fn();
 
 vi.mock('firebase/database', () => ({
   get: (...args: unknown[]) => getMock(...args),
@@ -13,6 +16,8 @@ vi.mock('firebase/database', () => ({
   remove: (...args: unknown[]) => removeMock(...args),
   onValue: (...args: unknown[]) => onValueMock(...args),
   runTransaction: (...args: unknown[]) => runTransactionMock(...args),
+  update: (...args: unknown[]) => updateMock(...args),
+  increment: (n: number) => incrementMock(n),
   ref: (_db: unknown, path: string) => ({ path }),
 }));
 
@@ -30,6 +35,7 @@ vi.mock('../lib/firebase/session-ref.js', () => ({
 
 vi.mock('../lib/online/word-maps-shard-rollback.js', () => ({
   rollbackWordMapsShard: (...args: unknown[]) => rollbackWordMapsShardMock(...args),
+  rollbackWordSubmitArtifacts: (...args: unknown[]) => rollbackWordSubmitArtifactsMock(...args),
   wordPlayersShardPlayerRef: (gameId: string, normalized: string, uid: string) => ({
     path: `session_word_maps/${gameId}/wordPlayers/${normalized}/${uid}`,
   }),
@@ -76,7 +82,10 @@ describe('player-words-service', () => {
     vi.clearAllMocks();
     setMock.mockResolvedValue(undefined);
     removeMock.mockResolvedValue(undefined);
+    updateMock.mockResolvedValue(undefined);
+    incrementMock.mockImplementation((n: number) => ({ __increment: n }));
     rollbackWordMapsShardMock.mockResolvedValue(undefined);
+    rollbackWordSubmitArtifactsMock.mockResolvedValue(undefined);
   });
 
   it('fetches per-player word maps for the requested roster', async () => {
@@ -272,9 +281,11 @@ describe('player-words-service', () => {
           if (ref.path.includes('/wordPlayers/') && ref.path.endsWith(`/${uid}`)) {
             return { committed: true, snapshot: { val: () => true } };
           }
-          if (ref.path.includes('/players/')) {
-            const player = updater({ name: 'Player', wordCount: 0, score: 0 });
-            return { committed: true, snapshot: { val: () => player } };
+          if (ref.path.includes('/players') && !ref.path.includes('/wordPlayers/')) {
+            const players = updater({
+              [uid]: { name: 'Player', wordCount: 0, score: 0 },
+            });
+            return { committed: true, snapshot: { val: () => players } };
           }
           return { committed: false, snapshot: { val: () => null } };
         },
@@ -291,7 +302,7 @@ describe('player-words-service', () => {
       });
     }
 
-    it('persists a unique word and updates session score', async () => {
+    it('persists a unique word and increments session score (single path)', async () => {
       mockSuccessfulSubmit('org-1', 'порт');
 
       const result = await submitOnlineWord('ABCDE', 'org-1', 'порт', 'порт', true);
@@ -304,6 +315,73 @@ describe('player-words-service', () => {
         expect.objectContaining({ path: expect.stringContaining('player_words/ABCDE/org-1/порт') }),
         expect.objectContaining({ display: 'порт' }),
       );
+      expect(updateMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: expect.stringContaining('game_sessions/ABCDE/players/org-1'),
+        }),
+        {
+          score: { __increment: 2 },
+          wordCount: { __increment: 1 },
+        },
+      );
+      expect(runTransactionMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: expect.stringContaining('session_word_maps/ABCDE/wordPlayers/порт/org-1'),
+        }),
+        expect.any(Function),
+      );
+      expect(
+        runTransactionMock.mock.calls.some((call) => {
+          const ref = call[0] as { path: string };
+          return ref.path.includes('/players/org-1');
+        }),
+      ).toBe(false);
+    });
+
+    it('uses peers transaction (absolute scores) when x2 demotion applies', async () => {
+      runTransactionMock.mockImplementation(
+        async (ref: { path: string }, updater: (v: unknown) => unknown) => {
+          if (ref.path.includes('/wordPlayers/') && ref.path.endsWith('/org-1')) {
+            return { committed: true, snapshot: { val: () => true } };
+          }
+          if (ref.path.endsWith('/players')) {
+            const next = updater({
+              peer: { name: 'Peer', wordCount: 1, score: 2 },
+              'org-1': { name: 'Player', wordCount: 0, score: 0 },
+            });
+            return { committed: true, snapshot: { val: () => next } };
+          }
+          return { committed: false, snapshot: { val: () => null } };
+        },
+      );
+      getMock.mockImplementation(async (ref: { path: string }) => {
+        if (ref.path.includes('/wordPlayers/порт')) {
+          return { exists: () => true, val: () => ({ peer: true, 'org-1': true }) };
+        }
+        if (ref.path === 'game_sessions/ABCDE') {
+          return {
+            exists: () => true,
+            val: () =>
+              playingSession(
+                {
+                  peer: { name: 'Peer', wordCount: 1, score: 2, online: true },
+                  'org-1': { name: 'Player', wordCount: 0, score: 0, online: true },
+                },
+                { wordPlayers: { порт: { peer: true, 'org-1': true } } },
+              ),
+          };
+        }
+        return { exists: () => false };
+      });
+
+      const result = await submitOnlineWord('ABCDE', 'org-1', 'порт', 'порт', true);
+
+      expect(result.ok).toBe(true);
+      expect(updateMock).not.toHaveBeenCalled();
+      expect(runTransactionMock).toHaveBeenCalledWith(
+        expect.objectContaining({ path: 'game_sessions/ABCDE/players' }),
+        expect.any(Function),
+      );
     });
 
     it('returns DUPLICATE when the shard transaction does not commit', async () => {
@@ -312,7 +390,7 @@ describe('player-words-service', () => {
       const result = await submitOnlineWord('ABCDE', 'org-1', 'порт', 'порт', true);
 
       expect(result).toEqual({ ok: false, error: 'DUPLICATE' });
-      expect(rollbackWordMapsShardMock).not.toHaveBeenCalled();
+      expect(rollbackWordSubmitArtifactsMock).not.toHaveBeenCalled();
     });
 
     it('returns NOT_PLAYING when the player is missing from wordPlayers shard', async () => {
@@ -325,6 +403,7 @@ describe('player-words-service', () => {
       const result = await submitOnlineWord('ABCDE', 'org-1', 'порт', 'порт', true);
 
       expect(result).toEqual({ ok: false, error: 'NOT_PLAYING' });
+      expect(rollbackWordSubmitArtifactsMock).toHaveBeenCalledWith('ABCDE', 'порт', 'org-1');
     });
 
     it('returns SESSION_MISSING and rolls back when the session node is gone', async () => {
@@ -339,7 +418,7 @@ describe('player-words-service', () => {
       const result = await submitOnlineWord('ABCDE', 'org-1', 'порт', 'порт', true);
 
       expect(result).toEqual({ ok: false, error: 'SESSION_MISSING' });
-      expect(rollbackWordMapsShardMock).toHaveBeenCalledWith('ABCDE', 'порт', 'org-1');
+      expect(rollbackWordSubmitArtifactsMock).toHaveBeenCalledWith('ABCDE', 'порт', 'org-1');
     });
 
     it('returns NOT_PLAYING when the uid is not in session.players', async () => {
@@ -368,7 +447,33 @@ describe('player-words-service', () => {
       const result = await submitOnlineWord('ABCDE', 'org-1', 'порт', 'порт', true);
 
       expect(result).toEqual({ ok: false, error: 'NOT_PLAYING' });
-      expect(rollbackWordMapsShardMock).toHaveBeenCalled();
+      expect(rollbackWordSubmitArtifactsMock).toHaveBeenCalled();
+    });
+
+    it('rolls back shard and player_words when score write fails after wordSet', async () => {
+      runTransactionMock.mockImplementation(async (ref: { path: string }) => {
+        if (ref.path.includes('/wordPlayers/')) {
+          return { committed: true, snapshot: { val: () => true } };
+        }
+        return { committed: false, snapshot: { val: () => null } };
+      });
+      getMock.mockImplementation(async (ref: { path: string }) => {
+        if (ref.path.includes('/wordPlayers/порт')) {
+          return { exists: () => true, val: () => ({ 'org-1': true }) };
+        }
+        if (ref.path === 'game_sessions/ABCDE') {
+          return { exists: () => true, val: () => playingSessionWithUid('org-1') };
+        }
+        return { exists: () => false };
+      });
+      updateMock.mockRejectedValueOnce(new Error('score write failed'));
+      setMock.mockResolvedValue(undefined);
+
+      const result = await submitOnlineWord('ABCDE', 'org-1', 'порт', 'порт', true);
+
+      expect(result.ok).toBe(false);
+      expect(setMock).toHaveBeenCalled();
+      expect(rollbackWordSubmitArtifactsMock).toHaveBeenCalledWith('ABCDE', 'порт', 'org-1');
     });
   });
 });

@@ -1,9 +1,11 @@
 import {
   get,
+  increment,
   onValue,
   ref,
   remove,
   set,
+  update,
   type DatabaseReference,
   type Unsubscribe,
 } from 'firebase/database';
@@ -19,7 +21,7 @@ import {
 } from '../online/apply-word-submit-to-session.js';
 import type { SubmitWordProfile } from '../online/submit-word-profile.js';
 import {
-  rollbackWordMapsShard,
+  rollbackWordSubmitArtifacts,
   wordPlayersPerWordRef,
   wordPlayersShardPlayerRef,
 } from '../online/word-maps-shard-rollback.js';
@@ -375,18 +377,12 @@ async function commitPlayerScorePlan(
   profile: SubmitWordProfile | null,
 ): Promise<boolean> {
   if (plan.mode === 'single') {
-    const tx = await runRtdbTransaction(sessionPlayerRef(gameId, plan.uid), (player) => {
-      if (player == null || typeof player !== 'object') {
-        return undefined;
-      }
-      return {
-        ...(player as GameSession['players'][string]),
-        score: plan.nextScore,
-        wordCount: plan.nextWordCount,
-      };
+    await update(sessionPlayerRef(gameId, plan.uid), {
+      score: increment(plan.deltaScore),
+      wordCount: increment(plan.deltaWordCount),
     });
-    profile?.mark('sessionFastTx');
-    return tx.committed;
+    profile?.mark('sessionIncrement');
+    return true;
   }
 
   const tx = await runRtdbTransaction(sessionPlayersRef(gameId), (players) => {
@@ -415,8 +411,57 @@ async function commitPlayerScorePlan(
   return tx.committed;
 }
 
+/** Best-effort reverse of a committed score plan after a parallel wordSet failure. */
+async function undoPlayerScorePlan(
+  gameId: string,
+  plan: PlayerScoreUpdatePlan,
+  previousPlayers: GameSession['players'],
+): Promise<void> {
+  try {
+    if (plan.mode === 'single') {
+      await update(sessionPlayerRef(gameId, plan.uid), {
+        score: increment(-plan.deltaScore),
+        wordCount: increment(-plan.deltaWordCount),
+      });
+      return;
+    }
+    await runRtdbTransaction(sessionPlayersRef(gameId), (players) => {
+      if (players == null || typeof players !== 'object') {
+        return undefined;
+      }
+      const next = { ...(players as GameSession['players']) };
+      const prevSubmitter = previousPlayers[plan.uid];
+      if (prevSubmitter && next[plan.uid]) {
+        next[plan.uid] = {
+          ...next[plan.uid],
+          score: prevSubmitter.score ?? 0,
+          wordCount: prevSubmitter.wordCount ?? 0,
+        };
+      }
+      for (const peer of plan.peerScores) {
+        const prevPeer = previousPlayers[peer.uid];
+        if (prevPeer && next[peer.uid]) {
+          next[peer.uid] = { ...next[peer.uid], score: prevPeer.score ?? 0 };
+        }
+      }
+      return next;
+    });
+  } catch {
+    // Best-effort score undo.
+  }
+}
+
+type ScorePathResult =
+  | { ok: true; plan: PlayerScoreUpdatePlan; previousPlayers: GameSession['players'] }
+  | {
+      ok: false;
+      error: SubmitWordError;
+      plan?: PlayerScoreUpdatePlan;
+      previousPlayers?: GameSession['players'];
+    };
+
 /**
- * Persist an accepted word: sharded word maps + fast session score + player word node.
+ * Persist an accepted word: sharded word maps + parallel session score + player word node.
  */
 export async function submitOnlineWord(
   gameId: string,
@@ -434,7 +479,6 @@ export async function submitOnlineWord(
 
     let entry: ScoredWordEntry = toScoredWordEntry(normalized, 'normal', uniqueBonusEnabled, 1);
 
-    let playersOnWord: Record<string, boolean>;
     try {
       const committedShard = await runRtdbTransaction(
         wordPlayersShardPlayerRef(roomId, normalized, uid),
@@ -450,16 +494,39 @@ export async function submitOnlineWord(
       if (!committedShard.committed) {
         return { ok: false, error: 'DUPLICATE' };
       }
+    } catch (error) {
+      if (isFirebasePermissionDenied(error)) {
+        return { ok: false, error: 'NOT_PLAYING' };
+      }
+      throw error;
+    }
 
+    const wordSetPromise = set(playerWordRef(roomId, uid, normalized), {
+      display,
+      at: Date.now(),
+    })
+      .then(() => {
+        profile?.mark('wordSet');
+        return { ok: true as const };
+      })
+      .catch((error: unknown) => ({ ok: false as const, error }));
+
+    let playersOnWord: Record<string, boolean>;
+    try {
       const parentSnapshot = await get(wordPlayersPerWordRef(roomId, normalized));
+      profile?.mark('shardParentGet');
       playersOnWord = (parentSnapshot.val() as Record<string, boolean> | null) ?? {};
       if (!playersOnWord[uid]) {
+        await wordSetPromise;
+        await rollbackWordSubmitArtifacts(roomId, normalized, uid);
         return { ok: false, error: 'NOT_PLAYING' };
       }
       const globalCount = Object.keys(playersOnWord).length;
       const kind: WordScoreKind = globalCount > 1 ? 'normal' : 'unique';
       entry = toScoredWordEntry(normalized, kind, uniqueBonusEnabled, globalCount);
     } catch (error) {
+      await wordSetPromise;
+      await rollbackWordSubmitArtifacts(roomId, normalized, uid);
       if (isFirebasePermissionDenied(error)) {
         return { ok: false, error: 'NOT_PLAYING' };
       }
@@ -468,65 +535,83 @@ export async function submitOnlineWord(
 
     const maps: SessionWordMaps = buildPartialWordMaps(normalized, playersOnWord);
 
-    let sessionSnapshot;
-    try {
-      sessionSnapshot = await get(sessionRef(roomId));
-    } catch (error) {
-      await rollbackWordMapsShard(roomId, normalized, uid);
-      if (isFirebasePermissionDenied(error)) {
-        return { ok: false, error: 'NOT_PLAYING' };
+    const scorePathPromise: Promise<ScorePathResult> = (async () => {
+      let sessionSnapshot;
+      try {
+        sessionSnapshot = await get(sessionRef(roomId));
+        profile?.mark('sessionGet');
+      } catch (error) {
+        if (isFirebasePermissionDenied(error)) {
+          return { ok: false, error: 'NOT_PLAYING' };
+        }
+        return { ok: false, error: 'SESSION_MISSING' };
       }
-      throw error;
-    }
 
-    if (!sessionSnapshot.exists()) {
-      await rollbackWordMapsShard(roomId, normalized, uid);
+      if (!sessionSnapshot.exists()) {
+        return { ok: false, error: 'SESSION_MISSING' };
+      }
+
+      const session = sessionSnapshot.val() as GameSession;
+      const planned = planPlayerScoreUpdate(
+        session,
+        maps,
+        uid,
+        normalized,
+        entry,
+        uniqueBonusEnabled,
+      );
+      if (!planned.ok) {
+        return { ok: false, error: planned.error };
+      }
+
+      try {
+        const sessionCommitted = await commitPlayerScorePlan(roomId, planned.plan, profile);
+        if (!sessionCommitted) {
+          return {
+            ok: false,
+            error: 'NOT_PLAYING',
+            plan: planned.plan,
+            previousPlayers: session.players,
+          };
+        }
+        return { ok: true, plan: planned.plan, previousPlayers: session.players };
+      } catch (error) {
+        if (isFirebasePermissionDenied(error)) {
+          return {
+            ok: false,
+            error: 'NOT_PLAYING',
+            plan: planned.plan,
+            previousPlayers: session.players,
+          };
+        }
+        return {
+          ok: false,
+          error: 'SESSION_MISSING',
+          plan: planned.plan,
+          previousPlayers: session.players,
+        };
+      }
+    })();
+
+    const [wordSetResult, scoreResult] = await Promise.all([wordSetPromise, scorePathPromise]);
+
+    if (!wordSetResult.ok || !scoreResult.ok) {
+      if (scoreResult.ok) {
+        await undoPlayerScorePlan(roomId, scoreResult.plan, scoreResult.previousPlayers);
+      }
+      await rollbackWordSubmitArtifacts(roomId, normalized, uid);
+
+      if (!wordSetResult.ok) {
+        if (isFirebasePermissionDenied(wordSetResult.error)) {
+          return { ok: false, error: 'DUPLICATE' };
+        }
+        throw wordSetResult.error;
+      }
+      if (!scoreResult.ok) {
+        return { ok: false, error: scoreResult.error };
+      }
       return { ok: false, error: 'SESSION_MISSING' };
     }
-
-    const session = sessionSnapshot.val() as GameSession;
-    const planned = planPlayerScoreUpdate(
-      session,
-      maps,
-      uid,
-      normalized,
-      entry,
-      uniqueBonusEnabled,
-    );
-    if (!planned.ok) {
-      await rollbackWordMapsShard(roomId, normalized, uid);
-      return { ok: false, error: planned.error };
-    }
-
-    let sessionCommitted = false;
-    try {
-      sessionCommitted = await commitPlayerScorePlan(roomId, planned.plan, profile);
-    } catch (error) {
-      await rollbackWordMapsShard(roomId, normalized, uid);
-      if (isFirebasePermissionDenied(error)) {
-        return { ok: false, error: 'NOT_PLAYING' };
-      }
-      throw error;
-    }
-
-    if (!sessionCommitted) {
-      await rollbackWordMapsShard(roomId, normalized, uid);
-      return { ok: false, error: 'NOT_PLAYING' };
-    }
-
-    try {
-      await set(playerWordRef(roomId, uid, normalized), {
-        display,
-        at: Date.now(),
-      });
-    } catch (error) {
-      await rollbackWordMapsShard(roomId, normalized, uid);
-      if (isFirebasePermissionDenied(error)) {
-        return { ok: false, error: 'DUPLICATE' };
-      }
-      throw error;
-    }
-    profile?.mark('wordSet');
 
     profile?.mark('done');
     return { ok: true, entry };

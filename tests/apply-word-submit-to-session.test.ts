@@ -99,6 +99,8 @@ describe('planPlayerScoreUpdate', () => {
     }
     expect(planned.plan.nextScore).toBe(2);
     expect(planned.plan.nextWordCount).toBe(1);
+    expect(planned.plan.deltaScore).toBe(2);
+    expect(planned.plan.deltaWordCount).toBe(1);
   });
 
   it('uses peers plan when x2 demotion applies', () => {
@@ -147,6 +149,8 @@ describe('planPlayerScoreUpdate', () => {
     }
     expect(planned.plan.nextWordCount).toBe(6);
     expect(planned.plan.nextScore).toBe(12);
+    expect(planned.plan.deltaScore).toBe(2);
+    expect(planned.plan.deltaWordCount).toBe(1);
   });
 });
 

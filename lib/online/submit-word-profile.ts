@@ -36,14 +36,22 @@ export function createSubmitWordProfile(normalized: string): SubmitWordProfile |
   const startedAt = performance.now();
   let lastAt = startedAt;
   const segments: string[] = [];
+  let finished = false;
 
   return {
     mark(label: string) {
+      if (finished) {
+        return;
+      }
       const now = performance.now();
       segments.push(`${label} +${(now - lastAt).toFixed(1)}ms`);
       lastAt = now;
     },
     finish() {
+      if (finished) {
+        return;
+      }
+      finished = true;
       const totalMs = performance.now() - startedAt;
       console.log(`[submitWord ${normalized}] total ${totalMs.toFixed(1)}ms`, segments.join(' | '));
       submitLatencyTotals.push(totalMs);

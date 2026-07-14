@@ -8,6 +8,11 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 <!-- Add dated notes at the top -->
 
+### 2026-07-14 — Submit latency: parallel wordSet + single increment
+
+- Shipped ADR-013. Profiler marks: `shardParentGet`, `sessionGet`, `sessionIncrement` / `sessionDualTx`, `wordSet` (may interleave).
+- Remaining 5+ same-word race (two first-finders both +2) is unchanged — needs parent `wordPlayers/{word}` transaction or CF later; do **not** use increment for demotion.
+
 ### 2026-07-14 — RTDB TTL + wordFirst removal
 
 - Deploy: functions → rules → client; then `DRY_RUN=1 npm run firebase:purge-orphans` then real wipe.

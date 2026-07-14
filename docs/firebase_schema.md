@@ -100,6 +100,7 @@ sequenceDiagram
   - Writes are **per-word shards** only: `wordPlayers/{normalized}/{uid}` (no bulk root JSON from clients).
   - Overlap uniqueness and live x2 demotion use `wordPlayers` counts/peers (no separate first-submitter map).
 - `player_words/{gameId}/{uid}` — per-player submitted words (immutable per normalized key)
+- **Online submit write path** (`submitOnlineWord`): after shard commit, `player_words` set runs **in parallel** with session score update. Single-player score bumps use RTDB `increment()`; x2 demotion (`peers`) still uses an absolute multi-player transaction. Partial failure rolls back shard + `player_words` (and best-effort undoes score).
 
 ## Security (RTDB rules + App Check)
 
