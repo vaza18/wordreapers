@@ -1,6 +1,13 @@
 # Release CI — testing tracks (Play Internal + TestFlight)
 
-Automated pipeline for **published GitHub Releases**: **local EAS production builds on GitHub-hosted runners** → submit to **Google Play Internal testing** and **TestFlight**. Binaries are **not** published as workflow/Release file assets (public repository).
+Automated pipeline for **published GitHub Releases**:
+
+1. **Local EAS production builds** on GitHub-hosted runners (`eas build --local`) — uses Expo only for the native build toolchain / credentials, not cloud build queues.
+2. **Direct store upload** via Fastlane (**no `eas submit`**, no Expo Submit Free Tier Queue):
+   - Android → Google Play Internal (`fastlane supply`)
+   - iOS → TestFlight (`fastlane pilot`)
+
+Binaries are **not** published as workflow/Release file assets (public repository).
 
 A bare `git push` of a tag does **not** start this workflow.
 
@@ -8,7 +15,7 @@ A bare `git push` of a tag does **not** start this workflow.
 
 | Event                                                 | Behavior                                                                                 |
 | ----------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| **GitHub Release → Publish** (`release: published`)   | Build Android + iOS from the release tag, submit to testing tracks, open version-sync PR |
+| **GitHub Release → Publish** (`release: published`)   | Build Android + iOS from the release tag, upload to testing tracks, open version-sync PR |
 | Same event with **Set as a pre-release**              | **Skipped** (`!github.event.release.prerelease` on the `validate` job)                   |
 | Actions → **Release stores (testing)** → Run workflow | Manual retry; set existing `tag_override`, platform, optional `sync_branch`              |
 
@@ -68,9 +75,9 @@ If sync base is `main` (ruleset + required checks), PAT + auto-merge matter most
 
 | Secret                                                        | Purpose                              |
 | ------------------------------------------------------------- | ------------------------------------ |
-| `EXPO_TOKEN`                                                  | Expo robot access token              |
-| `ASC_ISSUER_ID`, `ASC_KEY_ID`, `ASC_API_KEY_P8`, `ASC_APP_ID` | App Store Connect (iOS)              |
-| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`                            | Play API (Android)                   |
+| `EXPO_TOKEN`                                                  | Expo robot access token (local EAS)  |
+| `ASC_ISSUER_ID`, `ASC_KEY_ID`, `ASC_API_KEY_P8`, `ASC_APP_ID` | App Store Connect (TestFlight)       |
+| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`                            | Play API (Internal track)            |
 | `GOOGLE_SERVICES_JSON`, `GOOGLE_SERVICE_INFO_PLIST`           | Firebase native configs              |
 | `EXPO_PUBLIC_FIREBASE_*`                                      | Same as `.env` / `.env.example`      |
 | `VERSION_SYNC_TOKEN`                                          | Recommended PAT for sync PR + checks |
@@ -81,9 +88,18 @@ CI secrets `GOOGLE_SERVICES_JSON` / `GOOGLE_SERVICE_INFO_PLIST` hold **file cont
 
 Do **not** add `EXPO_PUBLIC_FIREBASE_APP_CHECK_PRODUCTION` unless you need an explicit override.
 
+## Store upload (direct)
+
+| Script                                                                          | Tool            | Target          |
+| ------------------------------------------------------------------------------- | --------------- | --------------- |
+| [`scripts/ci/submit-android-play.sh`](../scripts/ci/submit-android-play.sh)     | Fastlane Supply | Play `internal` |
+| [`scripts/ci/submit-ios-testflight.sh`](../scripts/ci/submit-ios-testflight.sh) | Fastlane Pilot  | TestFlight      |
+
+Fastlane is installed from [`scripts/ci/Gemfile`](../scripts/ci/Gemfile) (`ensure-fastlane.sh`). CI does **not** call `eas submit`.
+
 ## Caching
 
-- npm, vesum, Gradle (`actions/cache` on `~/.gradle`), CocoaPods
+- npm, vesum, Gradle (`actions/cache` on `~/.gradle`), CocoaPods, Fastlane gems (`scripts/ci/vendor/bundle`)
 - Do **not** enable `setup-java` `cache: gradle` — the repo has no committed `gradle-wrapper.properties` (native Android appears only inside local EAS prebuild)
 - `eas-cli` pinned (`eas-version: 21.0.0`)
 - iOS: `macos-15` + Xcode **26.3** via `maxim-lobanov/setup-xcode` (Expo SDK 57 / `expo-modules-jsi` need Swift 6.2+; do **not** pin `'16'` — that selects Xcode 16.4)
@@ -91,12 +107,15 @@ Do **not** add `EXPO_PUBLIC_FIREBASE_APP_CHECK_PRODUCTION` unless you need an ex
 
 ## Troubleshooting
 
-| Symptom                                                                                      | Likely cause                                                                                       | What to do                                                                                                                                                   |
-| -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Android fails at `setup-java` / gradle cache                                                 | No committed `gradle-wrapper.properties`                                                           | Ensure workflow tip has `cache: gradle` **removed**; retry via `workflow_dispatch` from `dev`/`main` (YAML from selected branch)                             |
-| iOS: `[CP-User] Build ExpoModulesJSI xcframework` + `Could not resolve package dependencies` | Wrong Xcode (e.g. 16.4). Nested SPM build needs Swift tools ≥ 6.2                                  | Pin Xcode **26.3+** on the runner. Do **not** force `RCT_USE_PREBUILT_RNCORE=0` with `useFrameworks: static` (known Expo breakage)                           |
-| Retry of tag `vX.Y.Z` still uses old workflow bugs                                           | Tag commit embeds old YAML when release event runs from that tip; dispatch uses branch YAML        | `workflow_dispatch` → choose branch with the fix → `tag_override=vX.Y.Z`; or cut a new patch release from a tip that includes the workflow fix               |
-| Android build OK, EAS Submit: `bundletool dump manifest … /manifest/@package` exit 1         | File uploaded to Submit is not a parseable AAB (corrupt, wrong archive), not a Play API/auth issue | Check Expo submission log; CI validates AAB (`BundleConfig.pb` + `base/manifest/…`) before submit. Retry android job after tip with `applicationArchivePath` |
+| Symptom                                                                                      | Likely cause                                                                                | What to do                                                                                                                                     |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Android fails at `setup-java` / gradle cache                                                 | No committed `gradle-wrapper.properties`                                                    | Ensure workflow tip has `cache: gradle` **removed**; retry via `workflow_dispatch` from `dev`/`main` (YAML from selected branch)               |
+| iOS: `[CP-User] Build ExpoModulesJSI xcframework` + `Could not resolve package dependencies` | Wrong Xcode (e.g. 16.4). Nested SPM build needs Swift tools ≥ 6.2                           | Pin Xcode **26.3+** on the runner. Do **not** force `RCT_USE_PREBUILT_RNCORE=0` with `useFrameworks: static` (known Expo breakage)             |
+| Retry of tag `vX.Y.Z` still uses old workflow bugs                                           | Tag commit embeds old YAML when release event runs from that tip; dispatch uses branch YAML | `workflow_dispatch` → choose branch with the fix → `tag_override=vX.Y.Z`; or cut a new patch release from a tip that includes the workflow fix |
+| AAB fails local validation (`BundleConfig.pb` / manifest missing)                            | `--output` is not a real App Bundle                                                         | Check `applicationArchivePath` in `eas.json`; inspect `file` / `unzip -l` in logs                                                              |
+| Play `supply` auth / permission errors                                                       | Service account not linked in Play Console or missing Release to testing tracks permission  | Play Console → Users and permissions → grant the SA; first AAB historically may need one manual upload                                         |
+| Pilot / ASC API errors                                                                       | Bad key, wrong `ASC_APP_ID`, or API key lacks App Manager / Developer access                | Verify `.p8` + key/issuer; TestFlight access for the key’s role                                                                                |
+| Expo dashboard shows Submit “Free Tier Queue”                                                | Something still called `eas submit`                                                         | CI must use Fastlane scripts above — do not reintroduce `eas submit`                                                                           |
 
 ## Local parity
 
@@ -106,12 +125,13 @@ SKIP_PRETTIER=1 bash scripts/ci/set-version-from-tag.sh v1.4.1
 bash scripts/ci/prepare-store-credentials.sh android
 bash scripts/ci/prepare-store-credentials.sh ios
 bash scripts/ci/release-build-submit.sh android
+# Or upload only:
+# bash scripts/ci/submit-android-play.sh .ci/artifacts/wordreapers.aab
+# ASC_KEY_ID=… ASC_ISSUER_ID=… bash scripts/ci/submit-ios-testflight.sh .ci/artifacts/wordreapers.ipa
 # Sync-style bump: npm ci first, then locked local Prettier (never network npx)
 npm ci --ignore-scripts
 bash scripts/ci/sync-version-to-branch.sh v1.4.1 dev
 ```
-
-Submit profile in `eas.json`: **`testing`** → Play `internal`, iOS TestFlight.
 
 ## Checklist after merging this workflow
 
@@ -126,4 +146,4 @@ Submit profile in `eas.json`: **`testing`** → Play `internal`, iOS TestFlight.
 
 - Auto-promote to production / App Store review
 - Attaching AAB/IPA to the GitHub Release
-- EAS cloud builds (free-tier queues)
+- EAS cloud builds and EAS Submit (free-tier queues)

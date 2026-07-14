@@ -1,0 +1,4 @@
+# Direct Play / TestFlight upload (no EAS Submit / Expo queues).
+source 'https://rubygems.org'
+
+gem 'fastlane', '~> 2.228'

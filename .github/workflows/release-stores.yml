@@ -218,7 +218,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Android + submit Internal testing
+      - uses: actions/cache@v5
+        with:
+          path: scripts/ci/vendor/bundle
+          key: fastlane-${{ runner.os }}-${{ hashFiles('scripts/ci/Gemfile.lock') }}
+          restore-keys: |
+            fastlane-${{ runner.os }}-
+
+      - name: Build Android + upload Play Internal
         run: |
           EXTRA=()
           if [[ "${{ needs.validate.outputs.clear_cache }}" == "true" ]]; then
@@ -310,7 +317,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build iOS + submit TestFlight
+      - uses: actions/cache@v5
+        with:
+          path: scripts/ci/vendor/bundle
+          key: fastlane-${{ runner.os }}-${{ hashFiles('scripts/ci/Gemfile.lock') }}
+          restore-keys: |
+            fastlane-${{ runner.os }}-
+
+      - name: Build iOS + upload TestFlight
         run: |
           EXTRA=()
           if [[ "${{ needs.validate.outputs.clear_cache }}" == "true" ]]; then

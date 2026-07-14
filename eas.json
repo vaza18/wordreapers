@@ -41,16 +41,6 @@
     }
   },
   "submit": {
-    "production": {},
-    "testing": {
-      "android": {
-        "track": "internal",
-        "releaseStatus": "completed",
-        "serviceAccountKeyPath": "./.ci/credentials/google-play.json"
-      },
-      "ios": {
-        "ascApiKeyPath": "./.ci/credentials/AuthKey.p8"
-      }
-    }
+    "production": {}
   }
 }

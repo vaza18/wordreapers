@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Write gitignored store credentials from CI secrets and patch eas.json submit.testing.
+# Write gitignored Firebase + store credentials from CI secrets.
 # Usage: bash scripts/ci/prepare-store-credentials.sh android|ios|all
 #
 # Secrets GOOGLE_SERVICES_JSON / GOOGLE_SERVICE_INFO_PLIST hold FILE CONTENTS in CI.
@@ -76,28 +76,16 @@ if [[ "$need_ios" -eq 1 ]]; then
 
   printf '%s\n' "$ASC_API_KEY_P8" >"$CRED_DIR/AuthKey.p8"
 
-  export EXPO_ASC_API_KEY_PATH="$CRED_DIR/AuthKey.p8"
+  export ASC_API_KEY_PATH="$CRED_DIR/AuthKey.p8"
+  # Keep EXPO_* aliases for any tooling that still reads them during local EAS build.
+  export EXPO_ASC_API_KEY_PATH="$ASC_API_KEY_PATH"
   export EXPO_ASC_KEY_ID="$ASC_KEY_ID"
   export EXPO_ASC_ISSUER_ID="$ASC_ISSUER_ID"
+  append_github_env ASC_API_KEY_PATH "$ASC_API_KEY_PATH"
   append_github_env EXPO_ASC_API_KEY_PATH "$EXPO_ASC_API_KEY_PATH"
   append_github_env EXPO_ASC_KEY_ID "$EXPO_ASC_KEY_ID"
   append_github_env EXPO_ASC_ISSUER_ID "$EXPO_ASC_ISSUER_ID"
-
-  if ! command -v jq >/dev/null 2>&1; then
-    echo "jq is required to patch eas.json submit.testing for iOS" >&2
-    exit 1
-  fi
-
-  tmp="$(mktemp)"
-  jq \
-    --arg keyId "$ASC_KEY_ID" \
-    --arg issuerId "$ASC_ISSUER_ID" \
-    --arg appId "$ASC_APP_ID" \
-    '.submit.testing.ios.ascApiKeyId = $keyId
-     | .submit.testing.ios.ascApiKeyIssuerId = $issuerId
-     | .submit.testing.ios.ascAppId = $appId' \
-    "$ROOT/eas.json" >"$tmp"
-  mv "$tmp" "$ROOT/eas.json"
+  # ASC_KEY_ID / ASC_ISSUER_ID / ASC_APP_ID already come from job env (secrets).
 fi
 
 echo "Store credentials prepared for platform=$PLATFORM."
