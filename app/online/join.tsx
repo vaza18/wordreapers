@@ -141,6 +141,10 @@ export default function JoinRoomScreen() {
     router.back();
   }, []);
 
+  const codeReady = isValidRoomCode(normalizeRoomCode(code));
+  /** Prefer QR when empty; promote Join once the code is ready (or QR unavailable). */
+  const joinIsPrimary = !canScanQr || codeReady;
+
   const screenOptions = useMemo(
     () => ({
       ...stackHeaderBack(handleBack),
@@ -151,12 +155,12 @@ export default function JoinRoomScreen() {
   return (
     <>
       <Stack.Screen options={screenOptions} />
-      <Screen>
+      <Screen style={styles.screenContent}>
         {joinLocked ? (
           <Text style={styles.lockedBanner}>{t('online.joinLockedBanner')}</Text>
         ) : null}
-        <Text style={styles.hint}>{t('online.joinHint')}</Text>
         <RoomCodeInput value={code} onChange={setCode} disabled={joinLocked} />
+        <Text style={styles.hint}>{t('online.joinHint')}</Text>
         {prewarming && !loading ? (
           <Text style={styles.hint}>{t('online.cloudConnecting')}</Text>
         ) : null}
@@ -173,7 +177,7 @@ export default function JoinRoomScreen() {
 
             <PrimaryButton
               label={t('online.scanQr')}
-              variant="secondary"
+              variant={joinIsPrimary ? 'secondary' : 'primary'}
               disabled={joinLocked || loading}
               onPress={() => {
                 setScannerOpen(true);
@@ -194,11 +198,15 @@ export default function JoinRoomScreen() {
           </>
         ) : null}
 
-        <PrimaryButton
-          label={t('online.joinAction')}
-          disabled={joinLocked || loading || !isValidRoomCode(normalizeRoomCode(code))}
-          onPress={handleJoin}
-        />
+        <View style={styles.joinActionSection}>
+          <View style={styles.sectionDivider} />
+          <PrimaryButton
+            label={t('online.joinAction')}
+            variant={joinIsPrimary ? 'primary' : 'secondary'}
+            disabled={joinLocked || loading || !codeReady}
+            onPress={handleJoin}
+          />
+        </View>
 
         <View style={styles.publicSection}>
           <View style={styles.sectionDivider} />
@@ -219,6 +227,9 @@ export default function JoinRoomScreen() {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
+    screenContent: {
+      flexGrow: 1,
+    },
     hint: {
       fontSize: 14,
       color: colors.textSecondary,
@@ -255,9 +266,13 @@ function createStyles(colors: ThemeColors) {
       fontSize: 13,
       color: colors.textTertiary,
     },
+    joinActionSection: {
+      gap: spacing.sm,
+      marginTop: spacing.md,
+    },
     publicSection: {
       gap: spacing.sm,
-      marginTop: spacing.xs,
+      marginTop: 'auto',
     },
     sectionDivider: {
       height: StyleSheet.hairlineWidth,

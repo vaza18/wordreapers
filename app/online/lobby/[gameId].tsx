@@ -603,7 +603,7 @@ export default function LobbyScreen() {
             {isPicker && !isFinished && hasBaseWord ? (
               <>
                 <PrimaryButton
-                  label={t('online.startGame')}
+                  label={t('game.start')}
                   disabled={!canStart || starting || lobbyLexiconLoading}
                   onPress={() => {
                     void handleStart();
