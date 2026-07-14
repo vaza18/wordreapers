@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CI: local EAS production build + submit to Play Internal / TestFlight (submit profile "testing").
+# CI: local EAS production build + direct Play Internal / TestFlight upload (no eas submit).
 # Usage: bash scripts/ci/release-build-submit.sh android|ios [--clear-cache]
 set -euo pipefail
 
@@ -61,12 +61,32 @@ if [[ ! -f "$OUT_PATH" ]]; then
   exit 1
 fi
 
-echo "Submitting $OUT_PATH via submit profile testing…"
-eas submit \
-  --platform "$PLATFORM" \
-  --profile testing \
-  --path "$OUT_PATH" \
-  --non-interactive \
-  --wait
+if [[ "$PLATFORM" == "android" ]]; then
+  echo "Validating AAB at $OUT_PATH ($(wc -c <"$OUT_PATH" | tr -d ' ') bytes)…"
+  file "$OUT_PATH" || true
+  if ! unzip -tqq "$OUT_PATH" >/dev/null 2>&1; then
+    echo "ERROR: $OUT_PATH is not a valid zip/AAB." >&2
+    if tar -tzf "$OUT_PATH" >/dev/null 2>&1; then
+      echo "Hint: file looks like tar.gz with an .aab name — check applicationArchivePath / --output." >&2
+      tar -tzf "$OUT_PATH" | head -40 >&2 || true
+    fi
+    exit 1
+  fi
+  if ! unzip -l "$OUT_PATH" | grep -q 'BundleConfig.pb'; then
+    echo "ERROR: $OUT_PATH zip lacks BundleConfig.pb — not an Android App Bundle." >&2
+    unzip -l "$OUT_PATH" | head -40 >&2 || true
+    exit 1
+  fi
+  if ! unzip -l "$OUT_PATH" | grep -q 'base/manifest/AndroidManifest.xml'; then
+    echo "ERROR: $OUT_PATH missing base/manifest/AndroidManifest.xml." >&2
+    unzip -l "$OUT_PATH" | head -40 >&2 || true
+    exit 1
+  fi
+  bash "$ROOT/scripts/ci/submit-android-play.sh" "$OUT_PATH"
+else
+  echo "IPA ready at $OUT_PATH ($(wc -c <"$OUT_PATH" | tr -d ' ') bytes)"
+  file "$OUT_PATH" || true
+  bash "$ROOT/scripts/ci/submit-ios-testflight.sh" "$OUT_PATH"
+fi
 
-echo "Done: $PLATFORM build + submit."
+echo "Done: $PLATFORM build + store upload."

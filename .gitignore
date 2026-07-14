@@ -11,6 +11,9 @@ credentials.json
 credentials/
 .ci/
 
+# Fastlane gems for direct store upload (CI installs via scripts/ci/Gemfile).
+scripts/ci/vendor/
+
 # Generated assets (see assets/README.md)
 assets/generated/
 
