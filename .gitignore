@@ -9,6 +9,7 @@ google-services.json
 GoogleService-Info.plist
 credentials.json
 credentials/
+.ci/
 
 # Generated assets (see assets/README.md)
 assets/generated/

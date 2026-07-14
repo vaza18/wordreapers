@@ -17,6 +17,7 @@ Almost all code is written and maintained by AI agents. This file is the single 
 | Why non-obvious design choices exist                                | [`docs/decisions.md`](docs/decisions.md)                                                               |
 | Rolling agent session notes (promote to permanent docs when stable) | [`docs/agent-notes.md`](docs/agent-notes.md)                                                           |
 | Legal / about copy                                                  | [`docs/legal/`](docs/legal/), [`docs/wordreapers_about.md`](docs/wordreapers_about.md)                 |
+| Release CI (GitHub Release → Play Internal + TestFlight)            | [`docs/release-ci.md`](docs/release-ci.md)                                                             |
 
 Types for Firebase live in [`lib/firebase/types.ts`](lib/firebase/types.ts). Shared game logic is in [`lib/game/`](lib/game/). Online session logic is in [`lib/online/`](lib/online/) (~100 files — highest regression risk).
 
