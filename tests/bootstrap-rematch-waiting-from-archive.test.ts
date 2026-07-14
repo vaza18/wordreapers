@@ -40,10 +40,10 @@ import { finishedSession } from './helpers/game-session-fixtures.js';
 
 const archiveSession = finishedSession();
 const archive = {
-  gameId: 'ABCD',
+  gameId: 'ABCDE',
   baseWordRound: 0,
   savedAt: Date.now(),
-  session: { ...archiveSession, id: 'ABCD' },
+  session: { ...archiveSession, id: 'ABCDE' },
   playerWords: {},
 };
 
@@ -59,12 +59,12 @@ describe('bootstrapRematchWaitingFromArchive', () => {
   it('creates a waiting session when the RTDB root is empty', async () => {
     getMock.mockResolvedValue({ exists: () => false });
 
-    const session = await bootstrapRematchWaitingFromArchive('ABCD', 'org', 0);
+    const session = await bootstrapRematchWaitingFromArchive('ABCDE', 'org', 0);
 
     expect(session.status).toBe('waiting');
     expect(setMock).toHaveBeenCalled();
-    expect(clearAllActiveRoundCachesForGame).toHaveBeenCalledWith('ABCD');
-    expect(setOrganizerWaitingRoom).toHaveBeenCalledWith('ABCD');
+    expect(clearAllActiveRoundCachesForGame).toHaveBeenCalledWith('ABCDE');
+    expect(setOrganizerWaitingRoom).toHaveBeenCalledWith('ABCDE');
   });
 
   it('reuses an existing waiting session created by a peer', async () => {
@@ -76,7 +76,7 @@ describe('bootstrapRematchWaitingFromArchive', () => {
     };
     getMock.mockResolvedValue({ exists: () => true, val: () => waiting });
 
-    const session = await bootstrapRematchWaitingFromArchive('ABCD', 'p2', 0);
+    const session = await bootstrapRematchWaitingFromArchive('ABCDE', 'p2', 0);
 
     expect(session).toBe(waiting);
     expect(setMock).not.toHaveBeenCalled();
@@ -85,13 +85,13 @@ describe('bootstrapRematchWaitingFromArchive', () => {
   it('throws when the finished archive is missing', async () => {
     getFinishedRoundArchive.mockResolvedValue(null);
 
-    await expect(bootstrapRematchWaitingFromArchive('ABCD', 'org', 0)).rejects.toThrow(
+    await expect(bootstrapRematchWaitingFromArchive('ABCDE', 'org', 0)).rejects.toThrow(
       'NO_FINISHED_ARCHIVE',
     );
   });
 
   it('throws when the actor is not in the archived roster', async () => {
-    await expect(bootstrapRematchWaitingFromArchive('ABCD', 'stranger', 0)).rejects.toThrow(
+    await expect(bootstrapRematchWaitingFromArchive('ABCDE', 'stranger', 0)).rejects.toThrow(
       'REMATCH_FAILED',
     );
   });
@@ -106,7 +106,7 @@ describe('bootstrapRematchWaitingFromArchive', () => {
       },
     });
 
-    await expect(bootstrapRematchWaitingFromArchive('ABCD', 'p2', 0)).rejects.toThrow(
+    await expect(bootstrapRematchWaitingFromArchive('ABCDE', 'p2', 0)).rejects.toThrow(
       'REMATCH_FAILED',
     );
   });
@@ -122,7 +122,7 @@ describe('bootstrapRematchWaitingFromArchive', () => {
       .mockResolvedValueOnce({ exists: () => true, val: () => ({ players: { org: {} } }) })
       .mockResolvedValueOnce({ exists: () => true, val: () => peerWaiting });
 
-    const session = await bootstrapRematchWaitingFromArchive('ABCD', 'org', 0);
+    const session = await bootstrapRematchWaitingFromArchive('ABCDE', 'org', 0);
 
     expect(session).toBe(peerWaiting);
     expect(clearSessionRootForRecreate).toHaveBeenCalled();
@@ -143,9 +143,9 @@ describe('bootstrapRematchWaitingFromArchive', () => {
       })
       .mockResolvedValueOnce({ exists: () => true, val: () => peerWaiting });
 
-    const session = await bootstrapRematchWaitingFromArchive('ABCD', 'org', 0);
+    const session = await bootstrapRematchWaitingFromArchive('ABCDE', 'org', 0);
 
-    expect(rematchFinishedSessionToWaiting).toHaveBeenCalledWith('ABCD', 'org');
+    expect(rematchFinishedSessionToWaiting).toHaveBeenCalledWith('ABCDE', 'org');
     expect(session).toBe(peerWaiting);
   });
 
@@ -158,7 +158,7 @@ describe('bootstrapRematchWaitingFromArchive', () => {
       }),
     });
 
-    await expect(bootstrapRematchWaitingFromArchive('ABCD', 'org', 0)).rejects.toThrow(
+    await expect(bootstrapRematchWaitingFromArchive('ABCDE', 'org', 0)).rejects.toThrow(
       'REMATCH_FAILED',
     );
   });
@@ -179,7 +179,7 @@ describe('bootstrapRematchWaitingFromArchive', () => {
 
     setMock.mockRejectedValueOnce(permissionDenied);
 
-    const session = await bootstrapRematchWaitingFromArchive('ABCD', 'p2', 0);
+    const session = await bootstrapRematchWaitingFromArchive('ABCDE', 'p2', 0);
 
     expect(session).toBe(peerWaiting);
     expect(setOrganizerWaitingRoom).not.toHaveBeenCalled();
@@ -188,7 +188,7 @@ describe('bootstrapRematchWaitingFromArchive', () => {
   it('skips organizer waiting room when a non-organizer bootstraps', async () => {
     getMock.mockResolvedValue({ exists: () => false });
 
-    await bootstrapRematchWaitingFromArchive('ABCD', 'p2', 0);
+    await bootstrapRematchWaitingFromArchive('ABCDE', 'p2', 0);
 
     expect(setOrganizerWaitingRoom).not.toHaveBeenCalled();
   });
@@ -199,7 +199,7 @@ describe('bootstrapRematchWaitingFromArchive', () => {
       .mockResolvedValueOnce({ exists: () => true, val: () => ({ players: { org: {} } }) })
       .mockResolvedValueOnce({ exists: () => false });
 
-    const session = await bootstrapRematchWaitingFromArchive('ABCD', 'org', 0);
+    const session = await bootstrapRematchWaitingFromArchive('ABCDE', 'org', 0);
 
     expect(session.status).toBe('waiting');
     expect(setMock).toHaveBeenCalled();
@@ -209,7 +209,7 @@ describe('bootstrapRematchWaitingFromArchive', () => {
     getMock.mockResolvedValue({ exists: () => false });
     setMock.mockRejectedValue(new Error('NETWORK_ERROR'));
 
-    await expect(bootstrapRematchWaitingFromArchive('ABCD', 'org', 0)).rejects.toThrow(
+    await expect(bootstrapRematchWaitingFromArchive('ABCDE', 'org', 0)).rejects.toThrow(
       'NETWORK_ERROR',
     );
   });
@@ -231,7 +231,7 @@ describe('bootstrapRematchWaitingFromArchive', () => {
 
     setMock.mockRejectedValueOnce(permissionDenied);
 
-    const session = await bootstrapRematchWaitingFromArchive('ABCD', 'org', 0);
+    const session = await bootstrapRematchWaitingFromArchive('ABCDE', 'org', 0);
 
     expect(session).toBe(peerWaiting);
   });
@@ -246,7 +246,7 @@ describe('bootstrapRematchWaitingFromArchive', () => {
       .mockResolvedValueOnce({ exists: () => false })
       .mockResolvedValueOnce({ exists: () => true, val: () => peerWaiting });
 
-    const session = await bootstrapRematchWaitingFromArchive('ABCD', 'org', 0);
+    const session = await bootstrapRematchWaitingFromArchive('ABCDE', 'org', 0);
 
     expect(session).toBe(peerWaiting);
     expect(setMock).not.toHaveBeenCalled();
@@ -259,7 +259,7 @@ describe('bootstrapRematchWaitingFromArchive', () => {
     });
     rematchFinishedSessionToWaiting.mockResolvedValue(undefined);
 
-    await expect(bootstrapRematchWaitingFromArchive('ABCD', 'org', 0)).rejects.toThrow(
+    await expect(bootstrapRematchWaitingFromArchive('ABCDE', 'org', 0)).rejects.toThrow(
       'REMATCH_FAILED',
     );
   });

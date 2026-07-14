@@ -27,7 +27,7 @@ function finishedSession(baseWordRound: number): GameSession {
 describe('results rematch archive staleness', () => {
   it('treats prior-round ack as stale for the current finished session', () => {
     const round0Archive = {
-      gameId: 'ABCD',
+      gameId: 'ABCDE',
       baseWordRound: 0,
       savedAt: 1,
       session: finishedSession(0),
@@ -42,7 +42,7 @@ describe('results rematch archive staleness', () => {
 
   it('accepts ack for the same round', () => {
     const round1Archive = {
-      gameId: 'ABCD',
+      gameId: 'ABCDE',
       baseWordRound: 1,
       savedAt: 2,
       session: finishedSession(1),

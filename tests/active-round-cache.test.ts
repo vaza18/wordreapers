@@ -43,40 +43,40 @@ describe('active-round-cache', () => {
 
   it('saves and reads a parked round entry', async () => {
     await saveActiveRoundCache({
-      gameId: 'ABCD',
+      gameId: 'ABCDE',
       baseWordRound: 0,
       timerEndsAt: 2_000_000,
       words: { порт: { display: 'порт', at: 100 } },
       sessionSnapshot: snapshot,
     });
 
-    const entry = await getActiveRoundCache('ABCD', 0);
+    const entry = await getActiveRoundCache('ABCDE', 0);
     expect(entry?.words.порт).toEqual({ display: 'порт', at: 100 });
   });
 
   it('finds the newest non-expired parked round for a room', async () => {
     await saveActiveRoundCache({
-      gameId: 'ABCD',
+      gameId: 'ABCDE',
       baseWordRound: 0,
       timerEndsAt: 1_500_000,
       words: {},
       sessionSnapshot: snapshot,
     });
     await saveActiveRoundCache({
-      gameId: 'ABCD',
+      gameId: 'ABCDE',
       baseWordRound: 1,
       timerEndsAt: 2_500_000,
       words: {},
       sessionSnapshot: { ...snapshot, baseWordRound: 1 },
     });
 
-    const best = await findActiveRoundCacheForGame('ABCD', 2_000_000);
+    const best = await findActiveRoundCacheForGame('ABCDE', 2_000_000);
     expect(best?.baseWordRound).toBe(1);
   });
 
   it('clears all parked rounds for one game', async () => {
     await saveActiveRoundCache({
-      gameId: 'ABCD',
+      gameId: 'ABCDE',
       baseWordRound: 0,
       timerEndsAt: 2_000_000,
       words: {},
@@ -90,15 +90,15 @@ describe('active-round-cache', () => {
       sessionSnapshot: snapshot,
     });
 
-    await clearAllActiveRoundCachesForGame('abcd');
+    await clearAllActiveRoundCachesForGame('abcde');
 
-    await expect(getActiveRoundCache('ABCD', 0)).resolves.toBeNull();
+    await expect(getActiveRoundCache('ABCDE', 0)).resolves.toBeNull();
     await expect(getActiveRoundCache('WXYZ', 0)).resolves.not.toBeNull();
   });
 
   it('purges expired parked rounds', async () => {
     await saveActiveRoundCache({
-      gameId: 'ABCD',
+      gameId: 'ABCDE',
       baseWordRound: 0,
       timerEndsAt: 1_000,
       words: {},
@@ -107,12 +107,12 @@ describe('active-round-cache', () => {
 
     await purgeExpiredActiveRoundCaches(2_000);
 
-    await expect(getActiveRoundCache('ABCD', 0)).resolves.toBeNull();
+    await expect(getActiveRoundCache('ABCDE', 0)).resolves.toBeNull();
   });
 
   it('converts cache words to maps and back', () => {
     const map = wordsMapFromCache({
-      gameId: 'ABCD',
+      gameId: 'ABCDE',
       baseWordRound: 0,
       timerEndsAt: 2_000_000,
       words: {
@@ -131,7 +131,7 @@ describe('active-round-cache', () => {
     expect(
       canRestorePlayingRoundFromCache(
         {
-          gameId: 'ABCD',
+          gameId: 'ABCDE',
           baseWordRound: 0,
           timerEndsAt: 2_000_000,
           words: {},
@@ -144,7 +144,7 @@ describe('active-round-cache', () => {
     expect(
       canRestorePlayingRoundFromCache(
         {
-          gameId: 'ABCD',
+          gameId: 'ABCDE',
           baseWordRound: 0,
           timerEndsAt: 1_000,
           words: {},

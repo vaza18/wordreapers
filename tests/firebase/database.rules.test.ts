@@ -509,7 +509,7 @@ describe('waiting → playing round start player patch', () => {
       },
     };
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await ctx.database().ref('game_sessions/REMCH2').set(rematchWithAutoX2);
+      await ctx.database().ref('game_sessions/REMC2').set(rematchWithAutoX2);
     });
     const now = Date.now();
     const settings = {
@@ -517,7 +517,7 @@ describe('waiting → playing round start player patch', () => {
       uniqueBonusEnabled: false,
     };
     const multiPath = buildRoundStartWritePaths({
-      gameId: 'REMCH2',
+      gameId: 'REMC2',
       session: rematchWithAutoX2,
       actorUid: 'p1',
       now,
@@ -613,9 +613,8 @@ describe('session_word_maps', () => {
     );
   });
 
-  it('denies second writer on wordFirst', async () => {
-    await assertSucceeds(wordMaps('ABCDE').child('wordFirst/slovo').set('p1'));
-    await assertFails(wordMaps('ABCDE').child('wordFirst/slovo').set('org'));
+  it('denies writes under removed wordFirst path', async () => {
+    await assertFails(wordMaps('ABCDE').child('wordFirst/slovo').set('p1'));
   });
 });
 

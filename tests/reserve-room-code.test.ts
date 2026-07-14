@@ -20,7 +20,7 @@ describe('reserveUniqueRoomCode', () => {
 
   it('reuses preferred code when slot is empty', async () => {
     getMock.mockResolvedValueOnce({ exists: () => false });
-    await expect(reserveUniqueRoomCode('ABCD', 'org-1')).resolves.toBe('ABCD');
+    await expect(reserveUniqueRoomCode('ABCDE', 'org-1')).resolves.toBe('ABCDE');
   });
 
   it('reuses preferred code when same organizer already owns it', async () => {
@@ -28,7 +28,7 @@ describe('reserveUniqueRoomCode', () => {
       exists: () => true,
       val: () => ({ organizerId: 'org-1' }),
     });
-    await expect(reserveUniqueRoomCode('ABCD', 'org-1')).resolves.toBe('ABCD');
+    await expect(reserveUniqueRoomCode('ABCDE', 'org-1')).resolves.toBe('ABCDE');
   });
 
   it('allocates a new code when another organizer owns preferred code', async () => {
@@ -38,8 +38,8 @@ describe('reserveUniqueRoomCode', () => {
         val: () => ({ organizerId: 'other' }),
       })
       .mockResolvedValueOnce({ exists: () => false });
-    const code = await reserveUniqueRoomCode('ABCD', 'org-1');
-    expect(code).not.toBe('ABCD');
+    const code = await reserveUniqueRoomCode('ABCDE', 'org-1');
+    expect(code).not.toBe('ABCDE');
     expect(code).toHaveLength(5);
   });
 });

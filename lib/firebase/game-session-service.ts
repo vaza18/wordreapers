@@ -1295,6 +1295,7 @@ export async function rematchFinishedSessionToWaiting(
       pauseVote: null,
       pauseState: null,
       resumeVote: null,
+      createdAt: getServerNow(),
       purgeAfterAt: null,
       finishedAt: null,
       resultsExitedBy: null,

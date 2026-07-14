@@ -47,18 +47,18 @@ describe('finalizeOnlineRoundForPlayer', () => {
       { playerId: 'guest', score: 5, wordCount: 2, uniqueCount: 1 },
     ];
 
-    await finalizeOnlineRoundForPlayer('ABCD', 0, 'org', standings);
+    await finalizeOnlineRoundForPlayer('ABCDE', 0, 'org', standings);
 
-    expect(markOnlineRoundProcessed).toHaveBeenCalledWith('ABCD:0');
+    expect(markOnlineRoundProcessed).toHaveBeenCalledWith('ABCDE:0');
     expect(recordOnlineRound).toHaveBeenCalledWith(true, 3, 'competition');
     expect(incrementCloudPlayerStatsIfRegistered).toHaveBeenCalledWith(true);
-    expect(clearActiveRoundCacheForSession).toHaveBeenCalledWith('ABCD', 0);
+    expect(clearActiveRoundCacheForSession).toHaveBeenCalledWith('ABCDE', 0);
   });
 
   it('skips duplicate finalization for the same round key', async () => {
     wasOnlineRoundProcessed.mockResolvedValue(true);
 
-    await finalizeOnlineRoundForPlayer('ABCD', 0, 'org', []);
+    await finalizeOnlineRoundForPlayer('ABCDE', 0, 'org', []);
 
     expect(recordOnlineRound).not.toHaveBeenCalled();
   });

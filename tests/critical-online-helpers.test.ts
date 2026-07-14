@@ -58,15 +58,15 @@ describe('grammar', () => {
 
 describe('join-link', () => {
   it('builds join URLs with normalized room code', () => {
-    expect(buildRoomJoinUrl('abcd')).toBe('/online/join?code=ABCD');
-    expect(buildRoomJoinUrl('abcd', 'org-1')).toBe('/online/join?code=ABCD&invitedBy=org-1');
+    expect(buildRoomJoinUrl('abcde')).toBe('/online/join?code=ABCDE');
+    expect(buildRoomJoinUrl('abcde', 'org-1')).toBe('/online/join?code=ABCDE&invitedBy=org-1');
   });
 });
 
 describe('play-toast-session-signature', () => {
   it('builds roster signatures without scores', () => {
     const session = {
-      id: 'ABCD',
+      id: 'ABCDE',
       ...playingSession({
         org: { name: 'Org', wordCount: 1, score: 5, online: true },
         guest: { name: 'Guest', wordCount: 0, score: 0, online: true },
@@ -77,19 +77,18 @@ describe('play-toast-session-signature', () => {
     };
 
     const signature = playToastRosterSignature(session);
-    expect(signature).toContain('ABCD:playing:0');
+    expect(signature).toContain('ABCDE:playing:0');
     expect(signature).not.toContain(':5:');
   });
 
   it('builds rank signatures from word maps', () => {
     const session = {
-      id: 'ABCD',
+      id: 'ABCDE',
       ...playingSession({
         org: { name: 'Org', wordCount: 1, score: 5, online: true },
       }),
       settings: DEFAULT_SESSION_SETTINGS,
       wordPlayers: { порт: { org: true } },
-      wordFirst: { порт: 'org' },
     };
 
     expect(playToastRankSignature(session)).toContain('org:');

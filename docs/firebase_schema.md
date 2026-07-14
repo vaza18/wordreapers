@@ -20,6 +20,7 @@ Core session document for a room.
 | `timerEndsAt`, `roundStartedAt`, `roundTimerBudgetSeconds`, `roundPlayedSeconds` | Round timer                                                                                                                                          |
 | `earlyFinishVote`, `pauseVote`, `addTimeVote`, `resumeVote`, `pauseState`        | In-round votes (see `online-multiplayer-rules.md`)                                                                                                   |
 | `finishedAt`, `purgeAfterAt`                                                     | Finished session metadata / TTL purge                                                                                                                |
+| `createdAt`                                                                      | Room lifecycle clock (set on create; refreshed on rematch). Abandoned waiting/playing TTL                                                            |
 | `isPublic`                                                                       | Room listed in public browse while waiting                                                                                                           |
 | `publicPublishedAt`                                                              | Server ms when published to browse                                                                                                                   |
 | `identityMasked`                                                                 | Permanent after a browse-list join; pseudonyms for strangers                                                                                         |
@@ -96,22 +97,25 @@ sequenceDiagram
 ## Related paths
 
 - `session_word_maps/{gameId}` — shared word overlap maps during play
-  - Writes are **per-word shards** only: `wordPlayers/{normalized}/{uid}` and `wordFirst/{normalized}` (no bulk root JSON from clients).
+  - Writes are **per-word shards** only: `wordPlayers/{normalized}/{uid}` (no bulk root JSON from clients).
+  - Overlap uniqueness and live x2 demotion use `wordPlayers` counts/peers (no separate first-submitter map).
 - `player_words/{gameId}/{uid}` — per-player submitted words (immutable per normalized key)
 
 ## Security (RTDB rules + App Check)
 
 - Rules: [`firebase/database.rules.json`](../firebase/database.rules.json) — roster-scoped writes, score caps, status transitions, waiting-only peek for strangers. **`waiting → playing`:** actor must match `newData.parent().baseWordPickerUid` (same atomic update) or stored `baseWordPickerUid`, or rotation fallback via `baseWordPickerOrder[baseWordRound]`. **Rematch** (`finished` → `waiting`): any roster member may commit the reset transaction (clears scores, reopens lobby); rules allow roster-wide player reset only in that transition.
 - **App Check:** native attestation via `@react-native-firebase/app-check` (Play Integrity / App Attest in production; debug token in dev). Tokens are **bridged into the JS SDK** (`firebase/app-check` `CustomProvider`) so `firebase/database` and `firebase/auth` attach `X-Firebase-AppCheck` on every request — see [`lib/firebase/app-check.ts`](../lib/firebase/app-check.ts). Enable RTDB enforcement in Console only after store builds show **Verified** metrics (not 100% outdated client).
-- **Room codes:** new rooms default to **5 characters** (`lib/firebase/room-code.ts`); existing 4–6 codes remain valid.
+- **Room codes:** exactly **5 characters** (`lib/firebase/room-code.ts`).
 - **Rules tests:** `npm run test:rules` (Firebase emulator + Vitest).
 
 ## Cloud Functions (RTDB)
 
-| Function                            | Schedule / trigger                            | Role                                                     |
-| ----------------------------------- | --------------------------------------------- | -------------------------------------------------------- |
-| `guardPublicLobbyWrite`             | on write `public_lobbies/{language}/{gameId}` | Content safety + counter delta                           |
-| `purgeStalePublicLobbiesScheduled`  | every 15 minutes                              | Drop expired/stale index rows; reconcile counts          |
-| `purgeExpiredRtdbSessionsScheduled` | every 24 hours                                | Purge old finished sessions (`purgeAfterAt` index query) |
+| Function                            | Schedule / trigger                            | Role                                                                                           |
+| ----------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `guardPublicLobbyWrite`             | on write `public_lobbies/{language}/{gameId}` | Content safety + counter delta                                                                 |
+| `purgeStalePublicLobbiesScheduled`  | every 15 minutes                              | Drop expired/stale index rows; reconcile counts                                                |
+| `purgeExpiredRtdbSessionsScheduled` | every 24 hours                                | Purge finished (`purgeAfterAt`) and abandoned waiting/playing (`createdAt` / `roundStartedAt`) |
 
-Deploy order when changing backend: **functions first** (indexes), then **database rules**, then **client**. App Check enforcement in Console **after** release builds include the SDK.
+One-shot orphan wipe (manual, after deploy): `npm run firebase:purge-orphans` (`scripts/purge-orphan-sessions.mjs`; loads `.env` / `.env.local`; supports `DRY_RUN=1`).
+
+Deploy order when changing backend: **functions first**, then **database rules**, then **client**. App Check enforcement in Console **after** release builds include the SDK.

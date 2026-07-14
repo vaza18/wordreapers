@@ -39,7 +39,6 @@ export interface PlayingRoundSnapshot {
   baseWord: string;
   settings: GameSession['settings'];
   players: GameSession['players'];
-  wordFirst?: GameSession['wordFirst'];
   wordPlayers?: GameSession['wordPlayers'];
   pauseState?: GameSession['pauseState'];
   timerEndsAt: number;
@@ -173,7 +172,6 @@ export function playingRoundSnapshotFromSession(session: GameSession): PlayingRo
     baseWord: session.baseWord,
     settings: session.settings,
     players: session.players,
-    wordFirst: session.wordFirst,
     wordPlayers: session.wordPlayers,
     pauseState: session.pauseState,
     timerEndsAt: session.timerEndsAt ?? session.roundStartedAt,

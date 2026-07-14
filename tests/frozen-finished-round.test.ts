@@ -16,7 +16,7 @@ import { finishedSession } from './helpers/game-session-fixtures.js';
 
 const session = finishedSession();
 const archive = {
-  gameId: 'ABCD',
+  gameId: 'ABCDE',
   baseWordRound: 0,
   savedAt: 1_000,
   session,
@@ -35,9 +35,9 @@ describe('frozen-finished-round', () => {
   it('freezes a finished session and clones player words', () => {
     const words = new Map([['org', new Map([['порт', { display: 'порт', at: 100 }]])]]);
 
-    const frozen = freezeFinishedRound('ABCD', session, words);
+    const frozen = freezeFinishedRound('ABCDE', session, words);
 
-    expect(frozen.session.id).toBe('ABCD');
+    expect(frozen.session.id).toBe('ABCDE');
     expect(frozen.words.get('org')?.get('порт')).toEqual({ display: 'порт', at: 100 });
     expect(frozen.words).not.toBe(words);
   });
@@ -45,7 +45,7 @@ describe('frozen-finished-round', () => {
   it('loads a frozen round from local archive', async () => {
     getFinishedRoundArchive.mockResolvedValue(archive);
 
-    const frozen = await loadFrozenFinishedRoundFromArchive('ABCD', 0);
+    const frozen = await loadFrozenFinishedRoundFromArchive('ABCDE', 0);
 
     expect(frozen?.savedAt).toBe(1_000);
     expect(frozen?.words.get('org')?.get('порт')).toEqual({ display: 'порт', at: 100 });
@@ -58,7 +58,7 @@ describe('frozen-finished-round', () => {
         : null,
     );
 
-    const frozen = await loadLatestFrozenFinishedRoundFromArchive('ABCD', 2);
+    const frozen = await loadLatestFrozenFinishedRoundFromArchive('ABCDE', 2);
 
     expect(frozen?.session.baseWordRound).toBe(1);
   });
@@ -68,7 +68,7 @@ describe('frozen-finished-round', () => {
       round === 0 ? archive : null,
     );
 
-    const frozen = await loadFrozenFinishedRoundBeforeLive('ABCD', 2);
+    const frozen = await loadFrozenFinishedRoundBeforeLive('ABCDE', 2);
 
     expect(frozen?.session.baseWordRound).toBe(0);
   });
@@ -76,6 +76,6 @@ describe('frozen-finished-round', () => {
   it('returns null when no archive exists', async () => {
     getFinishedRoundArchive.mockResolvedValue(null);
 
-    await expect(loadFrozenFinishedRoundFromArchive('ABCD', 0)).resolves.toBeNull();
+    await expect(loadFrozenFinishedRoundFromArchive('ABCDE', 0)).resolves.toBeNull();
   });
 });

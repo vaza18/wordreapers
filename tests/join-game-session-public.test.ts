@@ -101,7 +101,7 @@ describe('joinGameSession public rooms', () => {
     getMock.mockResolvedValueOnce(snapshot(publicSession(2, 'uk-uk')));
     await expect(
       joinGameSession(
-        'ABCD',
+        'ABCDE',
         { name: 'New', gender: 'm', avatarColorIndex: 1 },
         { joinSource: 'browse', playerLanguage: 'en-gb' },
       ),
@@ -112,7 +112,7 @@ describe('joinGameSession public rooms', () => {
     const full = publicSession(8);
     getMock.mockResolvedValueOnce(snapshot(full)).mockResolvedValueOnce(snapshot(full));
     await expect(
-      joinGameSession('ABCD', { name: 'New', gender: 'm', avatarColorIndex: 1 }),
+      joinGameSession('ABCDE', { name: 'New', gender: 'm', avatarColorIndex: 1 }),
     ).rejects.toThrow('ROOM_FULL');
   });
 
@@ -137,7 +137,7 @@ describe('joinGameSession public rooms', () => {
       .mockResolvedValueOnce(snapshot(joined));
 
     const result = await joinGameSession(
-      'ABCD',
+      'ABCDE',
       { name: 'New', gender: 'm', avatarColorIndex: 1 },
       { joinSource: 'browse', playerLanguage: 'uk-uk' },
     );
@@ -170,7 +170,7 @@ describe('joinGameSession public rooms', () => {
       .mockResolvedValueOnce(snapshot(joined));
 
     await joinGameSession(
-      'ABCD',
+      'ABCDE',
       { name: 'New', gender: 'm', avatarColorIndex: 1 },
       { joinSource: 'browse', playerLanguage: 'uk-uk' },
     );
@@ -204,7 +204,7 @@ describe('joinGameSession public rooms', () => {
       .mockResolvedValueOnce(snapshot(joined));
 
     await expect(
-      joinGameSession('ABCD', { name: 'New', gender: 'm', avatarColorIndex: 1 }),
+      joinGameSession('ABCDE', { name: 'New', gender: 'm', avatarColorIndex: 1 }),
     ).resolves.toBeDefined();
   });
 });

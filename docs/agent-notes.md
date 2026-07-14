@@ -8,6 +8,12 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 <!-- Add dated notes at the top -->
 
+### 2026-07-14 — RTDB TTL + wordFirst removal
+
+- Deploy: functions → rules → client; then `DRY_RUN=1 npm run firebase:purge-orphans` then real wipe.
+- Scheduled purge full-scans `game_sessions` (not only `purgeAfterAt` index) so missing-`createdAt` waiting/playing die immediately — deploy client `createdAt` writes before/with functions if you need to spare live test rooms.
+- Room codes exactly 5: fixtures must use 5-char ids (`REMCH2` truncated to `REMCH` and broke rules tests).
+
 ### 2026-07-13 — Round resume after process death
 
 - Solo snapshot key `wordreapers.soloRoundSnapshot`; always restored as paused; persist on pause/word/addTime/background.

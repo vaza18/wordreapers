@@ -22,9 +22,9 @@ describe('paused-online-resume', () => {
   });
 
   it('round-trips a resume pointer', async () => {
-    await savePausedOnlineResume({ gameId: 'ABCD', baseWordRound: 1, uid: 'u1' });
+    await savePausedOnlineResume({ gameId: 'ABCDE', baseWordRound: 1, uid: 'u1' });
     expect(await loadPausedOnlineResume()).toEqual({
-      gameId: 'ABCD',
+      gameId: 'ABCDE',
       baseWordRound: 1,
       uid: 'u1',
     });
@@ -37,7 +37,7 @@ describe('paused-online-resume', () => {
   });
 
   it('shouldResumePausedOnline only when playing + pause active + matching round/uid', () => {
-    const pointer = { gameId: 'ABCD', baseWordRound: 0, uid: 'org' };
+    const pointer = { gameId: 'ABCDE', baseWordRound: 0, uid: 'org' };
     const paused = playingSession(
       { org: { name: 'Org', wordCount: 0, score: 0, online: true } },
       {
@@ -65,7 +65,7 @@ describe('paused-online-resume', () => {
   });
 
   it('clearPausedOnlineResume removes the key', async () => {
-    await savePausedOnlineResume({ gameId: 'ABCD', baseWordRound: 0, uid: 'u1' });
+    await savePausedOnlineResume({ gameId: 'ABCDE', baseWordRound: 0, uid: 'u1' });
     await clearPausedOnlineResume();
     expect(getAsyncStorageMap().has(PAUSED_ONLINE_RESUME_KEY)).toBe(false);
   });

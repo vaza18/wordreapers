@@ -30,7 +30,7 @@ describe('archiveFinishedRoundFromFirebase', () => {
     const session = finishedSession();
     session.status = 'playing';
 
-    await archiveFinishedRoundFromFirebase('ABCD', session);
+    await archiveFinishedRoundFromFirebase('ABCDE', session);
 
     expect(fetchSessionPlayerWords).not.toHaveBeenCalled();
   });
@@ -39,9 +39,9 @@ describe('archiveFinishedRoundFromFirebase', () => {
     getFinishedRoundArchive.mockResolvedValue(null);
     const session = finishedSession();
 
-    await archiveFinishedRoundFromFirebase('ABCD', session);
+    await archiveFinishedRoundFromFirebase('ABCDE', session);
 
     expect(fetchSessionPlayerWords).toHaveBeenCalled();
-    expect(saveFinishedRoundArchive).toHaveBeenCalledWith('ABCD', session, expect.any(Map));
+    expect(saveFinishedRoundArchive).toHaveBeenCalledWith('ABCDE', session, expect.any(Map));
   });
 });

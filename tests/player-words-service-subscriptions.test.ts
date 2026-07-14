@@ -28,10 +28,10 @@ describe('player-words-service subscriptions', () => {
   });
 
   it('clears a player word node', async () => {
-    await clearPlayerWords('abcd', 'org');
+    await clearPlayerWords('abcde', 'org');
 
     expect(removeMock).toHaveBeenCalledWith({
-      path: 'player_words/ABCD/org',
+      path: 'player_words/ABCDE/org',
     });
   });
 
@@ -39,7 +39,7 @@ describe('player-words-service subscriptions', () => {
     const listener = vi.fn();
     onValueMock.mockImplementation(() => vi.fn());
 
-    subscribePlayerWords('ABCD', 'org', listener);
+    subscribePlayerWords('ABCDE', 'org', listener);
 
     const onNext = onValueMock.mock.calls[0]?.[1] as (snapshot: {
       exists: () => boolean;
@@ -62,7 +62,7 @@ describe('player-words-service subscriptions', () => {
       return vi.fn();
     });
 
-    const unsub = subscribeSessionPlayerWords('ABCD', ['org', 'guest'], listener);
+    const unsub = subscribeSessionPlayerWords('ABCDE', ['org', 'guest'], listener);
 
     listeners[0]?.({ exists: () => true, val: () => ({ порт: { display: 'порт', at: 1 } }) });
     listeners[1]?.({ exists: () => false, val: () => null });
@@ -78,7 +78,7 @@ describe('player-words-service subscriptions', () => {
   it('returns immediately for empty player id lists', () => {
     const listener = vi.fn();
 
-    subscribeSessionPlayerWords('ABCD', [], listener);
+    subscribeSessionPlayerWords('ABCDE', [], listener);
 
     expect(listener).toHaveBeenCalledWith(new Map());
     expect(onValueMock).not.toHaveBeenCalled();

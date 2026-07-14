@@ -7,7 +7,7 @@ import { parseRoundFinishedNotificationData } from '../lib/online/round-finished
 describe('canRestorePlayingRoundFromCache', () => {
   it('accepts a non-expired entry with session snapshot', () => {
     const entry: ActiveRoundCacheEntry = {
-      gameId: 'ABCD',
+      gameId: 'ABCDE',
       baseWordRound: 0,
       timerEndsAt: Date.now() + 60_000,
       words: {},
@@ -31,7 +31,7 @@ describe('canRestorePlayingRoundFromCache', () => {
 
   it('rejects expired entries', () => {
     const entry: ActiveRoundCacheEntry = {
-      gameId: 'ABCD',
+      gameId: 'ABCDE',
       baseWordRound: 0,
       timerEndsAt: Date.now() - 1,
       words: {},
@@ -59,9 +59,9 @@ describe('parseRoundFinishedNotificationData', () => {
     expect(
       parseRoundFinishedNotificationData({
         type: 'round_finished',
-        gameId: 'ABCD',
+        gameId: 'ABCDE',
       }),
-    ).toEqual({ type: 'round_finished', gameId: 'ABCD' });
+    ).toEqual({ type: 'round_finished', gameId: 'ABCDE' });
   });
 
   it('ignores unknown payloads', () => {

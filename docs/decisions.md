@@ -83,6 +83,13 @@ Format: **Decision → Alternatives → Why rejected → Date**
 - **Why rejected:** Intentional leave must not silently re-enter the round. Separate pointer keeps pause vs leave semantics clear.
 - **Date:** 2026-07 — `lib/online/session/left-online-resume.ts`, `lib/app/resolve-interrupted-round-resume.ts`
 
+## ADR-012: x2 demotion via wordPlayers peers (no wordFirst)
+
+- **Decision:** Drop `session_word_maps/.../wordFirst`. When a second player finds a unique-bonus word, demote peer scores using `wordPlayers` peers and session score deltas (`−1` for former sole finder; submitter `+entry.points`).
+- **Alternatives considered:** Keep write-once `wordFirst`; recompute absolute totals from full maps on every submit.
+- **Why rejected:** `wordFirst` looked like exclusive word claiming (removed product) and required an extra write-once path. Full-map recompute is heavier; partial maps already made absolute totals incorrect for multi-word scores.
+- **Date:** 2026-07 — `lib/online/apply-word-submit-to-session.ts`, `lib/firebase/player-words-service.ts`
+
 ---
 
 When adding a new ADR: keep it short; link the implementing file; do not duplicate `online-multiplayer-rules.md` tables.

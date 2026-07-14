@@ -48,6 +48,7 @@
     "firebase:deploy:rules": "bash scripts/firebase-deploy.sh --only database",
     "firebase:deploy:functions": "bash scripts/firebase-deploy.sh --only functions",
     "firebase:deploy:backend": "bash scripts/firebase-deploy.sh --only database,functions",
+    "firebase:purge-orphans": "node scripts/purge-orphan-sessions.mjs",
     "build:android": "bash scripts/eas-build-android-local.sh",
     "build:android:dev": "eas build --platform android --profile development",
     "build:ios": "bash scripts/eas-build-ios-local.sh"

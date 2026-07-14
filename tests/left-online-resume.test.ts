@@ -22,9 +22,9 @@ describe('left-online-resume', () => {
   });
 
   it('round-trips a resume pointer', async () => {
-    await saveLeftOnlineResume({ gameId: 'ABCD', baseWordRound: 1, uid: 'u1' });
+    await saveLeftOnlineResume({ gameId: 'ABCDE', baseWordRound: 1, uid: 'u1' });
     expect(await loadLeftOnlineResume()).toEqual({
-      gameId: 'ABCD',
+      gameId: 'ABCDE',
       baseWordRound: 1,
       uid: 'u1',
     });
@@ -37,7 +37,7 @@ describe('left-online-resume', () => {
   });
 
   it('shouldResumeLeftOnline when room and player still exist (playing or finished)', () => {
-    const pointer = { gameId: 'ABCD', baseWordRound: 0, uid: 'org' };
+    const pointer = { gameId: 'ABCDE', baseWordRound: 0, uid: 'org' };
     const playing = playingSession({
       org: { name: 'Org', wordCount: 0, score: 0, online: false, hasLeft: true },
     });
@@ -69,7 +69,7 @@ describe('left-online-resume', () => {
   });
 
   it('clearLeftOnlineResume removes the key', async () => {
-    await saveLeftOnlineResume({ gameId: 'ABCD', baseWordRound: 0, uid: 'u1' });
+    await saveLeftOnlineResume({ gameId: 'ABCDE', baseWordRound: 0, uid: 'u1' });
     await clearLeftOnlineResume();
     expect(getAsyncStorageMap().has(LEFT_ONLINE_RESUME_KEY)).toBe(false);
   });

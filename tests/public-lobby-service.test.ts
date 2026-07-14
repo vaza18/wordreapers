@@ -46,9 +46,9 @@ describe('setRoomPublic', () => {
 
   it('publishes safe waiting room without touching counter node', async () => {
     getMock.mockResolvedValueOnce(rtdbSnapshot(waitingSession()));
-    await setRoomPublic('ABCD', 'org', ['портрет', 'компютер']);
+    await setRoomPublic('ABCDE', 'org', ['портрет', 'компютер']);
     expect(updateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ path: expect.stringContaining('game_sessions/ABCD') }),
+      expect.objectContaining({ path: expect.stringContaining('game_sessions/ABCDE') }),
       expect.objectContaining({
         isPublic: true,
         maxPlayers: 8,
@@ -60,7 +60,7 @@ describe('setRoomPublic', () => {
 
   it('rejects unsafe base word', async () => {
     getMock.mockResolvedValueOnce(rtdbSnapshot(waitingSession({ baseWord: 'няшка' })));
-    await expect(setRoomPublic('ABCD', 'org', ['портрет'])).rejects.toThrow(
+    await expect(setRoomPublic('ABCDE', 'org', ['портрет'])).rejects.toThrow(
       'BASE_WORD_NOT_ALLOWED_PUBLIC',
     );
   });
@@ -90,7 +90,7 @@ describe('setRoomPrivate', () => {
         }),
       ),
     );
-    await setRoomPrivate('ABCD', 'org');
+    await setRoomPrivate('ABCDE', 'org');
     expect(removeMock).toHaveBeenCalled();
     expect(updateMock).toHaveBeenCalledWith(
       expect.anything(),
@@ -110,7 +110,7 @@ describe('syncPublicLobbyPlayerCount', () => {
   });
 
   it('updates browse index playerCount for public sessions', async () => {
-    await syncPublicLobbyPlayerCount('ABCD', {
+    await syncPublicLobbyPlayerCount('ABCDE', {
       isPublic: true,
       settings: waitingSession().settings,
       players: {
@@ -122,7 +122,7 @@ describe('syncPublicLobbyPlayerCount', () => {
   });
 
   it('no-ops for private sessions', async () => {
-    await syncPublicLobbyPlayerCount('ABCD', {
+    await syncPublicLobbyPlayerCount('ABCDE', {
       isPublic: false,
       settings: waitingSession().settings,
       players: { org: { name: 'Org', wordCount: 0, score: 0 } },
@@ -177,7 +177,7 @@ describe('unpublishPublicLobby', () => {
       ),
     );
 
-    await unpublishPublicLobby('ABCD', 'org', { clearSessionFlag: true });
+    await unpublishPublicLobby('ABCDE', 'org', { clearSessionFlag: true });
 
     expect(removeMock).toHaveBeenCalled();
     expect(updateMock).toHaveBeenCalledWith(
@@ -221,7 +221,7 @@ describe('reconcilePublicLobbyAfterRosterChange', () => {
 
   it('updates browse index playerCount for waiting public rooms', async () => {
     await reconcilePublicLobbyAfterRosterChange(
-      'ABCD',
+      'ABCDE',
       waitingSession({
         isPublic: true,
         settings: PUBLIC_LOBBY_SESSION_SETTINGS,
@@ -233,15 +233,15 @@ describe('reconcilePublicLobbyAfterRosterChange', () => {
     );
 
     expect(updateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ path: expect.stringContaining('public_lobbies/uk-uk/ABCD') }),
+      expect.objectContaining({ path: expect.stringContaining('public_lobbies/uk-uk/ABCDE') }),
       { playerCount: 2 },
     );
   });
 
   it('no-ops for private or non-waiting sessions', async () => {
-    await reconcilePublicLobbyAfterRosterChange('ABCD', waitingSession());
+    await reconcilePublicLobbyAfterRosterChange('ABCDE', waitingSession());
     await reconcilePublicLobbyAfterRosterChange(
-      'ABCD',
+      'ABCDE',
       waitingSession({ isPublic: true, status: 'playing' }),
     );
 

@@ -111,17 +111,17 @@ describe('results-coordination-service', () => {
       ),
     );
 
-    await markResultsExited('abcd', 'org');
+    await markResultsExited('abcde', 'org');
 
     expect(set).toHaveBeenCalledWith(
-      expect.objectContaining({ path: 'game_sessions/ABCD/resultsExitedBy/org' }),
+      expect.objectContaining({ path: 'game_sessions/ABCDE/resultsExitedBy/org' }),
       true,
     );
   });
 
   it('no-ops when session is missing or player is absent', async () => {
     get.mockResolvedValue(rtdbSnapshot(null, false));
-    await markResultsExited('ABCD', 'org');
+    await markResultsExited('ABCDE', 'org');
     expect(set).not.toHaveBeenCalled();
 
     get.mockResolvedValue(
@@ -130,7 +130,7 @@ describe('results-coordination-service', () => {
         players: {},
       }),
     );
-    await markResultsExited('ABCD', 'org');
+    await markResultsExited('ABCDE', 'org');
     expect(set).not.toHaveBeenCalled();
   });
 
@@ -143,7 +143,7 @@ describe('results-coordination-service', () => {
       ),
     );
 
-    await markResultsExited('ABCD', 'org');
+    await markResultsExited('ABCDE', 'org');
 
     expect(set).not.toHaveBeenCalled();
   });
@@ -152,13 +152,13 @@ describe('results-coordination-service', () => {
     get.mockResolvedValue(rtdbSnapshot(finishedSession()));
     set.mockRejectedValue({ code: 'PERMISSION_DENIED' });
 
-    await expect(markResultsExited('ABCD', 'org')).resolves.toBeUndefined();
+    await expect(markResultsExited('ABCDE', 'org')).resolves.toBeUndefined();
   });
 
   it('rethrows non-permission errors', async () => {
     get.mockResolvedValue(rtdbSnapshot(finishedSession()));
     set.mockRejectedValue(new Error('NETWORK_ERROR'));
 
-    await expect(markResultsExited('ABCD', 'org')).rejects.toThrow('NETWORK_ERROR');
+    await expect(markResultsExited('ABCDE', 'org')).rejects.toThrow('NETWORK_ERROR');
   });
 });

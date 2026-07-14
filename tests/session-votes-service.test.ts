@@ -85,7 +85,7 @@ describe('session-votes-service', () => {
     });
     installSession(session);
 
-    await proposeEarlyFinish('ABCD', 'org');
+    await proposeEarlyFinish('ABCDE', 'org');
 
     expect(session.status).toBe('finished');
     expect(session.finishedAt).toBe(SERVER_NOW);
@@ -99,7 +99,7 @@ describe('session-votes-service', () => {
     });
     installSession(session);
 
-    await proposeEarlyFinish('ABCD', 'org');
+    await proposeEarlyFinish('ABCDE', 'org');
 
     expect(session.status).toBe('playing');
     expect(session.earlyFinishVote).toEqual({
@@ -125,7 +125,7 @@ describe('session-votes-service', () => {
     );
     installSession(session);
 
-    await voteEarlyFinish('ABCD', 'guest', 'yes');
+    await voteEarlyFinish('ABCDE', 'guest', 'yes');
 
     expect(session.status).toBe('finished');
     expect(session.earlyFinishVote).toBeNull();
@@ -147,7 +147,7 @@ describe('session-votes-service', () => {
     );
     installSession(session);
 
-    await voteEarlyFinish('ABCD', 'guest', 'no');
+    await voteEarlyFinish('ABCDE', 'guest', 'no');
 
     expect(session.status).toBe('playing');
     expect(session.earlyFinishVote).toBeNull();
@@ -169,7 +169,7 @@ describe('session-votes-service', () => {
     );
     installSession(session);
 
-    await cancelEarlyFinishVote('ABCD', 'org');
+    await cancelEarlyFinishVote('ABCDE', 'org');
 
     expect(session.earlyFinishVote).toBeNull();
   });
@@ -190,7 +190,7 @@ describe('session-votes-service', () => {
     );
     installSession(session);
 
-    await resolveEarlyFinishVoteIfExpired('ABCD');
+    await resolveEarlyFinishVoteIfExpired('ABCDE');
 
     expect(session.status).toBe('finished');
   });
@@ -202,7 +202,7 @@ describe('session-votes-service', () => {
     const endsAt = session.timerEndsAt!;
     installSession(session);
 
-    await proposeAddTime('ABCD', 'org', 2);
+    await proposeAddTime('ABCDE', 'org', 2);
 
     expect(session.timerEndsAt).toBe(endsAt + 2 * 60_000);
     expect(session.addTimeVote).toBeNull();
@@ -226,7 +226,7 @@ describe('session-votes-service', () => {
     const endsAt = session.timerEndsAt!;
     installSession(session);
 
-    await voteAddTime('ABCD', 'guest', 'yes');
+    await voteAddTime('ABCDE', 'guest', 'yes');
 
     expect(session.timerEndsAt).toBe(endsAt + 3 * 60_000);
     expect(session.addTimeVote).toBeNull();
@@ -249,7 +249,7 @@ describe('session-votes-service', () => {
     );
     installSession(session);
 
-    await cancelAddTimeVote('ABCD', 'org');
+    await cancelAddTimeVote('ABCDE', 'org');
 
     expect(session.addTimeVote).toBeNull();
   });
@@ -271,7 +271,7 @@ describe('session-votes-service', () => {
     );
     installSession(session);
 
-    await resolveAddTimeVoteIfExpired('ABCD');
+    await resolveAddTimeVoteIfExpired('ABCDE');
 
     expect(session.addTimeVote).toBeNull();
     expect(session.status).toBe('playing');
@@ -283,7 +283,7 @@ describe('session-votes-service', () => {
     });
     installSession(session);
 
-    await proposePause('ABCD', 'org');
+    await proposePause('ABCDE', 'org');
 
     expect(session.pauseState?.active).toBe(true);
     expect(session.timerEndsAt).toBeNull();
@@ -305,7 +305,7 @@ describe('session-votes-service', () => {
     );
     installSession(session);
 
-    await votePause('ABCD', 'guest', 'yes');
+    await votePause('ABCDE', 'guest', 'yes');
 
     expect(session.pauseState?.active).toBe(true);
     expect(session.pauseVote).toBeNull();
@@ -323,7 +323,7 @@ describe('session-votes-service', () => {
     );
     installSession(session);
 
-    await proposeResume('ABCD', 'org');
+    await proposeResume('ABCDE', 'org');
 
     expect(session.pauseState).toBeNull();
     expect(session.timerEndsAt).toBe(SERVER_NOW + 90_000);
@@ -347,7 +347,7 @@ describe('session-votes-service', () => {
     );
     installSession(session);
 
-    await voteResume('ABCD', 'guest', 'yes');
+    await voteResume('ABCDE', 'guest', 'yes');
 
     expect(session.pauseState).toBeNull();
     expect(session.timerEndsAt).toBe(SERVER_NOW + 60_000);
@@ -371,7 +371,7 @@ describe('session-votes-service', () => {
     );
     installSession(session);
 
-    await resolveResumeVoteIfExpired('ABCD');
+    await resolveResumeVoteIfExpired('ABCDE');
 
     expect(session.pauseState).toBeNull();
   });
@@ -399,17 +399,17 @@ describe('session-votes-service', () => {
     );
     installSession(session);
 
-    await cancelPauseVote('ABCD', 'org');
+    await cancelPauseVote('ABCDE', 'org');
     expect(session.pauseVote).toBeNull();
 
-    await cancelResumeVote('ABCD', 'org');
+    await cancelResumeVote('ABCDE', 'org');
     expect(session.resumeVote).toBeNull();
   });
 
   it('skips vote transactions when the session is missing', async () => {
     installSession(null);
 
-    await proposeEarlyFinish('ABCD', 'org');
+    await proposeEarlyFinish('ABCDE', 'org');
 
     expect(runTransactionMock).not.toHaveBeenCalled();
   });
@@ -439,7 +439,7 @@ describe('session-votes-service', () => {
     );
     installSession(session);
 
-    await reconcileOpenSessionVotes('ABCD');
+    await reconcileOpenSessionVotes('ABCDE');
 
     expect(session.pauseState?.active).toBe(true);
     expect(session.pauseVote).toBeNull();
@@ -461,7 +461,7 @@ describe('session-votes-service', () => {
     );
     installSession(session);
 
-    await reconcileOpenSessionVotes('ABCD');
+    await reconcileOpenSessionVotes('ABCDE');
 
     expect(session.status).toBe('finished');
     expect(session.earlyFinishVote).toBeNull();

@@ -54,7 +54,7 @@ import {
 
 function cacheEntry(overrides: Partial<ActiveRoundCacheEntry> = {}): ActiveRoundCacheEntry {
   return {
-    gameId: 'ABCD',
+    gameId: 'ABCDE',
     baseWordRound: 0,
     timerEndsAt: 2_500_000,
     words: { порт: { display: 'порт', at: 100 } },
@@ -67,7 +67,6 @@ function cacheEntry(overrides: Partial<ActiveRoundCacheEntry> = {}): ActiveRound
       players: {
         org: { name: 'Org', wordCount: 1, score: 1 },
       },
-      wordFirst: { порт: 'org' },
       wordPlayers: { порт: { org: true } },
     },
     ...overrides,
@@ -90,7 +89,7 @@ describe('restorePlayingSessionFromLocalCache', () => {
   it('throws when local cache cannot be restored', async () => {
     findActiveRoundCacheForGame.mockResolvedValue(null);
 
-    await expect(restorePlayingSessionFromLocalCache('ABCD', 'org')).rejects.toThrow(
+    await expect(restorePlayingSessionFromLocalCache('ABCDE', 'org')).rejects.toThrow(
       'NO_RESTORABLE_LOCAL_CACHE',
     );
   });
@@ -104,7 +103,7 @@ describe('restorePlayingSessionFromLocalCache', () => {
       }),
     );
 
-    await expect(restorePlayingSessionFromLocalCache('ABCD', 'org')).rejects.toThrow(
+    await expect(restorePlayingSessionFromLocalCache('ABCDE', 'org')).rejects.toThrow(
       'ROUND_ALREADY_FINISHED',
     );
   });
@@ -118,7 +117,7 @@ describe('restorePlayingSessionFromLocalCache', () => {
       }),
     );
 
-    await expect(restorePlayingSessionFromLocalCache('ABCD', 'org')).rejects.toThrow(
+    await expect(restorePlayingSessionFromLocalCache('ABCDE', 'org')).rejects.toThrow(
       'ROOM_NOT_JOINABLE',
     );
   });
@@ -131,7 +130,7 @@ describe('restorePlayingSessionFromLocalCache', () => {
     );
     removeOrphanGameSessionShell.mockResolvedValue(false);
 
-    await expect(restorePlayingSessionFromLocalCache('ABCD', 'org')).rejects.toThrow(
+    await expect(restorePlayingSessionFromLocalCache('ABCDE', 'org')).rejects.toThrow(
       'NO_RESTORABLE_LOCAL_CACHE',
     );
   });
@@ -155,16 +154,15 @@ describe('restorePlayingSessionFromLocalCache', () => {
         }),
       );
 
-    const snap = await restorePlayingSessionFromLocalCache('ABCD', 'org');
+    const snap = await restorePlayingSessionFromLocalCache('ABCDE', 'org');
 
-    expect(removeOrphanGameSessionShell).toHaveBeenCalledWith('ABCD', 'org');
+    expect(removeOrphanGameSessionShell).toHaveBeenCalledWith('ABCDE', 'org');
     expect(set).toHaveBeenCalled();
-    expect(writeSessionWordMapsShards).toHaveBeenCalledWith('ABCD', {
-      wordFirst: { порт: 'org' },
+    expect(writeSessionWordMapsShards).toHaveBeenCalledWith('ABCDE', {
       wordPlayers: { порт: { org: true } },
     });
     expect(restorePlayerWordsToFirebase).toHaveBeenCalled();
-    expect(snap.id).toBe('ABCD');
+    expect(snap.id).toBe('ABCDE');
     expect(snap.status).toBe('playing');
   });
 
@@ -183,10 +181,10 @@ describe('restorePlayingSessionFromLocalCache', () => {
         }),
       );
 
-    await restorePlayingSessionFromLocalCache('abcd', 'org');
+    await restorePlayingSessionFromLocalCache('abcde', 'org');
 
     expect(set).toHaveBeenCalledWith(
-      { path: 'sessions/ABCD' },
+      { path: 'sessions/ABCDE' },
       expect.objectContaining({
         status: 'playing',
         baseWord: 'тест',
@@ -194,7 +192,7 @@ describe('restorePlayingSessionFromLocalCache', () => {
       }),
     );
     expect(writeSessionWordMapsShards).toHaveBeenCalled();
-    expect(restorePlayerWordsToFirebase).toHaveBeenCalledWith('ABCD', 'org', expect.any(Map));
+    expect(restorePlayerWordsToFirebase).toHaveBeenCalledWith('ABCDE', 'org', expect.any(Map));
   });
 
   it('skips word map shards and player words when cache has none', async () => {
@@ -225,7 +223,7 @@ describe('restorePlayingSessionFromLocalCache', () => {
         }),
       );
 
-    await restorePlayingSessionFromLocalCache('ABCD', 'org');
+    await restorePlayingSessionFromLocalCache('ABCDE', 'org');
 
     expect(writeSessionWordMapsShards).not.toHaveBeenCalled();
     expect(restorePlayerWordsToFirebase).not.toHaveBeenCalled();
@@ -237,7 +235,7 @@ describe('rejoinOnlineRound', () => {
     resetFirebaseRtdbMocks();
     vi.clearAllMocks();
     ensureAnonymousAuth.mockResolvedValue({ uid: 'guest-1' });
-    joinGameSession.mockResolvedValue({ id: 'ABCD', status: 'playing' });
+    joinGameSession.mockResolvedValue({ id: 'ABCDE', status: 'playing' });
     findActiveRoundCacheForGame.mockResolvedValue(cacheEntry());
     removeOrphanGameSessionShell.mockResolvedValue(true);
     writeSessionWordMapsShards.mockResolvedValue(undefined);
@@ -246,10 +244,10 @@ describe('rejoinOnlineRound', () => {
   });
 
   it('returns join result when room exists', async () => {
-    const session = { id: 'ABCD', status: 'playing' as const };
+    const session = { id: 'ABCDE', status: 'playing' as const };
     joinGameSession.mockResolvedValue(session);
 
-    const result = await rejoinOnlineRound('ABCD', {
+    const result = await rejoinOnlineRound('ABCDE', {
       name: 'Guest',
       gender: 'm',
       avatarColorIndex: 0,
@@ -263,7 +261,7 @@ describe('rejoinOnlineRound', () => {
   it('restores from cache and rejoins when room is missing', async () => {
     joinGameSession
       .mockRejectedValueOnce(new Error('ROOM_NOT_FOUND'))
-      .mockResolvedValueOnce({ id: 'ABCD', status: 'playing' });
+      .mockResolvedValueOnce({ id: 'ABCDE', status: 'playing' });
 
     const { get } = getFirebaseRtdbMocks();
     get
@@ -280,7 +278,7 @@ describe('rejoinOnlineRound', () => {
         }),
       );
 
-    const result = await rejoinOnlineRound('ABCD', {
+    const result = await rejoinOnlineRound('ABCDE', {
       name: 'Guest',
       gender: 'm',
       avatarColorIndex: 0,
@@ -288,14 +286,14 @@ describe('rejoinOnlineRound', () => {
 
     expect(ensureAnonymousAuth).toHaveBeenCalled();
     expect(joinGameSession).toHaveBeenCalledTimes(2);
-    expect(result.id).toBe('ABCD');
+    expect(result.id).toBe('ABCDE');
   });
 
   it('rethrows non-ROOM_NOT_FOUND join errors', async () => {
     joinGameSession.mockRejectedValue(new Error('ROOM_FULL'));
 
     await expect(
-      rejoinOnlineRound('ABCD', { name: 'Guest', gender: 'm', avatarColorIndex: 0 }),
+      rejoinOnlineRound('ABCDE', { name: 'Guest', gender: 'm', avatarColorIndex: 0 }),
     ).rejects.toThrow('ROOM_FULL');
   });
 });

@@ -18,10 +18,6 @@ export function sessionWordPlayersPerWordPath(gameId: string, normalized: string
   return `${sessionWordMapsPath(gameId)}/wordPlayers/${normalized}`;
 }
 
-export function sessionWordFirstPerWordPath(gameId: string, normalized: string): string {
-  return `${sessionWordMapsPath(gameId)}/wordFirst/${normalized}`;
-}
-
 export function gameSessionPlayersPath(gameId: string): string {
   return `${gameSessionPath(gameId)}/players`;
 }

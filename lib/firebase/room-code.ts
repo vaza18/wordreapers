@@ -25,12 +25,17 @@ export function normalizeRoomCode(input: string): string {
     .split('')
     .filter((char) => ROOM_CODE_ALPHABET.includes(char))
     .join('')
-    .slice(0, 6);
+    .slice(0, DEFAULT_CODE_LENGTH);
 }
 
 /**
- * Return true when code looks like a valid room id.
+ * Return true when code looks like a valid room id (exactly 5 characters).
  */
 export function isValidRoomCode(code: string): boolean {
-  return /^[2-9A-Z]{4,6}$/.test(code) && !code.includes('O') && !code.includes('I');
+  return (
+    code.length === DEFAULT_CODE_LENGTH &&
+    /^[2-9A-Z]+$/.test(code) &&
+    !code.includes('O') &&
+    !code.includes('I')
+  );
 }

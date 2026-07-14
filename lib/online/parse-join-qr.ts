@@ -1,4 +1,4 @@
-import { isValidRoomCode, normalizeRoomCode } from '@/lib/firebase/room-code';
+import { DEFAULT_CODE_LENGTH, isValidRoomCode, normalizeRoomCode } from '@/lib/firebase/room-code';
 
 export interface JoinQrPayload {
   code: string;
@@ -10,7 +10,7 @@ export interface JoinQrPayload {
  */
 function isRawCodeInput(input: string): boolean {
   const normalized = input.toUpperCase().replace(/\s/g, '');
-  return /^[2-9A-HJ-NP-Z]{4,6}$/.test(normalized);
+  return normalized.length === DEFAULT_CODE_LENGTH && /^[2-9A-HJ-NP-Z]+$/.test(normalized);
 }
 
 export function parseJoinQrPayload(data: string): JoinQrPayload | null {
@@ -24,7 +24,7 @@ export function parseJoinQrPayload(data: string): JoinQrPayload | null {
     return fromUrl;
   }
 
-  const loose = trimmed.match(/[?&]code=([2-9A-HJ-NP-Z]{4,6})/i);
+  const loose = trimmed.match(new RegExp(`[?&]code=([2-9A-HJ-NP-Z]{${DEFAULT_CODE_LENGTH}})`, 'i'));
   if (loose?.[1]) {
     const normalized = normalizeRoomCode(loose[1]);
     if (isValidRoomCode(normalized)) {
@@ -33,7 +33,10 @@ export function parseJoinQrPayload(data: string): JoinQrPayload | null {
   }
 
   if (isRawCodeInput(trimmed)) {
-    return { code: normalizeRoomCode(trimmed) };
+    const normalized = normalizeRoomCode(trimmed);
+    if (isValidRoomCode(normalized)) {
+      return { code: normalized };
+    }
   }
 
   return null;

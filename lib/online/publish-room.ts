@@ -59,18 +59,14 @@ function buildWordSessionMaps(
   words: readonly OrganizerSoloWord[],
   organizerUid: string,
 ): SessionWordMaps {
-  const wordFirst: Record<string, string> = {};
   const wordPlayers: Record<string, Record<string, boolean>> = {};
   for (const word of words) {
-    if (!wordFirst[word.normalized]) {
-      wordFirst[word.normalized] = organizerUid;
-    }
     wordPlayers[word.normalized] = {
       ...(wordPlayers[word.normalized] ?? {}),
       [organizerUid]: true,
     };
   }
-  return { wordFirst, wordPlayers };
+  return { wordPlayers };
 }
 
 async function writeSession(
@@ -108,6 +104,7 @@ export interface PublishWaitingRoomInput {
 export async function publishWaitingRoom(input: PublishWaitingRoomInput): Promise<string> {
   const gameId = await reserveUniqueRoomCode(input.draft.preferredCode, input.organizerUid);
   const settings = settingsFromSetup(input.setup, 1);
+  const serverNow = getServerNow();
 
   const session: GameSession = {
     baseWord: input.setup.baseWord,
@@ -115,6 +112,7 @@ export async function publishWaitingRoom(input: PublishWaitingRoomInput): Promis
     settings,
     timerEndsAt: null,
     organizerId: input.organizerUid,
+    createdAt: serverNow,
     players: {
       [input.organizerUid]: profileToPlayer(input.draft.profile),
     },
@@ -174,6 +172,7 @@ export async function publishPlayingSoloRound(input: PublishPlayingSoloInput): P
     settings: resolveGameSessionSettings(settings),
     timerEndsAt,
     roundStartedAt: serverNow,
+    createdAt: serverNow,
     roundTimerBudgetSeconds:
       input.roundTimerBudgetSeconds ?? resolveGameSessionSettings(settings).durationSeconds,
     organizerId: input.organizerUid,

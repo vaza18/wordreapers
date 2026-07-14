@@ -20,7 +20,6 @@ import {
 import type { SubmitWordProfile } from '../online/submit-word-profile.js';
 import {
   rollbackWordMapsShard,
-  wordFirstPerWordRef,
   wordPlayersPerWordRef,
   wordPlayersShardPlayerRef,
 } from '../online/word-maps-shard-rollback.js';
@@ -395,11 +394,16 @@ async function commitPlayerScorePlan(
       return undefined;
     }
     const next = { ...(players as GameSession['players']) };
-    const firstPlayer = next[plan.firstUid];
-    if (!firstPlayer || !next[plan.uid]) {
+    if (!next[plan.uid]) {
       return undefined;
     }
-    next[plan.firstUid] = { ...firstPlayer, score: plan.firstNextScore };
+    for (const peer of plan.peerScores) {
+      const peerPlayer = next[peer.uid];
+      if (!peerPlayer) {
+        return undefined;
+      }
+      next[peer.uid] = { ...peerPlayer, score: peer.nextScore };
+    }
     next[plan.uid] = {
       ...next[plan.uid],
       score: plan.nextScore,
@@ -431,7 +435,6 @@ export async function submitOnlineWord(
     let entry: ScoredWordEntry = toScoredWordEntry(normalized, 'normal', uniqueBonusEnabled, 1);
 
     let playersOnWord: Record<string, boolean>;
-    let prevGlobal: number;
     try {
       const committedShard = await runRtdbTransaction(
         wordPlayersShardPlayerRef(roomId, normalized, uid),
@@ -454,7 +457,6 @@ export async function submitOnlineWord(
         return { ok: false, error: 'NOT_PLAYING' };
       }
       const globalCount = Object.keys(playersOnWord).length;
-      prevGlobal = Math.max(0, globalCount - 1);
       const kind: WordScoreKind = globalCount > 1 ? 'normal' : 'unique';
       entry = toScoredWordEntry(normalized, kind, uniqueBonusEnabled, globalCount);
     } catch (error) {
@@ -464,54 +466,7 @@ export async function submitOnlineWord(
       throw error;
     }
 
-    let firstUid: string | undefined;
-    if (prevGlobal === 0) {
-      try {
-        const firstCommit = await runRtdbTransaction(
-          wordFirstPerWordRef(roomId, normalized),
-          (current) => {
-            if (current != null && typeof current === 'string') {
-              return undefined;
-            }
-            return uid;
-          },
-        );
-        profile?.mark('wordFirstSet');
-        const value = firstCommit.snapshot.val();
-        firstUid = typeof value === 'string' ? value : uid;
-      } catch (error) {
-        if (isFirebasePermissionDenied(error)) {
-          try {
-            const firstSnapshot = await get(wordFirstPerWordRef(roomId, normalized));
-            if (firstSnapshot.exists() && typeof firstSnapshot.val() === 'string') {
-              firstUid = firstSnapshot.val() as string;
-              profile?.mark('wordFirstSet');
-            } else {
-              await rollbackWordMapsShard(roomId, normalized, uid);
-              return { ok: false, error: 'NOT_PLAYING' };
-            }
-          } catch {
-            await rollbackWordMapsShard(roomId, normalized, uid);
-            return { ok: false, error: 'NOT_PLAYING' };
-          }
-        } else {
-          await rollbackWordMapsShard(roomId, normalized, uid);
-          throw error;
-        }
-      }
-    } else {
-      try {
-        const firstSnapshot = await get(wordFirstPerWordRef(roomId, normalized));
-        firstUid =
-          firstSnapshot.exists() && typeof firstSnapshot.val() === 'string'
-            ? (firstSnapshot.val() as string)
-            : undefined;
-      } catch {
-        firstUid = undefined;
-      }
-    }
-
-    const maps: SessionWordMaps = buildPartialWordMaps(normalized, playersOnWord, firstUid);
+    const maps: SessionWordMaps = buildPartialWordMaps(normalized, playersOnWord);
 
     let sessionSnapshot;
     try {

@@ -41,12 +41,11 @@ export type PlayerScoreUpdatePlan =
       nextWordCount: number;
     }
   | {
-      mode: 'dual';
-      firstUid: string;
-      firstNextScore: number;
+      mode: 'peers';
       uid: string;
       nextScore: number;
       nextWordCount: number;
+      peerScores: { uid: string; nextScore: number }[];
     };
 
 export type PlanPlayerScoreUpdateResult =
@@ -77,7 +76,7 @@ export function applyWordSubmitToWordPlayersShard(
     ok: true,
     prevGlobal,
     entry,
-    maps: buildPartialWordMaps(normalized, playersOnWord, prevGlobal === 0 ? uid : undefined),
+    maps: buildPartialWordMaps(normalized, playersOnWord),
   };
 }
 
@@ -85,10 +84,8 @@ export function applyWordSubmitToWordPlayersShard(
 export function buildPartialWordMaps(
   normalized: string,
   playersOnWord: Record<string, boolean>,
-  firstUid?: string,
 ): SessionWordMaps {
   return {
-    wordFirst: firstUid ? { [normalized]: firstUid } : {},
     wordPlayers: { [normalized]: playersOnWord },
   };
 }
@@ -107,7 +104,6 @@ export function applyWordSubmitToWordMaps(
     return { ok: false, error: 'DUPLICATE' };
   }
 
-  const wordFirst = { ...(maps.wordFirst ?? {}) };
   const wordPlayers = { ...(maps.wordPlayers ?? {}) };
   const prevGlobal = globalWordCount(wordPlayers, normalized);
   const globalCount = prevGlobal + 1;
@@ -116,22 +112,21 @@ export function applyWordSubmitToWordMaps(
   playersOnWord[uid] = true;
   wordPlayers[normalized] = playersOnWord;
 
-  if (prevGlobal === 0) {
-    wordFirst[normalized] = uid;
-  }
-
   const kind: WordScoreKind = globalCount > 1 ? 'normal' : 'unique';
   const entry = toScoredWordEntry(normalized, kind, uniqueBonusEnabled, globalCount);
 
   return {
     ok: true,
     prevGlobal,
-    maps: { wordFirst, wordPlayers },
+    maps: { wordPlayers },
     entry,
   };
 }
 
-/** Choose single-player vs dual-player session write after maps commit. */
+/**
+ * Choose single-player vs peer demotion write after maps commit.
+ * Uses deltas from current session player rows (partial maps are per-word only).
+ */
 export function planPlayerScoreUpdate(
   session: GameSession,
   maps: SessionWordMaps,
@@ -151,21 +146,27 @@ export function planPlayerScoreUpdate(
     return { ok: false, error: 'NOT_PLAYING' };
   }
 
-  const submitterTotals = playerTotalsFromMaps(maps, uid, uniqueBonusEnabled);
   const globalCount = globalWordCount(maps.wordPlayers, normalized);
-  if (globalCount > 1 && uniqueBonusEnabled) {
-    const firstUid = maps.wordFirst?.[normalized];
-    if (firstUid && firstUid !== uid && session.players[firstUid]) {
-      const firstTotals = playerTotalsFromMaps(maps, firstUid, uniqueBonusEnabled);
+  const prevGlobal = Math.max(0, globalCount - 1);
+  const nextScore = (player.score ?? 0) + entry.points;
+  const nextWordCount = (player.wordCount ?? 0) + 1;
+
+  if (uniqueBonusEnabled && prevGlobal === 1) {
+    const peerScores = Object.keys(maps.wordPlayers?.[normalized] ?? {})
+      .filter((peerUid) => peerUid !== uid && session.players[peerUid])
+      .map((peerUid) => ({
+        uid: peerUid,
+        nextScore: Math.max(0, (session.players[peerUid]?.score ?? 0) - 1),
+      }));
+    if (peerScores.length > 0) {
       return {
         ok: true,
         plan: {
-          mode: 'dual',
-          firstUid,
-          firstNextScore: firstTotals.score,
+          mode: 'peers',
           uid,
-          nextScore: submitterTotals.score,
-          nextWordCount: submitterTotals.wordCount,
+          nextScore,
+          nextWordCount,
+          peerScores,
         },
       };
     }
@@ -176,13 +177,13 @@ export function planPlayerScoreUpdate(
     plan: {
       mode: 'single',
       uid,
-      nextScore: submitterTotals.score,
-      nextWordCount: submitterTotals.wordCount,
+      nextScore,
+      nextWordCount,
     },
   };
 }
 
-/** Apply a score plan to a cloned players map (for tests and legacy full-session tx). */
+/** Apply a score plan to a cloned players map (for tests and full-session tx). */
 export function applyPlayerScorePlan(
   players: Record<string, GameSessionPlayer>,
   plan: PlayerScoreUpdatePlan,
@@ -190,10 +191,12 @@ export function applyPlayerScorePlan(
   const next = Object.fromEntries(
     Object.entries(players).map(([playerId, row]) => [playerId, { ...row }]),
   );
-  if (plan.mode === 'dual') {
-    const firstPlayer = next[plan.firstUid];
-    if (firstPlayer) {
-      next[plan.firstUid] = { ...firstPlayer, score: plan.firstNextScore };
+  if (plan.mode === 'peers') {
+    for (const peer of plan.peerScores) {
+      const peerPlayer = next[peer.uid];
+      if (peerPlayer) {
+        next[peer.uid] = { ...peerPlayer, score: peer.nextScore };
+      }
     }
   }
   const submitter = next[plan.uid];
