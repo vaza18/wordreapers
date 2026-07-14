@@ -73,7 +73,6 @@
     "errorSave": "Не вдалося зберегти профіль."
   },
   "online": {
-    "createGame": "Почати гру",
     "joinTitle": "Приєднатись до гри",
     "joinHint": "Введи код кімнати",
     "joinLockedBanner": "Спочатку пройди тренування в «Новій грі», потім зможеш приєднатись до інших.",
@@ -98,7 +97,6 @@
     "playersCount": "Гравці ({{count}})",
     "organizer": "організатор",
     "configureGame": "Налаштувати гру",
-    "startGame": "Почати гру ▶",
     "startHint": "Таймер запуститься після старту. Інші можуть приєднатись під час гри.",
     "waitingForOrganizer": "Очікуємо, поки організатор почне гру…",
     "waitingForRoundStart": "Очікуємо, поки {{name}} почне гру…",
@@ -124,7 +122,6 @@
     "playableWordsMax": "Можна зібрати до {{count}}\u00A0слів",
     "baseWordChangeHint": "Натисніть, щоб змінити",
     "baseWordRoundLabel": "раунд {{round}}",
-    "continueToLobby": "Далі → лобі",
     "inviteOthers": "Змагання",
     "inviteOthersHint": "2+ гравці",
     "inviteOthersLockedHint": "Спочатку потренуйся — знайди достатньо слів у раунді.",
@@ -308,7 +305,7 @@
     "defaultPlayerName": "Гравець {{index}}",
     "addPlayer": "+ Гравець",
     "removePlayer": "− Гравець",
-    "start": "Почати гру",
+    "start": "Почати гру ▶",
     "playTitle": "Гра",
     "resultsTitle": "Гра завершена",
     "winnerLineFemale": "🥇 {{name}} перемогла • {{scoreLabel}} • {{wordsLabel}}",
@@ -513,11 +510,11 @@
   },
   "common": {
     "back": "Назад",
-    "continue": "Далі",
     "cancel": "Скасувати",
-    "save": "Зберегти",
-    "loading": "Завантаження…",
     "close": "Закрити",
-    "refresh": "Оновити"
+    "continue": "Далі →",
+    "loading": "Завантаження…",
+    "refresh": "Оновити",
+    "save": "Зберегти"
   }
 }

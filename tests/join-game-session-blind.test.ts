@@ -167,7 +167,6 @@ describe('joinGameSession blind invite join', () => {
     const { fetchSessionWordMaps } = await import('../lib/firebase/session-word-maps-service.js');
     vi.mocked(fetchSessionWordMaps).mockResolvedValueOnce({
       wordPlayers: { slovo: { org: true } },
-      wordFirst: { slovo: 'org' },
     });
 
     const result = await joinGameSession('ABCDE', {

@@ -33,9 +33,7 @@ export interface SessionPauseState {
 
 /** Shared word maps under `session_word_maps/{gameId}`. */
 export interface SessionWordMaps {
-  /** First submitter per shared word (for score demotion). */
-  wordFirst?: Record<string, string>;
-  /** Player ids per normalized word (for overlap avatars and global counts). */
+  /** Player ids per normalized word (for overlap avatars, uniqueness, x2 demotion). */
   wordPlayers?: Record<string, Record<string, boolean>>;
 }
 
@@ -76,9 +74,9 @@ export interface GameSession {
   organizerId: string;
   players: Record<string, GameSessionPlayer>;
   /** Merged client-side from `session_word_maps` (not stored on core RTDB node). */
-  wordFirst?: Record<string, string>;
-  /** Merged client-side from `session_word_maps` (not stored on core RTDB node). */
   wordPlayers?: Record<string, Record<string, boolean>>;
+  /** Server ms when the room was created (refreshed on rematch); abandoned TTL anchor. */
+  createdAt?: number | null;
   earlyFinishVote?: SessionVote | null;
   pauseVote?: SessionVote | null;
   addTimeVote?: AddTimeVote | null;
@@ -95,7 +93,7 @@ export interface GameSession {
   baseWordChosenBy?: string | null;
   /** Server clock ms when the round ended (`finished`); excludes post-finish modal wait. */
   finishedAt?: number | null;
-  /** Unix ms; Cloud Function deletes the session after this time. */
+  /** Unix ms; Cloud Function deletes the finished session after this time. */
   purgeAfterAt?: number | null;
   /** Uids that left the results screen for home (metadata only). */
   resultsExitedBy?: Record<string, boolean> | null;

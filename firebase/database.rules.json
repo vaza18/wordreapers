@@ -1,7 +1,7 @@
 {
   "rules": {
     "game_sessions": {
-      ".indexOn": ["purgeAfterAt"],
+      ".indexOn": ["purgeAfterAt", "createdAt"],
       "$gameId": {
         ".read": "auth != null && (!data.exists() || data.child('players').child(auth.uid).exists() || data.child('status').val() == 'waiting' || (!data.child('status').exists() && !data.child('organizerId').exists()))",
         ".write": "auth != null && ((!data.exists() && newData.exists() && ((newData.child('organizerId').val() === auth.uid && newData.child('status').val() == 'waiting' && newData.child('players').child(auth.uid).exists()) || (newData.child('organizerId').val() === auth.uid && newData.child('status').val() == 'playing' && newData.child('players').child(auth.uid).exists()) || (newData.child('status').val() == 'waiting' && newData.child('players').child(auth.uid).exists() && newData.child('players').child(newData.child('organizerId').val()).exists()) || (newData.child('status').val() == 'playing' && newData.child('players').child(auth.uid).exists() && newData.child('players').child(newData.child('organizerId').val()).exists()))) || (data.exists() && newData.exists() && newData.child('organizerId').val() === data.child('organizerId').val() && (data.child('organizerId').val() === auth.uid || data.child('players').child(auth.uid).exists())) || (data.exists() && newData.exists() && !data.child('status').exists() && !data.child('organizerId').exists() && newData.child('status').val() == 'waiting' && newData.child('players').child(auth.uid).exists() && newData.child('players').child(newData.child('organizerId').val()).exists()) || (data.exists() && !newData.exists() && ((data.child('status').val() == 'waiting' && data.child('organizerId').val() === auth.uid) || (!data.child('status').exists() && data.child('players').child(auth.uid).exists()))))",
@@ -16,6 +16,9 @@
         },
         "purgeAfterAt": {
           ".validate": "newData.isNumber() || newData.val() === null"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber()"
         },
         "settings": {
           ".validate": "newData.hasChildren(['durationSeconds', 'uniqueBonusEnabled', 'uniqueBonusMode', 'language', 'allowProperNouns', 'allowSlang']) && (newData.child('uniqueBonusMode').val() == 'auto' || newData.child('uniqueBonusMode').val() == 'off') && (!data.exists() || newData.parent().child('status').val() == 'waiting' || (newData.child('durationSeconds').val() == data.child('durationSeconds').val() && newData.child('uniqueBonusEnabled').val() == data.child('uniqueBonusEnabled').val() && newData.child('uniqueBonusMode').val() == data.child('uniqueBonusMode').val() && newData.child('language').val() == data.child('language').val() && newData.child('allowProperNouns').val() == data.child('allowProperNouns').val() && newData.child('allowSlang').val() == data.child('allowSlang').val()) || (newData.parent().child('status').val() == 'playing' && data.child('uniqueBonusMode').val() == 'auto' && data.child('uniqueBonusEnabled').val() == false && newData.child('uniqueBonusEnabled').val() == true && newData.child('durationSeconds').val() == data.child('durationSeconds').val() && newData.child('uniqueBonusMode').val() == data.child('uniqueBonusMode').val() && newData.child('language').val() == data.child('language').val() && newData.child('allowProperNouns').val() == data.child('allowProperNouns').val() && newData.child('allowSlang').val() == data.child('allowSlang').val()) || (data.parent().child('status').val() == 'waiting' && newData.parent().child('status').val() == 'playing' && newData.child('durationSeconds').val() == data.child('durationSeconds').val() && newData.child('uniqueBonusMode').val() == data.child('uniqueBonusMode').val() && newData.child('language').val() == data.child('language').val() && newData.child('allowProperNouns').val() == data.child('allowProperNouns').val() && newData.child('allowSlang').val() == data.child('allowSlang').val()))"
@@ -70,12 +73,6 @@
       "$gameId": {
         ".read": "auth != null && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists()",
         ".write": "auth != null && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && !newData.exists() && (root.child('game_sessions').child($gameId).child('status').val() == 'finished' || root.child('game_sessions').child($gameId).child('status').val() == 'waiting')",
-        "wordFirst": {
-          "$normalized": {
-            ".write": "auth != null && !data.exists() && newData.val() === auth.uid && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && root.child('game_sessions').child($gameId).child('status').val() == 'playing'",
-            ".validate": "!newData.exists() || !data.exists()"
-          }
-        },
         "wordPlayers": {
           "$normalized": {
             "$uid": {

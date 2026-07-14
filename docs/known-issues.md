@@ -8,6 +8,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — Stale 4-char / abandoned rooms never purged
+
+- **Symptom:** Old `waiting`/`playing` rooms (often 4-character codes) lingered forever under `game_sessions`, `player_words`, and `session_word_maps`.
+- **Cause:** Scheduled purge only deleted sessions with `purgeAfterAt <= now`, which clients set only on `finished`. Abandoned waiting rooms and stuck playing rounds never got a TTL.
+- **Fix:** Add `createdAt` (refreshed on rematch); extend CF to purge abandoned waiting/playing after 7 days (or immediately when `createdAt` missing); delete wholesale `player_words/{gameId}`; one-shot `npm run firebase:purge-orphans`.
+- **Test:** `tests/purge-expired-sessions.test.ts`
+- **Area:** `functions/src/purge-expired-sessions.ts`, `lib/online/publish-room.ts`, rematch waiting write
+
 ### 2026-07 — Intentional leave also toasted «не в грі»
 
 - **Symptom:** When a peer pressed «Вийти» mid-round, remaining players saw both «залишив гру» and «не в грі» (status then correctly showed «вийшов»).

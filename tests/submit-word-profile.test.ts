@@ -39,6 +39,17 @@ describe('submit-word-profile', () => {
     );
   });
 
+  it('ignores repeated finish calls (listener + remoteDone race)', () => {
+    const profile = createSubmitWordProfile('порт');
+    expect(profile).not.toBeNull();
+
+    profile?.mark('validate');
+    profile?.finish();
+    profile?.finish();
+
+    expect(console.log).toHaveBeenCalledTimes(1);
+  });
+
   it('flushes rolling latency summary in dev', async () => {
     vi.resetModules();
     const { createSubmitWordProfile, flushSubmitLatencySummary } =

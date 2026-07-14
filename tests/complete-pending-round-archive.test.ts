@@ -63,19 +63,19 @@ describe('complete-pending-round-archive', () => {
   it('persists local archive and player stats once for a finished round', async () => {
     const session = finishedSession();
 
-    await persistFinishedRoundForPlayer('ABCD', 'org', session, words);
+    await persistFinishedRoundForPlayer('ABCDE', 'org', session, words);
 
-    expect(persistLocalArchive).toHaveBeenCalledWith('ABCD', 'org', session, words);
+    expect(persistLocalArchive).toHaveBeenCalledWith('ABCDE', 'org', session, words);
     expect(finalizeOnlineRoundForPlayer).toHaveBeenCalled();
-    expect(clearPendingRoundArchive).toHaveBeenCalledWith('ABCD', 0);
+    expect(clearPendingRoundArchive).toHaveBeenCalledWith('ABCDE', 0);
   });
 
   it('fetches words from firebase before persisting finished round', async () => {
     const session = finishedSession();
 
-    await persistFinishedRoundFromFirebase('ABCD', 'org', session);
+    await persistFinishedRoundFromFirebase('ABCDE', 'org', session);
 
-    expect(fetchSessionPlayerWords).toHaveBeenCalledWith('ABCD', ['org', 'p2', 'p3']);
+    expect(fetchSessionPlayerWords).toHaveBeenCalledWith('ABCDE', ['org', 'p2', 'p3']);
     expect(persistLocalArchive).toHaveBeenCalled();
   });
 
@@ -83,6 +83,6 @@ describe('complete-pending-round-archive', () => {
     const session = finishedSession();
     getMock.mockResolvedValue({ exists: () => true, val: () => session });
 
-    await expect(readLiveSession('ABCD')).resolves.toEqual(session);
+    await expect(readLiveSession('ABCDE')).resolves.toEqual(session);
   });
 });

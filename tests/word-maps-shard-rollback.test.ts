@@ -13,7 +13,10 @@ vi.mock('../lib/firebase/init.js', () => ({
   getFirebaseDatabase: () => ({}),
 }));
 
-import { rollbackWordMapsShard } from '../lib/online/word-maps-shard-rollback.js';
+import {
+  rollbackWordMapsShard,
+  rollbackWordSubmitArtifacts,
+} from '../lib/online/word-maps-shard-rollback.js';
 
 describe('rollbackWordMapsShard', () => {
   beforeEach(() => {
@@ -21,55 +24,44 @@ describe('rollbackWordMapsShard', () => {
     removeMock.mockResolvedValue(undefined);
   });
 
-  it('removes player shard and wordFirst when no players remain on the word', async () => {
-    getMock.mockResolvedValue({ exists: () => false });
-
-    await rollbackWordMapsShard('ABCD', 'порт', 'org-1');
-
-    expect(removeMock).toHaveBeenCalledTimes(2);
-    expect(removeMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        path: 'session_word_maps/ABCD/wordPlayers/порт/org-1',
-      }),
-    );
-    expect(removeMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        path: 'session_word_maps/ABCD/wordFirst/порт',
-      }),
-    );
-  });
-
-  it('keeps wordFirst when other players still have the word', async () => {
-    getMock.mockResolvedValue({
-      exists: () => true,
-      val: () => ({ guest: true }),
-    });
-
-    await rollbackWordMapsShard('ABCD', 'порт', 'org-1');
+  it('removes player wordPlayers shard', async () => {
+    await rollbackWordMapsShard('ABCDE', 'порт', 'org-1');
 
     expect(removeMock).toHaveBeenCalledTimes(1);
     expect(removeMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        path: 'session_word_maps/ABCD/wordPlayers/порт/org-1',
+        path: 'session_word_maps/ABCDE/wordPlayers/порт/org-1',
       }),
     );
-  });
-
-  it('removes wordFirst when the parent shard is empty', async () => {
-    getMock.mockResolvedValue({
-      exists: () => true,
-      val: () => ({}),
-    });
-
-    await rollbackWordMapsShard('abcd', 'порт', 'org-1');
-
-    expect(removeMock).toHaveBeenCalledTimes(2);
+    expect(getMock).not.toHaveBeenCalled();
   });
 
   it('swallows firebase errors during best-effort cleanup', async () => {
     removeMock.mockRejectedValueOnce(new Error('network'));
-    getMock.mockRejectedValueOnce(new Error('network'));
 
-    await expect(rollbackWordMapsShard('ABCD', 'порт', 'org-1')).resolves.toBeUndefined();
+    await expect(rollbackWordMapsShard('ABCDE', 'порт', 'org-1')).resolves.toBeUndefined();
+  });
+});
+
+describe('rollbackWordSubmitArtifacts', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    removeMock.mockResolvedValue(undefined);
+  });
+
+  it('removes wordPlayers shard and player_words leaf', async () => {
+    await rollbackWordSubmitArtifacts('ABCDE', 'порт', 'org-1');
+
+    expect(removeMock).toHaveBeenCalledTimes(2);
+    expect(removeMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: 'session_word_maps/ABCDE/wordPlayers/порт/org-1',
+      }),
+    );
+    expect(removeMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: 'player_words/ABCDE/org-1/порт',
+      }),
+    );
   });
 });

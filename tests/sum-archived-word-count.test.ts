@@ -7,7 +7,7 @@ describe('sumArchivedWordCountForPlayer', () => {
   it('sums wordCount for one uid across archives', () => {
     const archives: FinishedRoundArchive[] = [
       {
-        gameId: 'ABCD',
+        gameId: 'ABCDE',
         baseWordRound: 0,
         savedAt: 1,
         session: {

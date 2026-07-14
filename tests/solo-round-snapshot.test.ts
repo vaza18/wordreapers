@@ -32,7 +32,7 @@ describe('solo-round-snapshot', () => {
 
   it('builds a paused snapshot from playing state using remaining ms', () => {
     const snap = buildSoloRoundSnapshot({
-      draftId: 'ABCD',
+      draftId: 'ABCDE',
       setup,
       uniqueBonusEnabled: false,
       status: 'playing',
@@ -56,7 +56,7 @@ describe('solo-round-snapshot', () => {
 
     expect(snap).toMatchObject({
       version: 1,
-      draftId: 'ABCD',
+      draftId: 'ABCDE',
       status: 'paused',
       pausedRemainingMs: 90_000,
       words: [expect.objectContaining({ normalized: 'тест' })],
@@ -66,7 +66,7 @@ describe('solo-round-snapshot', () => {
   it('returns null when there is no active round to persist', () => {
     expect(
       buildSoloRoundSnapshot({
-        draftId: 'ABCD',
+        draftId: 'ABCDE',
         setup,
         uniqueBonusEnabled: false,
         status: 'idle',
@@ -82,7 +82,7 @@ describe('solo-round-snapshot', () => {
 
     expect(
       buildSoloRoundSnapshot({
-        draftId: 'ABCD',
+        draftId: 'ABCDE',
         setup: null,
         uniqueBonusEnabled: false,
         status: 'playing',
@@ -99,7 +99,7 @@ describe('solo-round-snapshot', () => {
 
   it('round-trips through AsyncStorage', async () => {
     const snap = buildSoloRoundSnapshot({
-      draftId: 'ABCD',
+      draftId: 'ABCDE',
       setup,
       uniqueBonusEnabled: false,
       status: 'paused',

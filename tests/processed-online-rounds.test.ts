@@ -20,38 +20,38 @@ describe('processed-online-rounds', () => {
   });
 
   it('normalizes room code in round keys', () => {
-    expect(onlineRoundKey('abcd', 2)).toBe('ABCD:2');
+    expect(onlineRoundKey('abcde', 2)).toBe('ABCDE:2');
   });
 
   it('reports unprocessed rounds by default', async () => {
-    expect(await wasOnlineRoundProcessed('ABCD:0')).toBe(false);
+    expect(await wasOnlineRoundProcessed('ABCDE:0')).toBe(false);
   });
 
   it('marks a round as processed', async () => {
-    await markOnlineRoundProcessed('ABCD:0');
+    await markOnlineRoundProcessed('ABCDE:0');
 
-    expect(await wasOnlineRoundProcessed('ABCD:0')).toBe(true);
-    expect(await wasOnlineRoundProcessed('ABCD:1')).toBe(false);
+    expect(await wasOnlineRoundProcessed('ABCDE:0')).toBe(true);
+    expect(await wasOnlineRoundProcessed('ABCDE:1')).toBe(false);
   });
 
   it('is idempotent when marking the same round twice', async () => {
-    await markOnlineRoundProcessed('ABCD:0');
-    await markOnlineRoundProcessed('ABCD:0');
+    await markOnlineRoundProcessed('ABCDE:0');
+    await markOnlineRoundProcessed('ABCDE:0');
 
     const raw = getAsyncStorageMap().get(STORAGE_KEY);
-    expect(JSON.parse(String(raw))).toEqual(['ABCD:0']);
+    expect(JSON.parse(String(raw))).toEqual(['ABCDE:0']);
   });
 
   it('treats corrupt storage as empty', async () => {
     getAsyncStorageMap().set(STORAGE_KEY, 'not-json');
 
-    expect(await wasOnlineRoundProcessed('ABCD:0')).toBe(false);
+    expect(await wasOnlineRoundProcessed('ABCDE:0')).toBe(false);
   });
 
   it('treats non-array storage as empty', async () => {
     getAsyncStorageMap().set(STORAGE_KEY, JSON.stringify({ bad: true }));
 
-    expect(await wasOnlineRoundProcessed('ABCD:0')).toBe(false);
+    expect(await wasOnlineRoundProcessed('ABCDE:0')).toBe(false);
   });
 
   it('trims stored keys to the last 200 entries', async () => {

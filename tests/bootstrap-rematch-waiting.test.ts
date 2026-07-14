@@ -37,6 +37,7 @@ describe('bootstrap rematch waiting session shape', () => {
     expect(waiting.wordPlayers).toBeUndefined();
     expect(waiting.purgeAfterAt).toBeUndefined();
     expect(waiting.resultsExitedBy).toBeUndefined();
+    expect(typeof waiting.createdAt).toBe('number');
   });
 
   it('synthesizes organizer roster entry when missing from archived players', () => {

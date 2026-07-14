@@ -40,7 +40,6 @@ const archive = {
     players: {
       org: { name: 'Org', wordCount: 1, score: 5, online: false },
     },
-    wordFirst: { порт: 'org' },
     wordPlayers: { порт: { org: true } },
   },
   playerWords: {

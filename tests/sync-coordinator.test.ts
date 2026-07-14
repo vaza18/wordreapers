@@ -79,10 +79,10 @@ describe('sync-coordinator', () => {
 
   it('dedupes pending and recent archives in buildSyncWorkQueue', () => {
     const queue = buildSyncWorkQueue(
-      [{ gameId: 'ABCD', baseWordRound: 0, uid: 'u1', markedAt: 1_000 }],
+      [{ gameId: 'ABCDE', baseWordRound: 0, uid: 'u1', markedAt: 1_000 }],
       [
         {
-          gameId: 'ABCD',
+          gameId: 'ABCDE',
           baseWordRound: 0,
           savedAt: 1_000,
           ackSent: false,
@@ -102,7 +102,7 @@ describe('sync-coordinator', () => {
 
     expect(queue).toHaveLength(1);
     expect(queue[0]).toMatchObject({
-      gameId: 'ABCD',
+      gameId: 'ABCDE',
       baseWordRound: 0,
       fromPending: true,
       uid: 'u1',
@@ -111,7 +111,7 @@ describe('sync-coordinator', () => {
 
   it('persists finished round archives for rostered players', async () => {
     vi.mocked(listPendingRoundArchives).mockResolvedValue([
-      { gameId: 'ABCD', baseWordRound: 0, uid: 'org', markedAt: 1_000 },
+      { gameId: 'ABCDE', baseWordRound: 0, uid: 'org', markedAt: 1_000 },
     ]);
     getMock.mockResolvedValue({
       exists: () => true,
@@ -132,7 +132,7 @@ describe('sync-coordinator', () => {
 
     expect(persistLocalArchive).toHaveBeenCalled();
     expect(finalizeOnlineRoundForPlayer).toHaveBeenCalled();
-    expect(clearPendingRoundArchive).toHaveBeenCalledWith('ABCD', 0);
+    expect(clearPendingRoundArchive).toHaveBeenCalledWith('ABCDE', 0);
   });
 
   it('abandons stale waiting rooms when organizer is alone offline', async () => {
@@ -176,10 +176,10 @@ describe('sync-coordinator', () => {
 
   it('skips sync work for the active play screen game', async () => {
     vi.mocked(listPendingRoundArchives).mockResolvedValue([
-      { gameId: 'ABCD', baseWordRound: 0, uid: 'org', markedAt: 1_000 },
+      { gameId: 'ABCDE', baseWordRound: 0, uid: 'org', markedAt: 1_000 },
     ]);
 
-    await syncFinishedRoundsCoordinator({ uid: 'org', activePlayGameId: 'ABCD' });
+    await syncFinishedRoundsCoordinator({ uid: 'org', activePlayGameId: 'ABCDE' });
 
     expect(getMock).not.toHaveBeenCalled();
     expect(persistLocalArchive).not.toHaveBeenCalled();

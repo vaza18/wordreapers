@@ -34,7 +34,7 @@ const soloSnap: SoloRoundSnapshotV1 = {
 };
 
 const pausedPointer: PausedOnlineResumePointer = {
-  gameId: 'ABCD',
+  gameId: 'ABCDE',
   baseWordRound: 0,
   uid: 'org',
 };
@@ -94,11 +94,11 @@ describe('resolveInterruptedRoundResume', () => {
       baseDeps({
         loadPausedPointer: async () => pausedPointer,
         loadLeftPointer: async () => leftPointer,
-        fetchSession: async (gameId) => (gameId === 'ABCD' ? session : null),
+        fetchSession: async (gameId) => (gameId === 'ABCDE' ? session : null),
       }),
     );
 
-    expect(target).toEqual({ kind: 'onlinePaused', gameId: 'ABCD' });
+    expect(target).toEqual({ kind: 'onlinePaused', gameId: 'ABCDE' });
   });
 
   it('resumes left screen when room still exists (even if finished)', async () => {
@@ -131,7 +131,7 @@ describe('resolveInterruptedRoundResume', () => {
         loadPausedPointer: async () => pausedPointer,
         clearPausedPointer: clearPaused,
         loadLeftPointer: async () => leftPointer,
-        fetchSession: async (gameId) => (gameId === 'LEFT1' || gameId === 'ABCD' ? playing : null),
+        fetchSession: async (gameId) => (gameId === 'LEFT1' || gameId === 'ABCDE' ? playing : null),
       }),
     );
 

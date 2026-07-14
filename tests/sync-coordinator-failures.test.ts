@@ -71,11 +71,11 @@ describe('syncFinishedRoundsCoordinator failure paths', () => {
 
   it('clears pending archive when session is missing but archive exists', async () => {
     vi.mocked(listPendingRoundArchives).mockResolvedValue([
-      { gameId: 'ABCD', baseWordRound: 0, uid: 'org', markedAt: 1_000 },
+      { gameId: 'ABCDE', baseWordRound: 0, uid: 'org', markedAt: 1_000 },
     ]);
     getMock.mockResolvedValue({ exists: () => false });
     vi.mocked(getFinishedRoundArchive).mockResolvedValue({
-      gameId: 'ABCD',
+      gameId: 'ABCDE',
       baseWordRound: 0,
       savedAt: 1_000,
       session: {
@@ -91,13 +91,13 @@ describe('syncFinishedRoundsCoordinator failure paths', () => {
 
     await syncFinishedRoundsCoordinator({ uid: 'org' });
 
-    expect(clearPendingRoundArchive).toHaveBeenCalledWith('ABCD', 0);
+    expect(clearPendingRoundArchive).toHaveBeenCalledWith('ABCDE', 0);
     expect(notifyRoundFinishedOnce).toHaveBeenCalled();
   });
 
   it('drops stale pending work when baseWordRound no longer matches', async () => {
     vi.mocked(listPendingRoundArchives).mockResolvedValue([
-      { gameId: 'ABCD', baseWordRound: 0, uid: 'org', markedAt: 1_000 },
+      { gameId: 'ABCDE', baseWordRound: 0, uid: 'org', markedAt: 1_000 },
     ]);
     getMock.mockResolvedValue({
       exists: () => true,
@@ -114,14 +114,14 @@ describe('syncFinishedRoundsCoordinator failure paths', () => {
 
     await syncFinishedRoundsCoordinator({ uid: 'org' });
 
-    expect(clearPendingRoundArchive).toHaveBeenCalledWith('ABCD', 0);
+    expect(clearPendingRoundArchive).toHaveBeenCalledWith('ABCDE', 0);
     expect(persistLocalArchive).not.toHaveBeenCalled();
   });
 
   it('continues queue when one item throws', async () => {
     vi.mocked(listPendingRoundArchives).mockResolvedValue([
       { gameId: 'FAIL', baseWordRound: 0, uid: 'org', markedAt: 1_000 },
-      { gameId: 'ABCD', baseWordRound: 0, uid: 'org', markedAt: 1_000 },
+      { gameId: 'ABCDE', baseWordRound: 0, uid: 'org', markedAt: 1_000 },
     ]);
     getMock.mockRejectedValueOnce(new Error('NETWORK')).mockResolvedValueOnce({
       exists: () => true,

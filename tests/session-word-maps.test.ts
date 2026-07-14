@@ -32,20 +32,18 @@ describe('session-word-maps helpers', () => {
       timerEndsAt: 1,
       organizerId: 'org',
       players: {},
-      wordFirst: { порт: 'org' },
       wordPlayers: { порт: { org: true } },
     };
 
     const stripped = stripWordMapsFromSession(session);
 
-    expect(stripped).not.toHaveProperty('wordFirst');
     expect(stripped).not.toHaveProperty('wordPlayers');
-    expect(session.wordFirst).toEqual({ порт: 'org' });
+    expect(session.wordPlayers).toEqual({ порт: { org: true } });
   });
 
   it('returns core unchanged when maps are null', () => {
     const core = {
-      id: 'ABCD',
+      id: 'ABCDE',
       baseWord: 'тест',
       status: 'playing' as const,
       settings: DEFAULT_SESSION_SETTINGS,
@@ -59,7 +57,7 @@ describe('session-word-maps helpers', () => {
 
   it('merges word maps onto a core session', () => {
     const core = {
-      id: 'ABCD',
+      id: 'ABCDE',
       baseWord: 'тест',
       status: 'playing' as const,
       settings: DEFAULT_SESSION_SETTINGS,
@@ -68,7 +66,6 @@ describe('session-word-maps helpers', () => {
       players: {},
     };
     const maps = {
-      wordFirst: { порт: 'org' },
       wordPlayers: { порт: { org: true } },
     };
 
@@ -81,18 +78,15 @@ describe('session-word-maps helpers', () => {
   it('extracts word maps from a merged session shape', () => {
     expect(
       sessionWordMapsFromSession({
-        wordFirst: { порт: 'org' },
         wordPlayers: { порт: { org: true } },
       }),
     ).toEqual({
-      wordFirst: { порт: 'org' },
       wordPlayers: { порт: { org: true } },
     });
   });
 
   it('exposes an empty word maps constant', () => {
     expect(EMPTY_SESSION_WORD_MAPS).toEqual({
-      wordFirst: {},
       wordPlayers: {},
     });
   });

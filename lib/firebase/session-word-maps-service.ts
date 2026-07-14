@@ -25,7 +25,6 @@ function parseSessionWordMaps(raw: unknown): SessionWordMaps {
   }
   const value = raw as SessionWordMaps;
   return {
-    wordFirst: value.wordFirst ?? {},
     wordPlayers: value.wordPlayers ?? {},
   };
 }
@@ -48,7 +47,7 @@ export async function fetchSessionWordMaps(gameId: string): Promise<SessionWordM
   }
 }
 
-/** Live word maps (overlap, x2 demotion, standings recompute). */
+/** Live word maps (overlap, uniqueness, standings recompute). */
 export function subscribeSessionWordMaps(
   gameId: string,
   listener: (maps: SessionWordMaps | null) => void,
@@ -82,10 +81,7 @@ export async function writeSessionWordMapsShards(
   maps: SessionWordMaps,
 ): Promise<void> {
   const roomId = normalizeRoomCode(gameId);
-  const payload: Record<string, string | boolean> = {};
-  for (const [normalized, uid] of Object.entries(maps.wordFirst ?? {})) {
-    payload[`wordFirst/${normalized}`] = uid;
-  }
+  const payload: Record<string, boolean> = {};
   for (const [normalized, playersOnWord] of Object.entries(maps.wordPlayers ?? {})) {
     for (const [uid, onWord] of Object.entries(playersOnWord)) {
       if (onWord) {

@@ -70,11 +70,11 @@ describe('cache-active-round', () => {
     );
     const words = new Map([['порт', { display: 'порт', at: 100 }]]);
 
-    await cacheActiveRoundProgress('ABCD', 'org', session, words);
+    await cacheActiveRoundProgress('ABCDE', 'org', session, words);
 
     expect(saveActiveRoundCache).toHaveBeenCalledWith(
       expect.objectContaining({
-        gameId: 'ABCD',
+        gameId: 'ABCDE',
         words: { порт: { display: 'порт', at: 100 } },
       }),
     );
@@ -85,7 +85,7 @@ describe('cache-active-round', () => {
     session.status = 'waiting';
 
     await cacheActiveRoundProgress(
-      'ABCD',
+      'ABCDE',
       'org',
       session,
       new Map([['порт', { display: 'порт', at: 100 }]]),
@@ -100,14 +100,14 @@ describe('cache-active-round', () => {
       { timerEndsAt: 2_000_000, baseWordRound: 0 },
     );
     getActiveRoundCache.mockResolvedValue({
-      gameId: 'ABCD',
+      gameId: 'ABCDE',
       baseWordRound: 0,
       timerEndsAt: 2_000_000,
       words: { порт: { display: 'порт', at: 100 } },
     });
     getMock.mockResolvedValue({ exists: () => true, val: () => session });
 
-    await tryRestoreActiveRoundCache('ABCD', 'org', session, 0);
+    await tryRestoreActiveRoundCache('ABCDE', 'org', session, 0);
 
     expect(restorePlayerWordsToFirebase).toHaveBeenCalled();
   });

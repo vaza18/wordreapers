@@ -28,7 +28,6 @@ function playingSession(overrides?: Partial<GameSession>): GameSession {
       p1: { name: 'A', score: 0, wordCount: 0, avatarColorIndex: 0, online: true },
       p2: { name: 'B', score: 0, wordCount: 0, avatarColorIndex: 1, online: true },
     },
-    wordFirst: {},
     wordPlayers: {},
     ...overrides,
   };
@@ -74,16 +73,17 @@ describe('applyWordSubmitToWordPlayersShard', () => {
 });
 
 describe('buildPartialWordMaps', () => {
-  it('includes first uid only when provided', () => {
-    expect(buildPartialWordMaps('порт', { p1: true }, 'p1').wordFirst).toEqual({ порт: 'p1' });
-    expect(buildPartialWordMaps('порт', { p1: true, p2: true }).wordFirst).toEqual({});
+  it('builds wordPlayers shard for one word', () => {
+    expect(buildPartialWordMaps('порт', { p1: true })).toEqual({
+      wordPlayers: { порт: { p1: true } },
+    });
   });
 });
 
 describe('planPlayerScoreUpdate', () => {
   it('uses single-player plan for first unique word', () => {
     const session = playingSession();
-    const maps = buildPartialWordMaps('порт', { p1: true }, 'p1');
+    const maps = buildPartialWordMaps('порт', { p1: true });
     const shard = applyWordSubmitToWordPlayersShard(null, 'p1', 'порт', true);
     if (!shard.ok) {
       throw new Error('expected shard ok');
@@ -99,32 +99,34 @@ describe('planPlayerScoreUpdate', () => {
     }
     expect(planned.plan.nextScore).toBe(2);
     expect(planned.plan.nextWordCount).toBe(1);
+    expect(planned.plan.deltaScore).toBe(2);
+    expect(planned.plan.deltaWordCount).toBe(1);
   });
 
-  it('uses dual-player plan when x2 demotion applies', () => {
+  it('uses peers plan when x2 demotion applies', () => {
     const session = playingSession({
       players: {
         p1: { name: 'A', score: 2, wordCount: 1, avatarColorIndex: 0, online: true },
         p2: { name: 'B', score: 0, wordCount: 0, avatarColorIndex: 1, online: true },
       },
     });
-    const maps = buildPartialWordMaps('порт', { p1: true, p2: true }, 'p1');
+    const maps = buildPartialWordMaps('порт', { p1: true, p2: true });
     const entry = { normalized: 'порт', kind: 'normal' as const, points: 1, badge: null };
     const planned = planPlayerScoreUpdate(session, maps, 'p2', 'порт', entry, true);
     expect(planned.ok).toBe(true);
     if (!planned.ok) {
       return;
     }
-    expect(planned.plan.mode).toBe('dual');
-    if (planned.plan.mode !== 'dual') {
+    expect(planned.plan.mode).toBe('peers');
+    if (planned.plan.mode !== 'peers') {
       return;
     }
-    expect(planned.plan.firstNextScore).toBe(1);
+    expect(planned.plan.peerScores).toEqual([{ uid: 'p1', nextScore: 1 }]);
     expect(planned.plan.nextScore).toBe(1);
     expect(planned.plan.nextWordCount).toBe(1);
   });
 
-  it('uses map word count when session player totals lag behind maps', () => {
+  it('increments from session score when submitting another unique word', () => {
     const session = playingSession({
       players: {
         p1: { name: 'A', score: 10, wordCount: 5, avatarColorIndex: 0, online: true },
@@ -138,7 +140,7 @@ describe('planPlayerScoreUpdate', () => {
       д: { p1: true },
       е: { p1: true },
     };
-    const maps: SessionWordMaps = { wordFirst: {}, wordPlayers };
+    const maps: SessionWordMaps = { wordPlayers };
     const entry = { normalized: 'е', kind: 'unique' as const, points: 2, badge: 'x2' as const };
     const planned = planPlayerScoreUpdate(session, maps, 'p1', 'е', entry, true);
     expect(planned.ok).toBe(true);
@@ -147,11 +149,13 @@ describe('planPlayerScoreUpdate', () => {
     }
     expect(planned.plan.nextWordCount).toBe(6);
     expect(planned.plan.nextScore).toBe(12);
+    expect(planned.plan.deltaScore).toBe(2);
+    expect(planned.plan.deltaWordCount).toBe(1);
   });
 });
 
 describe('applyPlayerScorePlan', () => {
-  it('applies dual-player demotion and increment', () => {
+  it('applies peers demotion and submitter increment', () => {
     const session = playingSession({
       players: {
         p1: { name: 'A', score: 2, wordCount: 1, avatarColorIndex: 0, online: true },
@@ -159,9 +163,8 @@ describe('applyPlayerScorePlan', () => {
       },
     });
     const next = applyPlayerScorePlan(session.players, {
-      mode: 'dual',
-      firstUid: 'p1',
-      firstNextScore: 1,
+      mode: 'peers',
+      peerScores: [{ uid: 'p1', nextScore: 1 }],
       uid: 'p2',
       nextScore: 1,
       nextWordCount: 1,
@@ -205,7 +208,7 @@ describe('word submit integration (shard + score)', () => {
 
   it('rejects when session is not playing', () => {
     const session = playingSession({ status: 'finished' });
-    const maps = buildPartialWordMaps('порт', { p1: true }, 'p1');
+    const maps = buildPartialWordMaps('порт', { p1: true });
     const entry = { normalized: 'порт', kind: 'unique' as const, points: 2, badge: 'x2' as const };
     const result = applyPlayerScoreFromWordSubmit(session, maps, 'p1', 'порт', entry, true);
     expect(result).toEqual({ ok: false, error: 'NOT_PLAYING' });
@@ -213,7 +216,7 @@ describe('word submit integration (shard + score)', () => {
 });
 
 describe('applyWordSubmitToWordMaps', () => {
-  it('returns prevGlobal for legacy full-tree helper', () => {
+  it('returns prevGlobal for full-tree helper', () => {
     const result = applyWordSubmitToWordMaps({}, 'p1', 'порт', true);
     expect(result.ok).toBe(true);
     if (!result.ok) {
@@ -226,7 +229,7 @@ describe('applyWordSubmitToWordMaps', () => {
 describe('applyPlayerScoreFromWordSubmit', () => {
   it('delegates to plan + apply', () => {
     const session = playingSession();
-    const maps = buildPartialWordMaps('порт', { p1: true }, 'p1');
+    const maps = buildPartialWordMaps('порт', { p1: true });
     const entry = { normalized: 'порт', kind: 'unique' as const, points: 2, badge: 'x2' as const };
     const result = applyPlayerScoreFromWordSubmit(session, maps, 'p1', 'порт', entry, true);
     expect(result.ok).toBe(true);

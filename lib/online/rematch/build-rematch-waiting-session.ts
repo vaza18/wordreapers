@@ -32,6 +32,7 @@ export function buildRematchWaitingSession(source: GameSession): GameSession {
     settings: resolveGameSessionSettings(source.settings, Object.keys(source.players).length),
     timerEndsAt: null,
     organizerId: source.organizerId,
+    createdAt: Date.now(),
     baseWordRound: (source.baseWordRound ?? 0) + 1,
     players,
     baseWordPickerOrder,

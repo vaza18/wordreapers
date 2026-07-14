@@ -1,6 +1,6 @@
-import { get, ref, remove } from 'firebase/database';
+import { ref, remove } from 'firebase/database';
 
-import { sessionWordFirstPerWordPath, sessionWordPlayersPerWordPath } from '../firebase/paths.js';
+import { playerWordLeafPath, sessionWordPlayersPerWordPath } from '../firebase/paths.js';
 import { getFirebaseDatabase } from '../firebase/init.js';
 import { normalizeRoomCode } from '../firebase/room-code.js';
 
@@ -18,11 +18,8 @@ function wordPlayersShardPlayerRef(gameId: string, normalized: string, uid: stri
   );
 }
 
-function wordFirstPerWordRef(gameId: string, normalized: string) {
-  return ref(
-    getFirebaseDatabase(),
-    sessionWordFirstPerWordPath(normalizeRoomCode(gameId), normalized),
-  );
+function playerWordLeafRef(gameId: string, uid: string, normalized: string) {
+  return ref(getFirebaseDatabase(), playerWordLeafPath(normalizeRoomCode(gameId), uid, normalized));
 }
 
 /** Best-effort undo after session/player_words write fails post-shard commit. */
@@ -31,26 +28,36 @@ export async function rollbackWordMapsShard(
   normalized: string,
   uid: string,
 ): Promise<void> {
-  const roomId = normalizeRoomCode(gameId);
   try {
-    await remove(wordPlayersShardPlayerRef(roomId, normalized, uid));
-  } catch {
-    // Best-effort cleanup.
-  }
-
-  try {
-    const snapshot = await get(wordPlayersPerWordRef(roomId, normalized));
-    if (!snapshot.exists()) {
-      await remove(wordFirstPerWordRef(roomId, normalized));
-      return;
-    }
-    const playersOnWord = snapshot.val() as Record<string, boolean>;
-    if (Object.keys(playersOnWord).length === 0) {
-      await remove(wordFirstPerWordRef(roomId, normalized));
-    }
+    await remove(wordPlayersShardPlayerRef(gameId, normalized, uid));
   } catch {
     // Best-effort cleanup.
   }
 }
 
-export { wordPlayersPerWordRef, wordPlayersShardPlayerRef, wordFirstPerWordRef };
+/** Best-effort undo of player_words leaf (parallel wordSet may have committed). */
+export async function rollbackPlayerWordLeaf(
+  gameId: string,
+  normalized: string,
+  uid: string,
+): Promise<void> {
+  try {
+    await remove(playerWordLeafRef(gameId, uid, normalized));
+  } catch {
+    // Best-effort cleanup.
+  }
+}
+
+/** Compensating cleanup for shard + player_words after a partial submit failure. */
+export async function rollbackWordSubmitArtifacts(
+  gameId: string,
+  normalized: string,
+  uid: string,
+): Promise<void> {
+  await Promise.all([
+    rollbackWordMapsShard(gameId, normalized, uid),
+    rollbackPlayerWordLeaf(gameId, normalized, uid),
+  ]);
+}
+
+export { wordPlayersPerWordRef, wordPlayersShardPlayerRef };

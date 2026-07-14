@@ -13,7 +13,6 @@ describe('live-standings', () => {
       { org: { name: 'Org', wordCount: 0, score: 0, online: true } },
       {
         wordPlayers: { порт: { org: true } },
-        wordFirst: { порт: 'org' },
       },
     );
 

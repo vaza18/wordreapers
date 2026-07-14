@@ -342,7 +342,7 @@ export default function OnlinePickWordScreen() {
         />
 
         <PrimaryButton
-          label={t('online.continueToLobby')}
+          label={t('common.continue')}
           disabled={!canSave || saving}
           onPress={() => {
             void handleSave();

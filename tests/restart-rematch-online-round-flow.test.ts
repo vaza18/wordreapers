@@ -36,9 +36,9 @@ describe('restartRematchOnlineRound', () => {
   it('bootstraps waiting from archive when RTDB session is missing', async () => {
     getMock.mockResolvedValue({ exists: () => false });
 
-    await restartRematchOnlineRound('ABCD', 'org', 0);
+    await restartRematchOnlineRound('ABCDE', 'org', 0);
 
-    expect(bootstrapRematchWaitingFromArchive).toHaveBeenCalledWith('ABCD', 'org', 0);
+    expect(bootstrapRematchWaitingFromArchive).toHaveBeenCalledWith('ABCDE', 'org', 0);
   });
 
   it('no-ops when rematch lobby is already waiting', async () => {
@@ -47,7 +47,7 @@ describe('restartRematchOnlineRound', () => {
       val: () => ({ ...finishedSession(), status: 'waiting' }),
     });
 
-    await restartRematchOnlineRound('ABCD', 'org', 0);
+    await restartRematchOnlineRound('ABCDE', 'org', 0);
 
     expect(bootstrapRematchWaitingFromArchive).not.toHaveBeenCalled();
     expect(rematchFinishedSessionToWaiting).not.toHaveBeenCalled();
@@ -59,9 +59,9 @@ describe('restartRematchOnlineRound', () => {
       val: () => finishedSession(),
     });
 
-    await restartRematchOnlineRound('ABCD', 'org', 0);
+    await restartRematchOnlineRound('ABCDE', 'org', 0);
 
-    expect(rematchFinishedSessionToWaiting).toHaveBeenCalledWith('ABCD', 'org');
+    expect(rematchFinishedSessionToWaiting).toHaveBeenCalledWith('ABCDE', 'org');
   });
 
   it('no-ops when rematch is requested during an active round', async () => {
@@ -70,7 +70,7 @@ describe('restartRematchOnlineRound', () => {
       val: () => ({ ...finishedSession(), status: 'playing' }),
     });
 
-    await restartRematchOnlineRound('ABCD', 'org', 0);
+    await restartRematchOnlineRound('ABCDE', 'org', 0);
 
     expect(bootstrapRematchWaitingFromArchive).not.toHaveBeenCalled();
     expect(rematchFinishedSessionToWaiting).not.toHaveBeenCalled();
@@ -82,14 +82,14 @@ describe('restartRematchOnlineRound', () => {
     });
     getMock.mockRejectedValue(permissionDenied);
 
-    await restartRematchOnlineRound('ABCD', 'org', 0);
+    await restartRematchOnlineRound('ABCDE', 'org', 0);
 
-    expect(bootstrapRematchWaitingFromArchive).toHaveBeenCalledWith('ABCD', 'org', 0);
+    expect(bootstrapRematchWaitingFromArchive).toHaveBeenCalledWith('ABCDE', 'org', 0);
   });
 
   it('rethrows non-permission RTDB read errors', async () => {
     getMock.mockRejectedValue(new Error('NETWORK_ERROR'));
 
-    await expect(restartRematchOnlineRound('ABCD', 'org', 0)).rejects.toThrow('NETWORK_ERROR');
+    await expect(restartRematchOnlineRound('ABCDE', 'org', 0)).rejects.toThrow('NETWORK_ERROR');
   });
 });

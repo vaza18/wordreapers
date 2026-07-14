@@ -9,11 +9,11 @@ describe('shouldSkipWaitingAbandonOnBack', () => {
         {
           index: 1,
           routes: [
-            { key: 'setup', name: 'setup', params: { gameId: 'ABCD' } },
-            { key: 'lobby', name: 'lobby/[gameId]', params: { gameId: 'ABCD' } },
+            { key: 'setup', name: 'setup', params: { gameId: 'ABCDE' } },
+            { key: 'lobby', name: 'lobby/[gameId]', params: { gameId: 'ABCDE' } },
           ],
         },
-        'ABCD',
+        'ABCDE',
       ),
     ).toBe(true);
   });
@@ -25,10 +25,10 @@ describe('shouldSkipWaitingAbandonOnBack', () => {
           index: 1,
           routes: [
             { key: 'join', name: 'join' },
-            { key: 'lobby', name: 'lobby/[gameId]', params: { gameId: 'ABCD' } },
+            { key: 'lobby', name: 'lobby/[gameId]', params: { gameId: 'ABCDE' } },
           ],
         },
-        'ABCD',
+        'ABCDE',
       ),
     ).toBe(false);
   });

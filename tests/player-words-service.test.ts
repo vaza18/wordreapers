@@ -5,7 +5,10 @@ const setMock = vi.fn();
 const removeMock = vi.fn();
 const onValueMock = vi.fn();
 const runTransactionMock = vi.fn();
+const updateMock = vi.fn();
+const incrementMock = vi.fn((n: number) => ({ __increment: n }));
 const rollbackWordMapsShardMock = vi.fn();
+const rollbackWordSubmitArtifactsMock = vi.fn();
 
 vi.mock('firebase/database', () => ({
   get: (...args: unknown[]) => getMock(...args),
@@ -13,6 +16,8 @@ vi.mock('firebase/database', () => ({
   remove: (...args: unknown[]) => removeMock(...args),
   onValue: (...args: unknown[]) => onValueMock(...args),
   runTransaction: (...args: unknown[]) => runTransactionMock(...args),
+  update: (...args: unknown[]) => updateMock(...args),
+  increment: (n: number) => incrementMock(n),
   ref: (_db: unknown, path: string) => ({ path }),
 }));
 
@@ -30,14 +35,12 @@ vi.mock('../lib/firebase/session-ref.js', () => ({
 
 vi.mock('../lib/online/word-maps-shard-rollback.js', () => ({
   rollbackWordMapsShard: (...args: unknown[]) => rollbackWordMapsShardMock(...args),
+  rollbackWordSubmitArtifacts: (...args: unknown[]) => rollbackWordSubmitArtifactsMock(...args),
   wordPlayersShardPlayerRef: (gameId: string, normalized: string, uid: string) => ({
     path: `session_word_maps/${gameId}/wordPlayers/${normalized}/${uid}`,
   }),
   wordPlayersPerWordRef: (gameId: string, normalized: string) => ({
     path: `session_word_maps/${gameId}/wordPlayers/${normalized}`,
-  }),
-  wordFirstPerWordRef: (gameId: string, normalized: string) => ({
-    path: `session_word_maps/${gameId}/wordFirst/${normalized}`,
   }),
 }));
 
@@ -70,7 +73,6 @@ function playingSessionWithUid(uid: string) {
       roundStartedAt: now - 60_000,
       timerEndsAt: now + 240_000,
       wordPlayers: {},
-      wordFirst: {},
     },
   );
 }
@@ -80,7 +82,10 @@ describe('player-words-service', () => {
     vi.clearAllMocks();
     setMock.mockResolvedValue(undefined);
     removeMock.mockResolvedValue(undefined);
+    updateMock.mockResolvedValue(undefined);
+    incrementMock.mockImplementation((n: number) => ({ __increment: n }));
     rollbackWordMapsShardMock.mockResolvedValue(undefined);
+    rollbackWordSubmitArtifactsMock.mockResolvedValue(undefined);
   });
 
   it('fetches per-player word maps for the requested roster', async () => {
@@ -93,7 +98,7 @@ describe('player-words-service', () => {
       })
       .mockResolvedValueOnce({ exists: () => false });
 
-    const byPlayer = await fetchSessionPlayerWords('ABCD', ['org-1', 'guest-1']);
+    const byPlayer = await fetchSessionPlayerWords('ABCDE', ['org-1', 'guest-1']);
 
     expect(byPlayer.get('org-1')?.get('порт')).toEqual({ display: 'порт', at: 100 });
     expect(byPlayer.get('guest-1')?.size).toBe(0);
@@ -128,7 +133,7 @@ describe('player-words-service', () => {
 
   describe('restorePlayerWordsToFirebase', () => {
     it('skips when there are no words to restore', async () => {
-      await restorePlayerWordsToFirebase('ABCD', 'org-1', new Map());
+      await restorePlayerWordsToFirebase('ABCDE', 'org-1', new Map());
 
       expect(getMock).not.toHaveBeenCalled();
       expect(setMock).not.toHaveBeenCalled();
@@ -138,7 +143,7 @@ describe('player-words-service', () => {
       getMock.mockResolvedValueOnce({ exists: () => false });
 
       await restorePlayerWordsToFirebase(
-        'ABCD',
+        'ABCDE',
         'org-1',
         new Map([['порт', { display: 'порт', at: 100 }]]),
       );
@@ -156,7 +161,7 @@ describe('player-words-service', () => {
         });
 
       await restorePlayerWordsToFirebase(
-        'ABCD',
+        'ABCDE',
         'org-1',
         new Map([
           ['порт', { display: 'порт', at: 100 }],
@@ -166,7 +171,9 @@ describe('player-words-service', () => {
 
       expect(setMock).toHaveBeenCalledTimes(1);
       expect(setMock).toHaveBeenCalledWith(
-        expect.objectContaining({ path: expect.stringContaining('player_words/ABCD/org-1/ретро') }),
+        expect.objectContaining({
+          path: expect.stringContaining('player_words/ABCDE/org-1/ретро'),
+        }),
         { display: 'ретро', at: 200 },
       );
     });
@@ -181,7 +188,7 @@ describe('player-words-service', () => {
       );
       const words = new Map([['порт', { display: 'порт', at: now - 60_000 }]]);
 
-      const cleared = await reconcileOwnPlayerWordsWithSession('ABCD', 'org-1', session, words);
+      const cleared = await reconcileOwnPlayerWordsWithSession('ABCDE', 'org-1', session, words);
 
       expect(cleared).toBe(true);
       expect(removeMock).toHaveBeenCalled();
@@ -195,7 +202,7 @@ describe('player-words-service', () => {
       );
       const words = new Map([['порт', { display: 'порт', at: now }]]);
 
-      const cleared = await reconcileOwnPlayerWordsWithSession('ABCD', 'org-1', session, words);
+      const cleared = await reconcileOwnPlayerWordsWithSession('ABCDE', 'org-1', session, words);
 
       expect(cleared).toBe(false);
       expect(removeMock).not.toHaveBeenCalled();
@@ -207,7 +214,7 @@ describe('player-words-service', () => {
 
       await expect(
         reconcileOwnPlayerWordsWithSession(
-          'ABCD',
+          'ABCDE',
           'org-1',
           session,
           new Map([['порт', { display: 'порт', at: 1 }]]),
@@ -220,17 +227,17 @@ describe('player-words-service', () => {
     it('ignores permission denied when clearing own words', async () => {
       removeMock.mockRejectedValueOnce(permissionDenied());
 
-      await expect(resetOwnPlayerWordsNode('ABCD', 'org-1')).resolves.toBeUndefined();
+      await expect(resetOwnPlayerWordsNode('ABCDE', 'org-1')).resolves.toBeUndefined();
     });
   });
 
   describe('clearAllPlayerWords', () => {
     it('removes only the actor words when a guest clears during rematch', async () => {
-      await clearAllPlayerWords('ABCD', ['org-1', 'guest-1'], 'guest-1', 'org-1');
+      await clearAllPlayerWords('ABCDE', ['org-1', 'guest-1'], 'guest-1', 'org-1');
 
       expect(removeMock).toHaveBeenCalledTimes(1);
       expect(removeMock).toHaveBeenCalledWith(
-        expect.objectContaining({ path: 'player_words/ABCD/guest-1' }),
+        expect.objectContaining({ path: 'player_words/ABCDE/guest-1' }),
       );
     });
 
@@ -244,7 +251,7 @@ describe('player-words-service', () => {
         },
       };
 
-      await clearWaitingLobbyPlayerWordsAsOrganizer('ABCD', session, 'org-1');
+      await clearWaitingLobbyPlayerWordsAsOrganizer('ABCDE', session, 'org-1');
 
       expect(removeMock).toHaveBeenCalledTimes(2);
     });
@@ -260,7 +267,7 @@ describe('player-words-service', () => {
         }),
       });
 
-      const words = await getOwnPlayerWords('ABCD', 'org-1');
+      const words = await getOwnPlayerWords('ABCDE', 'org-1');
 
       expect(words.size).toBe(1);
       expect(words.get('порт')).toEqual({ display: 'порт', at: 100 });
@@ -274,54 +281,116 @@ describe('player-words-service', () => {
           if (ref.path.includes('/wordPlayers/') && ref.path.endsWith(`/${uid}`)) {
             return { committed: true, snapshot: { val: () => true } };
           }
-          if (ref.path.includes('/wordFirst/')) {
-            const value = updater(null);
-            return { committed: true, snapshot: { val: () => value } };
-          }
-          if (ref.path.includes('/players/')) {
-            const player = updater({ name: 'Player', wordCount: 0, score: 0 });
-            return { committed: true, snapshot: { val: () => player } };
+          if (ref.path.includes('/players') && !ref.path.includes('/wordPlayers/')) {
+            const players = updater({
+              [uid]: { name: 'Player', wordCount: 0, score: 0 },
+            });
+            return { committed: true, snapshot: { val: () => players } };
           }
           return { committed: false, snapshot: { val: () => null } };
         },
       );
 
       getMock.mockImplementation(async (ref: { path: string }) => {
-        if (ref.path === 'game_sessions/ABCD') {
+        if (ref.path === 'game_sessions/ABCDE') {
           return { exists: () => true, val: () => playingSessionWithUid(uid) };
         }
         if (ref.path.includes(`/wordPlayers/${normalized}`)) {
           return { exists: () => true, val: () => ({ [uid]: true }) };
         }
-        if (ref.path.includes(`/wordFirst/${normalized}`)) {
-          return { exists: () => true, val: () => uid };
-        }
         return { exists: () => false };
       });
     }
 
-    it('persists a unique word and updates session score', async () => {
+    it('persists a unique word and increments session score (single path)', async () => {
       mockSuccessfulSubmit('org-1', 'порт');
 
-      const result = await submitOnlineWord('ABCD', 'org-1', 'порт', 'порт', true);
+      const result = await submitOnlineWord('ABCDE', 'org-1', 'порт', 'порт', true);
 
       expect(result).toEqual({
         ok: true,
         entry: expect.objectContaining({ normalized: 'порт', kind: 'unique' }),
       });
       expect(setMock).toHaveBeenCalledWith(
-        expect.objectContaining({ path: expect.stringContaining('player_words/ABCD/org-1/порт') }),
+        expect.objectContaining({ path: expect.stringContaining('player_words/ABCDE/org-1/порт') }),
         expect.objectContaining({ display: 'порт' }),
+      );
+      expect(updateMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: expect.stringContaining('game_sessions/ABCDE/players/org-1'),
+        }),
+        {
+          score: { __increment: 2 },
+          wordCount: { __increment: 1 },
+        },
+      );
+      expect(runTransactionMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: expect.stringContaining('session_word_maps/ABCDE/wordPlayers/порт/org-1'),
+        }),
+        expect.any(Function),
+      );
+      expect(
+        runTransactionMock.mock.calls.some((call) => {
+          const ref = call[0] as { path: string };
+          return ref.path.includes('/players/org-1');
+        }),
+      ).toBe(false);
+    });
+
+    it('uses peers transaction (absolute scores) when x2 demotion applies', async () => {
+      runTransactionMock.mockImplementation(
+        async (ref: { path: string }, updater: (v: unknown) => unknown) => {
+          if (ref.path.includes('/wordPlayers/') && ref.path.endsWith('/org-1')) {
+            return { committed: true, snapshot: { val: () => true } };
+          }
+          if (ref.path.endsWith('/players')) {
+            const next = updater({
+              peer: { name: 'Peer', wordCount: 1, score: 2 },
+              'org-1': { name: 'Player', wordCount: 0, score: 0 },
+            });
+            return { committed: true, snapshot: { val: () => next } };
+          }
+          return { committed: false, snapshot: { val: () => null } };
+        },
+      );
+      getMock.mockImplementation(async (ref: { path: string }) => {
+        if (ref.path.includes('/wordPlayers/порт')) {
+          return { exists: () => true, val: () => ({ peer: true, 'org-1': true }) };
+        }
+        if (ref.path === 'game_sessions/ABCDE') {
+          return {
+            exists: () => true,
+            val: () =>
+              playingSession(
+                {
+                  peer: { name: 'Peer', wordCount: 1, score: 2, online: true },
+                  'org-1': { name: 'Player', wordCount: 0, score: 0, online: true },
+                },
+                { wordPlayers: { порт: { peer: true, 'org-1': true } } },
+              ),
+          };
+        }
+        return { exists: () => false };
+      });
+
+      const result = await submitOnlineWord('ABCDE', 'org-1', 'порт', 'порт', true);
+
+      expect(result.ok).toBe(true);
+      expect(updateMock).not.toHaveBeenCalled();
+      expect(runTransactionMock).toHaveBeenCalledWith(
+        expect.objectContaining({ path: 'game_sessions/ABCDE/players' }),
+        expect.any(Function),
       );
     });
 
     it('returns DUPLICATE when the shard transaction does not commit', async () => {
       runTransactionMock.mockResolvedValue({ committed: false, snapshot: { val: () => true } });
 
-      const result = await submitOnlineWord('ABCD', 'org-1', 'порт', 'порт', true);
+      const result = await submitOnlineWord('ABCDE', 'org-1', 'порт', 'порт', true);
 
       expect(result).toEqual({ ok: false, error: 'DUPLICATE' });
-      expect(rollbackWordMapsShardMock).not.toHaveBeenCalled();
+      expect(rollbackWordSubmitArtifactsMock).not.toHaveBeenCalled();
     });
 
     it('returns NOT_PLAYING when the player is missing from wordPlayers shard', async () => {
@@ -331,9 +400,10 @@ describe('player-words-service', () => {
         val: () => ({}),
       });
 
-      const result = await submitOnlineWord('ABCD', 'org-1', 'порт', 'порт', true);
+      const result = await submitOnlineWord('ABCDE', 'org-1', 'порт', 'порт', true);
 
       expect(result).toEqual({ ok: false, error: 'NOT_PLAYING' });
+      expect(rollbackWordSubmitArtifactsMock).toHaveBeenCalledWith('ABCDE', 'порт', 'org-1');
     });
 
     it('returns SESSION_MISSING and rolls back when the session node is gone', async () => {
@@ -345,10 +415,10 @@ describe('player-words-service', () => {
         return { exists: () => false };
       });
 
-      const result = await submitOnlineWord('ABCD', 'org-1', 'порт', 'порт', true);
+      const result = await submitOnlineWord('ABCDE', 'org-1', 'порт', 'порт', true);
 
       expect(result).toEqual({ ok: false, error: 'SESSION_MISSING' });
-      expect(rollbackWordMapsShardMock).toHaveBeenCalledWith('ABCD', 'порт', 'org-1');
+      expect(rollbackWordSubmitArtifactsMock).toHaveBeenCalledWith('ABCDE', 'порт', 'org-1');
     });
 
     it('returns NOT_PLAYING when the uid is not in session.players', async () => {
@@ -356,13 +426,10 @@ describe('player-words-service', () => {
         if (ref.path.includes('/wordPlayers/')) {
           return { committed: true, snapshot: { val: () => true } };
         }
-        if (ref.path.includes('/wordFirst/')) {
-          return { committed: true, snapshot: { val: () => 'org-1' } };
-        }
         return { committed: false, snapshot: { val: () => null } };
       });
       getMock.mockImplementation(async (ref: { path: string }) => {
-        if (ref.path === 'game_sessions/ABCD') {
+        if (ref.path === 'game_sessions/ABCDE') {
           return {
             exists: () => true,
             val: () =>
@@ -374,16 +441,39 @@ describe('player-words-service', () => {
         if (ref.path.includes('/wordPlayers/порт')) {
           return { exists: () => true, val: () => ({ 'org-1': true }) };
         }
-        if (ref.path.includes('/wordFirst/порт')) {
-          return { exists: () => true, val: () => 'org-1' };
-        }
         return { exists: () => false };
       });
 
-      const result = await submitOnlineWord('ABCD', 'org-1', 'порт', 'порт', true);
+      const result = await submitOnlineWord('ABCDE', 'org-1', 'порт', 'порт', true);
 
       expect(result).toEqual({ ok: false, error: 'NOT_PLAYING' });
-      expect(rollbackWordMapsShardMock).toHaveBeenCalled();
+      expect(rollbackWordSubmitArtifactsMock).toHaveBeenCalled();
+    });
+
+    it('rolls back shard and player_words when score write fails after wordSet', async () => {
+      runTransactionMock.mockImplementation(async (ref: { path: string }) => {
+        if (ref.path.includes('/wordPlayers/')) {
+          return { committed: true, snapshot: { val: () => true } };
+        }
+        return { committed: false, snapshot: { val: () => null } };
+      });
+      getMock.mockImplementation(async (ref: { path: string }) => {
+        if (ref.path.includes('/wordPlayers/порт')) {
+          return { exists: () => true, val: () => ({ 'org-1': true }) };
+        }
+        if (ref.path === 'game_sessions/ABCDE') {
+          return { exists: () => true, val: () => playingSessionWithUid('org-1') };
+        }
+        return { exists: () => false };
+      });
+      updateMock.mockRejectedValueOnce(new Error('score write failed'));
+      setMock.mockResolvedValue(undefined);
+
+      const result = await submitOnlineWord('ABCDE', 'org-1', 'порт', 'порт', true);
+
+      expect(result.ok).toBe(false);
+      expect(setMock).toHaveBeenCalled();
+      expect(rollbackWordSubmitArtifactsMock).toHaveBeenCalledWith('ABCDE', 'порт', 'org-1');
     });
   });
 });

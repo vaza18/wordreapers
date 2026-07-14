@@ -86,7 +86,7 @@ describe('exitOnlineToHome', () => {
     const myWords = new Map([['порт', { display: 'порт', at: 100 }]]);
 
     await exitOnlineToHome({
-      gameId: 'ABCD',
+      gameId: 'ABCDE',
       uid: 'org',
       isOrganizer: true,
       sessionStatus: 'playing',
@@ -94,19 +94,19 @@ describe('exitOnlineToHome', () => {
       myWords,
     });
 
-    expect(cacheActiveRoundProgress).toHaveBeenCalledWith('ABCD', 'org', session, myWords);
+    expect(cacheActiveRoundProgress).toHaveBeenCalledWith('ABCDE', 'org', session, myWords);
     expect(navigateHomeClearingStack).toHaveBeenCalled();
   });
 
   it('awaits waiting-room cleanup before navigation', async () => {
     await exitOnlineToHome({
-      gameId: 'ABCD',
+      gameId: 'ABCDE',
       uid: 'guest',
       isOrganizer: false,
       sessionStatus: 'waiting',
     });
 
-    expect(runExitCleanupMocks.leaveGameSession).toHaveBeenCalledWith('ABCD', 'guest');
+    expect(runExitCleanupMocks.leaveGameSession).toHaveBeenCalledWith('ABCDE', 'guest');
     expect(navigateHomeClearingStack).toHaveBeenCalled();
   });
 
@@ -115,7 +115,7 @@ describe('exitOnlineToHome', () => {
     const words = new Map([['org', new Map([['порт', { display: 'порт', at: 1 }]])]]);
 
     await exitOnlineToHome({
-      gameId: 'ABCD',
+      gameId: 'ABCDE',
       uid: 'org',
       isOrganizer: true,
       sessionStatus: 'finished',
@@ -130,7 +130,7 @@ describe('exitOnlineToHome', () => {
 
   it('clears organizer waiting-room tracking on exit', async () => {
     await exitOnlineToHome({
-      gameId: 'ABCD',
+      gameId: 'ABCDE',
       uid: 'org-1',
       isOrganizer: true,
       sessionStatus: 'waiting',

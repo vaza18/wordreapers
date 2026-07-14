@@ -1,0 +1,349 @@
+name: Release stores (testing)
+
+# Public repo: do not upload AAB/IPA as Actions artifacts or GitHub Release assets.
+# Trigger: GitHub Release published (not a bare tag push). Version sync uses release target_commitish.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build and submit
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - android
+          - ios
+      clear_cache:
+        description: Pass --clear-cache to eas build --local
+        required: false
+        default: false
+        type: boolean
+      tag_override:
+        description: 'Existing release tag to rebuild (e.g. v1.4.1). Does not publish a Release.'
+        required: true
+        type: string
+      sync_branch:
+        description: 'Branch for version sync PR (default main). Ignored on release events (uses target_commitish).'
+        required: false
+        default: main
+        type: choice
+        options:
+          - main
+          - dev
+
+concurrency:
+  group: release-stores-${{ github.event.release.tag_name || inputs.tag_override || github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    # Bare tag push does not trigger this workflow. Pre-releases are ignored.
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'release' && !github.event.release.prerelease)
+    runs-on: ubuntu-latest
+    outputs:
+      run_android: ${{ steps.decide.outputs.run_android }}
+      run_ios: ${{ steps.decide.outputs.run_ios }}
+      clear_cache: ${{ steps.decide.outputs.clear_cache }}
+      version_tag: ${{ steps.tag.outputs.version_tag }}
+      sync_branch: ${{ steps.tag.outputs.sync_branch }}
+      checkout_ref: ${{ steps.tag.outputs.checkout_ref }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag, checkout ref, and sync branch
+        id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TARGET: ${{ github.event.release.target_commitish }}
+          TAG_OVERRIDE: ${{ inputs.tag_override }}
+          SYNC_BRANCH_INPUT: ${{ inputs.sync_branch }}
+        run: |
+          if [[ "$EVENT_NAME" == "release" ]]; then
+            TAG="$RELEASE_TAG"
+            CHECKOUT_REF="$TAG"
+            TARGET="${RELEASE_TARGET:-main}"
+            # target_commitish is a branch name for UI releases; SHAs fall back to main.
+            if [[ "$TARGET" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "Release target_commitish is a SHA; sync fallback → main"
+              SYNC_BRANCH=main
+            else
+              case "$TARGET" in
+                main | dev) SYNC_BRANCH="$TARGET" ;;
+                *)
+                  echo "Release target_commitish '$TARGET' not in allowlist; sync fallback → main"
+                  SYNC_BRANCH=main
+                  ;;
+              esac
+            fi
+          else
+            TAG="$TAG_OVERRIDE"
+            CHECKOUT_REF="$TAG"
+            SYNC_BRANCH="${SYNC_BRANCH_INPUT:-main}"
+          fi
+
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version tag must look like v1.4.1 (got: $TAG)" >&2
+            exit 1
+          fi
+
+          if ! git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null \
+            && ! git rev-parse -q --verify "refs/tags/${TAG}^{}" >/dev/null; then
+            git fetch origin "refs/tags/${TAG}:refs/tags/${TAG}" || true
+          fi
+          if ! git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "Git tag $TAG not found (publish a GitHub Release that creates/uses this tag)." >&2
+            exit 1
+          fi
+
+          echo "version_tag=$TAG" >>"$GITHUB_OUTPUT"
+          echo "checkout_ref=$CHECKOUT_REF" >>"$GITHUB_OUTPUT"
+          echo "sync_branch=$SYNC_BRANCH" >>"$GITHUB_OUTPUT"
+          echo "Using tag=$TAG checkout_ref=$CHECKOUT_REF sync_branch=$SYNC_BRANCH"
+
+      - name: Decide platforms
+        id: decide
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            PLATFORM="${{ inputs.platform }}"
+            CLEAR="${{ inputs.clear_cache }}"
+          else
+            PLATFORM=all
+            CLEAR=false
+          fi
+          case "$PLATFORM" in
+            all)
+              echo "run_android=true" >>"$GITHUB_OUTPUT"
+              echo "run_ios=true" >>"$GITHUB_OUTPUT"
+              ;;
+            android)
+              echo "run_android=true" >>"$GITHUB_OUTPUT"
+              echo "run_ios=false" >>"$GITHUB_OUTPUT"
+              ;;
+            ios)
+              echo "run_android=false" >>"$GITHUB_OUTPUT"
+              echo "run_ios=true" >>"$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Unknown platform: $PLATFORM" >&2
+              exit 1
+              ;;
+          esac
+          echo "clear_cache=$CLEAR" >>"$GITHUB_OUTPUT"
+
+  android:
+    needs: validate
+    if: needs.validate.outputs.run_android == 'true'
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 120
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PUBLIC_FIREBASE_API_KEY: ${{ secrets.EXPO_PUBLIC_FIREBASE_API_KEY }}
+      EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+      EXPO_PUBLIC_FIREBASE_DATABASE_URL: ${{ secrets.EXPO_PUBLIC_FIREBASE_DATABASE_URL }}
+      EXPO_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.EXPO_PUBLIC_FIREBASE_PROJECT_ID }}
+      EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+      EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+      EXPO_PUBLIC_FIREBASE_APP_ID: ${{ secrets.EXPO_PUBLIC_FIREBASE_APP_ID }}
+      EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID: ${{ secrets.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID }}
+      GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+      GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
+      ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_APP_ID: ${{ secrets.ASC_APP_ID }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.validate.outputs.checkout_ref }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Use npm 11
+        run: npm install -g npm@11.6.2
+
+      - name: Apply version from tag
+        env:
+          # Build job does not commit version files; skip Prettier (needs node_modules).
+          SKIP_PRETTIER: '1'
+        run: bash scripts/ci/set-version-from-tag.sh "${{ needs.validate.outputs.version_tag }}"
+
+      - name: Prepare store credentials (fail fast)
+        run: bash scripts/ci/prepare-store-credentials.sh android
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: 21.0.0
+          packager: npm
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: actions/cache@v5
+        with:
+          path: .data/vesum
+          key: vesum-${{ runner.os }}-${{ hashFiles('scripts/dictionary/fetch-vesum.ts', 'scripts/dictionary/build-dictionary.ts') }}
+          restore-keys: |
+            vesum-${{ runner.os }}-
+
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('package-lock.json', 'app.json', 'app.config.js', 'eas.json') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Android + submit Internal testing
+        run: |
+          EXTRA=()
+          if [[ "${{ needs.validate.outputs.clear_cache }}" == "true" ]]; then
+            EXTRA+=(--clear-cache)
+          fi
+          bash scripts/ci/release-build-submit.sh android "${EXTRA[@]}"
+
+  ios:
+    needs: validate
+    if: needs.validate.outputs.run_ios == 'true'
+    # Pin image + Xcode for reproducible local EAS iOS builds (macos-latest floats).
+    runs-on: macos-15
+    environment: release
+    timeout-minutes: 150
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PUBLIC_FIREBASE_API_KEY: ${{ secrets.EXPO_PUBLIC_FIREBASE_API_KEY }}
+      EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+      EXPO_PUBLIC_FIREBASE_DATABASE_URL: ${{ secrets.EXPO_PUBLIC_FIREBASE_DATABASE_URL }}
+      EXPO_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.EXPO_PUBLIC_FIREBASE_PROJECT_ID }}
+      EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+      EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+      EXPO_PUBLIC_FIREBASE_APP_ID: ${{ secrets.EXPO_PUBLIC_FIREBASE_APP_ID }}
+      EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID: ${{ secrets.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID }}
+      GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+      GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
+      ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_APP_ID: ${{ secrets.ASC_APP_ID }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.validate.outputs.checkout_ref }}
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '16'
+
+      - name: Show selected Xcode
+        run: |
+          xcode-select -p
+          xcodebuild -version
+          df -h .
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Use npm 11
+        run: npm install -g npm@11.6.2
+
+      - name: Apply version from tag
+        env:
+          SKIP_PRETTIER: '1'
+        run: bash scripts/ci/set-version-from-tag.sh "${{ needs.validate.outputs.version_tag }}"
+
+      - name: Prepare store credentials (fail fast)
+        run: bash scripts/ci/prepare-store-credentials.sh ios
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: 21.0.0
+          packager: npm
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - uses: actions/cache@v5
+        with:
+          path: .data/vesum
+          key: vesum-${{ runner.os }}-${{ hashFiles('scripts/dictionary/fetch-vesum.ts', 'scripts/dictionary/build-dictionary.ts') }}
+          restore-keys: |
+            vesum-${{ runner.os }}-
+
+      - uses: actions/cache@v5
+        with:
+          path: |
+            ~/Library/Caches/CocoaPods
+            ~/Library/Caches/org.carthage.CarthageKit
+          key: cocoapods-${{ runner.os }}-${{ hashFiles('package-lock.json', 'app.json', 'app.config.js', 'eas.json') }}
+          restore-keys: |
+            cocoapods-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build iOS + submit TestFlight
+        run: |
+          EXTRA=()
+          if [[ "${{ needs.validate.outputs.clear_cache }}" == "true" ]]; then
+            EXTRA+=(--clear-cache)
+          fi
+          bash scripts/ci/release-build-submit.sh ios "${EXTRA[@]}"
+
+  sync-version:
+    needs: [validate, android, ios]
+    if: |
+      always()
+      && needs.validate.result == 'success'
+      && (needs.validate.outputs.run_android != 'true' || needs.android.result == 'success')
+      && (needs.validate.outputs.run_ios != 'true' || needs.ios.result == 'success')
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ secrets.VERSION_SYNC_TOKEN || github.token }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.VERSION_SYNC_TOKEN || github.token }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Use npm 11
+        run: npm install -g npm@11.6.2
+
+      - name: Sync version via PR + auto-merge
+        run: |
+          bash scripts/ci/sync-version-to-branch.sh \
+            "${{ needs.validate.outputs.version_tag }}" \
+            "${{ needs.validate.outputs.sync_branch }}"

@@ -41,9 +41,7 @@ describe('overlapPeersFromSession', () => {
   });
 
   it('returns empty when wordPlayers entry is missing', () => {
-    const s = session({
-      wordFirst: { рот: 'a' },
-    });
+    const s = session({});
     expect(overlapPeersFromSession('рот', s, 'org')).toEqual([]);
   });
 });

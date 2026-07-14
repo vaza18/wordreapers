@@ -29,9 +29,8 @@ describe('restoreSessionWordsToRtdb', () => {
 
   it('writes word maps and per-player word nodes', async () => {
     await restoreSessionWordsToRtdb(
-      'abcd',
+      'abcde',
       {
-        wordFirst: { порт: 'org-1' },
         wordPlayers: { порт: { 'org-1': true } },
       },
       {
@@ -41,8 +40,7 @@ describe('restoreSessionWordsToRtdb', () => {
       },
     );
 
-    expect(writeSessionWordMapsShards).toHaveBeenCalledWith('ABCD', {
-      wordFirst: { порт: 'org-1' },
+    expect(writeSessionWordMapsShards).toHaveBeenCalledWith('ABCDE', {
       wordPlayers: { порт: { 'org-1': true } },
     });
     expect(setMock).toHaveBeenCalled();
@@ -50,8 +48,8 @@ describe('restoreSessionWordsToRtdb', () => {
 
   it('skips empty word map shards and empty player word nodes', async () => {
     await restoreSessionWordsToRtdb(
-      'ABCD',
-      { wordFirst: {}, wordPlayers: {} },
+      'ABCDE',
+      { wordPlayers: {} },
       {
         'org-1': {},
       },

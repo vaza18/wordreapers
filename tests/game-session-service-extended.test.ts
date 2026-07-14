@@ -117,7 +117,6 @@ describe('game-session-service extended', () => {
     ensureFirebaseAppCheck.mockResolvedValue(undefined);
     fetchSessionWordMaps.mockResolvedValue({
       wordPlayers: { порт: { 'org-1': true } },
-      wordFirst: { порт: 'org-1' },
     });
   });
 
@@ -128,7 +127,7 @@ describe('game-session-service extended', () => {
   it('throws ROOM_NOT_FOUND when session root is missing', async () => {
     getMock.mockResolvedValue({ exists: () => false });
 
-    await expect(joinGameSession('ABCD', profile)).rejects.toThrow('ROOM_NOT_FOUND');
+    await expect(joinGameSession('ABCDE', profile)).rejects.toThrow('ROOM_NOT_FOUND');
   });
 
   it('rejoins an existing player and appends live round uid while playing', async () => {
@@ -145,18 +144,18 @@ describe('game-session-service extended', () => {
         }),
       });
 
-    await rejoinExistingPlayer('ABCD', 'guest-1', {
+    await rejoinExistingPlayer('ABCDE', 'guest-1', {
       name: 'Guest',
       gender: 'f',
       avatarColorIndex: 1,
     });
 
     expect(updateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ path: 'game_sessions/ABCD/players/guest-1' }),
+      expect.objectContaining({ path: 'game_sessions/ABCDE/players/guest-1' }),
       expect.objectContaining({ online: true, hasLeft: false }),
     );
     expect(updateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ path: 'game_sessions/ABCD' }),
+      expect.objectContaining({ path: 'game_sessions/ABCDE' }),
       { liveRoundPlayerUids: ['org-1', 'guest-1'] },
     );
   });
@@ -167,13 +166,13 @@ describe('game-session-service extended', () => {
       val: () => waitingSession,
     });
 
-    await updateGameSessionSetup('ABCD', 'org-1', {
+    await updateGameSessionSetup('ABCDE', 'org-1', {
       baseWord: 'портрет',
       settings: DEFAULT_SESSION_SETTINGS,
     });
 
     expect(updateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ path: 'game_sessions/ABCD' }),
+      expect.objectContaining({ path: 'game_sessions/ABCDE' }),
       expect.objectContaining({
         baseWord: 'портрет',
         baseWordChosenBy: 'org-1',
@@ -196,7 +195,7 @@ describe('game-session-service extended', () => {
     });
 
     await expect(
-      updateGameSessionSetup('ABCD', 'guest', {
+      updateGameSessionSetup('ABCDE', 'guest', {
         settings: DEFAULT_SESSION_SETTINGS,
       }),
     ).rejects.toThrow('NOT_AUTHORIZED');
@@ -211,10 +210,10 @@ describe('game-session-service extended', () => {
       }),
     });
 
-    await updateGameSessionBaseWord('ABCD', 'org-1', 'портрет');
+    await updateGameSessionBaseWord('ABCDE', 'org-1', 'портрет');
 
     expect(updateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ path: 'game_sessions/ABCD' }),
+      expect.objectContaining({ path: 'game_sessions/ABCDE' }),
       { baseWord: 'портрет', baseWordChosenBy: 'org-1' },
     );
   });
@@ -229,7 +228,7 @@ describe('game-session-service extended', () => {
       }),
     });
 
-    await expect(updateGameSessionBaseWord('ABCD', 'guest', 'портрет')).rejects.toThrow(
+    await expect(updateGameSessionBaseWord('ABCDE', 'guest', 'портрет')).rejects.toThrow(
       'NOT_BASE_WORD_PICKER',
     );
   });
@@ -244,7 +243,7 @@ describe('game-session-service extended', () => {
         val: () => ({ ...session, status: 'waiting' }),
       });
 
-    await restartGameSessionForRematch('ABCD', 'org');
+    await restartGameSessionForRematch('ABCDE', 'org');
 
     expect(updateMock).toHaveBeenCalledWith(
       expect.anything(),
@@ -258,7 +257,7 @@ describe('game-session-service extended', () => {
       val: () => finishedSession(),
     });
 
-    await expect(restartGameSessionForRematch('ABCD', 'p2')).rejects.toThrow('REMATCH_FAILED');
+    await expect(restartGameSessionForRematch('ABCDE', 'p2')).rejects.toThrow('REMATCH_FAILED');
   });
 
   it('syncs player scores from word maps during playing', async () => {
@@ -283,15 +282,15 @@ describe('game-session-service extended', () => {
       return { committed: true };
     });
 
-    await syncSessionPlayerScores('ABCD');
+    await syncSessionPlayerScores('ABCDE');
 
     expect(runTransactionMock).toHaveBeenCalled();
   });
 
   it('skips score sync when word maps are empty', async () => {
-    fetchSessionWordMaps.mockResolvedValue({ wordPlayers: {}, wordFirst: {} });
+    fetchSessionWordMaps.mockResolvedValue({ wordPlayers: {} });
 
-    await syncSessionPlayerScores('ABCD');
+    await syncSessionPlayerScores('ABCDE');
 
     expect(getMock).not.toHaveBeenCalled();
     expect(runTransactionMock).not.toHaveBeenCalled();
@@ -313,10 +312,10 @@ describe('game-session-service extended', () => {
       }),
     });
 
-    await syncLobbyPickerState('ABCD');
+    await syncLobbyPickerState('ABCDE');
 
     expect(updateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ path: 'game_sessions/ABCD' }),
+      expect.objectContaining({ path: 'game_sessions/ABCDE' }),
       {
         baseWord: '',
         baseWordChosenBy: null,
@@ -331,7 +330,7 @@ describe('game-session-service extended', () => {
     });
     removeMock.mockResolvedValue(undefined);
 
-    await clearSessionRootForRecreate('ABCD', 'org-1');
+    await clearSessionRootForRecreate('ABCDE', 'org-1');
 
     expect(onDisconnectCancel).toHaveBeenCalled();
     expect(removeMock).toHaveBeenCalled();
@@ -343,7 +342,7 @@ describe('game-session-service extended', () => {
       val: () => ({ players: { 'org-1': { online: false } } }),
     });
 
-    await expect(removeOrphanGameSessionShell('ABCD', 'guest')).resolves.toBe(false);
+    await expect(removeOrphanGameSessionShell('ABCDE', 'guest')).resolves.toBe(false);
     expect(removeMock).not.toHaveBeenCalled();
   });
 
@@ -353,7 +352,7 @@ describe('game-session-service extended', () => {
     });
 
     const onSession = vi.fn();
-    subscribeGameSession('ABCD', onSession);
+    subscribeGameSession('ABCDE', onSession);
 
     await vi.waitFor(() => {
       expect(onValueMock).toHaveBeenCalled();
@@ -367,17 +366,16 @@ describe('game-session-service extended', () => {
       exists: () => true,
       val: () => ({
         ...waitingSession,
-        wordFirst: { порт: 'org-1' },
         wordPlayers: { порт: { 'org-1': true } },
       }),
     });
 
     expect(onSession).toHaveBeenCalledWith(
       expect.objectContaining({
-        id: 'ABCD',
+        id: 'ABCDE',
         status: 'waiting',
       }),
     );
-    expect(onSession.mock.calls[0][0]).not.toHaveProperty('wordFirst');
+    expect(onSession.mock.calls[0][0]).not.toHaveProperty('wordPlayers');
   });
 });

@@ -35,7 +35,7 @@ vi.mock('../lib/firebase/player-words-service.js', () => ({
 
 vi.mock('../lib/firebase/session-word-maps-service.js', () => ({
   clearSessionWordMaps: vi.fn().mockResolvedValue(undefined),
-  fetchSessionWordMaps: vi.fn().mockResolvedValue({ wordFirst: {}, wordPlayers: {} }),
+  fetchSessionWordMaps: vi.fn().mockResolvedValue({ wordPlayers: {} }),
 }));
 
 vi.mock('../lib/firebase/server-clock.js', () => ({
@@ -112,32 +112,32 @@ describe('game-session-service', () => {
       val: () => ({ name: 'Org', wordCount: 0, score: 0, online: false }),
     });
 
-    await markPlayerOnline('ABCD', 'org-1');
+    await markPlayerOnline('ABCDE', 'org-1');
 
     expect(updateMock).toHaveBeenCalledWith(expect.anything(), { online: true });
     expect(onDisconnectUpdate).toHaveBeenCalledWith({ online: false });
   });
 
   it('skips mark online while voluntary leave is in flight', async () => {
-    beginVoluntaryLeave('ABCD', 'org-1');
+    beginVoluntaryLeave('ABCDE', 'org-1');
     try {
-      await markPlayerOnline('ABCD', 'org-1');
+      await markPlayerOnline('ABCDE', 'org-1');
 
       expect(getMock).not.toHaveBeenCalled();
       expect(updateMock).not.toHaveBeenCalled();
     } finally {
-      endVoluntaryLeave('ABCD', 'org-1');
+      endVoluntaryLeave('ABCDE', 'org-1');
     }
   });
 
   it('skips mark offline while voluntary leave is in flight', async () => {
-    beginVoluntaryLeave('ABCD', 'guest');
+    beginVoluntaryLeave('ABCDE', 'guest');
     try {
-      await markPlayerOffline('ABCD', 'guest');
+      await markPlayerOffline('ABCDE', 'guest');
 
       expect(updateMock).not.toHaveBeenCalled();
     } finally {
-      endVoluntaryLeave('ABCD', 'guest');
+      endVoluntaryLeave('ABCDE', 'guest');
     }
   });
 
@@ -153,18 +153,18 @@ describe('game-session-service', () => {
         },
       }),
     });
-    beginVoluntaryLeave('ABCD', 'guest');
+    beginVoluntaryLeave('ABCDE', 'guest');
     try {
-      await voluntaryLeaveWaitingLobbyIfMember('ABCD', 'guest');
+      await voluntaryLeaveWaitingLobbyIfMember('ABCDE', 'guest');
 
       expect(updateMock).not.toHaveBeenCalled();
     } finally {
-      endVoluntaryLeave('ABCD', 'guest');
+      endVoluntaryLeave('ABCDE', 'guest');
     }
   });
 
   it('marks an existing player offline', async () => {
-    await markPlayerOffline('ABCD', 'org-1');
+    await markPlayerOffline('ABCDE', 'org-1');
 
     expect(updateMock).toHaveBeenCalledWith(expect.anything(), { online: false });
   });
@@ -178,7 +178,7 @@ describe('game-session-service', () => {
       order.push('update');
     });
 
-    await markPlayerOffline('ABCD', 'org-1');
+    await markPlayerOffline('ABCDE', 'org-1');
 
     expect(order[0]).toBe('update');
     expect(order.indexOf('update')).toBeLessThan(order.indexOf('cancel'));
@@ -193,7 +193,7 @@ describe('game-session-service', () => {
         }),
     );
 
-    const pending = markPlayerOffline('ABCD', 'org-1');
+    const pending = markPlayerOffline('ABCDE', 'org-1');
     await vi.waitFor(() => {
       expect(updateMock).toHaveBeenCalledWith(expect.anything(), { online: false });
     });
@@ -205,7 +205,7 @@ describe('game-session-service', () => {
   it('returns null when the room snapshot is missing', async () => {
     getMock.mockResolvedValue({ exists: () => false });
 
-    await expect(tryReadGameSessionSnapshot('ABCD')).resolves.toBeNull();
+    await expect(tryReadGameSessionSnapshot('ABCDE')).resolves.toBeNull();
   });
 
   it('deletes a solo waiting room when the organizer abandons it', async () => {
@@ -214,7 +214,7 @@ describe('game-session-service', () => {
       val: () => waitingSession,
     });
 
-    await abandonWaitingGameSession('ABCD', 'org-1');
+    await abandonWaitingGameSession('ABCDE', 'org-1');
 
     expect(removeMock).toHaveBeenCalled();
   });
@@ -225,7 +225,7 @@ describe('game-session-service', () => {
       val: () => waitingSession,
     });
 
-    await organizerLeaveWaitingLobby('ABCD', 'org-1', waitingSession);
+    await organizerLeaveWaitingLobby('ABCDE', 'org-1', waitingSession);
 
     expect(removeMock).toHaveBeenCalled();
   });
@@ -243,7 +243,7 @@ describe('game-session-service', () => {
       val: () => session,
     });
 
-    await leaveGameSession('ABCD', 'guest');
+    await leaveGameSession('ABCDE', 'guest');
 
     expect(updateMock).toHaveBeenCalledWith(expect.anything(), {
       online: false,
@@ -253,10 +253,10 @@ describe('game-session-service', () => {
 
   it('reports whether a game session exists', async () => {
     getMock.mockResolvedValueOnce({ exists: () => true });
-    await expect(gameSessionExists('ABCD')).resolves.toBe(true);
+    await expect(gameSessionExists('ABCDE')).resolves.toBe(true);
 
     getMock.mockResolvedValueOnce({ exists: () => false });
-    await expect(gameSessionExists('ABCD')).resolves.toBe(false);
+    await expect(gameSessionExists('ABCDE')).resolves.toBe(false);
   });
 
   it('finishes an expired playing session', async () => {
@@ -279,7 +279,7 @@ describe('game-session-service', () => {
       return { committed: next != null, snapshot: { val: () => session } };
     });
 
-    await expect(finishGameSessionIfExpired('ABCD')).resolves.toBe(true);
+    await expect(finishGameSessionIfExpired('ABCDE')).resolves.toBe(true);
     expect(session.status).toBe('finished');
   });
 
@@ -292,7 +292,7 @@ describe('game-session-service', () => {
         val: () => ({ ...session, status: 'waiting' }),
       });
 
-    await rematchFinishedSessionToWaiting('ABCD', 'org');
+    await rematchFinishedSessionToWaiting('ABCDE', 'org');
 
     expect(updateMock).toHaveBeenCalledWith(
       expect.anything(),
@@ -313,12 +313,12 @@ describe('game-session-service', () => {
     };
     getMock.mockResolvedValue({ exists: () => true, val: () => session });
 
-    await startGameSession('ABCD', 'org-1');
+    await startGameSession('ABCDE', 'org-1');
 
     expect(updateMock).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        'game_sessions/ABCD/status': 'playing',
+        'game_sessions/ABCDE/status': 'playing',
       }),
     );
   });
@@ -336,7 +336,7 @@ describe('game-session-service', () => {
     };
     getMock.mockResolvedValue({ exists: () => true, val: () => session });
 
-    await expect(finishGameSessionIfExpired('ABCD')).resolves.toBe(false);
+    await expect(finishGameSessionIfExpired('ABCDE')).resolves.toBe(false);
     expect(session.status).toBe('playing');
   });
 
@@ -360,7 +360,7 @@ describe('game-session-service', () => {
     };
     getMock.mockResolvedValue({ exists: () => true, val: () => session });
 
-    await expect(finishGameSessionIfExpired('ABCD')).resolves.toBe(false);
+    await expect(finishGameSessionIfExpired('ABCDE')).resolves.toBe(false);
     expect(session.status).toBe('playing');
     expect(runTransactionMock).not.toHaveBeenCalled();
   });
