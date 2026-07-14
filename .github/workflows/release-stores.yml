@@ -191,11 +191,11 @@ jobs:
           packager: npm
           token: ${{ secrets.EXPO_TOKEN }}
 
+      # Do not use setup-java cache:gradle — no committed gradle-wrapper (Expo prebuild is inside EAS).
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
-          cache: gradle
 
       - uses: android-actions/setup-android@v3
 

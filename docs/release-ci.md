@@ -83,7 +83,8 @@ Do **not** add `EXPO_PUBLIC_FIREBASE_APP_CHECK_PRODUCTION` unless you need an ex
 
 ## Caching
 
-- npm, vesum, Gradle, CocoaPods
+- npm, vesum, Gradle (`actions/cache` on `~/.gradle`), CocoaPods
+- Do **not** enable `setup-java` `cache: gradle` — the repo has no committed `gradle-wrapper.properties` (native Android appears only inside local EAS prebuild)
 - `eas-cli` pinned (`eas-version: 21.0.0`)
 - iOS: `macos-15` + Xcode **16** via `maxim-lobanov/setup-xcode` (avoids floating `macos-latest`)
 - Optional `clear_cache` on workflow_dispatch
