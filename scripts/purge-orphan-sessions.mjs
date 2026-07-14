@@ -98,6 +98,7 @@ function shouldPurgeSession(session, now) {
   return shouldPurgeFinishedSession(session, now) || shouldPurgeAbandonedSession(session, now);
 }
 
+/** Resolve ADC or GOOGLE_APPLICATION_CREDENTIALS path for Admin SDK. */
 function resolveCredentialPath() {
   const fromEnv = process.env.GOOGLE_APPLICATION_CREDENTIALS?.trim();
   if (fromEnv) {
@@ -107,6 +108,7 @@ function resolveCredentialPath() {
   return { kind: 'adc', path: adcPath, exists: existsSync(adcPath) };
 }
 
+/** True when the error looks like missing/invalid Google Application credentials. */
 function isCredentialError(error) {
   const message = String(error?.message ?? error ?? '');
   return (

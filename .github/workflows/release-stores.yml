@@ -191,11 +191,11 @@ jobs:
           packager: npm
           token: ${{ secrets.EXPO_TOKEN }}
 
+      # Do not use setup-java cache:gradle — no committed gradle-wrapper (Expo prebuild is inside EAS).
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
-          cache: gradle
 
       - uses: android-actions/setup-android@v3
 
@@ -255,14 +255,18 @@ jobs:
         with:
           ref: ${{ needs.validate.outputs.checkout_ref }}
 
+      # Expo SDK 57 / expo-modules-jsi require Swift 6.2+ (Xcode 26).
+      # maxim-lobanov '16' picks Xcode_16.4 — nested SPM build of ExpoModulesJSI then fails with
+      # "Could not resolve package dependencies" during [CP-User] Build ExpoModulesJSI xcframework.
       - uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: '16'
+          xcode-version: '26.3'
 
       - name: Show selected Xcode
         run: |
           xcode-select -p
           xcodebuild -version
+          swift --version
           df -h .
 
       - uses: actions/setup-node@v5

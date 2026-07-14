@@ -83,10 +83,19 @@ Do **not** add `EXPO_PUBLIC_FIREBASE_APP_CHECK_PRODUCTION` unless you need an ex
 
 ## Caching
 
-- npm, vesum, Gradle, CocoaPods
+- npm, vesum, Gradle (`actions/cache` on `~/.gradle`), CocoaPods
+- Do **not** enable `setup-java` `cache: gradle` — the repo has no committed `gradle-wrapper.properties` (native Android appears only inside local EAS prebuild)
 - `eas-cli` pinned (`eas-version: 21.0.0`)
-- iOS: `macos-15` + Xcode **16** via `maxim-lobanov/setup-xcode` (avoids floating `macos-latest`)
+- iOS: `macos-15` + Xcode **26.3** via `maxim-lobanov/setup-xcode` (Expo SDK 57 / `expo-modules-jsi` need Swift 6.2+; do **not** pin `'16'` — that selects Xcode 16.4)
 - Optional `clear_cache` on workflow_dispatch
+
+## Troubleshooting
+
+| Symptom                                                                                      | Likely cause                                                                                | What to do                                                                                                                                     |
+| -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Android fails at `setup-java` / gradle cache                                                 | No committed `gradle-wrapper.properties`                                                    | Ensure workflow tip has `cache: gradle` **removed**; retry via `workflow_dispatch` from `dev`/`main` (YAML from selected branch)               |
+| iOS: `[CP-User] Build ExpoModulesJSI xcframework` + `Could not resolve package dependencies` | Wrong Xcode (e.g. 16.4). Nested SPM build needs Swift tools ≥ 6.2                           | Pin Xcode **26.3+** on the runner. Do **not** force `RCT_USE_PREBUILT_RNCORE=0` with `useFrameworks: static` (known Expo breakage)             |
+| Retry of tag `vX.Y.Z` still uses old workflow bugs                                           | Tag commit embeds old YAML when release event runs from that tip; dispatch uses branch YAML | `workflow_dispatch` → choose branch with the fix → `tag_override=vX.Y.Z`; or cut a new patch release from a tip that includes the workflow fix |
 
 ## Local parity
 
