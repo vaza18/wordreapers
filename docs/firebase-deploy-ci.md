@@ -136,13 +136,28 @@ Add to GitHub Environment **`release`** (do **not** reuse `GOOGLE_PLAY_SERVICE_A
 ### Create the service account
 
 1. Google Cloud Console → select the Firebase / GCP project (`EXPO_PUBLIC_FIREBASE_PROJECT_ID`).
-2. **IAM & Admin → Service Accounts → Create**.
-3. Grant role **Firebase Admin** (`roles/firebase.admin`) — sufficient for `firebase deploy --only database,functions` in CI.
-4. Keys → **Add key → JSON**; copy the file contents into the GitHub secret (real JSON, not a path).
-5. Do not commit the JSON. Rotate if leaked.
-6. **Smoke once:** Actions → Deploy Firebase backend → `force=true`, `target=both` (or `rules` / `functions`). Confirm success before relying on a Release gate.
+2. **IAM & Admin → Service Accounts → Create** (dedicated deploy SA — not the Play SA).
+3. On the **project** (**IAM & Admin → IAM** → edit / grant on the deploy SA email), grant:
+   - **Firebase Admin** (`roles/firebase.admin`) — RTDB rules + Functions deploy APIs
+   - **Cloud Scheduler Admin** (`roles/cloudscheduler.admin`) — required to create/update Scheduler jobs for `onSchedule` Functions (`cloudscheduler.jobs.update`). Without this, RT trigger functions can succeed while scheduled ones fail with 403 on `firebase-schedule-…` jobs.
+4. Grant **Service Account User** (`roles/iam.serviceAccountUser`) so the deploy SA can `iam.serviceAccounts.ActAs` on **each runtime SA** that Functions use. For this project (and typical 2nd Gen Functions) that is **both**:
+   - App Engine default: `{project-id}@appspot.gserviceaccount.com`
+   - Compute Engine default: `{PROJECT_NUMBER}-compute@developer.gserviceaccount.com`  
+     (shown in the 403 message if missing; for Wordreapers / `slovozbyrachy` it is `90271470130-compute@developer.gserviceaccount.com`)
 
-Granular roles (optional later): Realtime Database Admin, Cloud Functions Admin, Service Account User, Cloud Build Editor, Artifact Registry Writer — Firebase Admin is the documented MVP.
+   Without ActAs on the SA named in the error, `firebase deploy --only database` can succeed while `--only functions` fails.
+
+   **Recommended (least privilege):** on each runtime SA → **IAM → Service Accounts →** open that SA → **Permissions / Principals with access → Grant access** → deploy SA email → role **Service Account User**.
+
+   **Broader alternative:** project-level **Service Account User** on the deploy SA (can ActAs any SA in the project).
+
+5. Keys → **Add key → JSON**; copy the file contents into the GitHub secret (real JSON, not a path).
+6. Do not commit the JSON. Rotate if leaked.
+7. **Smoke once:** Actions → Deploy Firebase backend → `force=true`, `target=both` (or `rules` / `functions`). Confirm success before relying on a Release gate.
+
+Granting ActAs only on `@appspot…` is **not** enough for 2nd Gen functions that run as the Compute default SA — repeat the same grant on `{number}-compute@developer.gserviceaccount.com` when the log asks for it.
+
+MVP role set for CI: **Firebase Admin** + **Cloud Scheduler Admin** (project) + **Service Account User** (on appspot and compute runtime SAs). Optional later instead of Firebase Admin: Realtime Database Admin, Cloud Functions Admin, Cloud Build Editor, Artifact Registry Writer.
 
 CI writes the secret to a temp file under `$RUNNER_TEMP` and sets `GOOGLE_APPLICATION_CREDENTIALS`. Logs must never print the JSON.
 
@@ -157,20 +172,22 @@ Shipping breaking rules/functions while old store builds are still live is a pro
 
 ## Troubleshooting
 
-| Symptom                                          | Likely cause                                                          | What to do                                                                                                                    |
-| ------------------------------------------------ | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Auth / permission errors on deploy               | Missing or wrong SA; Play SA reused; role too weak                    | Set `FIREBASE_SERVICE_ACCOUNT_JSON`; grant Firebase Admin; smoke with `force=true`                                            |
-| Job no-op but you expected deploy                | Diff empty vs previous `v*` tag                                       | `force=true`; confirm changes under `firebase/`, `firebase.json`, `functions/**`, or `scripts/dictionary/**`                  |
-| Retry same release tag redeploys backend         | Diff vs previous `v*` still shows backend paths                       | Expected; use a commit with no backend delta for no-op, or accept idempotent redeploy                                         |
-| Older backend wins after newer Release           | Two Releases overlapped; concurrency queues by start time, not semver | Publish/finish **one Release at a time** in version order; see checklist item 5                                               |
-| Rules in prod, functions failed (stores blocked) | Sequential deploy; rules finished before functions error              | Re-run with `force=true` and `target=functions` (or `both`). CI emits `::warning::` after rules when functions still pending. |
-| Unknown `--version-tag` / tip mismatch           | Tag missing, not tip, or not an ancestor of CURRENT                   | Use tip-matching `vX.Y.Z` (release does); or omit `version_tag`; or `--force`                                                 |
-| No ancestor older `v*` tag                       | Older tags exist but none are ancestors of CURRENT                    | Ensure history is connected; or dispatch with `force=true`                                                                    |
-| `test:rules` failed                              | Rules regression                                                      | Fix locally with `npm run test:rules`; do not force-deploy past the gate                                                      |
-| Typecheck / functions `build` failed             | TS or dict copy error in `functions/`                                 | Fix, then re-run; deploy step never runs if gates fail                                                                        |
-| Store android/ios skipped / blocked              | Backend job failed                                                    | Fix backend deploy/tests; no-op success is enough for apps when unchanged                                                     |
-| Workflow waiting on approval / never starts      | Environment reviewers, or ref not on `release` allowlist              | Approve jobs; ensure deployment branches/tags include `v*` / `main` / `dev` as needed                                         |
-| Parallel deploy failures locally                 | Known flaky when rules+functions in one parallel attempt              | CI always runs rules then functions; locally prefer sequential npm scripts                                                    |
+| Symptom                                                      | Likely cause                                                               | What to do                                                                                                                                                                                                                      |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth / permission errors on deploy                           | Missing or wrong SA; Play SA reused; role too weak                         | Set `FIREBASE_SERVICE_ACCOUNT_JSON`; grant Firebase Admin, Cloud Scheduler Admin, and Service Account User on runtime SAs; smoke with `force=true`                                                                              |
+| `iam.serviceAccounts.ActAs` on `…@appspot…` or `…-compute@…` | Deploy SA cannot impersonate the Functions **runtime** SA named in the 403 | Grant deploy SA **Service Account User** on **that** SA (appspot and/or `{number}-compute@developer.gserviceaccount.com` for 2nd Gen); then `force` + `functions`. Appspot-only grant is not enough when the log cites compute. |
+| `cloudscheduler.jobs.update` / Failed to upsert schedule     | Deploy SA cannot update Cloud Scheduler jobs for `onSchedule` Functions    | Grant project role **Cloud Scheduler Admin** (`roles/cloudscheduler.admin`) to the deploy SA; then `force` + `functions`. RT-only functions may already be live.                                                                |
+| Job no-op but you expected deploy                            | Diff empty vs previous `v*` tag                                            | `force=true`; confirm changes under `firebase/`, `firebase.json`, `functions/**`, or `scripts/dictionary/**`                                                                                                                    |
+| Retry same release tag redeploys backend                     | Diff vs previous `v*` still shows backend paths                            | Expected; use a commit with no backend delta for no-op, or accept idempotent redeploy                                                                                                                                           |
+| Older backend wins after newer Release                       | Two Releases overlapped; concurrency queues by start time, not semver      | Publish/finish **one Release at a time** in version order; see checklist item 5                                                                                                                                                 |
+| Rules in prod, functions failed (stores blocked)             | Sequential deploy; rules finished before functions error                   | Fix cause (often IAM ActAs), then re-run with `force=true` and `target=functions` (or `both`). CI emits `::warning::` after rules when functions still pending.                                                                 |
+| Unknown `--version-tag` / tip mismatch                       | Tag missing, not tip, or not an ancestor of CURRENT                        | Use tip-matching `vX.Y.Z` (release does); or omit `version_tag`; or `--force`                                                                                                                                                   |
+| No ancestor older `v*` tag                                   | Older tags exist but none are ancestors of CURRENT                         | Ensure history is connected; or dispatch with `force=true`                                                                                                                                                                      |
+| `test:rules` failed                                          | Rules regression                                                           | Fix locally with `npm run test:rules`; do not force-deploy past the gate                                                                                                                                                        |
+| Typecheck / functions `build` failed                         | TS or dict copy error in `functions/`                                      | Fix, then re-run; deploy step never runs if gates fail                                                                                                                                                                          |
+| Store android/ios skipped / blocked                          | Backend job failed                                                         | Fix backend deploy/tests; no-op success is enough for apps when unchanged                                                                                                                                                       |
+| Workflow waiting on approval / never starts                  | Environment reviewers, or ref not on `release` allowlist                   | Approve jobs; ensure deployment branches/tags include `v*` / `main` / `dev` as needed                                                                                                                                           |
+| Parallel deploy failures locally                             | Known flaky when rules+functions in one parallel attempt                   | CI always runs rules then functions; locally prefer sequential npm scripts                                                                                                                                                      |
 
 ## Local parity
 
