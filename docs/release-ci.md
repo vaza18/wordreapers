@@ -99,8 +99,9 @@ Fastlane is installed from [`scripts/ci/Gemfile`](../scripts/ci/Gemfile) (`ensur
 
 ## Caching
 
-- npm, vesum, Gradle (`actions/cache` on `~/.gradle`), CocoaPods, Fastlane gems (`scripts/ci/vendor/bundle`)
+- npm, vesum, Gradle (`actions/cache` on `~/.gradle`), CocoaPods, Fastlane gems (`scripts/ci/vendor`)
 - Both store jobs use `ruby/setup-ruby` (Ruby 3.3 + Bundler **2.6.9**) before Fastlane
+- iOS: Fastlane binstubs must be on `PATH` **before** local `eas build` (EAS spawns `fastlane` during the archive)
 - Do **not** enable `setup-java` `cache: gradle` — the repo has no committed `gradle-wrapper.properties` (native Android appears only inside local EAS prebuild)
 - `eas-cli` pinned (`eas-version: 21.0.0`)
 - iOS: `macos-15` + Xcode **26.3** via `maxim-lobanov/setup-xcode` (Expo SDK 57 / `expo-modules-jsi` need Swift 6.2+; do **not** pin `'16'` — that selects Xcode 16.4)
@@ -115,7 +116,8 @@ Fastlane is installed from [`scripts/ci/Gemfile`](../scripts/ci/Gemfile) (`ensur
 | Retry of tag `vX.Y.Z` still uses old workflow bugs                                           | Tag commit embeds old YAML when release event runs from that tip; dispatch uses branch YAML | `workflow_dispatch` → choose branch with the fix → `tag_override=vX.Y.Z`; or cut a new patch release from a tip that includes the workflow fix |
 | AAB fails local validation; `file` says `ASCII text`                                         | `buildArtifactPaths` (e.g. `mapping.txt`) overwritten `--output` `.aab`                     | Production profile must not set `buildArtifactPaths` when CI uses a single-file `--output`                                                     |
 | AAB fails local validation (`BundleConfig.pb` / manifest missing)                            | `--output` is not a real App Bundle                                                         | Check `applicationArchivePath` in `eas.json`; inspect `file` / `unzip -l` in logs                                                              |
-| Fastlane: `undefined method 'untaint'` / Bundler 1.17.2                                      | `Gemfile.lock` `BUNDLED WITH 1.x` on Ruby 3.2+                                              | Lockfile must be `BUNDLED WITH` 2.x; `ensure-fastlane.sh` installs bundler ~> 2.5 (fastlane requires bundler < 3)                              |
+| Fastlane: `undefined method 'untaint'` / Bundler 1.17.2                                      | `Gemfile.lock` `BUNDLED WITH 1.x` on Ruby 3.2+                                              | Lockfile must be `BUNDLED WITH` 2.x; `ensure-fastlane.sh` pins bundler 2.6.9                                                                   |
+| iOS local EAS: `spawn fastlane ENOENT`                                                       | Fastlane only installed for upload; EAS spawn needs `fastlane` on PATH during the build     | `release-build-submit.sh` sources `ensure-fastlane.sh` **before** `eas build` on iOS; binstubs in `scripts/ci/vendor/bin`                      |
 | Play `supply` auth / permission errors                                                       | Service account not linked in Play Console or missing Release to testing tracks permission  | Play Console → Users and permissions → grant the SA; first AAB historically may need one manual upload                                         |
 | Pilot / ASC API errors                                                                       | Bad key, wrong `ASC_APP_ID`, or API key lacks App Manager / Developer access                | Verify `.p8` + key/issuer; TestFlight access for the key’s role                                                                                |
 | Expo dashboard shows Submit “Free Tier Queue”                                                | Something still called `eas submit`                                                         | CI must use Fastlane scripts above — do not reintroduce `eas submit`                                                                           |

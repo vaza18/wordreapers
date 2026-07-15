@@ -226,7 +226,7 @@ jobs:
 
       - uses: actions/cache@v5
         with:
-          path: scripts/ci/vendor/bundle
+          path: scripts/ci/vendor
           key: fastlane-${{ runner.os }}-${{ hashFiles('scripts/ci/Gemfile.lock') }}
           restore-keys: |
             fastlane-${{ runner.os }}-
@@ -331,7 +331,7 @@ jobs:
 
       - uses: actions/cache@v5
         with:
-          path: scripts/ci/vendor/bundle
+          path: scripts/ci/vendor
           key: fastlane-${{ runner.os }}-${{ hashFiles('scripts/ci/Gemfile.lock') }}
           restore-keys: |
             fastlane-${{ runner.os }}-

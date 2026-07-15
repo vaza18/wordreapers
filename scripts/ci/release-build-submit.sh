@@ -38,6 +38,9 @@ if [[ "$PLATFORM" == "android" ]]; then
   OUT_PATH="$OUT_DIR/wordreapers.aab"
 else
   OUT_PATH="$OUT_DIR/wordreapers.ipa"
+  # Local EAS iOS invokes `fastlane` from PATH during the native build (not only for upload).
+  # shellcheck source=ensure-fastlane.sh
+  source "$ROOT/scripts/ci/ensure-fastlane.sh"
 fi
 rm -f "$OUT_PATH"
 
