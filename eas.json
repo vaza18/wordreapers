@@ -32,8 +32,7 @@
       "environment": "production",
       "android": {
         "buildType": "app-bundle",
-        "applicationArchivePath": "android/app/build/outputs/bundle/release/*.aab",
-        "buildArtifactPaths": ["android/app/build/outputs/mapping/**/mapping.txt"]
+        "applicationArchivePath": "android/app/build/outputs/bundle/release/*.aab"
       },
       "env": {
         "APP_VARIANT": "production"
