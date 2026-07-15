@@ -8,6 +8,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — Blank screen when opening menu during resume vote
+
+- **Symptom:** On pause, after a peer proposed «продовжити», pressing the hamburger menu showed a blank white screen (neither pause nor menu).
+- **Cause:** `showGameMenu` hid `PauseRoundModal` via `pauseUiObscured`, while `gameMenuBlockedByVote` also prevented `GameMenuModal` from rendering when `resumeVote` was active.
+- **Fix:** Gate pause obscuring on menu actually being allowed; hide hamburger / no-op open while votes block the menu (`isGameMenuBlockedByVote` / `isPauseUiObscuredByOverlays`).
+- **Test:** `tests/play-menu-gates.test.ts`
+- **Area:** `lib/online/play-menu-gates.ts`, `app/online/play/[gameId].tsx`, `components/PauseRoundModal.tsx`
+
 ### 2026-07 — Stale 4-char / abandoned rooms never purged
 
 - **Symptom:** Old `waiting`/`playing` rooms (often 4-character codes) lingered forever under `game_sessions`, `player_words`, and `session_word_maps`.

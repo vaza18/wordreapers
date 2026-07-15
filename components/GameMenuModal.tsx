@@ -2,9 +2,13 @@ import { useTranslation } from 'react-i18next';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
-import { PrimaryButton } from '@/components/PrimaryButton';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
+import {
+  buildGameMenuGroups,
+  type GameMenuItemDef,
+  type GameMenuItemId,
+} from '@/lib/ui/game-menu-groups';
 import { modalCardChrome, modalOverlayBackground } from '@/lib/ui/modal-chrome';
 
 interface GameMenuModalProps {
@@ -26,7 +30,8 @@ interface GameMenuModalProps {
 }
 
 /**
- * In-round menu (mockup): continue, pause, settings, exit.
+ * In-round menu (Variant C): left-aligned icon+label list with grouped leave actions.
+ * Dismiss via ✕ or overlay (no separate “continue” row).
  */
 export function GameMenuModal({
   visible,
@@ -48,62 +53,112 @@ export function GameMenuModal({
   const styles = useThemedStyles(createStyles);
   const { t } = useTranslation();
 
+  const groups = buildGameMenuGroups({
+    showPause,
+    showInvite: Boolean(showInvite && onInvite),
+    showEndGame,
+    showExit,
+    showSettings: Boolean(onOpenSettings),
+    showHowToPlay: Boolean(onOpenHowToPlay),
+  });
+
+  const labelFor = (id: GameMenuItemId): string => {
+    switch (id) {
+      case 'pause':
+        return pauseLabel ?? t('game.menuPause');
+      case 'invite':
+        return t('online.menuInvitePlayer');
+      case 'endGame':
+        return endGameLabel;
+      case 'exit':
+        return exitLabel ?? t('game.menuExit');
+      case 'settings':
+        return t('nav.settings');
+      case 'howToPlay':
+        return t('game.menuHowToPlay');
+    }
+  };
+
+  const onPressFor = (id: GameMenuItemId): (() => void) => {
+    switch (id) {
+      case 'pause':
+        return onPause;
+      case 'invite':
+        return onInvite ?? onClose;
+      case 'endGame':
+        return onProposeEnd;
+      case 'exit':
+        return onExit;
+      case 'settings':
+        return onOpenSettings ?? onClose;
+      case 'howToPlay':
+        return onOpenHowToPlay ?? onClose;
+    }
+  };
+
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
         <View style={styles.card} onStartShouldSetResponder={() => true}>
-          <Text style={styles.title}>{t('game.menuTitle')}</Text>
+          <View style={styles.titleRow}>
+            <View style={styles.titleSide} />
+            <Text style={styles.title}>{t('game.menuTitle')}</Text>
+            <FeedbackPressable
+              accessibilityRole="button"
+              accessibilityLabel={t('common.close')}
+              hitSlop={8}
+              onPress={onClose}
+              style={styles.closeButton}
+            >
+              <Text style={styles.closeGlyph}>✕</Text>
+            </FeedbackPressable>
+          </View>
 
-          <FeedbackPressable
-            accessibilityRole="button"
-            onPress={onClose}
-            style={styles.continueRow}
-          >
-            <Text style={styles.continueLabel}>{t('game.menuContinue')}</Text>
-          </FeedbackPressable>
-
-          {showPause ? (
-            <PrimaryButton label={pauseLabel ?? t('game.menuPause')} onPress={onPause} />
-          ) : null}
-
-          {showInvite && onInvite ? (
-            <PrimaryButton
-              label={t('online.menuInvitePlayer')}
-              variant="secondary"
-              onPress={onInvite}
-            />
-          ) : null}
-
-          {showEndGame ? (
-            <PrimaryButton label={endGameLabel} variant="secondary" onPress={onProposeEnd} />
-          ) : null}
-
-          {onOpenHowToPlay ? (
-            <PrimaryButton
-              label={t('game.menuHowToPlay')}
-              variant="secondary"
-              onPress={onOpenHowToPlay}
-            />
-          ) : null}
-
-          {onOpenSettings ? (
-            <PrimaryButton label={t('nav.settings')} variant="secondary" onPress={onOpenSettings} />
-          ) : null}
-
-          {showExit ? (
-            <>
-              <View style={styles.divider} />
-
-              <PrimaryButton
-                label={exitLabel ?? t('game.menuExit')}
-                variant="secondary"
-                onPress={onExit}
-              />
-            </>
-          ) : null}
+          {groups.map((group, groupIndex) => (
+            <View key={group.id}>
+              {groupIndex > 0 ? <View style={styles.divider} /> : null}
+              <View style={styles.group}>
+                {group.items.map((item) => (
+                  <MenuRow
+                    key={item.id}
+                    item={item}
+                    label={labelFor(item.id)}
+                    onPress={onPressFor(item.id)}
+                    styles={styles}
+                  />
+                ))}
+              </View>
+            </View>
+          ))}
         </View>
       </Pressable>
     </Modal>
+  );
+}
+
+function MenuRow({
+  item,
+  label,
+  onPress,
+  styles,
+}: {
+  item: GameMenuItemDef;
+  label: string;
+  onPress: () => void;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  return (
+    <FeedbackPressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={[styles.row, styles.neutralRow]}
+    >
+      <Text style={styles.icon} accessibilityElementsHidden importantForAccessibility="no">
+        {item.icon}
+      </Text>
+      <Text style={styles.label}>{label}</Text>
+    </FeedbackPressable>
   );
 }
 
@@ -121,26 +176,63 @@ function createStyles(colors: ThemeColors) {
       padding: spacing.lg,
       gap: spacing.sm,
     },
+    titleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: spacing.xs,
+    },
+    titleSide: {
+      width: 32,
+    },
     title: {
+      flex: 1,
       fontSize: 16,
       fontWeight: '600',
       color: colors.textPrimary,
       textAlign: 'center',
-      marginBottom: spacing.xs,
     },
-    continueRow: {
-      backgroundColor: '#E1F5EE',
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: '#9FE1CB',
+    closeButton: {
+      width: 32,
+      height: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
       borderRadius: radii.sm,
+    },
+    closeGlyph: {
+      fontSize: 18,
+      fontWeight: '500',
+      color: colors.textSecondary,
+      lineHeight: 22,
+    },
+    group: {
+      gap: spacing.xs,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
       paddingVertical: spacing.md,
       paddingHorizontal: spacing.md,
+      borderRadius: radii.sm,
+      gap: spacing.sm,
     },
-    continueLabel: {
+    neutralRow: {
+      backgroundColor: colors.backgroundPrimary,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.borderSecondary,
+    },
+    icon: {
+      width: 24,
       fontSize: 15,
       fontWeight: '500',
-      color: '#085041',
+      color: colors.textPrimary,
       textAlign: 'center',
+    },
+    label: {
+      flex: 1,
+      fontSize: 15,
+      fontWeight: '500',
+      color: colors.textPrimary,
+      textAlign: 'left',
     },
     divider: {
       height: StyleSheet.hairlineWidth,

@@ -3,10 +3,14 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { HeaderBarButton } from '@/components/HeaderBarButton';
+import { MenuIcon } from '@/components/HeaderIcons';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { SettingsIconButton } from '@/components/SettingsIconButton';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
+import { useHeaderIconButtonLayout } from '@/hooks/useHeaderIconButtonLayout';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
+import { useTheme } from '@/hooks/useTheme';
 import { useServerNowWhen } from '@/hooks/useServerNow';
 import { ConditionalModal } from '@/lib/ui/conditional-modal';
 import { modalCardChrome, modalOverlayBackground } from '@/lib/ui/modal-chrome';
@@ -46,6 +50,8 @@ interface PauseRoundModalProps {
   onCancelEarlyFinishProposal?: () => void;
   onLeaveNowFromEarlyFinish?: () => void;
   onOpenMenu: () => void;
+  /** When false, hide the hamburger (e.g. blocking session vote owns the screen). Default true. */
+  canOpenMenu?: boolean;
   onOpenSettings: () => void;
 }
 
@@ -66,10 +72,13 @@ function PauseBody({
   onCancelEarlyFinishProposal,
   onLeaveNowFromEarlyFinish,
   onOpenMenu,
+  canOpenMenu = true,
   onOpenSettings,
 }: Omit<PauseRoundModalProps, 'visible' | 'serverNow'> & { serverNow: number }) {
   const styles = useThemedStyles(createStyles);
   const { t } = useTranslation();
+  const { colors } = useTheme();
+  const { backIconSize, buttonSize } = useHeaderIconButtonLayout();
   const { top, bottom } = useSafeAreaInsets();
   const frozenMs = session.pauseState?.frozenRemainingMs ?? 0;
   const standings = useMemo(
@@ -141,12 +150,21 @@ function PauseBody({
   const resumeButtonLabel = hasOnlineOpponent
     ? tGendered(t, 'game.pauseReadyToResume', viewerGender)
     : t('game.pauseResumeNow');
+  /** Hide menu when parent blocks it (resume/early-finish votes) so pause UI stays visible. */
+  const showMenuButton = canOpenMenu;
 
   return (
     <View
       style={[styles.overlay, { paddingTop: top + spacing.xs, paddingBottom: bottom + spacing.sm }]}
     >
       <View style={styles.topBar}>
+        {showMenuButton ? (
+          <HeaderBarButton accessibilityLabel={t('game.menu')} onPress={onOpenMenu}>
+            <MenuIcon size={backIconSize} color={colors.textSecondary} />
+          </HeaderBarButton>
+        ) : (
+          <View style={{ width: buttonSize, height: buttonSize }} />
+        )}
         <SettingsIconButton onPress={onOpenSettings} />
       </View>
       <View style={styles.card}>
@@ -324,9 +342,6 @@ function PauseBody({
           ) : (
             <PrimaryButton label={resumeButtonLabel} onPress={onProposeResume} />
           )}
-          {!earlyFinishVote ? (
-            <PrimaryButton label={t('game.menu')} variant="secondary" onPress={onOpenMenu} />
-          ) : null}
         </View>
       </View>
     </View>
@@ -358,7 +373,8 @@ function createStyles(colors: ThemeColors) {
     },
     topBar: {
       flexDirection: 'row',
-      justifyContent: 'flex-end',
+      alignItems: 'center',
+      justifyContent: 'space-between',
       paddingBottom: spacing.xs,
     },
     card: {

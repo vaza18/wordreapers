@@ -99,6 +99,7 @@ import {
   sessionPlayerScoresMatchWordMaps,
 } from '@/lib/online/live-standings';
 import { formatPlayRulesLabel } from '@/lib/online/play-rules-label';
+import { isGameMenuBlockedByVote, isPauseUiObscuredByOverlays } from '@/lib/online/play-menu-gates';
 import {
   resolveAddTimePickerDismissAction,
   shouldDeferClientTimerFinish,
@@ -486,11 +487,17 @@ export default function OnlinePlayScreen() {
       session?.pauseVote ||
       session?.earlyFinishVote ||
       session?.addTimeVote ||
-      session?.resumeVote
+      (isPaused && session?.resumeVote)
     ) {
       setShowGameMenu(false);
     }
-  }, [session?.pauseVote, session?.earlyFinishVote, session?.addTimeVote, session?.resumeVote]);
+  }, [
+    isPaused,
+    session?.pauseVote,
+    session?.earlyFinishVote,
+    session?.addTimeVote,
+    session?.resumeVote,
+  ]);
 
   useEffect(() => {
     if (session?.addTimeVote) {
@@ -604,8 +611,21 @@ export default function OnlinePlayScreen() {
   isPausedRef.current = isPaused;
 
   const openGameMenu = useCallback(() => {
+    const live = session;
+    if (
+      live &&
+      isGameMenuBlockedByVote({
+        pauseVote: live.pauseVote,
+        earlyVote: live.earlyFinishVote,
+        addTimeVote: live.addTimeVote,
+        isPaused: isPausedRef.current,
+        resumeVote: live.resumeVote,
+      })
+    ) {
+      return;
+    }
     setShowGameMenu(true);
-  }, []);
+  }, [session]);
   const openAddTimeModal = useCallback(() => {
     setShowAddTimeModal(true);
   }, []);
@@ -1146,14 +1166,21 @@ export default function OnlinePlayScreen() {
   const pauseVote = session.pauseVote;
   const addTimeVote = session.addTimeVote;
   const resumeVote = session.resumeVote;
-  const gameMenuBlockedByVote = Boolean(
-    pauseVote || earlyVote || addTimeVote || (isPaused && resumeVote),
-  );
-  const pauseUiObscured =
-    showGameMenu ||
-    showInviteModal ||
-    showExitConfirm ||
-    (showEndEarlyConfirm && !hasOnlineOpponentInRound);
+  const gameMenuBlockedByVote = isGameMenuBlockedByVote({
+    pauseVote,
+    earlyVote,
+    addTimeVote,
+    isPaused,
+    resumeVote,
+  });
+  const pauseUiObscured = isPauseUiObscuredByOverlays({
+    showGameMenu,
+    gameMenuBlockedByVote,
+    showInviteModal,
+    showExitConfirm,
+    showEndEarlyConfirm,
+    hasOnlineOpponentInRound,
+  });
   const canProposeAddTime = !isPaused && !earlyVote && !pauseVote && !addTimeVote;
 
   return (
@@ -1354,9 +1381,8 @@ export default function OnlinePlayScreen() {
           onLeaveNowFromEarlyFinish={
             earlyVote?.proposedBy === myUid ? leaveNowFromEarlyFinish : undefined
           }
-          onOpenMenu={() => {
-            setShowGameMenu(true);
-          }}
+          onOpenMenu={openGameMenu}
+          canOpenMenu={!gameMenuBlockedByVote}
           onOpenSettings={() => {
             router.push('/settings');
           }}
