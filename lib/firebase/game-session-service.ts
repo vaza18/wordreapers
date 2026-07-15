@@ -132,11 +132,6 @@ function profileToPlayer(
   return player;
 }
 
-/** Cancel server-side onDisconnect hooks without forcing `online: false` (React remount-safe). */
-export async function cancelPlayerOnlineOnDisconnect(gameId: string, uid: string): Promise<void> {
-  await cancelPlayerOnDisconnect(normalizeRoomCode(gameId), uid);
-}
-
 async function cancelPlayerOnDisconnect(gameId: string, uid: string): Promise<void> {
   const node = playerRef(normalizeRoomCode(gameId), uid);
   try {

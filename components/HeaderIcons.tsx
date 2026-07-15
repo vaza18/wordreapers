@@ -96,15 +96,6 @@ export function MenuIcon({ size = 22, color }: HeaderIconProps) {
   );
 }
 
-/** Plus — add time affordance on the play timer. */
-export function PlusIcon({ size = 20, color }: HeaderIconProps) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path d="M12 5v14M5 12h14" stroke={color} strokeWidth={2} strokeLinecap="round" />
-    </Svg>
-  );
-}
-
 /** Filled star — live standings / rating. */
 export function StarIcon({ size = 20, color }: HeaderIconProps) {
   return (

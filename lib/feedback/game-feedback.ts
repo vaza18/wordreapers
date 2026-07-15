@@ -224,13 +224,3 @@ export function playTimerAlert(mode: FeedbackMode): void {
     playWordSound();
   }
 }
-
-/**
- * Wrap a press handler with configured button feedback (feedback runs first).
- */
-export function withButtonFeedback(mode: FeedbackMode, onPress: () => void): () => void {
-  return () => {
-    playButtonFeedback(mode);
-    onPress();
-  };
-}

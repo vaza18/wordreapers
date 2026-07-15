@@ -64,7 +64,3 @@ export function setLocalRoomPublishedGameId(draftId: string, publishedGameId: st
 export function removeLocalRoomDraft(draftId: string): void {
   drafts.delete(draftId);
 }
-
-export function resolveDraftGameId(draft: LocalRoomDraft): string {
-  return draft.publishedGameId ?? draft.preferredCode;
-}

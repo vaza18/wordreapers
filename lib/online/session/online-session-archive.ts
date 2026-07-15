@@ -258,13 +258,6 @@ export async function listFinishedRoundArchives(): Promise<FinishedRoundArchive[
   return Object.values(store).sort((a, b) => b.savedAt - a.savedAt);
 }
 
-/** Multiplayer finished round archives for one room on this device, newest first. */
-export async function listFinishedArchivesForGame(gameId: string): Promise<FinishedRoundArchive[]> {
-  const normalized = normalizeRoomCode(gameId);
-  const archives = await listFinishedRoundArchives();
-  return archives.filter((archive) => archive.gameId === normalized);
-}
-
 /** Latest finished round archive for a room on this device, if any. */
 export async function latestFinishedArchiveForGame(
   gameId: string,

@@ -52,36 +52,6 @@ function createStyles(colors: ThemeColors) {
     switchOverlay: {
       ...StyleSheet.absoluteFill,
     },
-    stepperBlock: {
-      gap: spacing.sm,
-    },
-    stepperRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: spacing.xs,
-    },
-    step: {
-      borderRadius: 8,
-      borderWidth: 1,
-      paddingVertical: spacing.sm,
-      paddingHorizontal: spacing.md,
-    },
-    stepActive: {
-      backgroundColor: colors.accent,
-      borderColor: colors.accent,
-    },
-    stepIdle: {
-      backgroundColor: colors.backgroundPrimary,
-      borderColor: colors.borderSecondary,
-    },
-    stepLabel: {
-      fontSize: 14,
-      fontWeight: '500',
-      color: colors.textPrimary,
-    },
-    stepLabelActive: {
-      color: colors.textOnAccent,
-    },
   });
 }
 
@@ -160,45 +130,4 @@ export function SettingSwitch({
   }
 
   return row;
-}
-
-interface StepperProps {
-  label: string;
-  value: number;
-  options: number[];
-  suffix?: string;
-  onChange: (value: number) => void;
-}
-
-/**
- * Discrete stepper for duration and similar numeric settings.
- */
-export function Stepper({ label, value, options, suffix, onChange }: StepperProps) {
-  const styles = useThemedStyles(createStyles);
-
-  return (
-    <View style={styles.stepperBlock}>
-      <Text style={styles.label}>{label}</Text>
-      <View style={styles.stepperRow}>
-        {options.map((option) => {
-          const active = option === value;
-          return (
-            <FeedbackPressable
-              key={option}
-              accessibilityRole="button"
-              onPress={() => {
-                onChange(option);
-              }}
-              style={[styles.step, active ? styles.stepActive : styles.stepIdle]}
-            >
-              <Text style={[styles.stepLabel, active ? styles.stepLabelActive : null]}>
-                {option}
-                {suffix ?? ''}
-              </Text>
-            </FeedbackPressable>
-          );
-        })}
-      </View>
-    </View>
-  );
 }
