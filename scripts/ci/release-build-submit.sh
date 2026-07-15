@@ -66,6 +66,11 @@ if [[ "$PLATFORM" == "android" ]]; then
   file "$OUT_PATH" || true
   if ! unzip -tqq "$OUT_PATH" >/dev/null 2>&1; then
     echo "ERROR: $OUT_PATH is not a valid zip/AAB." >&2
+    file "$OUT_PATH" >&2 || true
+    head -c 200 "$OUT_PATH" | tr '\n' ' ' >&2 || true
+    echo >&2
+    echo "Hint: with eas --output FILE, buildArtifactPaths can overwrite the AAB (e.g. mapping.txt → ASCII text)." >&2
+    echo "Keep production android without buildArtifactPaths when using a single-file --output." >&2
     if tar -tzf "$OUT_PATH" >/dev/null 2>&1; then
       echo "Hint: file looks like tar.gz with an .aab name — check applicationArchivePath / --output." >&2
       tar -tzf "$OUT_PATH" | head -40 >&2 || true

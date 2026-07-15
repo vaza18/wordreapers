@@ -218,6 +218,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Fastlane needs Ruby 3.x + Bundler 2.x (Bundler 1.x breaks on Pathname#untaint).
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler: '2.6.9'
+
       - uses: actions/cache@v5
         with:
           path: scripts/ci/vendor/bundle
@@ -316,6 +322,12 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # Fastlane needs Ruby 3.x + Bundler 2.x (Bundler 1.x breaks on Pathname#untaint).
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler: '2.6.9'
 
       - uses: actions/cache@v5
         with:
