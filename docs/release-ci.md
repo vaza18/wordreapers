@@ -95,6 +95,8 @@ Do **not** add `EXPO_PUBLIC_FIREBASE_APP_CHECK_PRODUCTION` unless you need an ex
 | [`scripts/ci/submit-android-play.sh`](../scripts/ci/submit-android-play.sh)     | Fastlane Supply | Play `internal` |
 | [`scripts/ci/submit-ios-testflight.sh`](../scripts/ci/submit-ios-testflight.sh) | Fastlane Pilot  | TestFlight      |
 
+Play release **name** is set to `{versionCode} ({versionName})` from the AAB (e.g. `53 (1.4.0)`), via Supply `--version_name`. Override with `PLAY_RELEASE_NAME` if needed.
+
 Fastlane is installed from [`scripts/ci/Gemfile`](../scripts/ci/Gemfile) (`ensure-fastlane.sh`). CI does **not** call `eas submit`.
 
 ## Caching
