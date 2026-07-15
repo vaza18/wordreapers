@@ -845,8 +845,10 @@ export default function OnlinePlayScreen() {
       if (!key) {
         return;
       }
+      // Sync before re-render so a second press in the same gesture cannot reuse this key.
+      draftKeyIndicesRef.current = [...draftKeyIndicesRef.current, index];
       setDraft((prev) => prev + key.value);
-      setDraftKeyIndices((prev) => [...prev, index]);
+      setDraftKeyIndices(draftKeyIndicesRef.current);
       setFeedback(null);
     },
     [letterKeys],
@@ -855,13 +857,18 @@ export default function OnlinePlayScreen() {
   const clearDraft = useCallback(() => {
     setDraft('');
     setDraftKeyIndices([]);
+    draftKeyIndicesRef.current = [];
     setFeedback(null);
     lastValidatedDraft.current = '';
   }, []);
 
   const backspaceDraft = useCallback(() => {
     setDraft((prev) => prev.slice(0, -1));
-    setDraftKeyIndices((prev) => prev.slice(0, -1));
+    setDraftKeyIndices((prev) => {
+      const next = prev.slice(0, -1);
+      draftKeyIndicesRef.current = next;
+      return next;
+    });
     setFeedback(null);
   }, []);
 
