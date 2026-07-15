@@ -139,6 +139,19 @@ describe('hasMultiplayerRound', () => {
       hasMultiplayerRound(
         gameSession({
           baseWordRound: 1,
+          liveRoundPlayerUids: ['org'],
+          players: {
+            org: { name: 'Org', wordCount: 0, score: 0, online: true },
+            joiner: { name: 'Joiner', wordCount: 0, score: 0, online: true },
+          },
+        }),
+        'org',
+      ),
+    ).toBe(true);
+    expect(
+      hasMultiplayerRound(
+        gameSession({
+          baseWordRound: 1,
           liveRoundPlayerUids: ['org', 'p2'],
           players: {
             org: { name: 'Org', wordCount: 0, score: 0, online: true },

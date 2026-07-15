@@ -52,6 +52,7 @@ import { formatPlayRulesLabel } from '@/lib/online/play-rules-label';
 import { gameSessionSettingsFromSetup } from '@/lib/firebase/session-settings';
 import type { GameSession } from '@/lib/firebase/types';
 import { computePlayerScore } from '@/lib/game/scoring';
+import { buildSoloWordListDisplay } from '@/lib/game/solo-word-list-display';
 import { getLocalRoomDraft } from '@/lib/online/local-room-draft';
 import { abandonOrganizerWaitingRoomForDraft } from '@/lib/online/abandon-tracked-waiting-room';
 import { publishPlayingSoloForDraft } from '@/lib/online/publish-room';
@@ -96,7 +97,6 @@ export default function OrganizerSoloPlayScreen() {
   const resumeRound = useOrganizerSoloStore((state) => state.resumeRound);
   const addTime = useOrganizerSoloStore((state) => state.addTime);
   const persistSnapshot = useOrganizerSoloStore((state) => state.persistSnapshot);
-  const getScoredWords = useOrganizerSoloStore((state) => state.getScoredWords);
   const getRemainingMs = useOrganizerSoloStore((state) => state.getRemainingMs);
 
   const [dictionary, setDictionary] = useState<DictionaryIndex | null>(null);
@@ -122,6 +122,8 @@ export default function OrganizerSoloPlayScreen() {
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastValidatedDraft = useRef('');
+  const draftKeyIndicesRef = useRef(draftKeyIndices);
+  draftKeyIndicesRef.current = draftKeyIndices;
 
   useEffect(() => {
     if (!gameId) {
@@ -191,9 +193,11 @@ export default function OrganizerSoloPlayScreen() {
 
   const baseWordDisplay = setup?.baseWordDisplay ?? '';
   const letterKeys = useMemo(() => buildLetterKeys(baseWordDisplay), [baseWordDisplay]);
-  const usedKeyIndices = useMemo(() => new Set(draftKeyIndices), [draftKeyIndices]);
-  const scoredWords = getScoredWords();
-  const displays = words.map((word) => word.display);
+  // Memoize on `words` so draft keystrokes keep stable FlatList props.
+  const { entries: scoredWords, displays } = useMemo(
+    () => buildSoloWordListDisplay(words),
+    [words],
+  );
   const cachedLexiconMaxCount = useMemo(() => {
     if (!setup?.baseWord) {
       return null;
@@ -337,7 +341,10 @@ export default function OrganizerSoloPlayScreen() {
 
   const submitDraft = useCallback(
     (draftValue: string) => {
-      if (!setup || !dictionary || !supplementsReady || draftValue.length === 0) {
+      if (!setup || !supplementsReady || draftValue.length === 0) {
+        return;
+      }
+      if (!roundLexicon && !dictionary) {
         return;
       }
       if (draftValue === lastValidatedDraft.current) {
@@ -359,18 +366,27 @@ export default function OrganizerSoloPlayScreen() {
           roundLexicon: roundLexicon?.words,
         },
         deps: {
-          hasInDictionary: (word) =>
-            dictionary.hasWord(word) ||
-            hasWordInSortedList(whitelistGeneral, word) ||
-            (setup.allowProperNouns &&
-              (hasWordInSortedList(properNouns, word) ||
-                hasWordInSortedList(whitelistProper, word))) ||
-            (setup.allowSlang &&
-              (hasWordInSortedList(slang, word) || hasWordInSortedList(whitelistSlang, word))),
+          hasInDictionary: (word) => {
+            if (roundLexicon) {
+              return false;
+            }
+            if (!dictionary) {
+              return false;
+            }
+            return (
+              dictionary.hasWord(word) ||
+              hasWordInSortedList(whitelistGeneral, word) ||
+              (setup.allowProperNouns &&
+                (hasWordInSortedList(properNouns, word) ||
+                  hasWordInSortedList(whitelistProper, word))) ||
+              (setup.allowSlang &&
+                (hasWordInSortedList(slang, word) || hasWordInSortedList(whitelistSlang, word)))
+            );
+          },
         },
         lookupDisplayUpper: (word) =>
           roundLexicon?.displays.get(word) ??
-          dictionary.lookupDisplayUpper(word) ??
+          dictionary?.lookupDisplayUpper(word) ??
           toDisplayUpper(word),
       });
 
@@ -434,28 +450,34 @@ export default function OrganizerSoloPlayScreen() {
   }, [draft, submitDraft]);
 
   const pressKey = (index: number) => {
-    if (isPaused || usedKeyIndices.has(index)) {
+    if (isPaused || draftKeyIndicesRef.current.includes(index)) {
       return;
     }
     const key = letterKeys[index];
     if (!key) {
       return;
     }
+    draftKeyIndicesRef.current = [...draftKeyIndicesRef.current, index];
     setDraft((prev) => prev + key.value);
-    setDraftKeyIndices((prev) => [...prev, index]);
+    setDraftKeyIndices(draftKeyIndicesRef.current);
     setFeedback(null);
   };
 
   const clearDraft = () => {
     setDraft('');
     setDraftKeyIndices([]);
+    draftKeyIndicesRef.current = [];
     setFeedback(null);
     lastValidatedDraft.current = '';
   };
 
   const backspaceDraft = () => {
     setDraft((prev) => prev.slice(0, -1));
-    setDraftKeyIndices((prev) => prev.slice(0, -1));
+    setDraftKeyIndices((prev) => {
+      const next = prev.slice(0, -1);
+      draftKeyIndicesRef.current = next;
+      return next;
+    });
     setFeedback(null);
   };
 

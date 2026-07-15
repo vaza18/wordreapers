@@ -220,6 +220,29 @@ export function recomputeSessionPlayerScores(
 }
 
 /**
+ * RTDB multipath leaf updates for score/wordCount only — never rewrite whole `players/{uid}`
+ * (that races presence and fails rules when the joiner writes peers' `online`).
+ */
+export function buildPlayerTotalsUpdatePatch(
+  nextPlayers: Record<string, { score?: number; wordCount?: number }>,
+  previousPlayers: Record<string, { score?: number; wordCount?: number }>,
+): Record<string, number> {
+  const patch: Record<string, number> = {};
+  for (const [uid, player] of Object.entries(nextPlayers)) {
+    const previous = previousPlayers[uid];
+    const nextScore = player.score ?? 0;
+    const nextWordCount = player.wordCount ?? 0;
+    if ((previous?.score ?? 0) !== nextScore) {
+      patch[`players/${uid}/score`] = nextScore;
+    }
+    if ((previous?.wordCount ?? 0) !== nextWordCount) {
+      patch[`players/${uid}/wordCount`] = nextWordCount;
+    }
+  }
+  return patch;
+}
+
+/**
  * Standings from session word maps (authoritative when wordPlayers is populated).
  */
 export function buildStandingsFromSessionWordMaps(

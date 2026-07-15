@@ -274,17 +274,18 @@ describe('game-session-service extended', () => {
         },
       }),
     });
-    runTransactionMock.mockImplementation(async (_ref, updater) => {
-      const next = updater({
-        'org-1': { name: 'Org', wordCount: 0, score: 0 },
-      });
-      expect(next).toBeTruthy();
-      return { committed: true };
-    });
+    updateMock.mockResolvedValue(undefined);
 
     await syncSessionPlayerScores('ABCDE');
 
-    expect(runTransactionMock).toHaveBeenCalled();
+    expect(updateMock).toHaveBeenCalledWith(
+      { path: 'game_sessions/ABCDE' },
+      expect.objectContaining({
+        'players/org-1/score': expect.any(Number),
+        'players/org-1/wordCount': expect.any(Number),
+      }),
+    );
+    expect(runTransactionMock).not.toHaveBeenCalled();
   });
 
   it('skips score sync when word maps are empty', async () => {
@@ -293,7 +294,7 @@ describe('game-session-service extended', () => {
     await syncSessionPlayerScores('ABCDE');
 
     expect(getMock).not.toHaveBeenCalled();
-    expect(runTransactionMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
   });
 
   it('realigns lobby picker when offline players invalidate chosen base word', async () => {

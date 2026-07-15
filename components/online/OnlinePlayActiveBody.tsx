@@ -4,11 +4,13 @@ import { StyleSheet, Text, View } from 'react-native';
 import { OnlinePlayComposePanel } from '@/components/online/OnlinePlayComposePanel';
 import { OnlinePlayWordListSection } from '@/components/online/OnlinePlayWordListSection';
 import { spacing, type ThemeColors } from '@/constants/theme';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import type { PlayWordFeedbackVariant } from '@/lib/game/play-word-feedback';
 import type { LetterKey } from '@/lib/game/letter-keyboard';
 import type { ScoredWordEntry } from '@/lib/game/scoring';
 import type { WordOverlapPeer } from '@/lib/game/word-overlap-peers';
+import { PREFIX_SCROLL_DEBOUNCE_MS } from '@/lib/ui/word-list-scroll-behavior';
 
 export type OnlinePlayActiveBodyProps = {
   myName: string;
@@ -36,6 +38,7 @@ export type OnlinePlayActiveBodyProps = {
 
 /**
  * Player header, word list, and compose panel — kept separate from the ticking timer header.
+ * Debounces `draftPrefix` so FlatList prefix work does not run on every keystroke.
  */
 export const OnlinePlayActiveBody = memo(function OnlinePlayActiveBody({
   myName,
@@ -59,6 +62,9 @@ export const OnlinePlayActiveBody = memo(function OnlinePlayActiveBody({
   onBackspaceDraft,
 }: OnlinePlayActiveBodyProps) {
   const styles = useThemedStyles(createStyles);
+  const wordListDraftPrefix = useDebouncedValue(draft, PREFIX_SCROLL_DEBOUNCE_MS, {
+    flushEmpty: true,
+  });
 
   return (
     <>
@@ -77,7 +83,7 @@ export const OnlinePlayActiveBody = memo(function OnlinePlayActiveBody({
         <OnlinePlayWordListSection
           entries={entries}
           displays={displays}
-          draftPrefix={draft}
+          draftPrefix={wordListDraftPrefix}
           scrollToNormalized={scrollToNormalized}
           scrollToRequestId={scrollToRequestId}
           feedback={feedback}

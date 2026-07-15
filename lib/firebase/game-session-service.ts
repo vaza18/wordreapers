@@ -33,7 +33,7 @@ import {
   uniqueBonusEnabledForActiveRound,
   uniqueBonusLatchSettingsPatch,
 } from './session-settings.js';
-import { recomputeSessionPlayerScores } from '../game/scoring.js';
+import { buildPlayerTotalsUpdatePatch, recomputeSessionPlayerScores } from '../game/scoring.js';
 import { appendLiveRoundPlayerUid } from './live-round-player-uids.js';
 import { rematchWaitingPlayerPatch } from '../online/presence/live-round-membership.js';
 import { shouldOrganizerAbandonWaitingRoom } from '../online/should-organizer-abandon-waiting-room.js';
@@ -130,11 +130,6 @@ function profileToPlayer(
     player.invitedBy = invitedByUid;
   }
   return player;
-}
-
-/** Cancel server-side onDisconnect hooks without forcing `online: false` (React remount-safe). */
-export async function cancelPlayerOnlineOnDisconnect(gameId: string, uid: string): Promise<void> {
-  await cancelPlayerOnDisconnect(normalizeRoomCode(gameId), uid);
 }
 
 async function cancelPlayerOnDisconnect(gameId: string, uid: string): Promise<void> {
@@ -560,11 +555,19 @@ function buildJoinCommitPatch(
     const hasWords = Object.keys(context.wordMaps.wordPlayers ?? {}).length > 0;
     const bonusEnabled = uniqueBonusEnabledForActiveRound(sessionAfterJoin);
     if (hasWords && bonusEnabled) {
+      const playersForTotals = Object.fromEntries(
+        Object.entries(sessionAfterJoin.players).map(([playerId, player]) => [
+          playerId,
+          { ...player },
+        ]),
+      );
       recomputeSessionPlayerScores(
-        { ...sessionAfterJoin, wordPlayers: context.wordMaps.wordPlayers },
+        { players: playersForTotals, wordPlayers: context.wordMaps.wordPlayers },
         bonusEnabled,
       );
-      patch.players = sessionAfterJoin.players;
+      // Leaf score/wordCount only — a full `players` rewrite fails rules (peers' `online`)
+      // and used to abort liveRoundPlayerUids + x2 latch in the same atomic update.
+      Object.assign(patch, buildPlayerTotalsUpdatePatch(playersForTotals, session.players ?? {}));
     }
   }
 
@@ -739,36 +742,18 @@ export async function syncSessionPlayerScores(
     return;
   }
   const uniqueBonusEnabled = resolveGameSessionSettingsForSession(session).uniqueBonusEnabled;
+  const players = Object.fromEntries(
+    Object.entries(session.players).map(([playerId, player]) => [playerId, { ...player }]),
+  );
+  recomputeSessionPlayerScores({ players, wordPlayers: maps.wordPlayers }, uniqueBonusEnabled);
+  const patch = buildPlayerTotalsUpdatePatch(players, session.players);
+  if (Object.keys(patch).length === 0) {
+    return;
+  }
 
   try {
-    await runRtdbTransaction(playersRef(normalized), (current) => {
-      if (current == null || typeof current !== 'object') {
-        return undefined;
-      }
-
-      const players = Object.fromEntries(
-        Object.entries(current as GameSession['players']).map(([playerId, player]) => [
-          playerId,
-          { ...player },
-        ]),
-      );
-      recomputeSessionPlayerScores({ players, wordPlayers: maps.wordPlayers }, uniqueBonusEnabled);
-
-      let changed = false;
-      for (const [playerId, player] of Object.entries(players)) {
-        const stored = (current as GameSession['players'])[playerId];
-        if (stored?.score !== player.score || stored?.wordCount !== player.wordCount) {
-          changed = true;
-          break;
-        }
-      }
-
-      if (!changed) {
-        return undefined;
-      }
-
-      return players;
-    });
+    // Leaf updates avoid transactions on the whole `players` map (maxretry vs presence/score races).
+    await update(sessionRef(normalized), patch);
   } catch (error) {
     if (__DEV__) {
       console.warn('syncSessionPlayerScores', error);

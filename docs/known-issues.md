@@ -8,6 +8,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — Blank screen when opening menu during resume vote
+
+- **Symptom:** On pause, after a peer proposed «продовжити», pressing the hamburger menu showed a blank white screen (neither pause nor menu).
+- **Cause:** `showGameMenu` hid `PauseRoundModal` via `pauseUiObscured`, while `gameMenuBlockedByVote` also prevented `GameMenuModal` from rendering when `resumeVote` was active.
+- **Fix:** Gate pause obscuring on menu actually being allowed; hide hamburger / no-op open while votes block the menu (`isGameMenuBlockedByVote` / `isPauseUiObscuredByOverlays`).
+- **Test:** `tests/play-menu-gates.test.ts`
+- **Area:** `lib/online/play-menu-gates.ts`, `app/online/play/[gameId].tsx`, `components/PauseRoundModal.tsx`
+
 ### 2026-07 — Stale 4-char / abandoned rooms never purged
 
 - **Symptom:** Old `waiting`/`playing` rooms (often 4-character codes) lingered forever under `game_sessions`, `player_words`, and `session_word_maps`.
@@ -96,6 +104,22 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 - **Test:** `tests/organizer-solo-add-time.test.ts`, `tests/add-time-vote.test.ts`, `tests/game-session-service.test.ts`
 - **Area:** `components/online/PlayTimerHeader.tsx`, `app/online/solo/[gameId].tsx`, `store/organizer-solo-store.ts`, `app/online/play/[gameId].tsx`, `lib/online/voting/add-time-vote.ts`
 
+### 2026-07 — Rematch starter stuck in solo UI after mid-round joins
+
+- **Symptom:** Player who started a rematch round alone (then peers joined mid-round via invite) kept solo play UI: no rank/points chip peers, no overlap avatars, no standings «Рейтинг», votes applied without consensus. Joiners still saw multipplayer UI. RTDB could keep `settings.uniqueBonusEnabled: false` despite 3 live players; logs showed `syncSessionPlayerScores [Error: maxretry]`.
+- **Cause:** Mid-round join metadata update bundled a full `players` object rewrite (score recompute on x2 latch) with `liveRoundPlayerUids` + settings latch. Writing peers' `online`/`hasLeft` fails RTDB rules → whole atomic `update` aborted (often swallowed as permission-denied «ok»). Starter’s `liveRoundPlayerUids` stayed solo → `hasMultiplayerRound` / vote eligibility ignored joiners. Score sync used a whole-`players` transaction that lost to presence/score races (`maxretry`).
+- **Fix:** Join/sync write only `players/{uid}/score|wordCount` leaves; keep `liveRoundPlayerUids` + x2 latch in the same successful update. `hasMultiplayerRound` also treats online roster peers as multipplayer when live-uid list lags.
+- **Test:** `tests/join-mid-round-live-roster.test.ts`, `tests/live-round-membership.test.ts`, `tests/scoring.test.ts`
+- **Area:** `lib/firebase/game-session-service.ts`, `lib/game/scoring.ts`, `lib/online/presence/live-round-membership.ts`
+
+### 2026-07 — Online freeze after last-second add-time propose fails
+
+- **Symptom:** Player submits «Додати час» on the final second; picker closes, no vote reaches peers. Others see «Гру завершено», proposer stays on interactive-looking play UI at `00:00` with no taps responding (force-quit needed).
+- **Cause:** (1) `AddTimeModal` closed before `proposeAddTime` settled, ending local finish defer while the write could still no-op (`requirePlaying` after peers already finished). (2) Online lacked solo’s cancel-at-zero finish path and could stack / ghost `GameTimeUpModal` under the picker (`timeUpModalVisible === roundEnded` while `showAddTimeModal` still true).
+- **Fix:** Await propose before close; `proposeAddTime` returns committed; on failed propose / cancel with expired timer use `resolveAddTimePickerDismissAction` → local `roundOverPendingResults` + `finishGameSessionIfExpired`; `shouldShowTimeUpModal` requires picker closed.
+- **Test:** `tests/add-time-vote.test.ts`, `tests/session-votes-service.test.ts`
+- **Area:** `components/AddTimeModal.tsx`, `app/online/play/[gameId].tsx`, `lib/online/voting/add-time-vote.ts`, `lib/firebase/session-votes-service.ts`
+
 ### 2026-07 — Letter fly animation degrades with large accepted-word lists
 
 - **Symptom:** After ~60 accepted words, the ghost letter fly-to-draft animation became nearly invisible on Android (and faster on iOS). Worsened with more words.
@@ -103,6 +127,38 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 - **Fix:** Memoized `DraftLetterFlyOverlay` with animation stop/generation guard; prefix-aware row memo; debounced non-animated prefix scroll; pruned entrance set after row animation; Android FlatList tuning (`removeClippedSubviews`, smaller window).
 - **Test:** `tests/word-list-row-memo.test.ts`, `tests/word-list-entrance.test.ts`
 - **Area:** `components/online/OnlinePlayComposePanel.tsx`, `components/WordList.tsx`, `hooks/useVirtualWordListProps.ts`
+
+### 2026-07 — Fabric crash unmounting x2 badge after word accept
+
+- **Symptom:** iOS crash `NSInternalInconsistencyException: Attempt to unmount a view which has a different index` right after accepting a unique (x2) word; stack points at `RCTParagraphComponentView` with `x2` text.
+- **Cause:** `WordListRow` conditionally mounted/unmounted prefix overlays, word `Text` variants, x2 badge, and overlap avatars. Clearing the draft (prefix flush) at the same time as list insert/entrance shifted native child indices while Fabric tried to unmount the badge.
+- **Fix:** Always render fixed child slots in the row (hide unused via opacity/width); keep badge `Animated.Text` mounted.
+- **Test:** `tests/word-list-row-slots.test.ts`
+- **Area:** `components/WordList.tsx`, `lib/ui/word-list-row-slots.ts`
+
+### 2026-07 — Compose validation never re-ran after lexicon/dictionary ready
+
+- **Symptom:** Training/solo stopped accepting real words (e.g. «СУП») and showed no «немає в словнику» feedback; draft sat unchanged.
+- **Cause:** An interim compose-draft hook revalidated only on `draft` changes (missed lexicon readiness). Restored play/solo validate effect depends on `submitDraft` again so readiness updates re-check. Solo must allow lexicon-only validation after `releaseDictionaryAfterBuild`.
+- **Fix:** Keep parent debounce deps that include `submitDraft`; solo `acceptWord` uses round lexicon without requiring the full dictionary object in memory.
+- **Test:** Manual — type a known word after lexicon finishes loading in training.
+- **Area:** `app/online/solo/[gameId].tsx`, `app/online/play/[gameId].tsx`
+
+### 2026-07 — Draft hangs on iOS after input-lag “optimizations” (regression)
+
+- **Symptom:** On iOS (sim + device), mid-word draft paints hung for seconds (e.g. «ЛЕЛЕ» last letter delayed; «АК» after «Р» while a yield toast was up; clear-draft delayed 1–2s). Often correlated with toasts but also happened with no toast. Did not exist on iOS before the uncommitted lag work; Android training 100+ words was the original issue.
+- **Cause:** Speculative fixes (`useDeferredValue` / `startTransition`, compose island + contention freeze, live prefix thrash mitigations, pressIn letter apply) fought RN/iOS scheduling and introduced priority inversion / extra keystroke work. Toasts were a coincidence (same JS-thread backlog), not the root.
+- **Fix:** Revert online play compose/toast architecture to the pre-experiment path. Keep only: memoized solo `entries`/`displays` (`buildSoloWordListDisplay`) for Android training, and WordList Fabric stable row slots.
+- **Test:** `tests/solo-word-list-display.test.ts`, `tests/word-list-row-slots.test.ts`
+- **Area:** `app/online/solo/[gameId].tsx`, `lib/game/solo-word-list-display.ts`, `components/WordList.tsx`
+
+### 2026-07 — Draft typing janks with large word lists (training)
+
+- **Symptom:** On Android training, letter taps from the base-word keyboard got progressively slower after ~100 accepted words, even with animations off. An interim `useDeferredValue(draft)` fix made iOS much worse (letters hung 2–3s before appearing in the draft).
+- **Cause:** Solo rebuilt `entries`/`displays` on every render (`getScoredWords()` / `words.map`), so FlatList + row work ran on every keystroke as the list grew.
+- **Fix:** Memoize solo list props on `words` via `buildSoloWordListDisplay`. Do **not** use `useDeferredValue` for draft on RN/iOS.
+- **Test:** `tests/solo-word-list-display.test.ts`
+- **Area:** `app/online/solo/[gameId].tsx`, `lib/game/solo-word-list-display.ts`
 
 ### 2026-07 — Draft letter fly-to-draft animation (compose panel)
 

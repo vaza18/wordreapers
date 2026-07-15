@@ -27,11 +27,6 @@ export function ukPluralForm(count: number): UkPluralForm {
   return 'many';
 }
 
-/** Join a count with its unit using a non-breaking space. */
-export function joinCountUnit(count: number | string, unit: string): string {
-  return `${count}${NBSP}${unit}`;
-}
-
 function tPlural(baseKey: string, count: number): string {
   const raw = i18n.t(`${baseKey}_${ukPluralForm(count)}`, { count });
   // Templates use a normal space; normalize so RN Text won't split «144 слова».

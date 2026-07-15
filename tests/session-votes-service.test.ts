@@ -202,10 +202,28 @@ describe('session-votes-service', () => {
     const endsAt = session.timerEndsAt!;
     installSession(session);
 
-    await proposeAddTime('ABCDE', 'org', 2);
+    await expect(proposeAddTime('ABCDE', 'org', 2)).resolves.toBe(true);
 
     expect(session.timerEndsAt).toBe(endsAt + 2 * 60_000);
     expect(session.addTimeVote).toBeNull();
+  });
+
+  it('returns false when proposing add-time after the round already finished', async () => {
+    const session = playingSession(
+      {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        guest: { name: 'Guest', wordCount: 0, score: 0, online: true },
+      },
+      {
+        status: 'finished',
+        timerEndsAt: null,
+        finishedAt: SERVER_NOW,
+      },
+    );
+    installSession(session);
+
+    await expect(proposeAddTime('ABCDE', 'org', 2)).resolves.toBe(false);
+    expect(session.addTimeVote).toBeUndefined();
   });
 
   it('extends timer when all opponents agree to add time', async () => {

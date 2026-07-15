@@ -33,8 +33,10 @@ vi.mock('../lib/firebase/rtdb-errors.js', () => ({
   isFirebaseIgnorableRtdbError: vi.fn().mockReturnValue(false),
 }));
 
+const fetchSessionWordMapsMock = vi.fn().mockResolvedValue({ wordPlayers: {} });
+
 vi.mock('../lib/firebase/session-word-maps-service.js', () => ({
-  fetchSessionWordMaps: vi.fn().mockResolvedValue({ wordPlayers: {} }),
+  fetchSessionWordMaps: (...args: unknown[]) => fetchSessionWordMapsMock(...args),
 }));
 
 vi.mock('../lib/firebase/public-lobby-service.js', async (importOriginal) => {
@@ -82,6 +84,8 @@ describe('joinGameSession mid-round live roster', () => {
     getMock.mockReset();
     updateMock.mockReset();
     updateMock.mockResolvedValue(undefined);
+    fetchSessionWordMapsMock.mockReset();
+    fetchSessionWordMapsMock.mockResolvedValue({ wordPlayers: {} });
   });
 
   it('appends joiner to liveRoundPlayerUids when joining round 2+', async () => {
@@ -123,5 +127,62 @@ describe('joinGameSession mid-round live roster', () => {
       pathname: '/online/play/[gameId]',
       params: { gameId: 'ABCDE' },
     });
+  });
+
+  it('latches x2 and appends liveRoundPlayerUids without rewriting whole players map', async () => {
+    const playing: GameSession = {
+      ...roundTwoPlayingSession(),
+      settings: {
+        ...roundTwoPlayingSession().settings,
+        uniqueBonusMode: 'auto',
+        uniqueBonusEnabled: false,
+      },
+      liveRoundPlayerUids: ['org', 'p2'],
+      players: {
+        org: { name: 'Org', wordCount: 1, score: 1, online: true },
+        p2: { name: 'Two', wordCount: 1, score: 1, online: true },
+      },
+    };
+    fetchSessionWordMapsMock.mockResolvedValue({
+      wordPlayers: { порт: { org: true }, тор: { p2: true } },
+    });
+
+    const joined = {
+      ...playing,
+      players: {
+        ...playing.players,
+        joiner: { name: 'New', wordCount: 0, score: 0, online: true, avatarColorIndex: 1 },
+      },
+      baseWordPickerOrder: ['org', 'p2', 'joiner'],
+      liveRoundPlayerUids: ['org', 'p2', 'joiner'],
+      settings: { ...playing.settings, uniqueBonusEnabled: true },
+    };
+
+    getMock
+      .mockResolvedValueOnce({ exists: () => true, val: () => playing })
+      .mockResolvedValueOnce({ exists: () => true, val: () => playing })
+      .mockResolvedValueOnce({ exists: () => true, val: () => playing })
+      .mockResolvedValueOnce({ exists: () => true, val: () => joined });
+
+    await joinGameSession('ABCDE', {
+      name: 'New',
+      gender: 'm',
+      avatarColorIndex: 1,
+    });
+
+    const sessionUpdate = updateMock.mock.calls.find(
+      ([, payload]) =>
+        payload &&
+        typeof payload === 'object' &&
+        'liveRoundPlayerUids' in payload &&
+        Array.isArray((payload as { liveRoundPlayerUids: string[] }).liveRoundPlayerUids),
+    );
+    expect(sessionUpdate?.[1]).toMatchObject({
+      liveRoundPlayerUids: ['org', 'p2', 'joiner'],
+      settings: expect.objectContaining({ uniqueBonusEnabled: true }),
+      'players/org/score': expect.any(Number),
+      'players/p2/score': expect.any(Number),
+    });
+    expect(sessionUpdate?.[1]).not.toHaveProperty('players');
   });
 });

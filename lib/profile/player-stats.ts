@@ -44,13 +44,6 @@ export const DEFAULT_SPLIT_PLAYER_STATS: SplitPlayerStats = {
   training: { ...DEFAULT_TRAINING_STATS },
 };
 
-/** @deprecated Prefer SplitPlayerStats for local UI; kept for cloud increments. */
-export const DEFAULT_PLAYER_STATS: PlayerStats = {
-  gamesPlayed: 0,
-  gamesWon: 0,
-  wordsCollected: 0,
-};
-
 /**
  * Case-insensitive name match for attributing local games to the profile player.
  */

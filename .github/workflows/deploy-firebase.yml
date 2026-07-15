@@ -1,0 +1,260 @@
+name: Deploy Firebase backend
+
+# Manual hotfix and reusable gate for release-stores. Never on push to main/dev.
+# See docs/firebase-deploy-ci.md
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'auto/both = selective from diff; force+auto/both = redeploy BOTH sides (for one-sided repair use force+rules or force+functions)'
+        required: true
+        default: auto
+        type: choice
+        options:
+          - auto
+          - rules
+          - functions
+          - both
+      force:
+        description: 'Redeploy even if diff empty. With auto/both → always rules+functions. One-sided repair → force + rules|functions.'
+        required: false
+        default: false
+        type: boolean
+      checkout_ref:
+        description: 'Git ref to deploy (empty = branch selected for this run)'
+        required: false
+        default: ''
+        type: string
+      version_tag:
+        description: 'Optional vX.Y.Z for previous-tag detection (empty = infer)'
+        required: false
+        default: ''
+        type: string
+  workflow_call:
+    inputs:
+      checkout_ref:
+        description: Git ref / tag tip to deploy
+        required: true
+        type: string
+      version_tag:
+        description: Current release tag vX.Y.Z when known
+        required: false
+        type: string
+        default: ''
+      target:
+        description: auto | rules | functions | both
+        required: false
+        type: string
+        default: auto
+      force:
+        description: Deploy even when diff is empty
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      # Keep callers on `secrets: inherit` (see release-stores.yml). Do not remove inherit:
+      # for reusable workflows it is required for environment secrets to resolve; without it
+      # they can become empty strings even when the nested job uses `environment: release`.
+      # Missing values still fail closed in "Require Firebase deploy credentials" before npm ci.
+      EXPO_PUBLIC_FIREBASE_PROJECT_ID:
+        required: false
+      FIREBASE_SERVICE_ACCOUNT_JSON:
+        required: false
+
+concurrency:
+  # One deploy at a time to the production Firebase project (not per-git-ref).
+  group: deploy-firebase-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 45
+    env:
+      EXPO_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.EXPO_PUBLIC_FIREBASE_PROJECT_ID }}
+    steps:
+      - name: Resolve checkout ref and inputs
+        id: refs
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_CHECKOUT_REF: ${{ inputs.checkout_ref }}
+          INPUT_VERSION_TAG: ${{ inputs.version_tag }}
+          INPUT_TARGET: ${{ inputs.target }}
+          INPUT_FORCE: ${{ inputs.force }}
+          GITHUB_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+
+          # Fail closed on newlines / CR (would corrupt GITHUB_OUTPUT or shell).
+          reject_control() {
+            local name="$1" value="$2"
+            if [[ "$value" == *$'\n'* || "$value" == *$'\r'* ]]; then
+              echo "Invalid $name: contains a newline" >&2
+              exit 1
+            fi
+          }
+
+          CHECKOUT_REF="${INPUT_CHECKOUT_REF:-}"
+          if [[ -z "$CHECKOUT_REF" ]]; then
+            CHECKOUT_REF="$GITHUB_REF"
+          fi
+          reject_control checkout_ref "$CHECKOUT_REF"
+          # Branch / tag / SHA-like refs only (no spaces or shell metacharacters).
+          if [[ ! "$CHECKOUT_REF" =~ ^[A-Za-z0-9._/^{}-]+$ ]]; then
+            echo "Invalid checkout_ref (allowed: letters, digits, . _ / - ^ {}): $CHECKOUT_REF" >&2
+            exit 1
+          fi
+
+          VERSION_TAG="${INPUT_VERSION_TAG:-}"
+          reject_control version_tag "$VERSION_TAG"
+          if [[ -z "$VERSION_TAG" && "$CHECKOUT_REF" =~ ^refs/tags/(v[0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            VERSION_TAG="${BASH_REMATCH[1]}"
+          elif [[ -z "$VERSION_TAG" && "$CHECKOUT_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            VERSION_TAG="$CHECKOUT_REF"
+          fi
+          if [[ -n "$VERSION_TAG" && ! "$VERSION_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid version_tag (expected vX.Y.Z or empty): $VERSION_TAG" >&2
+            exit 1
+          fi
+
+          TARGET="$(printf '%s' "${INPUT_TARGET:-auto}" | tr '[:upper:]' '[:lower:]')"
+          reject_control target "$TARGET"
+          case "$TARGET" in
+            auto | rules | functions | both) ;;
+            *)
+              echo "Invalid target (expected auto|rules|functions|both): $TARGET" >&2
+              exit 1
+              ;;
+          esac
+
+          FORCE_LC="$(printf '%s' "${INPUT_FORCE:-false}" | tr '[:upper:]' '[:lower:]')"
+          if [[ "$FORCE_LC" == "true" ]]; then
+            FORCE=true
+          else
+            FORCE=false
+          fi
+
+          {
+            echo "checkout_ref=${CHECKOUT_REF}"
+            echo "version_tag=${VERSION_TAG}"
+            echo "target=${TARGET}"
+            echo "force=${FORCE}"
+          } >>"$GITHUB_OUTPUT"
+          echo "Resolved checkout_ref=$CHECKOUT_REF version_tag=${VERSION_TAG:-none} target=$TARGET force=$FORCE event=$EVENT_NAME"
+
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ steps.refs.outputs.checkout_ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Detect backend changes
+        id: detect
+        env:
+          DETECT_VERSION_TAG: ${{ steps.refs.outputs.version_tag }}
+          DETECT_TARGET: ${{ steps.refs.outputs.target }}
+          DETECT_FORCE: ${{ steps.refs.outputs.force }}
+        run: |
+          set -euo pipefail
+          ARGS=(--current-ref HEAD --target "$DETECT_TARGET" --force "$DETECT_FORCE")
+          if [[ -n "${DETECT_VERSION_TAG}" ]]; then
+            ARGS+=(--version-tag "$DETECT_VERSION_TAG")
+          fi
+          bash scripts/ci/detect-firebase-backend-changes.sh "${ARGS[@]}"
+
+      - name: Assert detect outputs
+        env:
+          DEPLOY_RULES: ${{ steps.detect.outputs.deploy_rules }}
+          DEPLOY_FUNCTIONS: ${{ steps.detect.outputs.deploy_functions }}
+          PREVIOUS_TAG: ${{ steps.detect.outputs.previous_tag }}
+        run: |
+          set -euo pipefail
+          case "${DEPLOY_RULES}" in
+            true | false) ;;
+            *)
+              echo "detect step missing deploy_rules output (got: '${DEPLOY_RULES}')" >&2
+              exit 1
+              ;;
+          esac
+          case "${DEPLOY_FUNCTIONS}" in
+            true | false) ;;
+            *)
+              echo "detect step missing deploy_functions output (got: '${DEPLOY_FUNCTIONS}')" >&2
+              exit 1
+              ;;
+          esac
+          echo "Detect summary: deploy_rules=${DEPLOY_RULES} deploy_functions=${DEPLOY_FUNCTIONS} previous_tag=${PREVIOUS_TAG:-none}"
+
+      - name: No-op when unchanged
+        if: steps.detect.outputs.deploy_rules == 'false' && steps.detect.outputs.deploy_functions == 'false'
+        run: |
+          echo "No Firebase backend changes since previous v* tag (or target filtered to empty)."
+          echo "Succeeding as no-op so dependent store jobs can proceed."
+
+      - name: Require Firebase deploy credentials
+        if: steps.detect.outputs.deploy_rules == 'true' || steps.detect.outputs.deploy_functions == 'true'
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${EXPO_PUBLIC_FIREBASE_PROJECT_ID:-}" ]]; then
+            echo "Missing EXPO_PUBLIC_FIREBASE_PROJECT_ID (environment release)." >&2
+            exit 1
+          fi
+          if [[ -z "${FIREBASE_SERVICE_ACCOUNT_JSON:-}" ]]; then
+            echo "Missing FIREBASE_SERVICE_ACCOUNT_JSON (environment release)." >&2
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v5
+        if: steps.detect.outputs.deploy_rules == 'true' || steps.detect.outputs.deploy_functions == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      # package-lock.json is built with npm 11; Node 22 images ship npm 10 and `npm ci` fails.
+      - name: Use npm 11
+        if: steps.detect.outputs.deploy_rules == 'true' || steps.detect.outputs.deploy_functions == 'true'
+        run: npm install -g npm@11.6.2
+
+      - uses: actions/cache@v5
+        if: steps.detect.outputs.deploy_rules == 'true' || steps.detect.outputs.deploy_functions == 'true'
+        with:
+          path: .data/vesum
+          key: vesum-${{ runner.os }}-${{ hashFiles('scripts/dictionary/fetch-vesum.ts', 'scripts/dictionary/build-dictionary.ts') }}
+          restore-keys: |
+            vesum-${{ runner.os }}-
+
+      - name: Install root dependencies
+        if: steps.detect.outputs.deploy_rules == 'true' || steps.detect.outputs.deploy_functions == 'true'
+        run: npm ci
+
+      - name: Validate RTDB rules
+        if: steps.detect.outputs.deploy_rules == 'true'
+        run: npm run test:rules
+
+      - name: Install Cloud Functions dependencies
+        if: steps.detect.outputs.deploy_functions == 'true'
+        run: npm ci --prefix functions
+
+      - name: Typecheck (includes functions/src)
+        if: steps.detect.outputs.deploy_functions == 'true'
+        run: npm run typecheck
+
+      # Intentional gate before credentials-heavy deploy; firebase.json predeploy builds again.
+      - name: Build Cloud Functions
+        if: steps.detect.outputs.deploy_functions == 'true'
+        run: npm --prefix functions run build
+
+      - name: Deploy Firebase backend
+        if: steps.detect.outputs.deploy_rules == 'true' || steps.detect.outputs.deploy_functions == 'true'
+        env:
+          DEPLOY_RULES: ${{ steps.detect.outputs.deploy_rules }}
+          DEPLOY_FUNCTIONS: ${{ steps.detect.outputs.deploy_functions }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: bash scripts/ci/firebase-deploy-ci.sh

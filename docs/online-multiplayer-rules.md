@@ -55,11 +55,12 @@ stateDiagram-v2
 
 ## 3. Лобі rematch (раунд 2+)
 
-| Правило                | Деталі                                                                                                                                                                                                                                                                                     |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Видимість у списку** | У `waiting` з `baseWordRound > 0` у списку гравців показуються **лише** `online: true` (opt-in).                                                                                                                                                                                           |
-| **Лічильник гравців**  | Відповідає видимому списку, не всьому roster.                                                                                                                                                                                                                                              |
-| **Старт раунду**       | `startGameSession` скидає `score`/`wordCount`: у лобі (`online: true`) — повний reset + `hasLeft: false`; у offline **opt-in** (`resultsExitedBy[uid]`) — те саме; інші offline — `online: false` + очищення лічильників. Записує `liveRoundPlayerUids` = uids з `online: true` у waiting. |
+| Правило                  | Деталі                                                                                                                                                                                                                                                                                     |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Видимість у списку**   | У `waiting` з `baseWordRound > 0` у списку гравців показуються **лише** `online: true` (opt-in).                                                                                                                                                                                           |
+| **Лічильник гравців**    | Відповідає видимому списку, не всьому roster.                                                                                                                                                                                                                                              |
+| **Старт раунду**         | `startGameSession` скидає `score`/`wordCount`: у лобі (`online: true`) — повний reset + `hasLeft: false`; у offline **opt-in** (`resultsExitedBy[uid]`) — те саме; інші offline — `online: false` + очищення лічильників. Записує `liveRoundPlayerUids` = uids з `online: true` у waiting. |
+| **Mid-round join patch** | Після `players/{uid}` — `liveRoundPlayerUids` append + auto x2 latch; рекомпут score лише leaf-ами `players/{uid}/score\|wordCount` (не rewrite всього `players` — інакше rules на `online` peers валить атомарний update і стартер лишається «соло»).                                     |
 
 ---
 
@@ -123,7 +124,7 @@ isActiveLivePlayer(session, uid) :=
 
 **Presence → reconcile vote:** коли required voter стає `online: false` (background або leave), клієнти викликають `reconcileOpenSessionVotes` — відкритий vote застосовується, якщо required-множина порожня або всі «так» (pause / early-finish / add-time / resume).
 
-**Додатковий час — локальний пікер vs голосування:** локальна `AddTimeModal` (вибір хвилин до `proposeAddTime`) дефермить finish **лише на цьому клієнті**. Стійкий defer між пристроями — лише RTDB `addTimeVote` (`finishGameSessionIfExpired` не комітить, поки vote живий). Поки пікер відкритий без vote, інший клієнт усе ще може завершити раунд по таймеру.
+**Додатковий час — локальний пікер vs голосування:** локальна `AddTimeModal` (вибір хвилин до `proposeAddTime`) дефермить finish **лише на цьому клієнті** (пікер лишається відкритим до settle `proposeAddTime`). Стійкий defer між пристроями — лише RTDB `addTimeVote` (`finishGameSessionIfExpired` не комітить, поки vote живий). Поки пікер відкритий без vote, інший клієнт усе ще може завершити раунд по таймеру. Якщо propose no-op (раунд уже `finished`) або пікер закрито після `00:00` без vote — клієнт показує «Гру завершено» (`resolveAddTimePickerDismissAction` / `shouldShowTimeUpModal`), без зависання play UI.
 
 ---
 

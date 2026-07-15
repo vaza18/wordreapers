@@ -13,7 +13,8 @@ import { ADD_TIME_MINUTE_OPTIONS } from '@/lib/online/voting/add-time-vote';
 interface AddTimeModalProps {
   visible: boolean;
   onClose: () => void;
-  onSelect: (minutes: number) => void;
+  /** May be async — modal stays open until settle, then closes. */
+  onSelect: (minutes: number) => void | Promise<void>;
   remainingMs: number;
   requiresConsensus: boolean;
 }
@@ -101,8 +102,10 @@ export function AddTimeModal({
           if (selectedMinutes == null) {
             return;
           }
-          onSelect(selectedMinutes);
-          onClose();
+          // Await propose before close so online finish defer lasts until vote write (or fail).
+          void Promise.resolve(onSelect(selectedMinutes)).finally(() => {
+            onClose();
+          });
         }}
       />
       <PrimaryButton label={t('common.cancel')} variant="secondary" onPress={onClose} />

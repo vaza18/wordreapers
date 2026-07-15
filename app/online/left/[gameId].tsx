@@ -492,6 +492,7 @@ export default function OnlineLeftRoundScreen() {
       <Stack.Screen options={screenOptions} />
       <RoundResultsView
         baseWordDisplay={viewData.baseWordDisplay}
+        showBaseWordInMeta
         totalDistinctWords={viewData.totalDistinctWords}
         maxPlayableWords={roundLexicon?.maxCount ?? null}
         roundLexicon={roundLexicon}
