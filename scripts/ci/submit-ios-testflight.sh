@@ -63,6 +63,6 @@ if [[ -n "${ASC_APP_ID:-}" ]]; then
 fi
 
 echo "Uploading $IPA_PATH → TestFlight (bundle=$BUNDLE_ID)…"
-bundle exec fastlane pilot "${PILOT_ARGS[@]}"
+fastlane pilot "${PILOT_ARGS[@]}"
 
 echo "TestFlight upload finished (processing may continue on Apple's side)."

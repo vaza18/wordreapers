@@ -8,6 +8,11 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 <!-- Add dated notes at the top -->
 
+### 2026-07-15 — Release CI: `Could not find command "_2.6.9_"`
+
+- After `vendor/bin` on PATH, a shell `bundle(){ bundle _2.6.9_ "$@"; }` hit a vendored `bundle` stub → `_2.6.9_` treated as a subcommand. Fix: absolute Bundler binary + invoke `fastlane` from PATH (not `bundle exec`).
+- Also: bundletool download progress must go to stderr or it pollutes Play `--version_name`.
+
 ### 2026-07-15 — Release CI: iOS `spawn fastlane ENOENT`
 
 - Local `eas build --platform ios` needs `fastlane` on PATH during the native build, not only for TestFlight upload. Install + binstubs via `ensure-fastlane.sh` before `eas build`.

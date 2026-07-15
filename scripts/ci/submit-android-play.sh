@@ -35,7 +35,7 @@ resolve_play_release_name() {
   local jar="$jar_dir/bundletool-all-${BUNDLETOOL_VERSION}.jar"
   mkdir -p "$jar_dir"
   if [[ ! -f "$jar" ]]; then
-    echo "Downloading bundletool ${BUNDLETOOL_VERSION}…"
+    echo "Downloading bundletool ${BUNDLETOOL_VERSION}…" >&2
     curl -fsSL -o "$jar" \
       "https://github.com/google/bundletool/releases/download/${BUNDLETOOL_VERSION}/bundletool-all-${BUNDLETOOL_VERSION}.jar"
   fi
@@ -61,7 +61,7 @@ source "$ROOT/scripts/ci/ensure-fastlane.sh"
 
 echo "Uploading $AAB_PATH → Play track=$TRACK status=$RELEASE_STATUS package=$PACKAGE_NAME release_name=$RELEASE_NAME"
 # supply --version_name sets the Google Play release *name* (not only Android versionName).
-bundle exec fastlane supply \
+fastlane supply \
   --aab "$AAB_PATH" \
   --json_key "$JSON_KEY" \
   --package_name "$PACKAGE_NAME" \
