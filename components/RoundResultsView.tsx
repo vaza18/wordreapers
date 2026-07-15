@@ -107,7 +107,7 @@ export interface RoundResultsViewProps {
   showScores?: boolean;
   showWordAuthors?: boolean;
   roundDurationSeconds?: number;
-  /** When true, «Показати незнайдені слова» is visible but not interactive (e.g. early exit while round plays). */
+  /** When true, «Показати всі можливі слова» is visible but not interactive (e.g. early exit while round plays). */
   missingWordsToggleDisabled?: boolean;
   /**
    * Override the victory-confetti trigger. When omitted, confetti shows if the

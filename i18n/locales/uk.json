@@ -326,7 +326,7 @@
     "resultsBaseWordMeta": "Базове слово: {{word}} • {{wordsLabel}}",
     "resultsBaseWordMetaWithMax": "Базове слово: {{word}} • {{count}} з {{max}} {{wordsLabel}}",
     "resultsWordsMetaWithMax": "{{count}} з {{max}} {{wordsLabel}}",
-    "showMissingWords": "Показати незнайдені слова",
+    "showMissingWords": "Показати всі можливі слова",
     "showMissingWordsAfterRound": "Ця опція зʼявиться після завершення раунду",
     "openDefinitionA11y": "Відкрити тлумачення слова {{word}}",
     "playableWordsLoading": "Рахуємо слова…",
