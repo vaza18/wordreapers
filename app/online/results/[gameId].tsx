@@ -374,7 +374,6 @@ export default function OnlineResultsScreen() {
         playerRankGroups={viewData.playerRankGroups}
         highlightPlayerId={myUid}
         defaultExpandedPlayerId={myUid}
-        showBaseWordInMeta={false}
         showScores={viewData.uniqueBonusEnabled}
         showWordAuthors={!viewData.isSolo}
         allowProperNouns={viewData.allowProperNouns}

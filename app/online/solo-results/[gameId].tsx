@@ -364,7 +364,6 @@ export default function OrganizerSoloResultsScreen() {
         winnerOverride={showUnlockModal}
         showScores={false}
         showWordAuthors={false}
-        showBaseWordInMeta={false}
         showTabs={false}
         wordsPerMinuteInMeta={viewData.wordsPerMinute}
         allowProperNouns={setup.allowProperNouns}

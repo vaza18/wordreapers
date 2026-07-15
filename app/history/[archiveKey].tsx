@@ -155,7 +155,6 @@ export default function ArchivedRoundResultsScreen() {
         playerRankGroups={viewData.playerRankGroups}
         highlightPlayerId={highlightPlayerId}
         defaultExpandedPlayerId={highlightPlayerId}
-        showBaseWordInMeta={false}
         showScores={viewData.isSolo ? false : viewData.uniqueBonusEnabled}
         showWordAuthors={!viewData.isSolo}
         showTabs={!viewData.isSolo}

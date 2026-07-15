@@ -37,11 +37,14 @@ import type { RoundPlayableLexicon } from '@/lib/dictionary/round-playable-lexic
 import type { GlobalResultWordRow, PlayerResultRankGroup } from '@/lib/game/results-view';
 import { isViewerWinner } from '@/lib/game/is-viewer-winner';
 import { buildResultsWordList } from '@/lib/game/results-missing-words';
+import {
+  formatResultsSharedMetaLabel,
+  formatResultsVisibleWordsCaption,
+} from '@/lib/game/results-meta-labels';
 import { formatRoundDuration } from '@/lib/game/round-duration';
 import { resolveRoundSuccessLevel } from '@/lib/game/solo-round-success';
 import { formatSoloSuccessBadge } from '@/lib/game/solo-round-success-i18n';
 import { formatResultsLexiconOptionsSuffix } from '@/lib/online/play-rules-label';
-import { formatUkWords, ukWordForm } from '@/lib/i18n/uk-plural';
 import { dismissWordOverlapTooltips } from '@/lib/ui/word-overlap-tooltip';
 import { useResolvedVisualEffects } from '@/hooks/useResolvedVisualEffects';
 
@@ -96,7 +99,7 @@ export interface RoundResultsViewProps {
   highlightPlayerId: string;
   defaultExpandedPlayerId: string;
   footer?: ReactNode;
-  /** When base word is shown in the stack header, hide it from the meta line. */
+  /** When base word is shown in the stack header, hide it from the meta line (default). */
   showBaseWordInMeta?: boolean;
   /** Hide «Всі слова» / «По гравцях» tabs (solo training). */
   showTabs?: boolean;
@@ -137,7 +140,7 @@ export function RoundResultsView({
   highlightPlayerId,
   defaultExpandedPlayerId,
   footer,
-  showBaseWordInMeta = true,
+  showBaseWordInMeta = false,
   showTabs = true,
   wordsPerMinuteInMeta = null,
   allowProperNouns = false,
@@ -169,51 +172,41 @@ export function RoundResultsView({
   const panelScroll = useScrollablePanelMetrics();
   const roundDurationLabel =
     roundDurationSeconds != null ? formatRoundDuration(roundDurationSeconds) : null;
-  const wordsMetaLabel = useMemo(() => {
-    if (showBaseWordInMeta) {
-      return maxPlayableWords != null && maxPlayableWords > 0
-        ? t('game.resultsBaseWordMetaWithMax', {
-            word: baseWordDisplay,
-            count: totalDistinctWords,
-            max: maxPlayableWords,
-            wordsLabel: ukWordForm(totalDistinctWords),
-          })
-        : t('game.resultsBaseWordMeta', {
-            word: baseWordDisplay,
-            count: totalDistinctWords,
-            wordsLabel: formatUkWords(totalDistinctWords),
-          });
-    }
-    return maxPlayableWords != null && maxPlayableWords > 0
-      ? t('game.resultsWordsMetaWithMax', {
-          count: totalDistinctWords,
-          max: maxPlayableWords,
-          wordsLabel: ukWordForm(totalDistinctWords),
-        })
-      : formatUkWords(totalDistinctWords);
-  }, [baseWordDisplay, maxPlayableWords, showBaseWordInMeta, t, totalDistinctWords]);
-  const statsLabel = useMemo(() => {
-    const parts = [wordsMetaLabel];
-    if (wordsPerMinuteInMeta != null) {
-      parts.push(t('game.resultsWordsPerMinuteShort', { rate: wordsPerMinuteInMeta }));
-    }
-    if (roundDurationLabel) {
-      parts.push(t('game.resultsRoundDuration', { duration: roundDurationLabel }));
-    }
-    const lexiconSuffix = formatResultsLexiconOptionsSuffix(t, {
-      allowProperNouns,
-      allowSlang,
-    });
-    if (lexiconSuffix) {
-      parts.push(lexiconSuffix);
-    }
-    return parts.join(' · ');
-  }, [allowProperNouns, allowSlang, roundDurationLabel, t, wordsMetaLabel, wordsPerMinuteInMeta]);
   const activeTab: ResultsTab = showTabs ? tab : 'all';
   const canShowMissingToggle = Boolean(roundLexicon) && !lexiconLoading;
   const allWordRows = useMemo(
     () => buildResultsWordList(globalWords, roundLexicon, deferredShowMissingWords),
     [deferredShowMissingWords, globalWords, roundLexicon],
+  );
+  const sharedMetaLabel = useMemo(
+    () =>
+      formatResultsSharedMetaLabel(t, {
+        showBaseWordInMeta,
+        baseWordDisplay,
+        wordsPerMinute: wordsPerMinuteInMeta,
+        roundDurationLabel,
+        lexiconSuffix: formatResultsLexiconOptionsSuffix(t, {
+          allowProperNouns,
+          allowSlang,
+        }),
+      }),
+    [
+      allowProperNouns,
+      allowSlang,
+      baseWordDisplay,
+      roundDurationLabel,
+      showBaseWordInMeta,
+      t,
+      wordsPerMinuteInMeta,
+    ],
+  );
+  const visibleWordsCaption = useMemo(
+    () =>
+      formatResultsVisibleWordsCaption(t, {
+        visibleCount: allWordRows.length,
+        maxPlayableWords,
+      }),
+    [allWordRows.length, maxPlayableWords, t],
   );
   const viewportHeight = panelScroll.scrollMetrics.viewportHeight;
   const contentHeight = panelScroll.scrollMetrics.contentHeight;
@@ -271,7 +264,7 @@ export function RoundResultsView({
           ) : null}
           {headline ? <ResultsHeadline text={headline} motionEnabled={generalMotion} /> : null}
 
-          <Text style={styles.stats}>{statsLabel}</Text>
+          {sharedMetaLabel ? <Text style={styles.stats}>{sharedMetaLabel}</Text> : null}
 
           {showTabs ? (
             <View style={styles.tabs}>
@@ -356,16 +349,23 @@ export function RoundResultsView({
           </View>
         </ScrollableWordPanel>
 
-        {activeTab === 'all' && canShowMissingToggle ? (
+        {activeTab === 'all' && (visibleWordsCaption || canShowMissingToggle) ? (
           <View style={styles.missingWordsBar}>
-            <SettingSwitch
-              variant="compact"
-              label={t('game.showMissingWords')}
-              value={showMissingWords}
-              onChange={setShowMissingWords}
-              disabled={missingWordsToggleDisabled}
-              onDisabledPress={missingWordsToggleDisabled ? onMissingWordsDisabledPress : undefined}
-            />
+            {visibleWordsCaption ? (
+              <Text style={styles.visibleWordsCaption}>{visibleWordsCaption}</Text>
+            ) : null}
+            {canShowMissingToggle ? (
+              <SettingSwitch
+                variant="compact"
+                label={t('game.showMissingWords')}
+                value={showMissingWords}
+                onChange={setShowMissingWords}
+                disabled={missingWordsToggleDisabled}
+                onDisabledPress={
+                  missingWordsToggleDisabled ? onMissingWordsDisabledPress : undefined
+                }
+              />
+            ) : null}
           </View>
         ) : null}
 
@@ -465,6 +465,12 @@ function createStyles(colors: ThemeColors) {
       fontSize: 15,
       fontWeight: '600',
       color: colors.textPrimary,
+    },
+    visibleWordsCaption: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.textPrimary,
+      marginBottom: spacing.sm,
     },
     wordPanel: {
       marginHorizontal: spacing.md,
