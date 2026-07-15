@@ -26,6 +26,43 @@ export function shouldDeferClientTimerFinish(options: {
   return options.showAddTimeModal || shouldDeferTimerFinishForAddTimeVote(options.addTimeVote);
 }
 
+export type AddTimePickerDismissAction = 'none' | 'finish_round';
+
+/**
+ * After closing / failing to propose from the local minute picker: finish if the
+ * round timer already elapsed (or Firebase already marked finished) so the proposer
+ * is not left on a frozen play UI without «Гру завершено».
+ */
+export function resolveAddTimePickerDismissAction(options: {
+  sessionStatus: string | undefined;
+  timerEndsAt: number | null | undefined;
+  now: number;
+  /** Vote already written — durable defer; do not force local finish. */
+  addTimeVoteActive?: boolean;
+}): AddTimePickerDismissAction {
+  if (options.addTimeVoteActive) {
+    return 'none';
+  }
+  if (options.sessionStatus === 'finished') {
+    return 'finish_round';
+  }
+  if (options.sessionStatus !== 'playing') {
+    return 'none';
+  }
+  if (options.timerEndsAt != null && options.now >= options.timerEndsAt) {
+    return 'finish_round';
+  }
+  return 'none';
+}
+
+/** Avoid stacking GameTimeUpModal under the local add-time picker (iOS freeze). */
+export function shouldShowTimeUpModal(options: {
+  roundEnded: boolean;
+  showAddTimeModal: boolean;
+}): boolean {
+  return options.roundEnded && !options.showAddTimeModal;
+}
+
 export function shouldFinishRoundAfterTimerExpired(
   timerEndsAt: number | null,
   now: number,

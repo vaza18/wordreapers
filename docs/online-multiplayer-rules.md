@@ -124,7 +124,7 @@ isActiveLivePlayer(session, uid) :=
 
 **Presence → reconcile vote:** коли required voter стає `online: false` (background або leave), клієнти викликають `reconcileOpenSessionVotes` — відкритий vote застосовується, якщо required-множина порожня або всі «так» (pause / early-finish / add-time / resume).
 
-**Додатковий час — локальний пікер vs голосування:** локальна `AddTimeModal` (вибір хвилин до `proposeAddTime`) дефермить finish **лише на цьому клієнті**. Стійкий defer між пристроями — лише RTDB `addTimeVote` (`finishGameSessionIfExpired` не комітить, поки vote живий). Поки пікер відкритий без vote, інший клієнт усе ще може завершити раунд по таймеру.
+**Додатковий час — локальний пікер vs голосування:** локальна `AddTimeModal` (вибір хвилин до `proposeAddTime`) дефермить finish **лише на цьому клієнті** (пікер лишається відкритим до settle `proposeAddTime`). Стійкий defer між пристроями — лише RTDB `addTimeVote` (`finishGameSessionIfExpired` не комітить, поки vote живий). Поки пікер відкритий без vote, інший клієнт усе ще може завершити раунд по таймеру. Якщо propose no-op (раунд уже `finished`) або пікер закрито після `00:00` без vote — клієнт показує «Гру завершено» (`resolveAddTimePickerDismissAction` / `shouldShowTimeUpModal`), без зависання play UI.
 
 ---
 

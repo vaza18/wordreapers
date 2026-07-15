@@ -34,18 +34,18 @@ async function runSessionVoteTransaction(
   gameId: string,
   mutate: (session: GameSession) => GameSession | undefined,
   options?: { requirePlaying?: boolean },
-): Promise<void> {
+): Promise<boolean> {
   const roomId = normalizeRoomCode(gameId);
   const pre = await get(sessionRef(roomId));
   if (!pre.exists()) {
-    return;
+    return false;
   }
   const preSession = pre.val() as GameSession;
   if (options?.requirePlaying && preSession.status !== 'playing') {
-    return;
+    return false;
   }
   try {
-    await runRtdbTransaction(sessionRef(roomId), (current) => {
+    const result = await runRtdbTransaction(sessionRef(roomId), (current) => {
       if (current == null) {
         return undefined;
       }
@@ -55,9 +55,10 @@ async function runSessionVoteTransaction(
       }
       return mutate(session);
     });
+    return result.committed;
   } catch (error) {
     if (isFirebaseIgnorableRtdbError(error)) {
-      return;
+      return false;
     }
     throw error;
   }
@@ -234,13 +235,14 @@ export async function cancelEarlyFinishVote(gameId: string, uid: string): Promis
 /**
  * Propose adding minutes to the round timer.
  * Applies immediately when no online opponents remain.
+ * @returns true when a vote was written or time was applied.
  */
 export async function proposeAddTime(
   gameId: string,
   uid: string,
   addMinutes: number,
-): Promise<void> {
-  await runSessionVoteTransaction(
+): Promise<boolean> {
+  return runSessionVoteTransaction(
     gameId,
     (session) => {
       if (!session.players[uid] || session.pauseState?.active) {

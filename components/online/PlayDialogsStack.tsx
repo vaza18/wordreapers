@@ -18,7 +18,7 @@ export type PlayDialogsStackProps = {
   addTimeRemainingMs: number;
   hasOpponent: boolean;
   onCloseAddTime: () => void;
-  onSelectAddTime: (minutes: number) => void;
+  onSelectAddTime: (minutes: number) => void | Promise<void>;
   showEndEarlyConfirm: boolean;
   hasOnlineOpponentInRound: boolean;
   onEndEarlyConfirm: () => void;

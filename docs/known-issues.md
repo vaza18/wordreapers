@@ -104,6 +104,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 - **Test:** `tests/join-mid-round-live-roster.test.ts`, `tests/live-round-membership.test.ts`, `tests/scoring.test.ts`
 - **Area:** `lib/firebase/game-session-service.ts`, `lib/game/scoring.ts`, `lib/online/presence/live-round-membership.ts`
 
+### 2026-07 — Online freeze after last-second add-time propose fails
+
+- **Symptom:** Player submits «Додати час» on the final second; picker closes, no vote reaches peers. Others see «Гру завершено», proposer stays on interactive-looking play UI at `00:00` with no taps responding (force-quit needed).
+- **Cause:** (1) `AddTimeModal` closed before `proposeAddTime` settled, ending local finish defer while the write could still no-op (`requirePlaying` after peers already finished). (2) Online lacked solo’s cancel-at-zero finish path and could stack / ghost `GameTimeUpModal` under the picker (`timeUpModalVisible === roundEnded` while `showAddTimeModal` still true).
+- **Fix:** Await propose before close; `proposeAddTime` returns committed; on failed propose / cancel with expired timer use `resolveAddTimePickerDismissAction` → local `roundOverPendingResults` + `finishGameSessionIfExpired`; `shouldShowTimeUpModal` requires picker closed.
+- **Test:** `tests/add-time-vote.test.ts`, `tests/session-votes-service.test.ts`
+- **Area:** `components/AddTimeModal.tsx`, `app/online/play/[gameId].tsx`, `lib/online/voting/add-time-vote.ts`, `lib/firebase/session-votes-service.ts`
+
 ### 2026-07 — Letter fly animation degrades with large accepted-word lists
 
 - **Symptom:** After ~60 accepted words, the ghost letter fly-to-draft animation became nearly invisible on Android (and faster on iOS). Worsened with more words.

@@ -4,11 +4,13 @@ import type { AddTimeVote, GameSession } from '../lib/firebase/types.js';
 import { EARLY_FINISH_VOTE_TIMEOUT_MS } from '../lib/online/voting/early-finish-vote.js';
 import {
   computeExtendedTimerEndsAt,
+  resolveAddTimePickerDismissAction,
   shouldApplyAddTimeFromVote,
   shouldClearAddTimeVote,
   shouldDeferClientTimerFinish,
   shouldDeferTimerFinishForAddTimeVote,
   shouldFinishRoundAfterTimerExpired,
+  shouldShowTimeUpModal,
   viewerNeedsAddTimeVote,
 } from '../lib/online/voting/add-time-vote.js';
 
@@ -92,6 +94,45 @@ describe('add time vote', () => {
     );
     expect(shouldDeferClientTimerFinish({ addTimeVote: null, showAddTimeModal: true })).toBe(true);
     expect(shouldDeferClientTimerFinish({ addTimeVote, showAddTimeModal: false })).toBe(true);
+  });
+
+  it('finishes round after closing add-time picker when timer already expired', () => {
+    const now = 1_000_000;
+    expect(
+      resolveAddTimePickerDismissAction({
+        sessionStatus: 'playing',
+        timerEndsAt: now - 1,
+        now,
+      }),
+    ).toBe('finish_round');
+    expect(
+      resolveAddTimePickerDismissAction({
+        sessionStatus: 'finished',
+        timerEndsAt: null,
+        now,
+      }),
+    ).toBe('finish_round');
+    expect(
+      resolveAddTimePickerDismissAction({
+        sessionStatus: 'playing',
+        timerEndsAt: now + 5_000,
+        now,
+      }),
+    ).toBe('none');
+    expect(
+      resolveAddTimePickerDismissAction({
+        sessionStatus: 'playing',
+        timerEndsAt: now - 1,
+        now,
+        addTimeVoteActive: true,
+      }),
+    ).toBe('none');
+  });
+
+  it('hides time-up modal while local add-time picker is still open', () => {
+    expect(shouldShowTimeUpModal({ roundEnded: true, showAddTimeModal: true })).toBe(false);
+    expect(shouldShowTimeUpModal({ roundEnded: true, showAddTimeModal: false })).toBe(true);
+    expect(shouldShowTimeUpModal({ roundEnded: false, showAddTimeModal: false })).toBe(false);
   });
 
   it('detects when round timer has expired', () => {
