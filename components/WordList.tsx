@@ -11,6 +11,7 @@ import {
   type WordListScrollOptions,
 } from '@/lib/ui/word-list-scroll-behavior';
 import { shouldSkipWordListRowRerender } from '@/lib/ui/word-list-row-memo';
+import { wordListRowShowsX2Badge } from '@/lib/ui/word-list-row-slots';
 
 import { ScrollableWordPanel } from '@/components/ScrollableWordPanel';
 import {
@@ -182,7 +183,7 @@ function WordListRow({
   onHighlightComplete?: (normalized: string) => void;
 }) {
   const split = splitDisplayByNormalizedPrefix(row.display, prefix);
-  const showBadge = showScoreBadges && row.entry.badge === 'x2';
+  const showBadge = wordListRowShowsX2Badge(showScoreBadges, row.entry.badge);
   const opacity = useRef(new Animated.Value(animateEntrance ? 0 : 1)).current;
   const translateX = useRef(new Animated.Value(animateEntrance ? -ROW_ENTRANCE_OFFSET : 0)).current;
   const badgeScale = useRef(new Animated.Value(showBadge && animateEntrance ? 0 : 1)).current;
@@ -307,30 +308,41 @@ function WordListRow({
   ]);
 
   return (
-    <Animated.View style={[notebookRow.row, styles.row, { opacity, transform: [{ translateX }] }]}>
-      {split ? <View pointerEvents="none" style={styles.rowPrefixHighlight} /> : null}
-      {showAcceptedHighlight ? (
-        <Animated.View
-          pointerEvents="none"
-          style={[styles.rowHighlight, { opacity: highlightOpacity }]}
-        />
-      ) : null}
-      {split ? (
-        <Text style={styles.word}>
-          <Text style={styles.wordPrefixStrong}>{split.prefix}</Text>
-          <Text style={styles.wordRest}>{split.rest}</Text>
+    <Animated.View
+      collapsable={false}
+      style={[notebookRow.row, styles.row, { opacity, transform: [{ translateX }] }]}
+    >
+      {/* Stable child slots — Fabric crashes if badge/overlays mount/unmount while indices shift. */}
+      <View
+        pointerEvents="none"
+        style={[styles.rowPrefixHighlight, !split ? styles.rowOverlayHidden : null]}
+      />
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.rowHighlight, { opacity: highlightOpacity }]}
+      />
+      <Text style={styles.word}>
+        <Text style={split ? styles.wordPrefixStrong : styles.word}>
+          {split ? split.prefix : row.display}
         </Text>
-      ) : (
-        <Text style={styles.word}>{row.display}</Text>
-      )}
-      {showBadge ? (
-        <Animated.Text style={[styles.badgeX2, { transform: [{ scale: badgeScale }] }]}>
-          {row.entry.badge}
-        </Animated.Text>
-      ) : null}
-      {showOverlapPeers && row.entry.overlapPeers && row.entry.overlapPeers.length > 0 ? (
-        <WordOverlapAvatars peers={row.entry.overlapPeers} />
-      ) : null}
+        <Text style={styles.wordRest}>{split ? split.rest : ''}</Text>
+      </Text>
+      <Animated.Text
+        style={[
+          styles.badgeX2,
+          !showBadge ? styles.rowSlotHidden : null,
+          { transform: [{ scale: badgeScale }] },
+        ]}
+      >
+        {showBadge ? row.entry.badge : ' '}
+      </Animated.Text>
+      <View
+        style={!showOverlapPeers || !row.entry.overlapPeers?.length ? styles.rowSlotHidden : null}
+      >
+        {showOverlapPeers && row.entry.overlapPeers && row.entry.overlapPeers.length > 0 ? (
+          <WordOverlapAvatars peers={row.entry.overlapPeers} />
+        ) : null}
+      </View>
     </Animated.View>
   );
 }
@@ -652,6 +664,14 @@ function createStyles(colors: ThemeColors) {
     rowHighlight: {
       ...StyleSheet.absoluteFill,
       backgroundColor: colors.penBlueMuted,
+    },
+    rowOverlayHidden: {
+      opacity: 0,
+    },
+    rowSlotHidden: {
+      opacity: 0,
+      width: 0,
+      overflow: 'hidden',
     },
     word: {
       flex: 1,
