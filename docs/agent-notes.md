@@ -8,6 +8,10 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 <!-- Add dated notes at the top -->
 
+### 2026-07-15 — Rematch starter solo UI after invite joins
+
+- Room `6DGFA` rematch: `uniqueBonusEnabled: false` in RTDB with 3 `liveRoundPlayerUids` — latch update aborted by full `players` rewrite. Starter alone at round start kept solo UI. Fix: leaf score patches + hasMultiplayerRound online-peer fallback.
+
 ### 2026-07-15 — Revert iOS input-lag “optimizations”
 
 - User: hangs mid-word without toasts (e.g. «ЛЕЛЕ» last letter delayed seconds). Confirmed not toast-root. Pre-change iOS was fine; Android 100+ training was the original bug.

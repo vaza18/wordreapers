@@ -96,6 +96,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 - **Test:** `tests/organizer-solo-add-time.test.ts`, `tests/add-time-vote.test.ts`, `tests/game-session-service.test.ts`
 - **Area:** `components/online/PlayTimerHeader.tsx`, `app/online/solo/[gameId].tsx`, `store/organizer-solo-store.ts`, `app/online/play/[gameId].tsx`, `lib/online/voting/add-time-vote.ts`
 
+### 2026-07 — Rematch starter stuck in solo UI after mid-round joins
+
+- **Symptom:** Player who started a rematch round alone (then peers joined mid-round via invite) kept solo play UI: no rank/points chip peers, no overlap avatars, no standings «Рейтинг», votes applied without consensus. Joiners still saw multipplayer UI. RTDB could keep `settings.uniqueBonusEnabled: false` despite 3 live players; logs showed `syncSessionPlayerScores [Error: maxretry]`.
+- **Cause:** Mid-round join metadata update bundled a full `players` object rewrite (score recompute on x2 latch) with `liveRoundPlayerUids` + settings latch. Writing peers' `online`/`hasLeft` fails RTDB rules → whole atomic `update` aborted (often swallowed as permission-denied «ok»). Starter’s `liveRoundPlayerUids` stayed solo → `hasMultiplayerRound` / vote eligibility ignored joiners. Score sync used a whole-`players` transaction that lost to presence/score races (`maxretry`).
+- **Fix:** Join/sync write only `players/{uid}/score|wordCount` leaves; keep `liveRoundPlayerUids` + x2 latch in the same successful update. `hasMultiplayerRound` also treats online roster peers as multipplayer when live-uid list lags.
+- **Test:** `tests/join-mid-round-live-roster.test.ts`, `tests/live-round-membership.test.ts`, `tests/scoring.test.ts`
+- **Area:** `lib/firebase/game-session-service.ts`, `lib/game/scoring.ts`, `lib/online/presence/live-round-membership.ts`
+
 ### 2026-07 — Letter fly animation degrades with large accepted-word lists
 
 - **Symptom:** After ~60 accepted words, the ghost letter fly-to-draft animation became nearly invisible on Android (and faster on iOS). Worsened with more words.

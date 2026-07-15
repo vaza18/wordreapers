@@ -144,7 +144,18 @@ export function hasMultiplayerRound(
   if ((session.baseWordRound ?? 0) === 0) {
     return Object.keys(session.players).some((id) => id !== myUid);
   }
-  return (session.liveRoundPlayerUids ?? []).some((id) => id !== myUid);
+  if ((session.liveRoundPlayerUids ?? []).some((id) => id !== myUid)) {
+    return true;
+  }
+  // Mid-round joiners may appear in `players` before `liveRoundPlayerUids` catches up
+  // (join metadata write raced). Online peers → multipplayer UI for the solo starter.
+  return Object.keys(session.players).some((id) => {
+    if (id === myUid) {
+      return false;
+    }
+    const player = session.players[id];
+    return player != null && player.hasLeft !== true && player.online === true;
+  });
 }
 
 /** Live participants plus players who left mid-round but scored in this round. */
