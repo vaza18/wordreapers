@@ -1,4 +1,4 @@
-import { formatUkWords, ukWordForm } from '../i18n/uk-plural.js';
+import { formatUkWords } from '../i18n/uk-plural.js';
 
 type TranslateFn = (key: string, options?: Record<string, unknown>) => string;
 
@@ -37,6 +37,7 @@ export function formatResultsSharedMetaLabel(
 
 /**
  * Caption for words currently listed on «Всі слова» vs lexicon size.
+ * Format: «4 слова з 1091» (plural attached to the found count).
  */
 export function formatResultsVisibleWordsCaption(
   t: TranslateFn,
@@ -47,10 +48,9 @@ export function formatResultsVisibleWordsCaption(
 ): string | null {
   const { visibleCount, maxPlayableWords } = opts;
   if (maxPlayableWords != null && maxPlayableWords > 0) {
-    return t('game.resultsWordsMetaWithMax', {
-      count: visibleCount,
+    return t('game.wordsOfMax', {
+      words: formatUkWords(visibleCount),
       max: maxPlayableWords,
-      wordsLabel: ukWordForm(visibleCount),
     });
   }
   if (visibleCount < 0) {

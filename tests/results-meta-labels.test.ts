@@ -67,7 +67,7 @@ describe('formatResultsVisibleWordsCaption', () => {
         visibleCount: 36,
         maxPlayableWords: 1224,
       }),
-    ).toBe('36 з 1224 слів');
+    ).toBe('36\u00A0слів з 1224');
   });
 
   it('uses full lexicon when all words are shown', () => {
@@ -76,7 +76,7 @@ describe('formatResultsVisibleWordsCaption', () => {
         visibleCount: 1224,
         maxPlayableWords: 1224,
       }),
-    ).toBe('1224 з 1224 слова');
+    ).toBe('1224\u00A0слова з 1224');
   });
 
   it('falls back to pluralized count when max unknown', () => {
