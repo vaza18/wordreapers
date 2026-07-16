@@ -97,6 +97,13 @@ Format: **Decision → Alternatives → Why rejected → Date**
 - **Why rejected:** Demotion + increment over-penalizes when two “second finders” race. Parent-word serialization is a larger redesign. Sequential wordSet left ~30–45ms on the listener path.
 - **Date:** 2026-07 — `lib/firebase/player-words-service.ts`, `lib/online/word-maps-shard-rollback.ts`
 
+## ADR-014: Client-only round playable lexicon (no Firebase snapshots)
+
+- **Decision:** Build and cache the round playable lexicon only on device (in-memory + local AsyncStorage archives). Do not upload `PlayableLexiconSnapshot` to RTDB/Storage for joiners. Speed via O(1) dictionary membership (`Set`) and `Intl.Collator` for sorts — not by sharing word lists over Firebase. Setup/pick-word prefetch runs only after select/shuffle/blur (`immediate`), not while typing — the playable-words hint uses `pending` (spacer, no «Обери базове слово») until commit (avoids JS-thread contention with the keyboard on Android). Typing soft-pauses in-flight work without evicting cache; hard clear only for empty/too-short.
+- **Alternatives considered:** Host publishes lexicon to Firebase so mid-round joiners skip the scan; Hermes micro-opts (typed letter masks / yield tuning) as primary fix; debounced prefetch while typing; evict cache on every typing keystroke.
+- **Why rejected:** Lexicon is static per base word/settings; large payloads pressure free-tier limits; training/solo must stay fast offline. Device evidence showed `localeCompare('uk')` in lookup/sort dominated wall-clock, not scan structure or Firebase absence. Typing-time prefetch contended with cooperative yields on Android. Evicting on typing forced a full rebuild after a typo.
+- **Date:** 2026-07 — `lib/dictionary/dictionary-index.ts`, `lib/dictionary/round-playable-lexicon.ts`, `hooks/useSetupPlayableLexiconHint.ts`
+
 ---
 
 When adding a new ADR: keep it short; link the implementing file; do not duplicate `online-multiplayer-rules.md` tables.

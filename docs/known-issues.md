@@ -8,6 +8,22 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — iOS base-word suggestion needs two taps
+
+- **Symptom:** On iOS, tapping a suggest item appeared to select but the field stayed on the typed prefix (e.g. «СУПЕРКОН»); second tap worked. Android was fine.
+- **Cause:** The first tap _did_ call `onSelect`, but iOS then emitted a stale `TextInput` `onChangeText` with the pre-select value while blurring/dismissing the keyboard, which overwrote React state. Earlier Pressable/`keyboardShouldPersistTaps` theories were incomplete.
+- **Fix:** `useBaseWordSuggestField` ignores `onChangeText` for `BASE_WORD_SUGGEST_IGNORE_CHANGE_MS` after suggest/shuffle; `onTouchSelectStart` on `onPressIn` + deferred `onTouchSelectEnd` on `onPressOut` (RN order is pressOut→press; sync clear would let blur start hide) + TTL; commit on `onPress`; on blur set `immediate` immediately (also when suppress swallows hide) and only defer dropdown hide; typing uses hint status `pending` (spacer) not `empty`/«Обери базове слово»; typing soft-pauses prefetch without cache eviction; `onFocus` clears suppress, ignore window, and pending hide timer.
+- **Test:** `tests/use-base-word-suggest-field.test.tsx` (incl. pressOut→blur→press), `tests/use-setup-playable-lexicon-hint.test.tsx` (`pending` + cache survives typing), `tests/playable-words-count-hint.test.tsx`; manual iOS one-tap select.
+- **Area:** `hooks/useBaseWordSuggestField.ts`, `components/BaseWordSuggestDropdown.tsx`, setup/pick-word screens
+
+### 2026-07 — Setup lexicon build very slow on Android (localeCompare)
+
+- **Symptom:** Long base + proper/slang (~5773 accepts) took ~90–180s on Android setup; felt much worse than lobby/play.
+- **Cause:** `DictionaryIndex` membership used binary search with per-probe `localeCompare('uk')`, and lexicon sort used per-call `localeCompare` — dominant cost scaled with accepted count on Hermes. Setup also often ran multiple builds while changing words.
+- **Fix:** O(1) `Set` in `DictionaryIndex`; `Intl.Collator('uk')` for lexicon sort; commit-only setup prefetch (select/shuffle/blur); typing soft-pauses without cache eviction. Verified S931B Dev Client: ~5s for 5773 accepts (was ~187s).
+- **Test:** `tests/round-playable-lexicon.test.ts`, `tests/round-playable-lexicon-prefetch.test.ts` (`pause` vs `clear`), `tests/use-setup-playable-lexicon-hint.test.tsx`, `tests/dictionary.test.ts`; manual `[lexicon] filterMs/finalizeMs` logs
+- **Area:** `lib/dictionary/dictionary-index.ts`, `lib/dictionary/round-playable-lexicon.ts`, `lib/dictionary/round-playable-lexicon-prefetch.ts`, `hooks/useSetupPlayableLexiconHint.ts`
+
 ### 2026-07 — Blank screen when opening menu during resume vote
 
 - **Symptom:** On pause, after a peer proposed «продовжити», pressing the hamburger menu showed a blank white screen (neither pause nor menu).
