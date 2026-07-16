@@ -2,9 +2,12 @@ import { canonicalForm, normalizeUk, toDisplayUpper } from './normalize.js';
 
 /**
  * Sorted main dictionary with normalization map for lookup and display.
+ * Keeps both the sorted `words` array (iteration / shared refs) and a `Set` for O(1) membership.
  */
 export class DictionaryIndex {
   private readonly words: string[];
+  /** O(1) membership — avoids `localeCompare('uk')` binary search on the hot path. */
+  private readonly wordSet: Set<string>;
   private readonly normalization: Map<string, string>;
 
   /**
@@ -13,6 +16,7 @@ export class DictionaryIndex {
    */
   constructor(words: string[], normalization: Record<string, string>) {
     this.words = words;
+    this.wordSet = new Set(words);
     this.normalization = new Map(Object.entries(normalization));
   }
 
@@ -20,7 +24,7 @@ export class DictionaryIndex {
    * Return whether a normalized word exists in the main dictionary.
    */
   hasWord(input: string): boolean {
-    return this.binarySearch(normalizeUk(input)) >= 0;
+    return this.wordSet.has(normalizeUk(input));
   }
 
   /**
@@ -28,7 +32,7 @@ export class DictionaryIndex {
    */
   lookupDisplay(input: string): string | null {
     const normalized = normalizeUk(input);
-    if (!this.hasWord(normalized)) {
+    if (!this.wordSet.has(normalized)) {
       return null;
     }
     return canonicalForm(normalized, this.normalization);
@@ -45,33 +49,6 @@ export class DictionaryIndex {
   /** Sorted normalized main-dictionary entries (read-only view). */
   readonlyWords(): readonly string[] {
     return this.words;
-  }
-
-  /**
-   * Binary search index of `target` in the sorted word list, or `-1`.
-   */
-  private binarySearch(target: string): number {
-    let lo = 0;
-    let hi = this.words.length - 1;
-
-    while (lo <= hi) {
-      const mid = (lo + hi) >> 1;
-      const value = this.words[mid];
-      if (value === undefined) {
-        break;
-      }
-      const cmp = target.localeCompare(value, 'uk');
-      if (cmp === 0) {
-        return mid;
-      }
-      if (cmp > 0) {
-        lo = mid + 1;
-      } else {
-        hi = mid - 1;
-      }
-    }
-
-    return -1;
   }
 }
 

@@ -10,6 +10,7 @@ import {
 import {
   clearRoundPlayableLexiconPrefetch,
   getRoundPlayableLexiconPrefetchStatus,
+  pauseRoundPlayableLexiconPrefetch,
   requestRoundPlayableLexiconPrefetch,
   resetRoundPlayableLexiconPrefetchForTests,
   subscribeRoundPlayableLexiconPrefetch,
@@ -148,5 +149,27 @@ describe('round-playable-lexicon-prefetch', () => {
     clearRoundPlayableLexiconPrefetch();
     expect(getRoundPlayableLexiconPrefetchStatus().kind).toBe('empty');
     expect(getCachedRoundPlayableLexicon('компютер', false, false)).toBeNull();
+  });
+
+  it('pause cancels work without evicting cache', async () => {
+    requestRoundPlayableLexiconPrefetch({
+      baseWord: 'компютер',
+      allowProperNouns: false,
+      allowSlang: false,
+    });
+    await vi.waitFor(() => {
+      expect(getCachedRoundPlayableLexicon('компютер', false, false)).not.toBeNull();
+    });
+
+    pauseRoundPlayableLexiconPrefetch();
+    expect(getRoundPlayableLexiconPrefetchStatus().kind).toBe('idle');
+    expect(getCachedRoundPlayableLexicon('компютер', false, false)?.maxCount).toBe(3);
+
+    requestRoundPlayableLexiconPrefetch({
+      baseWord: 'компютер',
+      allowProperNouns: false,
+      allowSlang: false,
+    });
+    expect(getRoundPlayableLexiconPrefetchStatus().kind).toBe('ready');
   });
 });

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
@@ -14,8 +15,11 @@ interface BaseWordSuggestDropdownProps {
   items: readonly BaseWordSuggestItem[];
   /** Total dictionary matches for prefix (may exceed `items.length`). */
   totalCount: number;
-  moreLabel: string;
   onSelect: (display: string) => void;
+  /** Mark suggest gesture on touch-down before TextInput blur handlers run. */
+  onTouchSelectStart?: () => void;
+  /** Clear suggest-blur suppress on press end (success or cancel). */
+  onTouchSelectEnd?: () => void;
 }
 
 function createStyles(colors: ThemeColors) {
@@ -86,9 +90,11 @@ function createStyles(colors: ThemeColors) {
 export function BaseWordSuggestDropdown({
   items,
   totalCount,
-  moreLabel,
   onSelect,
+  onTouchSelectStart,
+  onTouchSelectEnd,
 }: BaseWordSuggestDropdownProps) {
+  const { t } = useTranslation();
   const styles = useThemedStyles(createStyles);
   const { rowHeight, maxListHeight, moreRowHeight } = useBaseWordSuggestLayout();
 
@@ -104,7 +110,8 @@ export function BaseWordSuggestDropdown({
       <ScrollView
         style={{ maxHeight: listHeight }}
         nestedScrollEnabled
-        keyboardShouldPersistTaps="handled"
+        keyboardShouldPersistTaps="always"
+        keyboardDismissMode="none"
         showsVerticalScrollIndicator
       >
         {items.map((item, index) => {
@@ -113,15 +120,27 @@ export function BaseWordSuggestDropdown({
             <FeedbackPressable
               key={item.display}
               accessibilityRole="button"
+              onPressIn={() => {
+                onTouchSelectStart?.();
+              }}
+              onPressOut={() => {
+                onTouchSelectEnd?.();
+              }}
               onPress={() => {
                 onSelect(item.display);
               }}
               style={[styles.item, { height: rowHeight }, active ? styles.itemActive : null]}
             >
-              <Text style={[styles.itemWord, active ? styles.itemWordActive : null]}>
+              <Text
+                pointerEvents="none"
+                style={[styles.itemWord, active ? styles.itemWordActive : null]}
+              >
                 {item.display}
               </Text>
-              <Text style={[styles.itemMeta, active ? styles.itemMetaActive : null]}>
+              <Text
+                pointerEvents="none"
+                style={[styles.itemMeta, active ? styles.itemMetaActive : null]}
+              >
                 {item.letterCount} л.
               </Text>
             </FeedbackPressable>
@@ -129,8 +148,12 @@ export function BaseWordSuggestDropdown({
         })}
       </ScrollView>
       {showMoreFooter ? (
-        <View style={[styles.moreRow, { minHeight: moreRowHeight }]}>
-          <Text style={styles.moreText}>{moreLabel}</Text>
+        <View style={[styles.moreRow, { minHeight: moreRowHeight }]} pointerEvents="none">
+          <Text style={styles.moreText}>
+            {t('game.baseWordSuggestMore', {
+              count: Math.max(0, totalCount - items.length),
+            })}
+          </Text>
         </View>
       ) : null}
     </View>

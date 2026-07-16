@@ -17,6 +17,7 @@ import { ShuffleBaseWordButton } from '@/components/ShuffleBaseWordButton';
 import { MIN_BASE_WORD_LENGTH } from '@/constants/base-word';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useHeaderIconButtonLayout } from '@/hooks/useHeaderIconButtonLayout';
+import { useBaseWordSuggestField } from '@/hooks/useBaseWordSuggestField';
 import {
   useSetupPlayableLexiconHint,
   type SetupLexiconCommitMode,
@@ -70,6 +71,19 @@ export default function OnlinePickWordScreen() {
   const [baseWordInput, setBaseWordInput] = useState('');
   const [lexiconCommitMode, setLexiconCommitMode] = useState<SetupLexiconCommitMode>('typing');
   const [baseWordFocused, setBaseWordFocused] = useState(false);
+  const {
+    onChangeText: onBaseWordChangeText,
+    onFocus: onBaseWordFocus,
+    onBlur: onBaseWordBlur,
+    onTouchSelectStart,
+    onTouchSelectEnd,
+    commitBaseWordDisplay,
+  } = useBaseWordSuggestField({
+    baseWordInput,
+    setBaseWordInput,
+    setLexiconCommitMode,
+    setBaseWordFocused,
+  });
   const [durationMinutes, setDurationMinutes] = useState(10);
   const [uniqueBonusMode, setUniqueBonusMode] = useState<UniqueBonusMode>('auto');
   const [allowProperNouns, setAllowProperNouns] = useState(false);
@@ -173,9 +187,6 @@ export default function OnlinePickWordScreen() {
   }, [baseWordInput, baseWords, dictionary]);
 
   const showSuggestDropdown = baseWordFocused && suggestionResult.items.length > 0;
-  const suggestMoreLabel = t('game.baseWordSuggestMore', {
-    count: Math.max(0, suggestionResult.total - suggestionResult.items.length),
-  });
   const dictionaryOptionsLocked = session ? sessionContentSafetyLocked(session) : false;
   const baseWordDictionaryRequired = dictionaryOptionsLocked;
   const baseWordAllowed = baseWordDictionaryRequired
@@ -285,22 +296,18 @@ export default function OnlinePickWordScreen() {
                   showSuggestDropdown ? styles.inputActive : null,
                 ]}
                 value={baseWordInput}
-                onChangeText={(text) => {
-                  setLexiconCommitMode('typing');
-                  setBaseWordInput(text);
-                }}
-                onFocus={() => setBaseWordFocused(true)}
-                onBlur={() => {
-                  setTimeout(() => setBaseWordFocused(false), 200);
-                }}
+                onChangeText={onBaseWordChangeText}
+                onFocus={onBaseWordFocus}
+                onBlur={onBaseWordBlur}
                 placeholder={t('game.baseWordPlaceholder')}
               />
               <ShuffleBaseWordButton
                 onPress={() => {
                   const next = randomBaseWord(baseWords);
                   if (next && dictionary) {
-                    setLexiconCommitMode('immediate');
-                    setBaseWordInput(dictionary.lookupDisplayUpper(next) ?? toDisplayUpper(next));
+                    commitBaseWordDisplay(
+                      dictionary.lookupDisplayUpper(next) ?? toDisplayUpper(next),
+                    );
                   }
                 }}
               />
@@ -309,12 +316,9 @@ export default function OnlinePickWordScreen() {
               <BaseWordSuggestDropdown
                 items={suggestionResult.items}
                 totalCount={suggestionResult.total}
-                moreLabel={suggestMoreLabel}
-                onSelect={(display) => {
-                  setLexiconCommitMode('immediate');
-                  setBaseWordInput(display);
-                  setBaseWordFocused(false);
-                }}
+                onTouchSelectStart={onTouchSelectStart}
+                onTouchSelectEnd={onTouchSelectEnd}
+                onSelect={commitBaseWordDisplay}
               />
             ) : null}
           </View>

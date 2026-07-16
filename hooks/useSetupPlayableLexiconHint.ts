@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { MIN_BASE_WORD_LENGTH } from '@/constants/base-word';
-import { VALIDATION_DEBOUNCE_MS } from '@/constants/game-timing';
 import { lexiconCacheKey } from '@/lib/dictionary/round-playable-lexicon';
 import { letterCount, normalizeUk } from '@/lib/dictionary/normalize';
 import {
   clearRoundPlayableLexiconPrefetch,
+  pauseRoundPlayableLexiconPrefetch,
   requestRoundPlayableLexiconPrefetch,
   subscribeRoundPlayableLexiconPrefetch,
   type RoundPlayableLexiconPrefetchStatus,
@@ -13,13 +13,17 @@ import {
 
 export type SetupLexiconCommitMode = 'typing' | 'immediate';
 
-export type SetupPlayableLexiconHintStatus = 'empty' | 'tooShort' | 'loading' | 'ready' | 'error';
+export type SetupPlayableLexiconHintStatus =
+  'empty' | 'tooShort' | 'pending' | 'loading' | 'ready' | 'error';
 
 export interface UseSetupPlayableLexiconHintOptions {
   baseWordInput: string;
   allowProperNouns: boolean;
   allowSlang: boolean;
-  /** `typing` debounces prefetch; `immediate` runs after select/shuffle. */
+  /**
+   * `typing` does not start a lexicon build (avoids JS-thread contention with the keyboard).
+   * `immediate` runs after select / shuffle / blur commit / hydrate.
+   */
   commitMode: SetupLexiconCommitMode;
 }
 
@@ -51,8 +55,8 @@ function mapPrefetchStatus(
 }
 
 /**
- * Prefetch round lexicon on base-word setup screens (debounced for typing).
- * Skips words shorter than {@link MIN_BASE_WORD_LENGTH}.
+ * Prefetch round lexicon on base-word setup screens after an explicit commit.
+ * Skips words shorter than {@link MIN_BASE_WORD_LENGTH}. Typing alone does not build.
  */
 export function useSetupPlayableLexiconHint({
   baseWordInput,
@@ -84,29 +88,32 @@ export function useSetupPlayableLexiconHint({
 
     const wordChanged = prevNormalizedRef.current !== normalized;
     prevNormalizedRef.current = normalized;
-    const delay = commitMode === 'typing' && wordChanged ? VALIDATION_DEBOUNCE_MS : 0;
 
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      if (cancelled) {
-        return;
+    // Typing with an open keyboard contends with cooperative yields on Android — wait for commit.
+    // Use `pending` (not `empty`) so the hint does not lie with «Обери базове слово».
+    // Soft-pause only: do not evict cache (a typo must not force a full rebuild).
+    if (commitMode !== 'immediate') {
+      if (wordChanged) {
+        pauseRoundPlayableLexiconPrefetch();
       }
-      requestRoundPlayableLexiconPrefetch({
-        baseWord: normalized,
-        allowProperNouns,
-        allowSlang,
-      });
-    }, delay);
+      setStatus('pending');
+      setMaxCount(null);
+      return;
+    }
 
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
+    requestRoundPlayableLexiconPrefetch({
+      baseWord: normalized,
+      allowProperNouns,
+      allowSlang,
+    });
   }, [allowProperNouns, allowSlang, baseWordInput, commitMode]);
 
   useEffect(() => {
     const normalized = normalizeUk(baseWordInput);
     if (!normalized || letterCount(normalized) < MIN_BASE_WORD_LENGTH) {
+      return;
+    }
+    if (commitMode !== 'immediate') {
       return;
     }
     const wantKey = lexiconCacheKey(normalized, allowProperNouns, allowSlang);
@@ -116,7 +123,7 @@ export function useSetupPlayableLexiconHint({
       setStatus(mapped.status);
       setMaxCount(mapped.maxCount);
     });
-  }, [allowProperNouns, allowSlang, baseWordInput]);
+  }, [allowProperNouns, allowSlang, baseWordInput, commitMode]);
 
   return { status, maxCount };
 }

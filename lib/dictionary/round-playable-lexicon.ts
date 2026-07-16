@@ -41,16 +41,16 @@ export interface BuildRoundPlayableLexiconOptions {
 export interface BuildRoundPlayableLexiconAsyncOptions extends BuildRoundPlayableLexiconOptions {
   /** Return true to abort the in-flight build. */
   isCancelled?: () => boolean;
-  /** Yield to the event loop after this many ms of work (default 32). */
+  /** Yield to the event loop after this many ms of work (default 64). */
   yieldEveryMs?: number;
 }
 
 function resolveDisplay(
   normalized: string,
-  inMain: boolean,
   lookupMainDisplayUpper: BuildRoundPlayableLexiconOptions['lookupMainDisplayUpper'],
 ): string {
-  if (inMain && lookupMainDisplayUpper) {
+  // O(1) with DictionaryIndex word Set — null means not in main → plain uppercase.
+  if (lookupMainDisplayUpper) {
     return lookupMainDisplayUpper(normalized) ?? toDisplayUpper(normalized);
   }
   return toDisplayUpper(normalized);
@@ -103,7 +103,10 @@ function yieldToEventLoop(): Promise<void> {
 /** Words between cancel/time checks — avoids per-word `performance.now()` overhead. */
 const ASYNC_CHECK_EVERY_WORDS = 512;
 /** Default cooperative slice; higher = faster wall-clock, slightly longer UI stalls. */
-const ASYNC_YIELD_EVERY_MS_DEFAULT = 32;
+const ASYNC_YIELD_EVERY_MS_DEFAULT = 64;
+
+/** Shared collator — per-call `localeCompare('uk')` is very slow on Hermes for large sorts. */
+const UK_COLLATOR = new Intl.Collator('uk');
 
 type LexiconBuildState = {
   words: Set<string>;
@@ -115,13 +118,13 @@ type LexiconBuildState = {
   baseLen: number;
   minWordLength: number;
   allowedLetters: Set<string>;
-  mainSet: Set<string>;
   lookupMainDisplayUpper: BuildRoundPlayableLexiconOptions['lookupMainDisplayUpper'];
+  accepted: number;
+  scanned: number;
 };
 
 function createBuildState(
   baseWord: string,
-  sources: RoundPlayableLexiconSources,
   options: BuildRoundPlayableLexiconOptions,
 ): LexiconBuildState {
   const baseNorm = normalizeUk(baseWord);
@@ -136,12 +139,14 @@ function createBuildState(
     baseLen: baseNorm.length,
     minWordLength: options.minWordLength ?? 2,
     allowedLetters: new Set(baseMultiset.keys()),
-    mainSet: new Set(sources.main),
     lookupMainDisplayUpper: options.lookupMainDisplayUpper,
+    accepted: 0,
+    scanned: 0,
   };
 }
 
 function considerWord(state: LexiconBuildState, word: string): void {
+  state.scanned += 1;
   if (state.seen.has(word)) {
     return;
   }
@@ -163,20 +168,37 @@ function considerWord(state: LexiconBuildState, word: string): void {
   }
 
   state.words.add(word);
-  state.displays.set(
-    word,
-    resolveDisplay(word, state.mainSet.has(word), state.lookupMainDisplayUpper),
-  );
+  state.displays.set(word, resolveDisplay(word, state.lookupMainDisplayUpper));
+  state.accepted += 1;
 }
 
 function finalizeBuild(state: LexiconBuildState): RoundPlayableLexicon {
-  const sortedWords = [...state.words].sort((a, b) => a.localeCompare(b, 'uk'));
+  const sortedWords = [...state.words].sort((a, b) => UK_COLLATOR.compare(a, b));
   return {
     words: state.words,
     sortedWords,
     displays: state.displays,
     maxCount: state.words.size,
   };
+}
+
+function logBuildDev(
+  label: string,
+  filterMs: number,
+  finalizeMs: number,
+  state: LexiconBuildState,
+  yieldCount: number,
+): void {
+  if (typeof __DEV__ === 'undefined' || !__DEV__) {
+    return;
+  }
+  console.log(
+    `[lexicon] ${label} filterMs=${filterMs.toFixed(0)} finalizeMs=${finalizeMs.toFixed(0)} buildMs=${(filterMs + finalizeMs).toFixed(0)} yields=${yieldCount} scanned=${state.scanned} accepted=${state.accepted}`,
+  );
+}
+
+function nowMs(): number {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now();
 }
 
 /**
@@ -187,13 +209,20 @@ export function buildRoundPlayableLexicon(
   sources: RoundPlayableLexiconSources,
   options: BuildRoundPlayableLexiconOptions,
 ): RoundPlayableLexicon {
-  const state = createBuildState(baseWord, sources, options);
+  const timing = typeof __DEV__ !== 'undefined' && __DEV__;
+  const filterStarted = timing ? nowMs() : 0;
+  const state = createBuildState(baseWord, options);
   for (const list of collectSourceLists(sources, options)) {
     for (const word of list) {
       considerWord(state, word);
     }
   }
-  return finalizeBuild(state);
+  const filterMs = timing ? nowMs() - filterStarted : 0;
+  const finalizeStarted = timing ? nowMs() : 0;
+  const built = finalizeBuild(state);
+  const finalizeMs = timing ? nowMs() - finalizeStarted : 0;
+  logBuildDev('sync', filterMs, finalizeMs, state, 0);
+  return built;
 }
 
 /**
@@ -209,13 +238,20 @@ export async function buildRoundPlayableLexiconAsync(
 ): Promise<RoundPlayableLexicon | null> {
   const isCancelled = options.isCancelled ?? (() => false);
   const yieldEveryMs = options.yieldEveryMs ?? ASYNC_YIELD_EVERY_MS_DEFAULT;
-  const state = createBuildState(baseWord, sources, options);
-  let sliceStart = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const timing = typeof __DEV__ !== 'undefined' && __DEV__;
+  const filterStarted = timing ? nowMs() : 0;
+  const state = createBuildState(baseWord, options);
+  let sliceStart = nowMs();
   let sinceCheck = 0;
+  let yieldCount = 0;
 
   for (const list of collectSourceLists(sources, options)) {
     for (let i = 0; i < list.length; i += 1) {
-      considerWord(state, list[i]);
+      const word = list[i];
+      if (word === undefined) {
+        continue;
+      }
+      considerWord(state, word);
       sinceCheck += 1;
 
       if (sinceCheck < ASYNC_CHECK_EVERY_WORDS) {
@@ -227,13 +263,14 @@ export async function buildRoundPlayableLexiconAsync(
         return null;
       }
 
-      const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const now = nowMs();
       if (now - sliceStart >= yieldEveryMs) {
+        yieldCount += 1;
         await yieldToEventLoop();
         if (isCancelled()) {
           return null;
         }
-        sliceStart = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        sliceStart = nowMs();
       }
     }
   }
@@ -241,7 +278,12 @@ export async function buildRoundPlayableLexiconAsync(
   if (isCancelled()) {
     return null;
   }
-  return finalizeBuild(state);
+  const filterMs = timing ? nowMs() - filterStarted : 0;
+  const finalizeStarted = timing ? nowMs() : 0;
+  const built = finalizeBuild(state);
+  const finalizeMs = timing ? nowMs() - finalizeStarted : 0;
+  logBuildDev('async', filterMs, finalizeMs, state, yieldCount);
+  return built;
 }
 
 /** Module cache key for a round lexicon. */

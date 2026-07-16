@@ -27,6 +27,9 @@ export function PlayableWordsCountHint({ status, maxCount }: PlayableWordsCountH
   let content: ReactNode = null;
   if (status === 'empty' || status === 'tooShort') {
     content = <Text style={styles.hintText}>{t('game.playableWordsNeedBaseWord')}</Text>;
+  } else if (status === 'pending') {
+    // Valid-length word while waiting for select/shuffle/blur — keep layout, no misleading copy.
+    return <View style={styles.container} />;
   } else if (status === 'loading') {
     content = (
       <View style={styles.loadingRow}>

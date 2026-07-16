@@ -23,11 +23,7 @@
     "tests/**/*.ts",
     "tests/**/*.tsx",
     "i18n/**/*.ts",
-    "lib/dictionary/dictionary-index.ts",
-    "lib/dictionary/normalize.ts",
-    "lib/dictionary/round-playable-lexicon.ts",
-    "lib/dictionary/validate-word.ts",
-    "lib/dictionary/vesum-tags.ts",
+    "lib/dictionary/*.ts",
     "lib/game/*.ts",
     "lib/firebase/**/*.ts",
     "lib/online/**/*.ts",
@@ -41,5 +37,10 @@
     "types/react-native-firebase-app-check.d.ts",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
+  ],
+  "exclude": [
+    "lib/dictionary/index.ts",
+    "lib/dictionary/node-load.ts",
+    "lib/dictionary/paths-node.ts"
   ]
 }
