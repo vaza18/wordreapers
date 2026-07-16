@@ -8,6 +8,12 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 <!-- Add dated notes at the top -->
 
+### 2026-07-16 — Release CI: iOS ExpoModulesJSI Swift 6.3 requirement
+
+- Symptom: after the deps bump (`222e87d`, `expo` `^57.0.0` → `~57.0.6` → `expo-modules-jsi@57.0.3`), iOS archive fails compiling `expo-modules-jsi` (`JavaScriptCodable+Date.swift:53` `type of expression is ambiguous`).
+- Cause: SDK 57 `expo-modules-jsi` needs Swift **6.3** (Xcode 26.4+). Runner was `macos-15` pinned to Xcode 26.3 (Swift 6.2), which tops out that image. Not app code; not a patch-package case (Expo maintainers advise against patching, issue #46242).
+- Fix: `runs-on: macos-26` + `xcode-version: '26.4'`. Fastlane vendor cache auto-rebuilds via Ruby-version stamp on the new image.
+
 ### 2026-07-16 — Release CI: Fastlane `libruby` mismatch after Ruby patch
 
 - Symptom: iOS `eas build --local` → `fastlane --version` exit 1; `json` gem `linked to incompatible …/Ruby/3.3.11/…/libruby.3.3.dylib` while runner is 3.3.12.
