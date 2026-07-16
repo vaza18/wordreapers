@@ -4,22 +4,22 @@ import uk from '../i18n/locales/uk.json';
 import { buildGameMenuGroups } from '../lib/ui/game-menu-groups.js';
 
 describe('buildGameMenuGroups', () => {
-  it('orders session → leave → other with leave actions adjacent', () => {
+  it('orders session → other → leave with leave actions last', () => {
     const groups = buildGameMenuGroups({
       showPause: true,
       showInvite: true,
       showEndGame: true,
       showExit: true,
-      showSettings: true,
       showHowToPlay: true,
     });
 
-    expect(groups.map((g) => g.id)).toEqual(['session', 'leave', 'other']);
+    expect(groups.map((g) => g.id)).toEqual(['session', 'other', 'leave']);
     expect(groups.map((g) => g.items.map((i) => i.id))).toEqual([
       ['pause', 'invite'],
+      ['howToPlay'],
       ['endGame', 'exit'],
-      ['settings', 'howToPlay'],
     ]);
+    expect(groups.at(-1)?.id).toBe('leave');
   });
 
   it('omits empty groups when visibility flags hide items', () => {
@@ -28,7 +28,6 @@ describe('buildGameMenuGroups', () => {
       showInvite: false,
       showEndGame: false,
       showExit: false,
-      showSettings: false,
       showHowToPlay: false,
     });
 

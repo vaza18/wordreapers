@@ -1,5 +1,5 @@
 /** Stable id for one in-game menu row. */
-export type GameMenuItemId = 'pause' | 'invite' | 'endGame' | 'exit' | 'settings' | 'howToPlay';
+export type GameMenuItemId = 'pause' | 'invite' | 'endGame' | 'exit' | 'howToPlay';
 
 /** Menu section used for inter-group hairline dividers. */
 export type GameMenuGroupId = 'session' | 'leave' | 'other';
@@ -22,7 +22,6 @@ export interface GameMenuVisibility {
   showInvite?: boolean;
   showEndGame?: boolean;
   showExit?: boolean;
-  showSettings?: boolean;
   showHowToPlay?: boolean;
 }
 
@@ -30,11 +29,11 @@ const PAUSE: GameMenuItemDef = { id: 'pause', icon: '⏸' };
 const INVITE: GameMenuItemDef = { id: 'invite', icon: '▦' };
 const END_GAME: GameMenuItemDef = { id: 'endGame', icon: '🏁' };
 const EXIT: GameMenuItemDef = { id: 'exit', icon: '⎋' };
-const SETTINGS: GameMenuItemDef = { id: 'settings', icon: '⚙' };
 const HOW_TO_PLAY: GameMenuItemDef = { id: 'howToPlay', icon: '?' };
 
 /**
- * Builds Variant C in-game menu groups (session → leave → other).
+ * Builds Variant C in-game menu groups (session → other → leave).
+ * Leave actions stay last; settings open from the header gear, not the list.
  * Empty groups are omitted so callers can place hairline dividers between groups only.
  * Dismiss is via modal ✕ / overlay — no “continue” row.
  */
@@ -44,7 +43,6 @@ export function buildGameMenuGroups(visibility: GameMenuVisibility = {}): GameMe
     showInvite = false,
     showEndGame = false,
     showExit = false,
-    showSettings = false,
     showHowToPlay = false,
   } = visibility;
 
@@ -55,15 +53,14 @@ export function buildGameMenuGroups(visibility: GameMenuVisibility = {}): GameMe
   if (showInvite) session.push(INVITE);
   if (session.length > 0) groups.push({ id: 'session', items: session });
 
+  const other: GameMenuItemDef[] = [];
+  if (showHowToPlay) other.push(HOW_TO_PLAY);
+  if (other.length > 0) groups.push({ id: 'other', items: other });
+
   const leave: GameMenuItemDef[] = [];
   if (showEndGame) leave.push(END_GAME);
   if (showExit) leave.push(EXIT);
   if (leave.length > 0) groups.push({ id: 'leave', items: leave });
-
-  const other: GameMenuItemDef[] = [];
-  if (showSettings) other.push(SETTINGS);
-  if (showHowToPlay) other.push(HOW_TO_PLAY);
-  if (other.length > 0) groups.push({ id: 'other', items: other });
 
   return groups;
 }

@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
+import { SettingsIconButton } from '@/components/SettingsIconButton';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import {
@@ -30,8 +31,8 @@ interface GameMenuModalProps {
 }
 
 /**
- * In-round menu (Variant C): left-aligned icon+label list with grouped leave actions.
- * Dismiss via ✕ or overlay (no separate “continue” row).
+ * In-round menu (Variant C): left-aligned icon+label list with leave actions last.
+ * Settings open from the header gear; dismiss via ✕ or overlay (no “continue” row).
  */
 export function GameMenuModal({
   visible,
@@ -58,7 +59,6 @@ export function GameMenuModal({
     showInvite: Boolean(showInvite && onInvite),
     showEndGame,
     showExit,
-    showSettings: Boolean(onOpenSettings),
     showHowToPlay: Boolean(onOpenHowToPlay),
   });
 
@@ -72,8 +72,6 @@ export function GameMenuModal({
         return endGameLabel;
       case 'exit':
         return exitLabel ?? t('game.menuExit');
-      case 'settings':
-        return t('nav.settings');
       case 'howToPlay':
         return t('game.menuHowToPlay');
     }
@@ -89,8 +87,6 @@ export function GameMenuModal({
         return onProposeEnd;
       case 'exit':
         return onExit;
-      case 'settings':
-        return onOpenSettings ?? onClose;
       case 'howToPlay':
         return onOpenHowToPlay ?? onClose;
     }
@@ -101,7 +97,11 @@ export function GameMenuModal({
       <Pressable style={styles.overlay} onPress={onClose}>
         <View style={styles.card} onStartShouldSetResponder={() => true}>
           <View style={styles.titleRow}>
-            <View style={styles.titleSide} />
+            {onOpenSettings ? (
+              <SettingsIconButton onPress={onOpenSettings} />
+            ) : (
+              <View style={styles.titleSide} />
+            )}
             <Text style={styles.title}>{t('game.menuTitle')}</Text>
             <FeedbackPressable
               accessibilityRole="button"
