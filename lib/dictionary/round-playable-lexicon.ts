@@ -260,6 +260,34 @@ export function toPlayableLexiconSnapshot(lexicon: RoundPlayableLexicon): Playab
   return { maxCount: lexicon.maxCount, words, displays };
 }
 
+/** Validate unknown JSON into a playable lexicon snapshot, or null. */
+export function parsePlayableLexiconSnapshot(raw: unknown): PlayableLexiconSnapshot | null {
+  if (raw == null || typeof raw !== 'object') {
+    return null;
+  }
+  const row = raw as Record<string, unknown>;
+  if (typeof row.maxCount !== 'number' || !Number.isFinite(row.maxCount)) {
+    return null;
+  }
+  if (!Array.isArray(row.words) || !row.words.every((word) => typeof word === 'string')) {
+    return null;
+  }
+  if (
+    !Array.isArray(row.displays) ||
+    !row.displays.every((display) => typeof display === 'string')
+  ) {
+    return null;
+  }
+  if (row.words.length !== row.displays.length) {
+    return null;
+  }
+  return {
+    maxCount: row.maxCount,
+    words: row.words,
+    displays: row.displays,
+  };
+}
+
 /** Restore lexicon from an archived snapshot. */
 export function fromPlayableLexiconSnapshot(
   snapshot: PlayableLexiconSnapshot,

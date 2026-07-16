@@ -136,6 +136,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 - **Test:** `tests/word-list-row-slots.test.ts`
 - **Area:** `components/WordList.tsx`, `lib/ui/word-list-row-slots.ts`
 
+### 2026-07 — Lexicon rebuild after cold start blocks word validation
+
+- **Symptom:** After restoring a paused solo or online round from AsyncStorage, validation showed «немає в словнику» for 5–20s on Android with large lexicons (3000+ words) while the lexicon rebuilt on the JS thread.
+- **Cause:** Durable round snapshots (`solo-round-snapshot`, `active-round-cache`) saved words/timer but not the built `PlayableLexiconSnapshot`; in-memory lexicon cache was lost on process death.
+- **Fix:** Persist `playableLexicon` alongside round progress; restore via `useRoundPlayableLexicon({ archiveSnapshot })` on solo/play screens. Re-persist when lexicon becomes ready mid-round.
+- **Test:** `tests/solo-round-snapshot.test.ts`, `tests/cache-active-round.test.ts`, `tests/round-playable-lexicon.test.ts`
+- **Area:** `lib/game/solo-round-snapshot.ts`, `lib/online/session/cache-active-round.ts`, `store/organizer-solo-store.ts`, `app/online/solo/[gameId].tsx`, `app/online/play/[gameId].tsx`
+
 ### 2026-07 — Compose validation never re-ran after lexicon/dictionary ready
 
 - **Symptom:** Training/solo stopped accepting real words (e.g. «СУП») and showed no «немає в словнику» feedback; draft sat unchanged.

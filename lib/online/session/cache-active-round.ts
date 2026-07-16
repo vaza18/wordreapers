@@ -22,6 +22,8 @@ import {
   wordsRecordFromMap,
 } from './active-round-cache.js';
 import { playingRoundSnapshotFromSession } from './online-session-archive.js';
+import { playableLexiconSnapshotForSession } from '../playable-lexicon-archive.js';
+import type { PlayableLexiconSnapshot } from '../../dictionary/round-playable-lexicon.js';
 
 /**
  * Backup word list locally for rejoin (RTDB is left intact so results/scores stay correct).
@@ -32,7 +34,11 @@ export async function cacheActiveRoundProgress(
   session: GameSession,
   words: Map<string, StoredPlayerWord>,
 ): Promise<void> {
-  if (session.status !== 'playing' || session.timerEndsAt == null || words.size === 0) {
+  if (session.status !== 'playing' || session.timerEndsAt == null) {
+    return;
+  }
+  const playableLexicon = playableLexiconSnapshotForSession(session);
+  if (words.size === 0 && !playableLexicon) {
     return;
   }
   await saveActiveRoundCache({
@@ -41,7 +47,23 @@ export async function cacheActiveRoundProgress(
     timerEndsAt: session.timerEndsAt,
     words: wordsRecordFromMap(words),
     sessionSnapshot: playingRoundSnapshotFromSession(session) ?? undefined,
+    ...(playableLexicon ? { playableLexicon } : {}),
   });
+}
+
+/** Load a persisted lexicon snapshot for the current playing round, if any. */
+export async function loadActiveRoundLexiconSnapshot(
+  gameId: string,
+  session: GameSession,
+): Promise<PlayableLexiconSnapshot | null> {
+  if (session.status !== 'playing' || session.timerEndsAt == null) {
+    return null;
+  }
+  const cached = await getActiveRoundCache(gameId, session.baseWordRound ?? 0);
+  if (!cached || cached.timerEndsAt !== session.timerEndsAt) {
+    return null;
+  }
+  return cached.playableLexicon ?? null;
 }
 
 /**

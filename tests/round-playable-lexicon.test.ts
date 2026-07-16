@@ -4,6 +4,7 @@ import {
   buildRoundPlayableLexicon,
   buildRoundPlayableLexiconAsync,
   fromPlayableLexiconSnapshot,
+  parsePlayableLexiconSnapshot,
   toPlayableLexiconSnapshot,
 } from '../lib/dictionary/round-playable-lexicon';
 import { validateWord } from '../lib/dictionary/validate-word';
@@ -125,6 +126,19 @@ describe('buildRoundPlayableLexicon', () => {
     expect(restored.words.has('порт')).toBe(true);
     expect(restored.displays.get('порт')).toBe('ПОРТ');
     expect(restored.sortedWords).toEqual(lexicon.sortedWords);
+  });
+
+  it('parsePlayableLexiconSnapshot validates snapshot shape', () => {
+    const snapshot = toPlayableLexiconSnapshot(
+      buildRoundPlayableLexicon(
+        'компютер',
+        { main: MAIN },
+        { allowProperNouns: false, allowSlang: false },
+      ),
+    );
+    expect(parsePlayableLexiconSnapshot(snapshot)).toEqual(snapshot);
+    expect(parsePlayableLexiconSnapshot({ maxCount: 1, words: ['a'], displays: [] })).toBeNull();
+    expect(parsePlayableLexiconSnapshot(null)).toBeNull();
   });
 });
 

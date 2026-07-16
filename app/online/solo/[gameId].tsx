@@ -98,6 +98,7 @@ export default function OrganizerSoloPlayScreen() {
   const addTime = useOrganizerSoloStore((state) => state.addTime);
   const persistSnapshot = useOrganizerSoloStore((state) => state.persistSnapshot);
   const getRemainingMs = useOrganizerSoloStore((state) => state.getRemainingMs);
+  const restoredLexiconSnapshot = useOrganizerSoloStore((state) => state.playableLexicon);
 
   const [dictionary, setDictionary] = useState<DictionaryIndex | null>(null);
   const [properNouns, setProperNouns] = useState<string[]>([]);
@@ -174,6 +175,7 @@ export default function OrganizerSoloPlayScreen() {
     allowProperNouns: setup?.allowProperNouns ?? false,
     allowSlang: setup?.allowSlang ?? false,
     releaseDictionaryAfterBuild: true,
+    archiveSnapshot: restoredLexiconSnapshot,
     enabled: Boolean(setup?.baseWord && (status === 'playing' || status === 'finished')),
   });
 
@@ -270,6 +272,13 @@ export default function OrganizerSoloPlayScreen() {
     }
     void persistSnapshot();
   }, [persistSnapshot, status, words]);
+
+  useEffect(() => {
+    if ((status !== 'playing' && status !== 'paused') || !roundLexicon) {
+      return;
+    }
+    void persistSnapshot();
+  }, [persistSnapshot, roundLexicon, status]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (nextState) => {

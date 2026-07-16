@@ -3,12 +3,14 @@ import { create } from 'zustand';
 import type { ScoredWordEntry, WordScoreBadge, WordScoreKind } from '@/lib/game/scoring';
 import { buildStandings, computePlayerScore, resolveUniqueBonusEnabled } from '@/lib/game/scoring';
 import { computeRoundPlayedSecondsFromTimerState } from '@/lib/game/round-duration';
+import type { PlayableLexiconSnapshot } from '@/lib/dictionary/round-playable-lexicon';
 import {
   clearSoloRoundSnapshot,
   persistSoloRoundSnapshotFromState,
   type SoloRoundSnapshotV1,
 } from '@/lib/game/solo-round-snapshot';
 import type { LocalRoomSetup } from '@/lib/online/local-room-draft';
+import { playableLexiconSnapshotForSetup } from '@/lib/online/playable-lexicon-archive';
 import { computeExtendedTimerEndsAt } from '@/lib/online/voting/add-time-vote';
 
 export interface OrganizerSoloWord {
@@ -35,6 +37,8 @@ export interface OrganizerSoloState {
   status: 'idle' | 'playing' | 'paused' | 'finished';
   words: OrganizerSoloWord[];
   published: boolean;
+  /** Restored from durable snapshot — passed to round lexicon hook on cold start. */
+  playableLexicon: PlayableLexiconSnapshot | null;
   initFromSetup: (draftId: string, setup: LocalRoomSetup) => void;
   /** Restore a durable paused snapshot after process death. */
   hydrateFromSnapshot: (snapshot: SoloRoundSnapshotV1) => void;
@@ -66,6 +70,7 @@ const initialState = {
   status: 'idle' as const,
   words: [] as OrganizerSoloWord[],
   published: false,
+  playableLexicon: null as PlayableLexiconSnapshot | null,
 };
 
 export const useOrganizerSoloStore = create<OrganizerSoloState>((set, get) => ({
@@ -96,6 +101,7 @@ export const useOrganizerSoloStore = create<OrganizerSoloState>((set, get) => ({
       status: 'paused',
       words: snapshot.words.map((word) => ({ ...word })),
       published: snapshot.published,
+      playableLexicon: snapshot.playableLexicon ?? null,
     });
   },
 
@@ -195,6 +201,8 @@ export const useOrganizerSoloStore = create<OrganizerSoloState>((set, get) => ({
 
   persistSnapshot: () => {
     const state = get();
+    const playableLexicon =
+      state.setup != null ? playableLexiconSnapshotForSetup(state.setup) : undefined;
     return persistSoloRoundSnapshotFromState({
       draftId: state.draftId,
       setup: state.setup,
@@ -206,6 +214,7 @@ export const useOrganizerSoloStore = create<OrganizerSoloState>((set, get) => ({
       roundPlayedSeconds: state.roundPlayedSeconds,
       words: state.words,
       published: state.published,
+      ...(playableLexicon ? { playableLexicon } : {}),
     });
   },
 
