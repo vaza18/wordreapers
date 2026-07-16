@@ -8,6 +8,12 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 <!-- Add dated notes at the top -->
 
+### 2026-07-16 — Release CI: Fastlane `libruby` mismatch after Ruby patch
+
+- Symptom: iOS `eas build --local` → `fastlane --version` exit 1; `json` gem `linked to incompatible …/Ruby/3.3.11/…/libruby.3.3.dylib` while runner is 3.3.12.
+- Cause: `actions/cache` key for `scripts/ci/vendor` used only `Gemfile.lock`; `ruby/setup-ruby` floated `3.3` → new patch; restored native gems from previous patch. Not an app-code regression.
+- Fix: cache key includes resolved `RUBY_VERSION`; `ensure-fastlane.sh` stamps + rebuilds on mismatch. See `docs/release-ci.md` troubleshooting.
+
 ### 2026-07-16 — Android lexicon build perf (client-only)
 
 - Root fix kept: `DictionaryIndex` O(1) `Set` + `Intl.Collator('uk')` sort (+ commit-only setup prefetch). Speculative letter-mask / preferFastWallClock experiments reverted.
