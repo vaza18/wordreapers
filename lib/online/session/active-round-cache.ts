@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { StoredPlayerWord } from '../../firebase/player-words-service.js';
 import { normalizeRoomCode } from '../../firebase/room-code.js';
+import type { PlayableLexiconSnapshot } from '../../dictionary/round-playable-lexicon.js';
 import type { PlayingRoundSnapshot } from './online-session-archive.js';
 
 const STORAGE_KEY = 'wordreapers.activeOnlineRounds';
@@ -13,6 +14,8 @@ export interface ActiveRoundCacheEntry {
   words: Record<string, StoredPlayerWord>;
   /** Session snapshot for rejoin while the round timer is still running. */
   sessionSnapshot?: PlayingRoundSnapshot;
+  /** Cached playable lexicon — avoids rebuild after process death. */
+  playableLexicon?: PlayableLexiconSnapshot;
 }
 
 type CacheStore = Record<string, ActiveRoundCacheEntry>;

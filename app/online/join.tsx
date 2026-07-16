@@ -159,7 +159,17 @@ export default function JoinRoomScreen() {
         {joinLocked ? (
           <Text style={styles.lockedBanner}>{t('online.joinLockedBanner')}</Text>
         ) : null}
-        <RoomCodeInput value={code} onChange={setCode} disabled={joinLocked} />
+        <RoomCodeInput
+          value={code}
+          onChange={setCode}
+          disabled={joinLocked}
+          joinAction={{
+            onPress: handleJoin,
+            accessibilityLabel: t('online.joinAction'),
+            disabled: joinLocked || loading || !codeReady,
+            variant: joinIsPrimary ? 'primary' : 'secondary',
+          }}
+        />
         <Text style={styles.hint}>{t('online.joinHint')}</Text>
         {prewarming && !loading ? (
           <Text style={styles.hint}>{t('online.cloudConnecting')}</Text>
@@ -197,16 +207,6 @@ export default function JoinRoomScreen() {
             />
           </>
         ) : null}
-
-        <View style={styles.joinActionSection}>
-          <View style={styles.sectionDivider} />
-          <PrimaryButton
-            label={t('online.joinAction')}
-            variant={joinIsPrimary ? 'primary' : 'secondary'}
-            disabled={joinLocked || loading || !codeReady}
-            onPress={handleJoin}
-          />
-        </View>
 
         <View style={styles.publicSection}>
           <View style={styles.sectionDivider} />
@@ -265,10 +265,6 @@ function createStyles(colors: ThemeColors) {
     dividerText: {
       fontSize: 13,
       color: colors.textTertiary,
-    },
-    joinActionSection: {
-      gap: spacing.sm,
-      marginTop: spacing.md,
     },
     publicSection: {
       gap: spacing.sm,

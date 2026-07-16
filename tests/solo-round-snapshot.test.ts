@@ -119,6 +119,33 @@ describe('solo-round-snapshot', () => {
     expect(loaded?.setup.baseWord).toBe('тестслово');
   });
 
+  it('round-trips playable lexicon through AsyncStorage', async () => {
+    const playableLexicon = {
+      maxCount: 2,
+      words: ['тест', 'слово'],
+      displays: ['ТЕСТ', 'СЛОВО'],
+    };
+    const snap = buildSoloRoundSnapshot({
+      draftId: 'ABCDE',
+      setup,
+      uniqueBonusEnabled: false,
+      status: 'paused',
+      endsAt: null,
+      pausedRemainingMs: 45_000,
+      roundTimerBudgetSeconds: 300,
+      roundPlayedSeconds: null,
+      words: [],
+      published: false,
+      playableLexicon,
+      now: 1,
+    });
+    expect(snap).not.toBeNull();
+    await saveSoloRoundSnapshot(snap!);
+
+    const loaded = await loadSoloRoundSnapshot();
+    expect(loaded?.playableLexicon).toEqual(playableLexicon);
+  });
+
   it('rejects corrupt storage and clears it', async () => {
     getAsyncStorageMap().set(SOLO_ROUND_SNAPSHOT_KEY, '{not-json');
     expect(await loadSoloRoundSnapshot()).toBeNull();
@@ -128,6 +155,25 @@ describe('solo-round-snapshot', () => {
   it('parseSoloRoundSnapshot rejects wrong version / missing setup', () => {
     expect(parseSoloRoundSnapshot({ version: 99 })).toBeNull();
     expect(parseSoloRoundSnapshot({ version: 1, draftId: 'X' })).toBeNull();
+  });
+
+  it('parseSoloRoundSnapshot rejects corrupt playableLexicon', () => {
+    expect(
+      parseSoloRoundSnapshot({
+        version: 1,
+        draftId: 'ABCDE',
+        setup,
+        uniqueBonusEnabled: false,
+        status: 'paused',
+        pausedRemainingMs: 1,
+        roundTimerBudgetSeconds: 300,
+        roundPlayedSeconds: null,
+        words: [],
+        published: false,
+        playableLexicon: { maxCount: 1, words: ['a'], displays: [] },
+        savedAt: 1,
+      }),
+    ).toBeNull();
   });
 
   it('clearSoloRoundSnapshot removes the key', async () => {

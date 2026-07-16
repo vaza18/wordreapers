@@ -8,6 +8,22 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — iOS base-word suggestion needs two taps
+
+- **Symptom:** On iOS, tapping a suggest item appeared to select but the field stayed on the typed prefix (e.g. «СУПЕРКОН»); second tap worked. Android was fine.
+- **Cause:** The first tap _did_ call `onSelect`, but iOS then emitted a stale `TextInput` `onChangeText` with the pre-select value while blurring/dismissing the keyboard, which overwrote React state. Earlier Pressable/`keyboardShouldPersistTaps` theories were incomplete.
+- **Fix:** `useBaseWordSuggestField` ignores `onChangeText` for `BASE_WORD_SUGGEST_IGNORE_CHANGE_MS` after suggest/shuffle; `onTouchSelectStart` on `onPressIn` + deferred `onTouchSelectEnd` on `onPressOut` (RN order is pressOut→press; sync clear would let blur start hide) + TTL; commit on `onPress`; on blur set `immediate` immediately (also when suppress swallows hide) and only defer dropdown hide; typing uses hint status `pending` (spacer) not `empty`/«Обери базове слово»; typing soft-pauses prefetch without cache eviction; `onFocus` clears suppress, ignore window, and pending hide timer.
+- **Test:** `tests/use-base-word-suggest-field.test.tsx` (incl. pressOut→blur→press), `tests/use-setup-playable-lexicon-hint.test.tsx` (`pending` + cache survives typing), `tests/playable-words-count-hint.test.tsx`; manual iOS one-tap select.
+- **Area:** `hooks/useBaseWordSuggestField.ts`, `components/BaseWordSuggestDropdown.tsx`, setup/pick-word screens
+
+### 2026-07 — Setup lexicon build very slow on Android (localeCompare)
+
+- **Symptom:** Long base + proper/slang (~5773 accepts) took ~90–180s on Android setup; felt much worse than lobby/play.
+- **Cause:** `DictionaryIndex` membership used binary search with per-probe `localeCompare('uk')`, and lexicon sort used per-call `localeCompare` — dominant cost scaled with accepted count on Hermes. Setup also often ran multiple builds while changing words.
+- **Fix:** O(1) `Set` in `DictionaryIndex`; `Intl.Collator('uk')` for lexicon sort; commit-only setup prefetch (select/shuffle/blur); typing soft-pauses without cache eviction. Verified S931B Dev Client: ~5s for 5773 accepts (was ~187s).
+- **Test:** `tests/round-playable-lexicon.test.ts`, `tests/round-playable-lexicon-prefetch.test.ts` (`pause` vs `clear`), `tests/use-setup-playable-lexicon-hint.test.tsx`, `tests/dictionary.test.ts`; manual `[lexicon] filterMs/finalizeMs` logs
+- **Area:** `lib/dictionary/dictionary-index.ts`, `lib/dictionary/round-playable-lexicon.ts`, `lib/dictionary/round-playable-lexicon-prefetch.ts`, `hooks/useSetupPlayableLexiconHint.ts`
+
 ### 2026-07 — Blank screen when opening menu during resume vote
 
 - **Symptom:** On pause, after a peer proposed «продовжити», pressing the hamburger menu showed a blank white screen (neither pause nor menu).
@@ -135,6 +151,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 - **Fix:** Always render fixed child slots in the row (hide unused via opacity/width); keep badge `Animated.Text` mounted.
 - **Test:** `tests/word-list-row-slots.test.ts`
 - **Area:** `components/WordList.tsx`, `lib/ui/word-list-row-slots.ts`
+
+### 2026-07 — Lexicon rebuild after cold start blocks word validation
+
+- **Symptom:** After restoring a paused solo or online round from AsyncStorage, validation showed «немає в словнику» for 5–20s on Android with large lexicons (3000+ words) while the lexicon rebuilt on the JS thread.
+- **Cause:** Durable round snapshots (`solo-round-snapshot`, `active-round-cache`) saved words/timer but not the built `PlayableLexiconSnapshot`; in-memory lexicon cache was lost on process death.
+- **Fix:** Persist `playableLexicon` alongside round progress; restore via `useRoundPlayableLexicon({ archiveSnapshot })` on solo/play screens. Re-persist when lexicon becomes ready mid-round.
+- **Test:** `tests/solo-round-snapshot.test.ts`, `tests/cache-active-round.test.ts`, `tests/round-playable-lexicon.test.ts`
+- **Area:** `lib/game/solo-round-snapshot.ts`, `lib/online/session/cache-active-round.ts`, `store/organizer-solo-store.ts`, `app/online/solo/[gameId].tsx`, `app/online/play/[gameId].tsx`
 
 ### 2026-07 — Compose validation never re-ran after lexicon/dictionary ready
 

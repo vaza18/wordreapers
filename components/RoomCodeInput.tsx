@@ -2,14 +2,23 @@ import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { DEFAULT_CODE_LENGTH, normalizeRoomCode } from '@/lib/firebase/room-code';
+
+interface RoomCodeJoinAction {
+  onPress: () => void;
+  accessibilityLabel: string;
+  disabled?: boolean;
+  variant?: 'primary' | 'secondary';
+}
 
 interface RoomCodeInputProps {
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
+  joinAction?: RoomCodeJoinAction;
 }
 
 function createStyles(colors: ThemeColors) {
@@ -48,13 +57,44 @@ function createStyles(colors: ThemeColors) {
       fontWeight: '600',
       color: colors.accent,
     },
+    joinCell: {
+      width: 44,
+      height: 48,
+      borderRadius: radii.sm,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    joinCellPrimary: {
+      backgroundColor: colors.accent,
+    },
+    joinCellSecondary: {
+      backgroundColor: colors.backgroundPrimary,
+      borderWidth: 1.5,
+      borderColor: colors.borderSecondary,
+    },
+    joinCellDisabled: {
+      opacity: 0.5,
+    },
+    joinCellLabel: {
+      fontSize: 22,
+      fontWeight: '600',
+      color: colors.textOnAccent,
+    },
+    joinCellLabelSecondary: {
+      color: colors.textPrimary,
+    },
   });
 }
 
 /**
  * Room code entry (mockup screen 8). Default length is {@link DEFAULT_CODE_LENGTH}.
  */
-export function RoomCodeInput({ value, onChange, disabled = false }: RoomCodeInputProps) {
+export function RoomCodeInput({
+  value,
+  onChange,
+  disabled = false,
+  joinAction,
+}: RoomCodeInputProps) {
   const styles = useThemedStyles(createStyles);
   const { t } = useTranslation();
   const inputRef = useRef<TextInput>(null);
@@ -91,6 +131,30 @@ export function RoomCodeInput({ value, onChange, disabled = false }: RoomCodeInp
             <Text style={styles.cellText}>{char}</Text>
           </Pressable>
         ))}
+        {joinAction ? (
+          <FeedbackPressable
+            accessibilityRole="button"
+            accessibilityLabel={joinAction.accessibilityLabel}
+            disabled={disabled || joinAction.disabled}
+            onPress={joinAction.onPress}
+            style={[
+              styles.joinCell,
+              joinAction.variant === 'secondary'
+                ? styles.joinCellSecondary
+                : styles.joinCellPrimary,
+              disabled || joinAction.disabled ? styles.joinCellDisabled : null,
+            ]}
+          >
+            <Text
+              style={[
+                styles.joinCellLabel,
+                joinAction.variant === 'secondary' ? styles.joinCellLabelSecondary : null,
+              ]}
+            >
+              →
+            </Text>
+          </FeedbackPressable>
+        ) : null}
       </View>
     </View>
   );

@@ -9,6 +9,14 @@ const removeActiveRoundCache = vi.fn();
 const saveActiveRoundCache = vi.fn();
 const purgeExpiredActiveRoundCaches = vi.fn();
 
+vi.mock('../lib/online/playable-lexicon-archive.js', () => ({
+  playableLexiconSnapshotForSession: () => ({
+    maxCount: 2,
+    words: ['порт', 'рот'],
+    displays: ['ПОРТ', 'РОТ'],
+  }),
+}));
+
 vi.mock('firebase/database', () => ({
   get: (...args: unknown[]) => getMock(...args),
   ref: (_db: unknown, path: string) => ({ path }),
@@ -47,6 +55,7 @@ vi.mock('../lib/online/session/active-round-cache.js', async (importOriginal) =>
 
 import {
   cacheActiveRoundProgress,
+  loadActiveRoundLexiconSnapshot,
   purgeStaleActiveRoundCaches,
   tryRestoreActiveRoundCache,
 } from '../lib/online/session/cache-active-round.js';
@@ -76,8 +85,56 @@ describe('cache-active-round', () => {
       expect.objectContaining({
         gameId: 'ABCDE',
         words: { порт: { display: 'порт', at: 100 } },
+        playableLexicon: {
+          maxCount: 2,
+          words: ['порт', 'рот'],
+          displays: ['ПОРТ', 'РОТ'],
+        },
       }),
     );
+  });
+
+  it('saves lexicon-only cache when the round has no words yet', async () => {
+    const session = playingSession(
+      { org: { name: 'Org', wordCount: 0, score: 0, online: true } },
+      { timerEndsAt: 2_000_000 },
+    );
+
+    await cacheActiveRoundProgress('ABCDE', 'org', session, new Map());
+
+    expect(saveActiveRoundCache).toHaveBeenCalledWith(
+      expect.objectContaining({
+        gameId: 'ABCDE',
+        words: {},
+        playableLexicon: expect.objectContaining({ maxCount: 2 }),
+      }),
+    );
+  });
+
+  it('loads persisted lexicon snapshot for the active round', async () => {
+    const session = playingSession(
+      { org: { name: 'Org', wordCount: 0, score: 0, online: true } },
+      { timerEndsAt: 2_000_000, baseWordRound: 0 },
+    );
+    getActiveRoundCache.mockResolvedValue({
+      gameId: 'ABCDE',
+      baseWordRound: 0,
+      timerEndsAt: 2_000_000,
+      words: {},
+      playableLexicon: {
+        maxCount: 2,
+        words: ['порт', 'рот'],
+        displays: ['ПОРТ', 'РОТ'],
+      },
+    });
+
+    const snapshot = await loadActiveRoundLexiconSnapshot('ABCDE', session);
+
+    expect(snapshot).toEqual({
+      maxCount: 2,
+      words: ['порт', 'рот'],
+      displays: ['ПОРТ', 'РОТ'],
+    });
   });
 
   it('skips cache save when the round is not playing', async () => {

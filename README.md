@@ -1,5 +1,7 @@
 # Wordreapers (Словозбирачі)
 
+[![CI](https://github.com/vaza18/wordreapers/actions/workflows/ci.yml/badge.svg?event=push)](https://github.com/vaza18/wordreapers/actions/workflows/ci.yml)
+
 A Ukrainian word game for families: build words from the letters of a base word; the dictionary validates them automatically.
 
 Docs: [`docs/`](docs/) · Repository: [github.com/vaza18/wordreapers](https://github.com/vaza18/wordreapers) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)

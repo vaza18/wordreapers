@@ -1,5 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import {
+  parsePlayableLexiconSnapshot,
+  type PlayableLexiconSnapshot,
+} from '../dictionary/round-playable-lexicon.js';
 import type { WordScoreBadge, WordScoreKind } from './scoring.js';
 import type { LocalRoomSetup } from '../online/local-room-draft.js';
 
@@ -28,6 +32,8 @@ export interface SoloRoundSnapshotV1 {
   roundPlayedSeconds: number | null;
   words: SoloRoundSnapshotWord[];
   published: boolean;
+  /** Cached playable lexicon — avoids rebuild after process death. */
+  playableLexicon?: PlayableLexiconSnapshot;
   savedAt: number;
 }
 
@@ -43,6 +49,7 @@ export interface SoloRoundSnapshotSource {
   roundPlayedSeconds: number | null;
   words: SoloRoundSnapshotWord[];
   published: boolean;
+  playableLexicon?: PlayableLexiconSnapshot;
   now: number;
 }
 
@@ -114,6 +121,14 @@ export function parseSoloRoundSnapshot(raw: unknown): SoloRoundSnapshotV1 | null
   if (typeof row.published !== 'boolean') {
     return null;
   }
+  let playableLexicon: PlayableLexiconSnapshot | undefined;
+  if (row.playableLexicon != null) {
+    const parsedLexicon = parsePlayableLexiconSnapshot(row.playableLexicon);
+    if (!parsedLexicon) {
+      return null;
+    }
+    playableLexicon = parsedLexicon;
+  }
   const savedAt = typeof row.savedAt === 'number' ? row.savedAt : 0;
   return {
     version: SOLO_ROUND_SNAPSHOT_VERSION,
@@ -127,6 +142,7 @@ export function parseSoloRoundSnapshot(raw: unknown): SoloRoundSnapshotV1 | null
     roundPlayedSeconds: typeof row.roundPlayedSeconds === 'number' ? row.roundPlayedSeconds : null,
     words: row.words,
     published: row.published,
+    ...(playableLexicon ? { playableLexicon } : {}),
     savedAt,
   };
 }
@@ -165,6 +181,7 @@ export function buildSoloRoundSnapshot(
     roundPlayedSeconds: source.roundPlayedSeconds,
     words: source.words.map((word) => ({ ...word })),
     published: source.published,
+    ...(source.playableLexicon ? { playableLexicon: source.playableLexicon } : {}),
     savedAt: source.now,
   };
 }
@@ -201,7 +218,10 @@ export async function loadSoloRoundSnapshot(): Promise<SoloRoundSnapshotV1 | nul
 
 /** Persist current solo store fields when an active round exists. */
 export async function persistSoloRoundSnapshotFromState(
-  source: Omit<SoloRoundSnapshotSource, 'now'> & { now?: number },
+  source: Omit<SoloRoundSnapshotSource, 'now' | 'playableLexicon'> & {
+    now?: number;
+    playableLexicon?: PlayableLexiconSnapshot;
+  },
 ): Promise<boolean> {
   const snapshot = buildSoloRoundSnapshot({ ...source, now: source.now ?? Date.now() });
   if (!snapshot) {

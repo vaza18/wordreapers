@@ -3,9 +3,9 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { VALIDATION_DEBOUNCE_MS } from '../constants/game-timing.js';
 import { DictionaryIndex } from '../lib/dictionary/dictionary-index.js';
 import { clearRoundPlayableLexiconCache } from '../lib/dictionary/round-playable-lexicon-cache.js';
+import { getCachedRoundPlayableLexicon } from '../lib/dictionary/round-playable-lexicon-cache.js';
 import { resetRoundPlayableLexiconPrefetchForTests } from '../lib/dictionary/round-playable-lexicon-prefetch.js';
 import {
   useSetupPlayableLexiconHint,
@@ -49,7 +49,7 @@ describe('useSetupPlayableLexiconHint', () => {
     clearRoundPlayableLexiconCache();
   });
 
-  it('debounces typing before prefetch', async () => {
+  it('does not prefetch while typing (waits for commit)', async () => {
     const { result, rerender } = renderHook(
       ({ baseWordInput, commitMode }: HintHookProps) =>
         useSetupPlayableLexiconHint({
@@ -64,23 +64,48 @@ describe('useSetupPlayableLexiconHint', () => {
     expect(result.current.status).toBe('empty');
 
     rerender({ baseWordInput: 'КОМПЮТЕР', commitMode: 'typing' });
-    expect(result.current.status).not.toBe('ready');
-
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(VALIDATION_DEBOUNCE_MS - 1);
-    });
-    expect(result.current.status).not.toBe('ready');
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1);
       await vi.runAllTimersAsync();
     });
+    expect(result.current.status).toBe('pending');
+    expect(result.current.maxCount).toBeNull();
+  });
 
+  it('typing does not evict a previously built lexicon cache entry', async () => {
+    const { result, rerender } = renderHook(
+      ({ baseWordInput, commitMode }: HintHookProps) =>
+        useSetupPlayableLexiconHint({
+          baseWordInput,
+          allowProperNouns: false,
+          allowSlang: false,
+          commitMode,
+        }),
+      { initialProps: { baseWordInput: '', commitMode: 'typing' as SetupLexiconCommitMode } },
+    );
+
+    rerender({ baseWordInput: 'КОМПЮТЕР', commitMode: 'immediate' });
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
     await act(async () => {
       await vi.waitFor(() => {
         expect(result.current.status).toBe('ready');
       });
     });
+    expect(getCachedRoundPlayableLexicon('компютер', false, false)?.maxCount).toBe(3);
+
+    rerender({ baseWordInput: 'КОМПЮТЕРИ', commitMode: 'typing' });
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    expect(result.current.status).toBe('pending');
+    expect(getCachedRoundPlayableLexicon('компютер', false, false)?.maxCount).toBe(3);
+
+    rerender({ baseWordInput: 'КОМПЮТЕР', commitMode: 'immediate' });
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    expect(result.current.status).toBe('ready');
     expect(result.current.maxCount).toBe(3);
   });
 

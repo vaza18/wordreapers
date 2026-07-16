@@ -98,6 +98,15 @@ export function subscribeRoundPlayableLexiconPrefetch(listener: PrefetchListener
 }
 
 /**
+ * Cancel in-flight prefetch without evicting the cache.
+ * Used while the user is still editing a long-enough base word (typing).
+ */
+export function pauseRoundPlayableLexiconPrefetch(): void {
+  cancelPendingWork();
+  setStatus({ kind: 'idle' });
+}
+
+/**
  * Cancel pending prefetch and clear the empty-input UI state.
  * Evicts the previously active cache entry when abandoning a base word.
  */

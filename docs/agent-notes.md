@@ -8,6 +8,12 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 <!-- Add dated notes at the top -->
 
+### 2026-07-16 — Android lexicon build perf (client-only)
+
+- Root fix kept: `DictionaryIndex` O(1) `Set` + `Intl.Collator('uk')` sort (+ commit-only setup prefetch). Speculative letter-mask / preferFastWallClock experiments reverted.
+- Verified ~3–6s for 5773 accepts on S931B (`yieldEveryMs` 64). No play/solo blocking spinner — lexicon builds in background while the screen mounts; word submit already has ~1s debounce.
+- iOS suggest / setup hint: typing uses soft `pause` (no cache eviction); deferred `onPressOut` clear keeps suppress until `onPress`.
+
 ### 2026-07-15 — Dead code cleanup
 
 - Removed orphan modules (`leave-organizer-setup`, `session-participants`, unused `lib/game` barrel), unused exports (`PlusIcon`, `Stepper`, `withButtonFeedback`, …), and four test-only `lib/online` helpers (`resolve-rematch-navigation-route`, `restore-finished-round-to-firebase`, `sum-archived-word-count`, `voting-player-ids`) plus their dedicated tests. Pruned ~46 unused `uk.json` keys. No runtime behavior change.

@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useLiveRoundPlayScreen } from '@/hooks/useLiveRoundPlayScreen';
 import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
+import type { PlayableLexiconSnapshot } from '@/lib/dictionary/round-playable-lexicon';
 import { BottomSheetModal } from '@/components/BottomSheetModal';
 import { GameMenuModal } from '@/components/GameMenuModal';
 import { OnlinePlayActiveBody } from '@/components/online/OnlinePlayActiveBody';
@@ -52,6 +53,7 @@ import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
 import { markPendingRoundArchive } from '@/lib/online/session/pending-round-archive';
 import {
   cacheActiveRoundProgress,
+  loadActiveRoundLexiconSnapshot,
   purgeStaleActiveRoundCaches,
   tryRestoreActiveRoundCache,
 } from '@/lib/online/session/cache-active-round';
@@ -190,6 +192,8 @@ export default function OnlinePlayScreen() {
   > | null>(null);
   const [roundEndSessionSnapshot, setRoundEndSessionSnapshot] =
     useState<GameSessionSnapshot | null>(null);
+  const [restoredLexiconSnapshot, setRestoredLexiconSnapshot] =
+    useState<PlayableLexiconSnapshot | null>(null);
   const roundEnded = session?.status === 'finished' || roundOverPendingResults;
   const timeUpModalVisible = shouldShowTimeUpModal({
     roundEnded,
@@ -296,6 +300,23 @@ export default function OnlinePlayScreen() {
     leavingIntentionallyRef,
     onJoinFailed: setLoadError,
   });
+
+  useEffect(() => {
+    if (!session || session.status !== 'playing' || !myUid) {
+      setRestoredLexiconSnapshot(null);
+      return undefined;
+    }
+    let cancelled = false;
+    void loadActiveRoundLexiconSnapshot(gameId, session).then((snapshot) => {
+      if (!cancelled) {
+        setRestoredLexiconSnapshot(snapshot);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload lexicon when round identity changes
+  }, [gameId, myUid, session?.baseWordRound, session?.status, session?.timerEndsAt]);
 
   useEffect(() => {
     if (resultsNavigatedRef.current || !session || session.status !== 'playing' || !myUid) {
@@ -456,10 +477,19 @@ export default function OnlinePlayScreen() {
     allowProperNouns,
     allowSlang,
     releaseDictionaryAfterBuild: true,
+    archiveSnapshot: restoredLexiconSnapshot,
     enabled: Boolean(
       displaySession?.baseWord && (displaySession.status === 'playing' || roundEnded),
     ),
   });
+
+  useEffect(() => {
+    if (!session || session.status !== 'playing' || !myUid || !roundLexicon) {
+      return;
+    }
+    void cacheActiveRoundProgress(gameId, myUid, session, myWordsRef.current);
+  }, [gameId, myUid, roundLexicon, session]);
+
   const showPointUi = shouldShowPointUi(uniqueBonusEnabled);
 
   const isPaused = displaySession?.pauseState?.active === true;
