@@ -113,6 +113,29 @@ function roomCodeForIndex(index: number): string {
   return code;
 }
 
+/** Must match `FINISHED_ARCHIVES_KEY` in online-session-archive.ts. */
+const FINISHED_ARCHIVES_STORAGE_KEY = 'wordreapers.finishedOnlineRounds';
+
+/** Seed many archives in one write — avoids O(n²) JSON via repeated saveFinishedRoundArchive. */
+function seedFinishedArchives(count: number, startIndex = 0): void {
+  const store: Record<string, unknown> = {};
+  for (let i = 0; i < count; i++) {
+    const index = startIndex + i;
+    const gameId = roomCodeForIndex(index);
+    store[`${gameId}:0`] = {
+      gameId,
+      baseWordRound: 0,
+      savedAt: index * 1000,
+      session: finishedSession(String(index)),
+      playerWords: {},
+      archiveVersion: 3,
+      ackSent: false,
+      playerWordCounts: { org: 0 },
+    };
+  }
+  storage.set(FINISHED_ARCHIVES_STORAGE_KEY, JSON.stringify(store));
+}
+
 describe('finished archive retention', () => {
   beforeEach(() => {
     storage.clear();
@@ -125,15 +148,22 @@ describe('finished archive retention', () => {
   });
 
   it('keeps only the newest finished archives up to MAX_FINISHED_ARCHIVES', async () => {
-    for (let i = 0; i < MAX_FINISHED_ARCHIVES + 5; i++) {
-      vi.setSystemTime(i * 1000);
-      await saveFinishedRoundArchive(roomCodeForIndex(i), finishedSession(String(i)), new Map());
+    seedFinishedArchives(MAX_FINISHED_ARCHIVES);
+    const overflow = 5;
+    for (let i = 0; i < overflow; i++) {
+      const index = MAX_FINISHED_ARCHIVES + i;
+      vi.setSystemTime(index * 1000);
+      await saveFinishedRoundArchive(
+        roomCodeForIndex(index),
+        finishedSession(String(index)),
+        new Map(),
+      );
     }
 
     const archives = await listFinishedRoundArchives();
     expect(archives).toHaveLength(MAX_FINISHED_ARCHIVES);
     expect(archives.some((archive) => archive.gameId === roomCodeForIndex(0))).toBe(false);
-    expect(archives[0]?.gameId).toBe(roomCodeForIndex(MAX_FINISHED_ARCHIVES + 4));
+    expect(archives[0]?.gameId).toBe(roomCodeForIndex(MAX_FINISHED_ARCHIVES + overflow - 1));
   });
 
   it('keeps playableLexicon only on the newest MAX_STORED_LEXICON_SNAPSHOTS archives', async () => {

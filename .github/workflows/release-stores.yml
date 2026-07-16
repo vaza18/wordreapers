@@ -234,17 +234,22 @@ jobs:
         run: npm ci
 
       # Fastlane needs Ruby 3.x + Bundler 2.x (Bundler 1.x breaks on Pathname#untaint).
+      # Cache key must include the resolved patch (3.3.11 vs 3.3.12) — native gems link libruby.
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.3'
           bundler: '2.6.9'
 
+      - name: Resolve Ruby version for Fastlane cache
+        id: ruby-cache
+        run: echo "version=$(ruby -e 'print RUBY_VERSION')" >> "$GITHUB_OUTPUT"
+
       - uses: actions/cache@v5
         with:
           path: scripts/ci/vendor
-          key: fastlane-${{ runner.os }}-${{ hashFiles('scripts/ci/Gemfile.lock') }}
+          key: fastlane-${{ runner.os }}-ruby-${{ steps.ruby-cache.outputs.version }}-${{ hashFiles('scripts/ci/Gemfile.lock') }}
           restore-keys: |
-            fastlane-${{ runner.os }}-
+            fastlane-${{ runner.os }}-ruby-${{ steps.ruby-cache.outputs.version }}-
 
       - name: Build Android + upload Play Internal
         run: |
@@ -339,17 +344,22 @@ jobs:
         run: npm ci
 
       # Fastlane needs Ruby 3.x + Bundler 2.x (Bundler 1.x breaks on Pathname#untaint).
+      # Cache key must include the resolved patch (3.3.11 vs 3.3.12) — native gems link libruby.
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.3'
           bundler: '2.6.9'
 
+      - name: Resolve Ruby version for Fastlane cache
+        id: ruby-cache
+        run: echo "version=$(ruby -e 'print RUBY_VERSION')" >> "$GITHUB_OUTPUT"
+
       - uses: actions/cache@v5
         with:
           path: scripts/ci/vendor
-          key: fastlane-${{ runner.os }}-${{ hashFiles('scripts/ci/Gemfile.lock') }}
+          key: fastlane-${{ runner.os }}-ruby-${{ steps.ruby-cache.outputs.version }}-${{ hashFiles('scripts/ci/Gemfile.lock') }}
           restore-keys: |
-            fastlane-${{ runner.os }}-
+            fastlane-${{ runner.os }}-ruby-${{ steps.ruby-cache.outputs.version }}-
 
       - name: Build iOS + upload TestFlight
         run: |
