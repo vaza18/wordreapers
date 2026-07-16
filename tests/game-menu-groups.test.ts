@@ -51,7 +51,7 @@ describe('game menu uk copy', () => {
     expect(uk.game.menuPause).toBe('Пауза');
     expect(uk.game.menuPauseSolo).toBe('Пауза');
     expect(uk.online.menuInvitePlayer).toBe('Запросити');
-    expect(uk.game.menuProposeEnd).toBe('Завершити гру');
+    expect(uk.game.menuProposeEnd).toBe('Завершити гру для всіх');
     expect(uk.game.menuEndEarly).toBe('Завершити гру');
     expect(uk.game.menuExit).toBe('Вийти з гри');
     expect(uk.nav.settings).toBe('Налаштування');
