@@ -84,6 +84,7 @@ import {
   removeOrphanGameSessionShell,
   restartGameSessionForRematch,
   subscribeGameSession,
+  subscribePlayerOnlinePresence,
   syncLobbyPickerState,
   syncSessionPlayerScores,
   updateGameSessionBaseWord,
@@ -378,5 +379,32 @@ describe('game-session-service extended', () => {
       }),
     );
     expect(onSession.mock.calls[0][0]).not.toHaveProperty('wordPlayers');
+  });
+
+  it('subscribes to presence reconnect after app check', async () => {
+    onValueMock.mockImplementation(() => vi.fn());
+
+    const unsub = subscribePlayerOnlinePresence('ABCDE', 'org-1');
+
+    expect(onValueMock).not.toHaveBeenCalled();
+    await vi.waitFor(() => {
+      expect(ensureFirebaseAppCheck).toHaveBeenCalled();
+      expect(onValueMock).toHaveBeenCalled();
+    });
+    expect(onValueMock.mock.calls[0]?.[0]).toEqual({ path: '.info/connected' });
+    unsub();
+  });
+
+  it('still subscribes to presence when app check fails', async () => {
+    ensureFirebaseAppCheck.mockRejectedValueOnce(new Error('APP_CHECK_TOKEN_EMPTY'));
+    onValueMock.mockImplementation(() => vi.fn());
+
+    const unsub = subscribePlayerOnlinePresence('ABCDE', 'org-1');
+
+    await vi.waitFor(() => {
+      expect(onValueMock).toHaveBeenCalled();
+    });
+    expect(onValueMock.mock.calls[0]?.[0]).toEqual({ path: '.info/connected' });
+    unsub();
   });
 });

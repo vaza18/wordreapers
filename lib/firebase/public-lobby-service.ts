@@ -28,6 +28,7 @@ import {
   sessionHadPublicBrowseExposure,
   sessionIdentityMasked,
 } from '../online/public-lobby/session-identity.js';
+import { ensureFirebaseAppCheck } from './app-check.js';
 import { resolveGameSessionSettingsForSession } from './session-settings.js';
 import { getServerNow } from './server-clock.js';
 import { getFirebaseDatabase } from './init.js';
@@ -196,6 +197,8 @@ async function resolvePublicLobbyTotal(language: string): Promise<number> {
 
 /**
  * Fetch one browse page (non-realtime).
+ * Hard-fails if App Check is not ready (unlike presence / session subscribe, which soft-fail
+ * and still attach listeners). Browse is a one-shot read; the UI shows browseLoadFailed.
  */
 export async function fetchPublicLobbyPage(
   language: string,
@@ -210,6 +213,7 @@ export async function fetchPublicLobbyPage(
   totalPages: number | null;
   cursors: Map<number, PublicLobbyBrowseCursor | null>;
 }> {
+  await ensureFirebaseAppCheck();
   const safePage = Math.max(1, page);
   const total = await resolvePublicLobbyTotal(language);
   const totalPages = total === null ? null : total === 0 ? 0 : Math.ceil(total / pageSize);
@@ -237,6 +241,7 @@ export async function fetchPublicLobbyPage(
 
 /** Read approximate active public lobby count for language shard. */
 export async function fetchPublicLobbyCount(language: string): Promise<number | null> {
+  await ensureFirebaseAppCheck();
   const snapshot = await get(ref(getFirebaseDatabase(), publicLobbyCountPath(language)));
   if (!snapshot.exists()) {
     return 0;

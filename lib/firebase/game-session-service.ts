@@ -774,6 +774,11 @@ export function subscribeGameSession(
 
   void import('./app-check.js')
     .then(({ ensureFirebaseAppCheck }) => ensureFirebaseAppCheck())
+    .catch((error) => {
+      if (__DEV__) {
+        console.warn('subscribeGameSession app check', error);
+      }
+    })
     .then(() => {
       if (cancelled) {
         return;
@@ -853,11 +858,33 @@ export async function markPlayerOnline(gameId: string, uid: string): Promise<voi
  */
 export function subscribePlayerOnlinePresence(gameId: string, uid: string): Unsubscribe {
   const connectedRef = ref(getFirebaseDatabase(), '.info/connected');
-  return onValue(connectedRef, (snapshot) => {
-    if (snapshot.val() === true && shouldMarkPresenceOnline(AppState.currentState)) {
-      void markPlayerOnline(gameId, uid);
-    }
-  });
+  let unsub: Unsubscribe | null = null;
+  let cancelled = false;
+
+  void import('./app-check.js')
+    .then(({ ensureFirebaseAppCheck }) => ensureFirebaseAppCheck())
+    .catch((error) => {
+      if (__DEV__) {
+        console.warn('subscribePlayerOnlinePresence app check', error);
+      }
+    })
+    .then(() => {
+      if (cancelled) {
+        return;
+      }
+      // Still subscribe if App Check failed: presence must not silently drop while
+      // Console enforcement is off; RTDB will reject once enforcement is on.
+      unsub = onValue(connectedRef, (snapshot) => {
+        if (snapshot.val() === true && shouldMarkPresenceOnline(AppState.currentState)) {
+          void markPlayerOnline(gameId, uid);
+        }
+      });
+    });
+
+  return () => {
+    cancelled = true;
+    unsub?.();
+  };
 }
 
 /**
