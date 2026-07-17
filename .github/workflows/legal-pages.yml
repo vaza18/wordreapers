@@ -2,7 +2,17 @@ name: Legal pages (GitHub Pages)
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
+    # Keep path list in sync with pull_request.paths below.
+    paths:
+      - 'docs/legal/**'
+      - 'docs/wordreapers_about.md'
+      - 'assets/icons/app-icon-512x512.png'
+      - 'assets/store-badges/**'
+      - 'scripts/build-legal-pages.ts'
+      - '.github/workflows/legal-pages.yml'
+  pull_request:
+    # Keep path list in sync with push.paths above.
     paths:
       - 'docs/legal/**'
       - 'docs/wordreapers_about.md'
@@ -14,11 +24,9 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: legal-pages
+  group: legal-pages-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -50,8 +58,12 @@ jobs:
 
   deploy:
     needs: build
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

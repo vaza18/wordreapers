@@ -20,6 +20,15 @@ Each locale folder contains:
 
 The **MIT License** for source code stays at the repository root: [`LICENSE`](../../LICENSE).
 
+## Published legal pages
+
+The `Legal pages (GitHub Pages)` workflow:
+
+- builds relevant pull requests without deploying;
+- builds and deploys relevant changes pushed or merged to `main`;
+- does not run for direct pushes to `dev`;
+- can be run manually with `workflow_dispatch` (deployment occurs only when run from `main`).
+
 ## App integration (future)
 
 The in-app “Legal” screen should load documents for the active locale, e.g. `docs/legal/uk-uk/privacy_policy.md`, with fallback to a default locale if a translation is missing.
