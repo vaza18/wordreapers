@@ -8,6 +8,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — Training resume hit Firebase Auth / App Check Invalid
+
+- **Symptom:** App Check Console showed Auth/RTDB **Unverified: invalid** while finishing a paused local training round on a production Android build (Play Integrity). Training is supposed to stay offline.
+- **Cause:** `abandonOrganizerWaitingRoomForDraft` always called `ensureAnonymousAuth` (App Check + anonymous sign-in) before checking whether any tracked/published waiting room existed. Pure solo mount/resume therefore still contacted Auth. Separately, the JS App Check `CustomProvider` could return an empty native token with a fake expiry, which Firebase logs as **Invalid** rather than Missing.
+- **Fix:** Collect waiting-room ids first and skip Auth/RTDB when none; throw `APP_CHECK_TOKEN_EMPTY` instead of attaching an empty token; reset sticky App Check init on bootstrap `forceRetry`; await App Check before presence `.info/connected` and public lobby browse reads.
+- **Test:** `tests/abandon-tracked-waiting-room.test.ts` (negative/positive contracts), `tests/app-check-resolve-token.test.ts`, `tests/public-lobby-service.test.ts` (App Check before get), `tests/game-session-service-extended.test.ts` (presence after App Check). Manual production smoke: clean training pause/resume/finish should not create Auth spikes; invite/publish and browse still work.
+- **Area:** `lib/online/abandon-tracked-waiting-room.ts`, `lib/firebase/app-check.ts`, `lib/firebase/bootstrap.ts`, `lib/firebase/public-lobby-service.ts`, `lib/firebase/game-session-service.ts`
+
 ### 2026-07 — iOS base-word suggestion needs two taps
 
 - **Symptom:** On iOS, tapping a suggest item appeared to select but the field stayed on the typed prefix (e.g. «СУПЕРКОН»); second tap worked. Android was fine.

@@ -2,12 +2,22 @@ import { Platform } from 'react-native';
 
 import { isFirebaseConfigured } from './config.js';
 import { getFirebaseApp } from './init.js';
-import { expireTimeMillisFromAppCheckJwt } from './app-check-token-expiry.js';
+import { resolveNativeAppCheckTokenForJsSdk } from './app-check-resolve-token.js';
 import { hasNativeFirebaseAppModule } from './has-native-firebase-app-module.js';
 import type { NativeAppCheckTokenGetter } from './native-app-check-native.js';
 
 let initPromise: Promise<void> | null = null;
 let jsSdkAppCheckAttached = false;
+
+/**
+ * Clear sticky App Check init so `forceRetry` can re-run native attestation.
+ * Does not detach an already-initialized JS SDK App Check instance.
+ */
+export function resetFirebaseAppCheck(): void {
+  initPromise = null;
+}
+
+export { resolveNativeAppCheckTokenForJsSdk } from './app-check-resolve-token.js';
 
 /**
  * Native attestation (Play Integrity / App Attest) plus JS SDK bridge so RTDB + Auth
@@ -24,7 +34,10 @@ export async function ensureFirebaseAppCheck(): Promise<void> {
     return;
   }
 
-  initPromise = initNativeAppCheck();
+  initPromise = initNativeAppCheck().catch((error) => {
+    initPromise = null;
+    throw error;
+  });
   return initPromise;
 }
 
@@ -59,16 +72,7 @@ async function attachJsSdkAppCheck(
 
   initializeAppCheck(firebaseApp, {
     provider: new CustomProvider({
-      getToken: async () => {
-        let result = await getNativeAppCheckToken(nativeAppCheck, false);
-        if (!result.token) {
-          result = await getNativeAppCheckToken(nativeAppCheck, true);
-        }
-        return {
-          token: result.token,
-          expireTimeMillis: expireTimeMillisFromAppCheckJwt(result.token),
-        };
-      },
+      getToken: () => resolveNativeAppCheckTokenForJsSdk(nativeAppCheck, getNativeAppCheckToken),
     }),
     isTokenAutoRefreshEnabled: true,
   });

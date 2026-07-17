@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const onValueMock = vi.fn();
 const ensureAnonymousAuth = vi.fn();
 const ensureFirebaseAppCheck = vi.fn();
+const resetFirebaseAppCheckMock = vi.fn();
 const isFirebaseConfigured = vi.fn();
 const hasNativeFirebaseAppModule = vi.fn();
 const getFirebaseApp = vi.fn();
@@ -26,6 +27,10 @@ vi.mock('../lib/firebase/app-check.js', async (importOriginal) => {
   return {
     ...actual,
     ensureFirebaseAppCheck: () => ensureFirebaseAppCheck(),
+    resetFirebaseAppCheck: () => {
+      resetFirebaseAppCheckMock();
+      actual.resetFirebaseAppCheck();
+    },
   };
 });
 
@@ -191,6 +196,26 @@ describe('firebase bootstrap chain', () => {
     await vi.advanceTimersByTimeAsync(0);
     await second;
 
+    expect(ensureAnonymousAuth).toHaveBeenCalledTimes(2);
+  });
+
+  it('forceRetry resets sticky App Check init', async () => {
+    onValueMock.mockImplementation((_ref, onNext) => {
+      const unsub = vi.fn();
+      setTimeout(() => onNext({ val: () => true }), 0);
+      return unsub;
+    });
+
+    const first = ensureFirebaseReady();
+    await vi.advanceTimersByTimeAsync(0);
+    await first;
+    resetFirebaseAppCheckMock.mockClear();
+
+    const second = ensureFirebaseReady({ forceRetry: true });
+    await vi.advanceTimersByTimeAsync(0);
+    await second;
+
+    expect(resetFirebaseAppCheckMock).toHaveBeenCalled();
     expect(ensureAnonymousAuth).toHaveBeenCalledTimes(2);
   });
 

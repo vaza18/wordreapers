@@ -8,6 +8,26 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 <!-- Add dated notes at the top -->
 
+### 2026-07-17 — VirtualizedList warning: results lexicon gate
+
+- RN warning `dt`/`prevDt` are scroll-event gaps, not render duration; needs `contentLength > 5× viewport`. Confirmed source: play `WordList` (~50 rows), not results; often false positive after pause between scrolls.
+- Results: `resolveResultsWordListLexicon` keeps found-only list stable until «Показати всі можливі слова» is on (avoids rebuild when lexicon finishes).
+- `ResultsGlobalWordList`: hoist `t`/theme out of each row.
+- Test: `tests/round-playable-lexicon.test.ts`
+
+### 2026-07-17 — WordList FlatList update cost (no UX change)
+
+- Symptom: RN `VirtualizedList: large list that is slow to update` with ~60 accepted words (`dt` ~500ms+).
+- Cause: full `map+sort` rebuilt every row object on accept; `renderItem` identity churned on prefix/entrance/highlight Sets.
+- Change: `buildSortedWordListRows` reuses prior row identity + binary insert on single add; stable `renderItem` via snapshot ref + `extraData`.
+- Test: `tests/word-list-rows.test.ts`
+
+### 2026-07-17 — Training Firebase / App Check Invalid (production)
+
+- Production Android (Play Integrity): paused training resume/finish correlated with Auth/RTDB **Invalid** App Check metrics while enforcement still off.
+- Code fix: short-circuit `abandonOrganizerWaitingRoomForDraft` before Auth; reject empty App Check tokens; gate presence + public lobby browse. See `docs/known-issues.md`.
+- Manual smoke (narrow): (1) clean app data → training pause/resume/finish → no Auth spike; (2) setup→solo without publish; (3) invite/publish from solo still works; (4) browse/join → Verified. Sync coordinator may still hit Firebase if non-solo archives exist on device.
+
 ### 2026-07-16 — Release CI: iOS ExpoModulesJSI Swift 6.3 requirement
 
 - Symptom: after the deps bump (`222e87d`, `expo` `^57.0.0` → `~57.0.6` → `expo-modules-jsi@57.0.3`), iOS archive fails compiling `expo-modules-jsi` (`JavaScriptCodable+Date.swift:53` `type of expression is ambiguous`).

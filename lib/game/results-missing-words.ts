@@ -2,7 +2,7 @@ import type { GlobalResultWordRow } from '@/lib/game/results-view';
 import { toDisplayUpper } from '../dictionary/normalize.js';
 
 /** Lexicon fields used when merging found words with the full playable set. */
-interface ResultsWordListLexicon {
+export interface ResultsWordListLexicon {
   sortedWords: readonly string[];
   displays: ReadonlyMap<string, string>;
 }
@@ -14,6 +14,20 @@ export interface ResultsWordListRow {
   found: boolean;
   authors?: GlobalResultWordRow['authors'];
   showX2?: boolean;
+}
+
+/**
+ * Gate lexicon into the results word-list memo only while missing words are shown.
+ * Keeps found-only lists stable when the lexicon finishes loading in the background.
+ */
+export function resolveResultsWordListLexicon(
+  lexicon: ResultsWordListLexicon | null | undefined,
+  showMissing: boolean,
+): ResultsWordListLexicon | null {
+  if (!showMissing) {
+    return null;
+  }
+  return lexicon ?? null;
 }
 
 /**

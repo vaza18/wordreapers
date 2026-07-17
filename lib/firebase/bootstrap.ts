@@ -1,3 +1,4 @@
+import { resetFirebaseAppCheck } from './app-check.js';
 import { isFirebaseConfigured } from './config.js';
 import { bootstrapFirebaseConnection, type FirebaseConnectionResult } from './connection.js';
 
@@ -8,6 +9,7 @@ let bootstrapPromise: Promise<FirebaseConnectionResult> | null = null;
  */
 export function resetFirebaseBootstrap(): void {
   bootstrapPromise = null;
+  resetFirebaseAppCheck();
 }
 
 /**
