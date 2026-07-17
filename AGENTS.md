@@ -1,6 +1,6 @@
 # AGENTS.md — Wordreapers (Словозбирачі)
 
-Ukrainian word game for families: build words from the letters of a base word; the dictionary validates them automatically. **Stack:** Expo SDK 54, Expo Router 6, React Native 0.81, Zustand, Firebase Realtime Database, i18next (uk).
+Ukrainian word game for families: build words from the letters of a base word; the dictionary validates them automatically. **Stack:** Expo SDK 57, Expo Router 57, React Native 0.86, Zustand, Firebase Realtime Database, i18next (uk).
 
 Almost all code is written and maintained by AI agents. This file is the single entry point for how to work in this repo safely.
 
