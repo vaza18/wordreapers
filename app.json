@@ -7,11 +7,15 @@
     "scheme": "wordreapers",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icons/app-icon.png",
+    "locales": {
+      "uk": "./locales/app-metadata/uk.json"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.wordreapers.app",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
+        "CFBundleAllowMixedLocalizations": true,
         "UIDesignRequiresCompatibility": true,
         "UIStatusBarHidden": true,
         "UIViewControllerBasedStatusBarAppearance": false,
