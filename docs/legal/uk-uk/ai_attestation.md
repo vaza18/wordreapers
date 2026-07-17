@@ -55,7 +55,7 @@
    - Prettier (форматування);
    - TypeScript typecheck;
    - Vitest — понад 125 unit-тестів (ігрова логіка, словник, онлайн-сценарії, UI-допоміжні функції).
-2. **CI на GitHub** — ті самі перевірки на кожному push/PR до гілок `dev` і `main`.
+2. **CI на GitHub** — на pull request запускаються лише релевантні перевірки за зміненими файлами; повний набір перевірок — на кожному push/merge до `main`. Прямі push до `dev` CI не запускають (локально: `npm run ci:check`).
 3. **Pre-commit hook (Husky)** — локальний запуск `ci:check` перед комітом.
 4. **Словник:** окремі скрипти `dict:validate` (регресійні тест-кейси) та ручний огляд вибірки `dict:review-sample`.
 5. **Безпека онлайн-гри:** тести правил Firebase Realtime Database, App Check у production-збірках.
