@@ -28,6 +28,15 @@ Workflow: [`.github/workflows/release-stores.yml`](../.github/workflows/release-
 Backend deploy: [`.github/workflows/deploy-firebase.yml`](../.github/workflows/deploy-firebase.yml) → [`docs/firebase-deploy-ci.md`](firebase-deploy-ci.md)  
 Environment: GitHub **`release`** (secrets). **Required before first run:** deployment branches/tags include `v*` (and `main`/`dev` if you use `workflow_dispatch`). Release events use `refs/tags/v…` — without this gate, jobs hang on environment protection or fail.
 
+### Quality CI before release
+
+The `CI` workflow is selective on pull requests and full on `main`:
+
+- PRs to any base branch run only checks relevant to changed files.
+- Direct pushes to `dev` do not run GitHub Actions CI; use local `npm run ci:check` before pushing meaningful code.
+- Every push/merge to `main` runs the full suite (`dict:validate`, lint, Prettier, typecheck, coverage, and RTDB rules).
+- Automated version-sync PRs that only touch `app.json`, `package.json`, and `package-lock.json` run root `npm ci` plus Prettier before auto-merge; the post-merge `main` run provides the full quality signal.
+
 **Approvals:** `backend` (nested deploy job in the reusable workflow), `android`, `ios`, and `sync-version` all use `environment: release`. If the environment requires reviewers, each job needs its own approval (up to four per full run). Prefer required reviewers only if that friction is acceptable; otherwise rely on secrets + deployment allowlist without reviewer gates.
 
 ## How to ship a testing release

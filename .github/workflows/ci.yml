@@ -2,12 +2,230 @@ name: CI
 
 on:
   push:
-    branches: [dev, main]
+    branches: [main]
   pull_request:
 
 jobs:
   quality:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v5
+
+      # List all changed files; classify in bash (paths-filter negation is unreliable with
+      # default predicate-quantifier: some — see dorny/paths-filter docs).
+      - name: Detect changed paths
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          list-files: json
+          filters: |
+            any:
+              - '**'
+
+      - name: Decide checks
+        id: decide
+        shell: bash
+        env:
+          CHANGED_FILES: ${{ steps.changes.outputs.any_files }}
+        run: |
+          set -euo pipefail
+
+          files_json="${CHANGED_FILES:-[]}"
+          if [[ -z "$files_json" || "$files_json" == "null" ]]; then
+            files_json='[]'
+          fi
+
+          echo "Changed files: $files_json"
+
+          eval "$(
+            jq -r '
+              def lockfile:
+                . == "app.json" or . == "package.json" or . == "package-lock.json";
+              def prettier_file:
+                (test("\\.(md|json|ya?ml|tsx?|jsx?|cjs|mjs)$"))
+                and (startswith(".cursor/") | not);
+              def lint_file:
+                test("^(app|components|hooks)/.*\\.(ts|tsx)$")
+                or test("^(constants|store|i18n|services)/.*\\.ts$")
+                or test("^lib/.*\\.(ts|tsx)$")
+                or test("^scripts/.*\\.ts$")
+                or test("^tests/.*\\.(ts|tsx)$")
+                or test("^functions/src/.*\\.(ts|tsx)$")
+                or . == "vitest.config.ts"
+                or . == "eslint.config.js";
+              def app_non_dict:
+                test("^(app|components|hooks|constants|store|i18n|lib|services)/")
+                or test("^tests/")
+                or (
+                  test("^scripts/")
+                  and (startswith("scripts/dictionary/") | not)
+                  and . != "scripts/ensure-dictionary.mjs"
+                )
+                or . == "vitest.config.ts"
+                or test("^tsconfig.*\\.json$")
+                or . == "eslint.config.js";
+              def dictionary_file:
+                startswith("scripts/dictionary/")
+                or . == "scripts/ensure-dictionary.mjs"
+                or . == "docs/validation_test_cases.md";
+              def firebase_file:
+                startswith("firebase/")
+                or startswith("functions/")
+                or startswith("tests/firebase/")
+                or test("database\\.rules");
+              def ci_meta_file:
+                . == ".github/workflows/ci.yml"
+                or . == "scripts/ci-check.sh";
+
+              (length > 0 and all(.[]; lockfile)) as $lockfile_only
+              | (any(.[]; ci_meta_file)) as $ci_meta
+              | (any(.[]; prettier_file)) as $prettier
+              | (any(.[]; lint_file)) as $lint
+              | (any(.[]; app_non_dict)) as $app_code
+              | (any(.[]; firebase_file)) as $firebase
+              | (any(.[]; dictionary_file)) as $dictionary
+              | {
+                  lockfile_only: $lockfile_only,
+                  ci_meta: $ci_meta,
+                  prettier: $prettier,
+                  lint: $lint,
+                  app_code: $app_code,
+                  firebase: $firebase,
+                  dictionary: $dictionary
+                }
+              | to_entries[]
+              | "\(.key)=\(.value|tostring)"
+            ' <<<"$files_json"
+          )"
+
+          npm_ci=false
+          functions_ci=false
+          run_dict=false
+          run_lint=false
+          run_prettier=false
+          run_typecheck=false
+          run_coverage=false
+          run_rules=false
+
+          if [[ "$ci_meta" == "true" ]]; then
+            npm_ci=true
+            functions_ci=true
+            run_dict=true
+            run_lint=true
+            run_prettier=true
+            run_typecheck=true
+            run_coverage=true
+            run_rules=true
+          elif [[ "$lockfile_only" == "true" ]]; then
+            npm_ci=true
+            run_prettier=true
+          else
+            if [[ "$prettier" == "true" ]]; then
+              npm_ci=true
+              run_prettier=true
+            fi
+            if [[ "$lint" == "true" ]]; then
+              npm_ci=true
+              run_lint=true
+            fi
+            if [[ "$app_code" == "true" ]]; then
+              npm_ci=true
+              run_lint=true
+              run_prettier=true
+              run_typecheck=true
+              run_coverage=true
+            fi
+            if [[ "$firebase" == "true" ]]; then
+              npm_ci=true
+              functions_ci=true
+              run_lint=true
+              run_prettier=true
+              run_typecheck=true
+              run_rules=true
+            fi
+            if [[ "$dictionary" == "true" ]]; then
+              npm_ci=true
+              run_dict=true
+              run_lint=true
+              run_prettier=true
+              run_typecheck=true
+            fi
+          fi
+
+          {
+            echo "npm_ci=$npm_ci"
+            echo "functions_ci=$functions_ci"
+            echo "run_dict=$run_dict"
+            echo "run_lint=$run_lint"
+            echo "run_prettier=$run_prettier"
+            echo "run_typecheck=$run_typecheck"
+            echo "run_coverage=$run_coverage"
+            echo "run_rules=$run_rules"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "lockfile_only=$lockfile_only ci_meta=$ci_meta prettier=$prettier lint=$lint app_code=$app_code firebase=$firebase dictionary=$dictionary"
+          echo "npm_ci=$npm_ci functions_ci=$functions_ci dict=$run_dict lint=$run_lint prettier=$run_prettier typecheck=$run_typecheck coverage=$run_coverage rules=$run_rules"
+
+      - uses: actions/setup-node@v5
+        if: steps.decide.outputs.npm_ci == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      # package-lock.json is built with npm 11; Node 22 images ship npm 10 and `npm ci` fails.
+      - name: Use npm 11
+        if: steps.decide.outputs.npm_ci == 'true'
+        run: npm install -g npm@11.6.2
+
+      - uses: actions/cache@v5
+        if: steps.decide.outputs.run_dict == 'true'
+        with:
+          path: .data/vesum
+          key: vesum-${{ runner.os }}-${{ hashFiles('scripts/dictionary/fetch-vesum.ts', 'scripts/dictionary/build-dictionary.ts') }}
+          restore-keys: |
+            vesum-${{ runner.os }}-
+
+      - name: Install dependencies
+        if: steps.decide.outputs.npm_ci == 'true'
+        run: npm ci
+
+      - name: Install Cloud Functions dependencies
+        if: steps.decide.outputs.functions_ci == 'true'
+        run: npm ci --prefix functions
+
+      - name: Dictionary validation regression cases
+        if: steps.decide.outputs.run_dict == 'true'
+        run: npm run dict:validate
+
+      - name: ESLint
+        if: steps.decide.outputs.run_lint == 'true'
+        run: npm run lint
+
+      - name: Prettier
+        if: steps.decide.outputs.run_prettier == 'true'
+        run: npm run format:check
+
+      - name: Typecheck
+        if: steps.decide.outputs.run_typecheck == 'true'
+        run: npm run typecheck
+
+      - name: Unit tests with coverage gate
+        if: steps.decide.outputs.run_coverage == 'true'
+        run: npm run test:coverage
+
+      - name: RTDB security rules tests
+        if: steps.decide.outputs.run_rules == 'true'
+        run: npm run test:rules
+
+  quality-main:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v5
 
