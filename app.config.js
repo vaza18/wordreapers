@@ -64,6 +64,8 @@ module.exports = ({ config }) => {
     plugins.push('./plugins/with-ios-device-metro-host.cjs');
   }
 
+  // Production default home-screen name is English «Wordreapers».
+  // Ukrainian OS language uses locales.uk → «Словозбирачі» (see locales/app-metadata/uk.json).
   return {
     ...config,
     name: isProductionBuild ? 'Wordreapers' : config.name,
@@ -76,6 +78,7 @@ module.exports = ({ config }) => {
         config.ios?.googleServicesFile,
       infoPlist: baseIosInfoPlist,
     },
+
     android: {
       ...config.android,
       userInterfaceStyle: 'automatic',

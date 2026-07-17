@@ -104,6 +104,13 @@ Format: **Decision → Alternatives → Why rejected → Date**
 - **Why rejected:** Lexicon is static per base word/settings; large payloads pressure free-tier limits; training/solo must stay fast offline. Device evidence showed `localeCompare('uk')` in lookup/sort dominated wall-clock, not scan structure or Firebase absence. Typing-time prefetch contended with cooperative yields on Android. Evicting on typing forced a full rebuild after a typo.
 - **Date:** 2026-07 — `lib/dictionary/dictionary-index.ts`, `lib/dictionary/round-playable-lexicon.ts`, `hooks/useSetupPlayableLexiconHint.ts`
 
+## ADR-015: OS-localized home-screen app name
+
+- **Decision:** Production default `name` stays `Wordreapers`. When the device language is Ukrainian, native home-screen label is `Словозбирачі` via Expo `locales.uk` (`CFBundleDisplayName` / `android.app_name`) and `ios.infoPlist.CFBundleAllowMixedLocalizations`. Store listing titles remain English brand + Ukrainian subtitle/description.
+- **Alternatives considered:** Always show `Словозбирачі` in production; keep English-only home-screen name; third-party Android-only name plugin.
+- **Why rejected:** English brand matches store listing; Ukrainian speakers should still see the local name under a Ukrainian OS. SDK 57 already writes Android `values-b+uk/strings.xml` from `locales` — no extra plugin.
+- **Date:** 2026-07 — `app.json`, `locales/app-metadata/uk.json`, `app.config.js`
+
 ---
 
 When adding a new ADR: keep it short; link the implementing file; do not duplicate `online-multiplayer-rules.md` tables.

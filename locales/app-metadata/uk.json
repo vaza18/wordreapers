@@ -1,0 +1,8 @@
+{
+  "ios": {
+    "CFBundleDisplayName": "Словозбирачі"
+  },
+  "android": {
+    "app_name": "Словозбирачі"
+  }
+}
