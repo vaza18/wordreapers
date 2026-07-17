@@ -41,16 +41,17 @@ function ResultsWordRow({
   showScoreBadges,
   styles,
   notebookRow,
+  definitionA11yLabel,
+  definitionIconColor,
 }: {
   row: ResultsWordListRow;
   showAuthors: boolean;
   showScoreBadges: boolean;
   styles: ReturnType<typeof createStyles>;
   notebookRow: ReturnType<typeof createNotebookRowLineStyle>;
+  definitionA11yLabel: string;
+  definitionIconColor: string;
 }) {
-  const { t } = useTranslation();
-  const { colors } = useTheme();
-
   const handleOpenDefinition = useCallback(() => {
     const url = buildUkrainianDefinitionUrl(row.normalized);
     if (url) {
@@ -67,12 +68,12 @@ function ResultsWordRow({
         {!row.found ? (
           <FeedbackPressable
             accessibilityRole="button"
-            accessibilityLabel={t('game.openDefinitionA11y', { word: row.display })}
+            accessibilityLabel={definitionA11yLabel}
             hitSlop={8}
             onPress={handleOpenDefinition}
             style={styles.definitionButton}
           >
-            <DictionaryBookIcon size={18} color={colors.textSecondary} />
+            <DictionaryBookIcon size={18} color={definitionIconColor} />
           </FeedbackPressable>
         ) : null}
         {showAuthors && row.found && row.authors ? (
@@ -100,7 +101,9 @@ export function ResultsGlobalWordList({
   onContentSizeChange,
   scrollEventThrottle,
 }: ResultsGlobalWordListProps) {
+  const { t } = useTranslation();
   const styles = useThemedStyles(createStyles);
+  const { colors } = useTheme();
   const notebookRow = useNotebookRowLineStyle();
   const virtualList = useVirtualWordListProps();
 
@@ -117,9 +120,11 @@ export function ResultsGlobalWordList({
         showScoreBadges={showScoreBadges}
         styles={styles}
         notebookRow={notebookRow}
+        definitionA11yLabel={t('game.openDefinitionA11y', { word: row.display })}
+        definitionIconColor={colors.textSecondary}
       />
     ),
-    [notebookRow, showAuthors, showScoreBadges, styles],
+    [colors.textSecondary, notebookRow, showAuthors, showScoreBadges, styles, t],
   );
 
   return (

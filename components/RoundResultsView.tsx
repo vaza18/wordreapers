@@ -36,7 +36,10 @@ import { useThemedStyles } from '@/hooks/useThemedStyles';
 import type { RoundPlayableLexicon } from '@/lib/dictionary/round-playable-lexicon';
 import type { GlobalResultWordRow, PlayerResultRankGroup } from '@/lib/game/results-view';
 import { isViewerWinner } from '@/lib/game/is-viewer-winner';
-import { buildResultsWordList } from '@/lib/game/results-missing-words';
+import {
+  buildResultsWordList,
+  resolveResultsWordListLexicon,
+} from '@/lib/game/results-missing-words';
 import {
   formatResultsSharedMetaLabel,
   formatResultsVisibleWordsCaption,
@@ -174,9 +177,10 @@ export function RoundResultsView({
     roundDurationSeconds != null ? formatRoundDuration(roundDurationSeconds) : null;
   const activeTab: ResultsTab = showTabs ? tab : 'all';
   const canShowMissingToggle = Boolean(roundLexicon) && !lexiconLoading;
+  const lexiconForWordList = resolveResultsWordListLexicon(roundLexicon, deferredShowMissingWords);
   const allWordRows = useMemo(
-    () => buildResultsWordList(globalWords, roundLexicon, deferredShowMissingWords),
-    [deferredShowMissingWords, globalWords, roundLexicon],
+    () => buildResultsWordList(globalWords, lexiconForWordList, deferredShowMissingWords),
+    [deferredShowMissingWords, globalWords, lexiconForWordList],
   );
   const sharedMetaLabel = useMemo(
     () =>

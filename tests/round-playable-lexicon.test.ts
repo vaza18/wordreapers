@@ -8,7 +8,10 @@ import {
   toPlayableLexiconSnapshot,
 } from '../lib/dictionary/round-playable-lexicon';
 import { validateWord } from '../lib/dictionary/validate-word';
-import { buildResultsWordList } from '../lib/game/results-missing-words';
+import {
+  buildResultsWordList,
+  resolveResultsWordListLexicon,
+} from '../lib/game/results-missing-words';
 
 const MAIN = ['порт', 'рот', 'топ', 'компютер', 'мотор'];
 const PROPER = ['київ'];
@@ -200,5 +203,25 @@ describe('buildResultsWordList', () => {
     expect(rows.length).toBe(lexicon.maxCount);
     expect(rows.some((row) => row.normalized === 'порт' && row.found)).toBe(true);
     expect(rows.some((row) => row.normalized === 'рот' && !row.found)).toBe(true);
+  });
+});
+
+describe('resolveResultsWordListLexicon', () => {
+  const lexicon = {
+    sortedWords: ['порт', 'рот'],
+    displays: new Map([
+      ['порт', 'ПОРТ'],
+      ['рот', 'РОТ'],
+    ]),
+  };
+
+  it('returns null while missing-words toggle is off', () => {
+    expect(resolveResultsWordListLexicon(lexicon, false)).toBeNull();
+    expect(resolveResultsWordListLexicon(null, false)).toBeNull();
+  });
+
+  it('returns the lexicon only when missing-words toggle is on', () => {
+    expect(resolveResultsWordListLexicon(lexicon, true)).toBe(lexicon);
+    expect(resolveResultsWordListLexicon(null, true)).toBeNull();
   });
 });
