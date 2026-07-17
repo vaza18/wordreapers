@@ -32,6 +32,8 @@
     "lib/settings/**/*.ts",
     "lib/navigation/**/*.ts",
     "lib/navigation/**/*.tsx",
+    "lib/ui/**/*.ts",
+    "lib/ui/**/*.tsx",
     "types/assets.d.ts",
     "types/firebase-auth-rn.d.ts",
     "types/react-native-firebase-app-check.d.ts",

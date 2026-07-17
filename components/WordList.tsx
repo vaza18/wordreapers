@@ -27,13 +27,18 @@ import { useScrollablePanelMetrics } from '@/hooks/useScrollablePanelMetrics';
 import { useVirtualWordListProps } from '@/hooks/useVirtualWordListProps';
 import { spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
-import { normalizeUk, toDisplayUpper } from '@/lib/dictionary/normalize';
+import { normalizeUk } from '@/lib/dictionary/normalize';
 import { dismissWordOverlapTooltips } from '@/lib/ui/word-overlap-tooltip';
 import {
   findLastAddedNormalized,
   findRowIndexByNormalized,
   rowScrollOffset,
 } from '@/lib/ui/word-list-scroll';
+import {
+  buildSortedWordListRows,
+  wordListRenderExtraData,
+  type WordListRow,
+} from '@/lib/ui/word-list-rows';
 import type { ScoredWordEntry } from '@/lib/game/scoring';
 import type { WordOverlapPeer } from '@/lib/game/word-overlap-peers';
 import { scheduleIdleWork } from '@/lib/app/schedule-idle-work';
@@ -62,14 +67,8 @@ interface WordListProps {
   scrollToRequestId?: number;
 }
 
-interface WordRow {
-  key: string;
-  entry: ScoredWordEntry & { overlapPeers?: readonly WordOverlapPeer[] };
-  display: string;
-}
-
 /** First alphabetically sorted row whose normalized form starts with `prefix`. */
-function findPrefixScrollIndex(rows: readonly WordRow[], prefix: string): number {
+function findPrefixScrollIndex(rows: readonly WordListRow[], prefix: string): number {
   if (prefix.length === 0 || rows.length === 0) {
     return -1;
   }
@@ -97,7 +96,7 @@ function findPrefixScrollIndex(rows: readonly WordRow[], prefix: string): number
 }
 
 function scrollFlatListToRow(
-  listRef: RefObject<FlatList<WordRow> | null>,
+  listRef: RefObject<FlatList<WordListRow> | null>,
   index: number,
   rowHeight: number,
   shouldContinue: () => boolean,
@@ -170,7 +169,7 @@ function WordListRow({
   onEntranceComplete,
   onHighlightComplete,
 }: {
-  row: WordRow;
+  row: WordListRow;
   prefix: string;
   showScoreBadges: boolean;
   showOverlapPeers: boolean;
@@ -369,9 +368,17 @@ export const WordList = memo(function WordList({
   const { generalMotion } = useResolvedVisualEffects();
   const acceptScrollOptions = generalMotion ? ACCEPTED_WORD_SCROLL_OPTIONS : STATIC_SCROLL_OPTIONS;
   const prefix = normalizeUk(draftPrefix);
-  const listRef = useRef<FlatList<WordRow>>(null);
-  const rowsRef = useRef<readonly WordRow[]>([]);
+  const listRef = useRef<FlatList<WordListRow>>(null);
+  const rowsRef = useRef<readonly WordListRow[]>([]);
   const panelScroll = useScrollablePanelMetrics();
+  const {
+    onScroll: onPanelScroll,
+    onContentSizeChange: onPanelContentSizeChange,
+    onViewportLayout,
+    scrollbar,
+    scrollMetrics,
+    scrollEventThrottle,
+  } = panelScroll;
   const acceptedSnapshotRef = useRef<readonly string[] | null>(null);
   const scrollTargetRef = useRef<string | null>(null);
   const scrollGenerationRef = useRef(0);
@@ -386,19 +393,50 @@ export const WordList = memo(function WordList({
   );
 
   const rows = useMemo(
-    () =>
-      entries
-        .map((entry, index) => ({
-          key: `${entry.normalized}-${displays[index] ?? entry.normalized}`,
-          entry,
-          display: displays[index] ?? toDisplayUpper(entry.normalized),
-        }))
-        .sort((a, b) => a.entry.normalized.localeCompare(b.entry.normalized, 'uk')),
+    () => buildSortedWordListRows(entries, displays, rowsRef.current),
     [displays, entries],
   );
   rowsRef.current = rows;
 
-  const viewportHeight = panelScroll.scrollMetrics.viewportHeight;
+  const renderSnapshotRef = useRef({
+    prefix,
+    entranceNormalizes,
+    highlightNormalizes,
+    generalMotion,
+    showScoreBadges,
+    showOverlapPeers,
+    styles,
+    notebookRow,
+  });
+  renderSnapshotRef.current = {
+    prefix,
+    entranceNormalizes,
+    highlightNormalizes,
+    generalMotion,
+    showScoreBadges,
+    showOverlapPeers,
+    styles,
+    notebookRow,
+  };
+
+  const listExtraDataMarker = wordListRenderExtraData(
+    prefix,
+    entranceNormalizes,
+    highlightNormalizes,
+  );
+  const listExtraData = useMemo(
+    () => ({
+      marker: listExtraDataMarker,
+      generalMotion,
+      showScoreBadges,
+      showOverlapPeers,
+      styles,
+      notebookRow,
+    }),
+    [generalMotion, listExtraDataMarker, notebookRow, showOverlapPeers, showScoreBadges, styles],
+  );
+
+  const viewportHeight = scrollMetrics.viewportHeight;
   const fillerRowCount = notebookFillerRowCount(rows.length, viewportHeight, spacing.sm, rowHeight);
   const canScroll = notebookListCanScroll(rows.length, viewportHeight, spacing.sm, rowHeight);
 
@@ -462,12 +500,12 @@ export const WordList = memo(function WordList({
 
   const handleContentSizeChange = useCallback(
     (width: number, height: number) => {
-      panelScroll.onContentSizeChange(width, height);
+      onPanelContentSizeChange(width, height);
       if (scrollTargetRef.current) {
         flushPendingScroll();
       }
     },
-    [flushPendingScroll, panelScroll],
+    [flushPendingScroll, onPanelContentSizeChange],
   );
 
   const rowSignature = useMemo(() => rows.map((row) => row.entry.normalized).join('\0'), [rows]);
@@ -543,33 +581,27 @@ export const WordList = memo(function WordList({
   }, [flushPendingScroll, rowSignature]);
 
   const renderItem = useCallback(
-    ({ item: row }: { item: WordRow }) => (
-      <MemoWordListRow
-        row={row}
-        prefix={prefix}
-        showScoreBadges={showScoreBadges}
-        showOverlapPeers={showOverlapPeers}
-        styles={styles}
-        notebookRow={notebookRow}
-        animateEntrance={generalMotion && entranceNormalizes.has(row.entry.normalized)}
-        showAcceptedHighlight={highlightNormalizes.has(row.entry.normalized)}
-        highlightFadeEnabled={generalMotion}
-        onEntranceComplete={handleEntranceComplete}
-        onHighlightComplete={handleHighlightComplete}
-      />
-    ),
-    [
-      entranceNormalizes,
-      generalMotion,
-      handleEntranceComplete,
-      handleHighlightComplete,
-      highlightNormalizes,
-      notebookRow,
-      prefix,
-      showOverlapPeers,
-      showScoreBadges,
-      styles,
-    ],
+    ({ item: row }: { item: WordListRow }) => {
+      const snapshot = renderSnapshotRef.current;
+      return (
+        <MemoWordListRow
+          row={row}
+          prefix={snapshot.prefix}
+          showScoreBadges={snapshot.showScoreBadges}
+          showOverlapPeers={snapshot.showOverlapPeers}
+          styles={snapshot.styles}
+          notebookRow={snapshot.notebookRow}
+          animateEntrance={
+            snapshot.generalMotion && snapshot.entranceNormalizes.has(row.entry.normalized)
+          }
+          showAcceptedHighlight={snapshot.highlightNormalizes.has(row.entry.normalized)}
+          highlightFadeEnabled={snapshot.generalMotion}
+          onEntranceComplete={handleEntranceComplete}
+          onHighlightComplete={handleHighlightComplete}
+        />
+      );
+    },
+    [handleEntranceComplete, handleHighlightComplete],
   );
 
   if (!scrollable) {
@@ -596,24 +628,25 @@ export const WordList = memo(function WordList({
   }
 
   return (
-    <ScrollableWordPanel scrollbar={panelScroll.scrollbar}>
-      <View style={styles.listViewport} onLayout={panelScroll.onViewportLayout}>
+    <ScrollableWordPanel scrollbar={scrollbar}>
+      <View style={styles.listViewport} onLayout={onViewportLayout}>
         <FlatList
           ref={listRef}
           data={rows}
-          keyExtractor={(row: WordRow) => row.key}
+          extraData={listExtraData}
+          keyExtractor={(row: WordListRow) => row.key}
           style={styles.list}
           ListFooterComponent={ruledPaperFooter}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           scrollEnabled={canScroll || pendingAcceptedScroll}
           removeClippedSubviews={virtualList.removeClippedSubviews}
-          onScroll={panelScroll.onScroll}
+          onScroll={onPanelScroll}
           onScrollBeginDrag={() => {
             dismissWordOverlapTooltips();
           }}
           onContentSizeChange={handleContentSizeChange}
-          scrollEventThrottle={panelScroll.scrollEventThrottle}
+          scrollEventThrottle={scrollEventThrottle}
           getItemLayout={virtualList.getItemLayout}
           initialNumToRender={virtualList.initialNumToRender}
           maxToRenderPerBatch={virtualList.maxToRenderPerBatch}
