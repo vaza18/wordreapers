@@ -156,6 +156,12 @@ jobs:
             fi
           fi
 
+          # tsconfig.node.json compiles functions/src/** and resolves @types/node
+          # through functions deps, so typecheck always needs the functions install.
+          if [[ "$run_typecheck" == "true" ]]; then
+            functions_ci=true
+          fi
+
           {
             echo "npm_ci=$npm_ci"
             echo "functions_ci=$functions_ci"

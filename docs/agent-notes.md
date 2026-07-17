@@ -8,6 +8,12 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 <!-- Add dated notes at the top -->
 
+### 2026-07-17 — Selective CI: typecheck needs functions deps
+
+- Root `npm run typecheck` runs `tsc -p tsconfig.node.json`, which includes `functions/src/**` and `lib/**`; `@types/node` resolves through the functions install. Without `npm ci --prefix functions`, typecheck fails (`Cannot find name 'node:fs'`, missing `firebase-admin`) across `functions/src`, `lib/dictionary`, and `tests`.
+- Fix in `.github/workflows/ci.yml`: selective PR job sets `functions_ci=true` whenever `run_typecheck=true` (post-rule after category flags).
+- Repro locally: `mv functions/node_modules aside && npm run typecheck` → same errors.
+
 ### 2026-07-17 — VirtualizedList warning: results lexicon gate
 
 - RN warning `dt`/`prevDt` are scroll-event gaps, not render duration; needs `contentLength > 5× viewport`. Confirmed source: play `WordList` (~50 rows), not results; often false positive after pause between scrolls.
