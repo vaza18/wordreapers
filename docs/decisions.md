@@ -111,6 +111,20 @@ Format: **Decision → Alternatives → Why rejected → Date**
 - **Why rejected:** English brand matches store listing; Ukrainian speakers should still see the local name under a Ukrainian OS. SDK 57 already writes Android `values-b+uk/strings.xml` from `locales` — no extra plugin.
 - **Date:** 2026-07 — `app.json`, `locales/app-metadata/uk.json`, `app.config.js`
 
+## ADR-016: Platform Firebase app ids only (no web legacy fallback)
+
+- **Decision:** Client `initializeApp` uses `EXPO_PUBLIC_FIREBASE_APP_ID_ANDROID` or `_IOS` for the **current** platform (from `.env` / GitHub `release` secrets). Missing **that** platform’s id throws. Store CI jobs only inject the id for the platform being built. No web app id fallback; no hardcoding in source/`eas.json`.
+- **Alternatives considered:** Single shared web `EXPO_PUBLIC_FIREBASE_APP_ID`; always require both platform ids on every job; hardcode ids in `app-ids.ts` / `eas.json`.
+- **Why rejected:** App Check tokens are app-scoped — web id + native attestation → **Invalid**. Requiring both ids on an android-only job is unnecessary. Hardcoded ids duplicate Console config.
+- **Date:** 2026-07 — `lib/firebase/app-ids.ts`, `lib/firebase/config.ts`, `scripts/eas-build-env.sh`
+
+## ADR-017: No legacy compatibility code by default
+
+- **Decision:** Agents must not leave dual paths, deprecated aliases, or silent fallbacks when replacing behavior. Update all callers to the new contract and fail loudly if required input is missing. Keep transitional support only when the user explicitly requests it.
+- **Alternatives considered:** Soft deprecation windows; “preferred + old still works” env/API shims.
+- **Why rejected:** Hidden fallbacks mask misconfiguration, multiply edge cases for agent maintenance, and obscure what is actually required. Explicit request is the only exception.
+- **Date:** 2026-07 — `.cursor/rules/no-legacy-code.mdc`, `AGENTS.md`
+
 ---
 
 When adding a new ADR: keep it short; link the implementing file; do not duplicate `online-multiplayer-rules.md` tables.

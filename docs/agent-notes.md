@@ -8,6 +8,13 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 <!-- Add dated notes at the top -->
 
+### 2026-07-18 — Store App Check 100% Invalid (web appId + missing EXPO_PUBLIC prod flag)
+
+- Confirmed via Firebase MCP: Android `…:android:6c8ea52a…`, iOS `…:ios:1bf134e3…`, web `…:web:a2fdb146…`. Local/CI used a **web** single `EXPO_PUBLIC_FIREBASE_APP_ID` (removed — platform ids only; see ADR-016).
+- Android SHA list already has SHA_1 `f75a2267…` + SHA_256 `dd18df5b…` — still verify Play Console **App signing** cert matches (upload vs Google Play App Signing).
+- Fix shipped in code: `EXPO_PUBLIC_FIREBASE_APP_CHECK_PRODUCTION` on EAS production + platform app ids from `.env` / GitHub `release` secrets (not hardcoded, no web fallback). Needs a new store build (1.4.2+) to validate Verified metrics.
+- Manual Console checks: App Check → each app → Play Integrity / App Attest registered; do not Enforce yet.
+
 ### 2026-07-17 — Selective CI: typecheck needs functions deps
 
 - Root `npm run typecheck` runs `tsc -p tsconfig.node.json`, which includes `functions/src/**` and `lib/**`; `@types/node` resolves through the functions install. Without `npm ci --prefix functions`, typecheck fails (`Cannot find name 'node:fs'`, missing `firebase-admin`) across `functions/src`, `lib/dictionary`, and `tests`.

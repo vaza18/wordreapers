@@ -8,6 +8,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — Store builds 1.4.x App Check 100% Invalid
+
+- **Symptom:** After first GitHub Actions → Play/TestFlight releases (v1.4.0–1.4.1), App Check Console showed **100% Unverified: invalid** for RTDB and Auth (enforcement still off).
+- **Cause:** (1) `useProductionAppCheckProviders()` relied on raw `APP_VARIANT` / `EAS_BUILD_PROFILE`, which Metro does **not** inline into the client JS bundle — store builds fell back to the **debug** provider without a registered debug token. (2) JS Firebase `initializeApp` used a **web** `EXPO_PUBLIC_FIREBASE_APP_ID` while native RNFB attested as Android/iOS apps — App Check tokens are app-scoped → Invalid.
+- **Fix:** Set `EXPO_PUBLIC_FIREBASE_APP_CHECK_PRODUCTION=true` on the EAS `production` profile; bake `firebaseAppCheckProduction` from that flag only (plugin does **not** use `APP_VARIANT`); require platform app ids with **no** web fallback; runtime mode uses **only** `EXPO_PUBLIC_*` + `expo.extra`; never attach `debugToken` when production providers are on.
+- **Test:** `tests/app-check-mode.test.ts`, `tests/app-ids.test.ts`; manual: new store build → App Check metrics show **Verified** (not Invalid). Do **not** Enforce until Verified dominates.
+- **Area:** `lib/firebase/app-check-mode.ts`, `lib/firebase/app-ids.ts`, `lib/firebase/config.ts`, `lib/firebase/native-app-check-native.ts`, `plugins/with-firebase-extra.cjs`, `eas.json`
+
 ### 2026-07 — Training resume hit Firebase Auth / App Check Invalid
 
 - **Symptom:** App Check Console showed Auth/RTDB **Unverified: invalid** while finishing a paused local training round on a production Android build (Play Integrity). Training is supposed to stay offline.

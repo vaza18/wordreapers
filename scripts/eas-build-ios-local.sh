@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # shellcheck source=eas-build-env.sh
-source "$(cd "$(dirname "$0")" && pwd)/eas-build-env.sh" "npm run build:ios"
+source "$(cd "$(dirname "$0")" && pwd)/eas-build-env.sh" ios
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 if [[ ! -f "$ROOT/assets/generated/dictionaries/uk-uk/dictionary.txt" ]]; then
