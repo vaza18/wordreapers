@@ -25,7 +25,7 @@ if [[ "$PLATFORM" != "android" && "$PLATFORM" != "ios" ]]; then
 fi
 
 # shellcheck source=../eas-build-env.sh
-source "$ROOT/scripts/eas-build-env.sh" "ci release-build-submit ($PLATFORM)"
+source "$ROOT/scripts/eas-build-env.sh" "$PLATFORM"
 
 if [[ ! -f "$ROOT/assets/generated/dictionaries/uk-uk/dictionary.txt" ]]; then
   echo "Building uk-uk dictionary before EAS archive…" >&2

@@ -20,7 +20,7 @@ Download from Firebase Console → **Project settings → General** (gitignored,
 - `google-services.json` (Android app `com.wordreapers.app`)
 - `GoogleService-Info.plist` (iOS app `com.wordreapers.app`)
 
-Register **App Check** providers (Console → App Check → Apps): Android **Play Integrity**, iOS **App Attest**. Add the same debug UUID under **Manage debug tokens** on both platforms; put it in `EXPO_PUBLIC_FIREBASE_APP_CHECK_DEBUG_TOKEN` for dev builds.
+Register **App Check** providers (Console → App Check → Apps): Android **Play Integrity**, iOS **App Attest**. Add the same debug UUID under **Manage debug tokens** on both platforms; put it in `EXPO_PUBLIC_FIREBASE_APP_CHECK_DEBUG_TOKEN` for dev builds. Store builds must use `EXPO_PUBLIC_FIREBASE_APP_CHECK_PRODUCTION=true` (set by EAS `production` in `eas.json`) and the **platform** Firebase app id (Android/iOS), not the web app id.
 
 After changing native Firebase plugins or config files, rebuild the dev client (`npm run android` / `npm run ios`) — a Metro reload is not enough.
 

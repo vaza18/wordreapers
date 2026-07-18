@@ -1,0 +1,32 @@
+---
+description: Never keep legacy compatibility shims or old-path fallbacks unless the user explicitly asks
+alwaysApply: true
+---
+
+# No legacy code
+
+Do **not** leave behind compatibility layers, dual code paths, or “just in case” fallbacks when replacing behavior.
+
+## What this means
+
+When you change how something works (API, env var, data shape, screen flow, config key):
+
+1. **Delete** the old path in the same change (or immediately after).
+2. **Update** all callers, tests, docs, CI, and env examples to the new contract.
+3. **Fail loudly** if required input is missing — do not silently fall back to an obsolete value or format.
+4. Prefer one clear source of truth over “new preferred + old still works”.
+
+## Do not add
+
+- Deprecated aliases (`FOO` still accepted because `FOO_NEW` exists)
+- `// legacy` / `// for backwards compatibility` branches without an explicit user request
+- Dual reads/writes “until everyone upgrades” unless the user asked for a migration window
+- Hardcoded leftovers that duplicate env/config “as a safety net”
+
+## Exception
+
+Only keep transitional/legacy support when the **user explicitly asks** to preserve something for a migration, rollback, or future use. Document that request in the PR/summary and set a removal condition if known.
+
+## Why
+
+Legacy fallbacks hide misconfiguration (e.g. wrong Firebase app id → App Check Invalid), inflate the surface area agents must reason about, and make `git blame` lie about what is actually required. Wordreapers is agent-maintained: **one current contract** beats polite compatibility.

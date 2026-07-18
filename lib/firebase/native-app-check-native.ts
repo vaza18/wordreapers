@@ -6,6 +6,7 @@ import {
 } from '@react-native-firebase/app-check';
 
 import { useProductionAppCheckProviders } from './app-check-mode.js';
+import { buildNativeAppCheckProviderConfig } from './native-app-check-provider-config.js';
 
 export type NativeAppCheckTokenGetter = (
   appCheckInstance: unknown,
@@ -23,16 +24,7 @@ export async function createNativeAppCheckSession(): Promise<NativeAppCheckSessi
   const production = useProductionAppCheckProviders();
 
   const provider = new ReactNativeFirebaseAppCheckProvider();
-  provider.configure({
-    android: {
-      provider: production ? 'playIntegrity' : 'debug',
-      ...(debugToken ? { debugToken } : {}),
-    },
-    apple: {
-      provider: production ? 'appAttestWithDeviceCheckFallback' : 'debug',
-      ...(debugToken ? { debugToken } : {}),
-    },
-  });
+  provider.configure(buildNativeAppCheckProviderConfig(production, debugToken));
 
   const nativeAppCheck = await initializeNativeAppCheck(getApp(), {
     provider,

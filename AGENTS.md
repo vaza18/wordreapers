@@ -4,6 +4,8 @@ Ukrainian word game for families: build words from the letters of a base word; t
 
 Almost all code is written and maintained by AI agents. This file is the single entry point for how to work in this repo safely.
 
+**No legacy code:** when replacing a contract, delete the old path — do not keep silent fallbacks or dual APIs unless the user explicitly asks. See [`.cursor/rules/no-legacy-code.mdc`](.cursor/rules/no-legacy-code.mdc).
+
 ## Where to find the truth
 
 | Topic                                                                   | Source of truth                                                                                        |
@@ -92,6 +94,7 @@ One logical change per commit (feature / refactor / docs separately). Future age
 | `docs-sync.mdc`                    | Always — keep docs/mockups/legal in sync              |
 | `ci-check-before-done.mdc`         | Always — run `npm run ci:check` before done           |
 | `commit-hygiene.mdc`               | Always — atomic commits                               |
+| `no-legacy-code.mdc`               | Always — no compatibility shims unless user asks      |
 | `online-multiplayer-domain.mdc`    | Editing `app/online/`, `lib/online/`, related hooks   |
 | `dictionary-validation-domain.mdc` | Editing `lib/dictionary/`, `scripts/dictionary/`      |
 | `firebase-backend-domain.mdc`      | Editing `firebase/`, `functions/src/`                 |

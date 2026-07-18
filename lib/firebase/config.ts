@@ -1,4 +1,7 @@
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
+
+import { resolveFirebaseAppId } from './app-ids.js';
 
 /**
  * Firebase Web config from Expo public env (see `.env.example`).
@@ -21,17 +24,34 @@ interface FirebaseExtra {
   firebaseProjectId?: string;
   firebaseStorageBucket?: string;
   firebaseMessagingSenderId?: string;
-  firebaseAppId?: string;
+  firebaseAppIdAndroid?: string;
+  firebaseAppIdIos?: string;
   firebaseMeasurementId?: string;
+  firebaseAppCheckProduction?: boolean;
 }
 
 function extraConfig(): FirebaseExtra {
   return Constants.expoConfig?.extra ?? {};
 }
 
+function hasPlatformAppId(extra: FirebaseExtra): boolean {
+  if (Platform.OS === 'ios') {
+    return Boolean(extra.firebaseAppIdIos?.trim());
+  }
+  if (Platform.OS === 'android') {
+    return Boolean(extra.firebaseAppIdAndroid?.trim());
+  }
+  return false;
+}
+
 function configFromExtra(): FirebasePublicConfig | null {
   const extra = extraConfig();
-  if (!extra.firebaseApiKey || !extra.firebaseDatabaseURL || !extra.firebaseProjectId) {
+  if (
+    !extra.firebaseApiKey ||
+    !extra.firebaseDatabaseURL ||
+    !extra.firebaseProjectId ||
+    !hasPlatformAppId(extra)
+  ) {
     return null;
   }
   return {
@@ -41,21 +61,39 @@ function configFromExtra(): FirebasePublicConfig | null {
     projectId: extra.firebaseProjectId,
     storageBucket: extra.firebaseStorageBucket ?? '',
     messagingSenderId: extra.firebaseMessagingSenderId ?? '',
-    appId: extra.firebaseAppId ?? '',
+    appId: resolveFirebaseAppId({
+      androidAppId: extra.firebaseAppIdAndroid,
+      iosAppId: extra.firebaseAppIdIos,
+    }),
     measurementId: extra.firebaseMeasurementId || undefined,
   };
 }
 
 function envString(name: string): string | undefined {
-  const value = process.env[name];
+  const value = process.env[name]?.trim();
   return value?.length ? value : undefined;
+}
+
+function platformAppIdEnvName():
+  'EXPO_PUBLIC_FIREBASE_APP_ID_ANDROID' | 'EXPO_PUBLIC_FIREBASE_APP_ID_IOS' | null {
+  if (Platform.OS === 'ios') {
+    return 'EXPO_PUBLIC_FIREBASE_APP_ID_IOS';
+  }
+  if (Platform.OS === 'android') {
+    return 'EXPO_PUBLIC_FIREBASE_APP_ID_ANDROID';
+  }
+  return null;
 }
 
 function configFromProcessEnv(): FirebasePublicConfig | null {
   const apiKey = envString('EXPO_PUBLIC_FIREBASE_API_KEY');
   const databaseURL = envString('EXPO_PUBLIC_FIREBASE_DATABASE_URL');
   const projectId = envString('EXPO_PUBLIC_FIREBASE_PROJECT_ID');
-  if (!apiKey || !databaseURL || !projectId) {
+  const androidAppId = envString('EXPO_PUBLIC_FIREBASE_APP_ID_ANDROID');
+  const iosAppId = envString('EXPO_PUBLIC_FIREBASE_APP_ID_IOS');
+  const platformAppId =
+    Platform.OS === 'ios' ? iosAppId : Platform.OS === 'android' ? androidAppId : undefined;
+  if (!apiKey || !databaseURL || !projectId || !platformAppId) {
     return null;
   }
   return {
@@ -65,7 +103,10 @@ function configFromProcessEnv(): FirebasePublicConfig | null {
     projectId,
     storageBucket: envString('EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET') ?? '',
     messagingSenderId: envString('EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID') ?? '',
-    appId: envString('EXPO_PUBLIC_FIREBASE_APP_ID') ?? '',
+    appId: resolveFirebaseAppId({
+      androidAppId,
+      iosAppId,
+    }),
     measurementId: envString('EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID'),
   };
 }
@@ -75,7 +116,7 @@ function resolveFirebaseConfig(): FirebasePublicConfig | null {
 }
 
 function requireEnv(name: string): string {
-  const value = process.env[name];
+  const value = process.env[name]?.trim();
   if (!value) {
     throw new Error(`Missing ${name}. Copy .env.example to .env and fill Firebase keys.`);
   }
@@ -98,8 +139,12 @@ export function loadFirebaseConfig(): FirebasePublicConfig {
     projectId: requireEnv('EXPO_PUBLIC_FIREBASE_PROJECT_ID'),
     storageBucket: requireEnv('EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET'),
     messagingSenderId: requireEnv('EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID'),
-    appId: requireEnv('EXPO_PUBLIC_FIREBASE_APP_ID'),
-    measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID,
+    appId: resolveFirebaseAppId({
+      androidAppId:
+        Platform.OS === 'android' ? requireEnv('EXPO_PUBLIC_FIREBASE_APP_ID_ANDROID') : undefined,
+      iosAppId: Platform.OS === 'ios' ? requireEnv('EXPO_PUBLIC_FIREBASE_APP_ID_IOS') : undefined,
+    }),
+    measurementId: envString('EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID'),
   };
 }
 
@@ -129,15 +174,15 @@ const OPTIONAL_ENV_VARS = [
   'EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN',
   'EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET',
   'EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
-  'EXPO_PUBLIC_FIREBASE_APP_ID',
   'EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID',
 ] as const;
 
 function fieldPresence(value: string | undefined): string {
-  if (!value?.length) {
+  const trimmed = value?.trim();
+  if (!trimmed?.length) {
     return 'порожньо';
   }
-  return `${value.length} симв.`;
+  return `${trimmed.length} симв.`;
 }
 
 /**
@@ -150,8 +195,21 @@ export function describeFirebaseConfigGap(): string | null {
   }
 
   const extra = extraConfig();
-  const missingExtra = REQUIRED_EXTRA_FIELDS.filter((key) => !extra[key]?.length);
-  const missingRequiredEnv = REQUIRED_ENV_VARS.filter((name) => !envString(name));
+  const platformExtraKey =
+    Platform.OS === 'ios'
+      ? 'firebaseAppIdIos'
+      : Platform.OS === 'android'
+        ? 'firebaseAppIdAndroid'
+        : null;
+  const platformEnvName = platformAppIdEnvName();
+  const missingExtra = [
+    ...REQUIRED_EXTRA_FIELDS.filter((key) => !extra[key]?.trim()),
+    ...(platformExtraKey && !extra[platformExtraKey]?.trim() ? [platformExtraKey] : []),
+  ];
+  const missingRequiredEnv = [
+    ...REQUIRED_ENV_VARS.filter((name) => !envString(name)),
+    ...(platformEnvName && !envString(platformEnvName) ? [platformEnvName] : []),
+  ];
   const missingOptionalEnv = OPTIONAL_ENV_VARS.filter((name) => !envString(name));
 
   const lines = ['[α] Firebase config'];
@@ -160,6 +218,9 @@ export function describeFirebaseConfigGap(): string | null {
   );
   for (const key of REQUIRED_EXTRA_FIELDS) {
     lines.push(`  ${key}: ${fieldPresence(extra[key])}`);
+  }
+  if (platformExtraKey) {
+    lines.push(`  ${platformExtraKey}: ${fieldPresence(extra[platformExtraKey])}`);
   }
 
   lines.push(
