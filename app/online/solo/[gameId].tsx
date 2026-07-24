@@ -43,6 +43,7 @@ import { ensureFirebaseReady } from '@/lib/firebase/ensure-firebase-ready';
 import { joinErrorMessage } from '@/lib/firebase/join-error-message';
 import { buildLetterKeys } from '@/lib/game/letter-keyboard';
 import { acceptWord } from '@/lib/game/play-word';
+import { syncDraftKeyIndicesRef } from '@/lib/game/sync-draft-key-indices-ref';
 import {
   playWordErrorMessage,
   playWordFeedbackVariant,
@@ -418,7 +419,9 @@ export default function OrganizerSoloPlayScreen() {
       });
       setScrollRequest({ normalized: result.normalized, id: Date.now() });
       setDraft('');
-      setDraftKeyIndices([]);
+      // Must clear ref before the next press — state updates are async; otherwise
+      // keys from the accepted word stay "used" while the draft text was reset.
+      setDraftKeyIndices(syncDraftKeyIndicesRef(draftKeyIndicesRef, []));
       lastValidatedDraft.current = '';
       setFeedback(t('game.wordAccepted'));
       setFeedbackVariant('success');

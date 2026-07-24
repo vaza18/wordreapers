@@ -1,10 +1,64 @@
 import type { GameSession, GameSessionPlayer } from '../../firebase/types.js';
 
 import { assertRematchWaitingPlayerPatch } from '../invariants.js';
+import {
+  isRematchDurableLobbyOptIn,
+  isRematchWaitingLobbyOptedIn,
+} from '../rematch/rematch-waiting-lobby.js';
 
-/** Uids present in the waiting lobby when the current `playing` round started (`online: true`). */
-export function waitingLobbyOptInUids(session: Pick<GameSession, 'players'>): string[] {
-  return Object.keys(session.players).filter((uid) => session.players[uid]?.online === true);
+/**
+ * Who enters `liveRoundPlayerUids` when waiting → playing.
+ * Online lobby members always count. On rematch rounds, durable opt-in
+ * (`resultsExitedBy` / picker seat / committed base-word chooser) also counts so a
+ * brief AppState lock / `online: false` cannot drop an opted-in peer (or empty the roster).
+ */
+export function waitingLobbyOptInUids(
+  session: Pick<GameSession, 'players'> &
+    Partial<
+      Pick<
+        GameSession,
+        'baseWordRound' | 'resultsExitedBy' | 'baseWord' | 'baseWordChosenBy' | 'baseWordPickerUid'
+      >
+    >,
+): string[] {
+  const rematchRound = (session.baseWordRound ?? 0) > 0;
+  return Object.keys(session.players).filter((uid) => {
+    const player = session.players[uid];
+    if (!player) {
+      return false;
+    }
+    if (player.hasLeft === true) {
+      if (!rematchRound || !isRematchDurableLobbyOptIn(session, uid)) {
+        return false;
+      }
+      // Stale hasLeft with durable rematch seat still counts for round-start roster.
+    }
+    if (player.online === true) {
+      return true;
+    }
+    if (!rematchRound) {
+      return false;
+    }
+    return isRematchWaitingLobbyOptedIn(session, uid);
+  });
+}
+
+/** Round-start roster: opted-in lobby uids, always including the starter. */
+export function liveRoundPlayerUidsForRoundStart(
+  session: Pick<GameSession, 'players'> &
+    Partial<
+      Pick<
+        GameSession,
+        'baseWordRound' | 'resultsExitedBy' | 'baseWord' | 'baseWordChosenBy' | 'baseWordPickerUid'
+      >
+    >,
+  actorUid: string,
+): string[] {
+  const uids = waitingLobbyOptInUids(session);
+  if (actorUid && !uids.includes(actorUid) && session.players[actorUid]?.hasLeft !== true) {
+    return [...uids, actorUid];
+  }
+  return uids;
 }
 
 /** Whether this uid was opted into the current live round roster (round 2+). */

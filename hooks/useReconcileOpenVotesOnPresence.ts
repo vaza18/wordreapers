@@ -35,7 +35,7 @@ export function useReconcileOpenVotesOnPresence(
 
     const now = getServerNow();
     const ready =
-      (pauseVote != null && shouldActivatePauseFromVote(session, pauseVote)) ||
+      (pauseVote != null && shouldActivatePauseFromVote(session, pauseVote, now)) ||
       (earlyVote != null && shouldFinishFromEarlyVote(session, earlyVote, now)) ||
       (addTimeVote != null && shouldApplyAddTimeFromVote(session, addTimeVote)) ||
       (resumeVote != null &&

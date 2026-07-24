@@ -2,7 +2,15 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useIsFocused } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  AppState,
+  type AppStateStatus,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { LobbyQrCode } from '@/components/LobbyQrCode';
@@ -25,6 +33,7 @@ import {
   startGameSession,
   subscribeGameSession,
   syncLobbyPickerState,
+  tryReadGameSessionSnapshot,
   type GameSessionSnapshot,
 } from '@/lib/firebase/game-session-service';
 import { syncPublicRosterAliases } from '@/lib/firebase/public-lobby-service';
@@ -35,6 +44,7 @@ import {
   currentBaseWordPickerUid,
   isCurrentBaseWordPicker,
   isEligibleBaseWordPickerPlayer,
+  shouldClearLobbyBaseWordForPicker,
 } from '@/lib/online/base-word-picker';
 import { formatLobbySettingsLabel } from '@/lib/online/lobby-settings-label';
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
@@ -64,7 +74,9 @@ import { useOrganizerAbandonWaitingOnExit } from '@/lib/online/use-organizer-aba
 import { usePlayerOnlinePresence } from '@/lib/online/presence/use-player-online-presence';
 import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
 import { isLobbyVisiblePlayer } from '@/lib/online/rematch/rematch-waiting-lobby';
+import { shouldMarkPresenceOnline } from '@/lib/online/presence/app-presence-state';
 import { handoffPlayerPresence } from '@/lib/online/presence/presence-handoff';
+import { lobbyToPickWordRoute } from '@/lib/online/lobby-pick-word-navigation';
 import {
   claimPlayRouteNavigation,
   seedPlaySessionBootstrap,
@@ -118,6 +130,92 @@ export default function LobbyScreen() {
     };
   }, [gameId]);
 
+  // Heal stale lobby UI if the listener missed rematch peer / base-word updates
+  // (focus return from pick-word, or AppState active after multi-sim inactive).
+  // Missing / orphan RTDB roots must clear local state — otherwise a zombie lobby
+  // keeps showing «Почати гру» while join correctly reports the room is gone.
+  const healLobbySessionFromRtdb = useCallback(() => {
+    if (!gameId) {
+      return;
+    }
+    void tryReadGameSessionSnapshot(gameId)
+      .then((live) => {
+        if (!live) {
+          setSession(null);
+          setFirebaseSessionLive(false);
+          setLoading(false);
+          return;
+        }
+        setSession(live);
+        setFirebaseSessionLive(true);
+        setLoading(false);
+      })
+      .catch((error) => {
+        if (__DEV__) {
+          console.warn('lobby tryReadGameSessionSnapshot heal', error);
+        }
+      });
+  }, [gameId]);
+
+  useEffect(() => {
+    if (!isFocused || !gameId) {
+      return undefined;
+    }
+    healLobbySessionFromRtdb();
+    return undefined;
+  }, [gameId, isFocused, healLobbySessionFromRtdb]);
+
+  // Late «Грати ще» must re-read immediately so an already-opted peer (possibly
+  // offline on this device due to multi-sim focus) is visible before pick UI.
+  useEffect(() => {
+    if (!justOptedIn || !gameId) {
+      return;
+    }
+    healLobbySessionFromRtdb();
+  }, [gameId, justOptedIn, healLobbySessionFromRtdb]);
+
+  // Peer may commit baseWord while this client's listener missed the update
+  // (multi-sim inactive). Re-heal until the word appears or we leave waiting.
+  useEffect(() => {
+    if (!isFocused || !gameId || !session || session.status !== 'waiting') {
+      return undefined;
+    }
+    const hasWord = Boolean(session.baseWord && session.baseWord.length >= 2);
+    if (hasWord || (session.baseWordRound ?? 0) === 0) {
+      return undefined;
+    }
+    const id = setInterval(() => {
+      healLobbySessionFromRtdb();
+    }, 2000);
+    return () => {
+      clearInterval(id);
+    };
+  }, [
+    gameId,
+    healLobbySessionFromRtdb,
+    isFocused,
+    session,
+    session?.baseWord,
+    session?.baseWordRound,
+    session?.status,
+  ]);
+
+  useEffect(() => {
+    if (!gameId || !isFocused) {
+      return undefined;
+    }
+    const onAppState = (nextState: AppStateStatus) => {
+      if (!shouldMarkPresenceOnline(nextState)) {
+        return;
+      }
+      healLobbySessionFromRtdb();
+    };
+    const sub = AppState.addEventListener('change', onAppState);
+    return () => {
+      sub.remove();
+    };
+  }, [gameId, isFocused, healLobbySessionFromRtdb]);
+
   const shouldReconcilePublicAliases = session ? needsPublicAliasReconcile(session) : false;
   const publicAliasRound = session?.baseWordRound ?? 0;
   const sessionRef = useRef(session);
@@ -166,6 +264,9 @@ export default function LobbyScreen() {
         session?.status === 'finished' ||
         session?.status === 'playing'),
     ),
+    // Waiting lobby: multi-sim focus → inactive must not write false offline.
+    // Live `playing` presence on this screen is rare; play hook uses inactive.
+    session?.status === 'playing' ? 'background-and-inactive' : 'background-only',
   );
   const isOrganizer = session?.organizerId === myUid;
 
@@ -175,9 +276,7 @@ export default function LobbyScreen() {
     }
     const picker = currentBaseWordPickerUid(session);
     const pickerDrifted = session.baseWordPickerUid !== picker;
-    const wordDrifted = Boolean(
-      session.baseWord && session.baseWordChosenBy && session.baseWordChosenBy !== picker,
-    );
+    const wordDrifted = shouldClearLobbyBaseWordForPicker(session);
     if (pickerDrifted || wordDrifted) {
       void syncLobbyPickerState(gameId);
     }
@@ -207,6 +306,12 @@ export default function LobbyScreen() {
   const pickerPlayer = pickerUid && session ? session.players[pickerUid] : undefined;
   const pickerName =
     pickerUid && session ? displayPlayerName(pickerPlayer, myUid, pickerUid, session) : '';
+  const chosenByUid = session?.baseWordChosenBy || pickerUid;
+  const chosenByPlayer = chosenByUid && session ? session.players[chosenByUid] : undefined;
+  const chosenByName =
+    chosenByUid && session
+      ? displayPlayerName(chosenByPlayer, myUid, chosenByUid, session)
+      : pickerName;
   const turnNumber = session ? baseWordPickerTurnNumber(session) : 1;
   const hasBaseWord = Boolean(session?.baseWord && session.baseWord.length >= 2);
   const isFirstRound = (session?.baseWordRound ?? 0) === 0;
@@ -403,8 +508,8 @@ export default function LobbyScreen() {
           {tGendered(
             t,
             'online.baseWordChosenBy',
-            myUid && pickerUid ? playerGenderForDisplay(session, myUid, pickerUid) : null,
-            { name: pickerName },
+            myUid && chosenByUid ? playerGenderForDisplay(session, myUid, chosenByUid) : null,
+            { name: chosenByName },
           )}
         </Text>
         {isPicker && session.status === 'waiting' ? (
@@ -450,7 +555,7 @@ export default function LobbyScreen() {
             <FeedbackPressable
               accessibilityRole="button"
               onPress={() => {
-                router.push({ pathname: '/online/pick-word/[gameId]', params: { gameId } });
+                router.push(lobbyToPickWordRoute(gameId));
               }}
               style={styles.baseWordBannerPressable}
             >
@@ -582,7 +687,7 @@ export default function LobbyScreen() {
               <PrimaryButton
                 label={t('online.pickBaseWordAction')}
                 onPress={() => {
-                  router.push({ pathname: '/online/pick-word/[gameId]', params: { gameId } });
+                  router.push(lobbyToPickWordRoute(gameId));
                 }}
               />
             ) : null}

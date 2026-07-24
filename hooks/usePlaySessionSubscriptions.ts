@@ -1,15 +1,27 @@
 import { useEffect } from 'react';
 import type { TFunction } from 'i18next';
 import type { Dispatch, SetStateAction } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 
 import { ensureAnonymousAuth } from '@/lib/firebase/auth';
 import {
+  markPlayerOnline,
+  tryReadGameSessionSnapshot,
   subscribeGameSession,
   type GameSessionSnapshot,
 } from '@/lib/firebase/game-session-service';
-import { subscribePlayerWords, type StoredPlayerWord } from '@/lib/firebase/player-words-service';
+import {
+  getOwnPlayerWords,
+  subscribePlayerWords,
+  type StoredPlayerWord,
+} from '@/lib/firebase/player-words-service';
 import { subscribeSessionWordMaps } from '@/lib/firebase/session-word-maps-service';
 import type { SessionWordMaps } from '@/lib/firebase/types';
+import {
+  shouldHealPlayUiOnAppState,
+  shouldReplaceOwnWordsFromResumeSnapshot,
+} from '@/lib/game/compose-resume-heal';
+import { shouldMarkPresenceOnline } from '@/lib/online/presence/app-presence-state';
 import { mergePlaySessionSubscription } from '@/lib/online/session/play-session-bootstrap';
 
 type UsePlaySessionSubscriptionsParams = {
@@ -71,4 +83,59 @@ export function usePlaySessionSubscriptions({
       unsubWords?.();
     };
   }, [gameId, myUid, setLoadError, setLoading, setMyWords, setSessionCore, setWordMaps, t]);
+
+  // After unlock: wait for markPlayerOnline, then re-read so local pause UI is not stuck on
+  // stale online:false while peers already see «в грі». Also heal own words if submit
+  // committed while the UI/listener was stalled after lock.
+  useEffect(() => {
+    if (!gameId || !myUid) {
+      return undefined;
+    }
+    const onAppState = (next: AppStateStatus) => {
+      if (!shouldHealPlayUiOnAppState(next) || !shouldMarkPresenceOnline(next)) {
+        return;
+      }
+      void (async () => {
+        try {
+          await markPlayerOnline(gameId, myUid);
+        } catch (error) {
+          if (__DEV__) {
+            console.warn('markPlayerOnline on AppState active', error);
+          }
+        }
+        if (!shouldMarkPresenceOnline(AppState.currentState)) {
+          return;
+        }
+        const [snap, remoteWords] = await Promise.all([
+          tryReadGameSessionSnapshot(gameId),
+          getOwnPlayerWords(gameId, myUid).catch((error: unknown) => {
+            if (__DEV__) {
+              console.warn('getOwnPlayerWords on AppState active', error);
+            }
+            return null;
+          }),
+        ]);
+        if (snap) {
+          setSessionCore((prev) => mergePlaySessionSubscription(prev, snap));
+        }
+        if (remoteWords) {
+          setMyWords((prev) => {
+            if (
+              !shouldReplaceOwnWordsFromResumeSnapshot({
+                localNormalized: new Set(prev.keys()),
+                remoteNormalized: new Set(remoteWords.keys()),
+              })
+            ) {
+              return prev;
+            }
+            return remoteWords;
+          });
+        }
+      })();
+    };
+    const sub = AppState.addEventListener('change', onAppState);
+    return () => {
+      sub.remove();
+    };
+  }, [gameId, myUid, setMyWords, setSessionCore]);
 }

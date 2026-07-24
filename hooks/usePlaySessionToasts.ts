@@ -8,6 +8,12 @@ import {
   playToastRosterSignature,
 } from '@/lib/online/play-toast-session-signature';
 import { formatPlayToastEvents } from '@/lib/online/format-play-toast';
+import {
+  isPresenceToastEvent,
+  PRESENCE_TOAST_DEBOUNCE_MS,
+  resolvePendingPresenceToast,
+  type PresenceToastEvent,
+} from '@/lib/online/presence-toast-coalesce';
 import { useProfileStore } from '@/store/profile-store';
 
 import { type PlayToastItem, useToastQueue } from './useToastQueue';
@@ -37,6 +43,7 @@ function detectRosterToastEvents(
 /**
  * Short-lived roster / standings toasts while an online round is in progress.
  * Roster diffs use core session; rank diffs use word-map standings with debounce.
+ * Presence offline↔returned flips are debounced so contradictory banners do not stack.
  */
 export function usePlaySessionToasts(
   rosterSession: GameSessionSnapshot | null,
@@ -51,6 +58,9 @@ export function usePlaySessionToasts(
   const rankBaselineRef = useRef<GameSessionSnapshot | null>(null);
   const rankLatestRef = useRef<GameSessionSnapshot | null>(null);
   const rankDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const presencePendingRef = useRef<
+    Map<string, { event: PresenceToastEvent; timer: ReturnType<typeof setTimeout> }>
+  >(new Map());
   const rosterSessionRef = useRef(rosterSession);
   const rankSessionRef = useRef(rankSession);
   rosterSessionRef.current = rosterSession;
@@ -67,6 +77,16 @@ export function usePlaySessionToasts(
       : null;
 
   useEffect(() => {
+    const pending = presencePendingRef.current;
+    return () => {
+      for (const entry of pending.values()) {
+        clearTimeout(entry.timer);
+      }
+      pending.clear();
+    };
+  }, []);
+
+  useEffect(() => {
     const current = rosterSessionRef.current;
     if (!enabled || !current || current.status !== 'playing' || !myUid) {
       prevRosterRef.current = current;
@@ -80,8 +100,36 @@ export function usePlaySessionToasts(
     }
 
     const events = detectRosterToastEvents(prev, current, myUid);
-    const items = formatPlayToastEvents(t, events, viewerGender, current, myUid);
-    enqueueToasts(items);
+    const presenceEvents = events.filter(isPresenceToastEvent);
+    const otherEvents = events.filter((event) => !isPresenceToastEvent(event));
+
+    const otherItems = formatPlayToastEvents(t, otherEvents, viewerGender, current, myUid);
+    enqueueToasts(otherItems);
+
+    for (const event of presenceEvents) {
+      const existing = presencePendingRef.current.get(event.playerId) ?? null;
+      const resolved = resolvePendingPresenceToast(existing?.event ?? null, event);
+      if (existing) {
+        clearTimeout(existing.timer);
+        presencePendingRef.current.delete(event.playerId);
+      }
+      if (resolved.cancel || !resolved.pending) {
+        continue;
+      }
+      const pendingEvent = resolved.pending;
+      const sessionForFormat = current;
+      const timer = setTimeout(() => {
+        presencePendingRef.current.delete(pendingEvent.playerId);
+        const live = rosterSessionRef.current;
+        if (!live || live.status !== 'playing') {
+          return;
+        }
+        enqueueToasts(
+          formatPlayToastEvents(t, [pendingEvent], viewerGender, sessionForFormat, myUid),
+        );
+      }, PRESENCE_TOAST_DEBOUNCE_MS);
+      presencePendingRef.current.set(pendingEvent.playerId, { event: pendingEvent, timer });
+    }
   }, [enabled, enqueueToasts, myUid, rosterSignature, t, viewerGender]);
 
   useEffect(() => {

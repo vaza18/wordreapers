@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const rejoinExistingPlayer = vi.fn();
-const markPlayerOnline = vi.fn();
+const markResultsExited = vi.fn();
 let appState: string = 'active';
 
 vi.mock('react-native', () => ({
@@ -14,7 +14,10 @@ vi.mock('react-native', () => ({
 
 vi.mock('../lib/firebase/game-session-service.js', () => ({
   rejoinExistingPlayer: (...args: unknown[]) => rejoinExistingPlayer(...args),
-  markPlayerOnline: (...args: unknown[]) => markPlayerOnline(...args),
+}));
+
+vi.mock('../lib/firebase/results-coordination-service.js', () => ({
+  markResultsExited: (...args: unknown[]) => markResultsExited(...args),
 }));
 
 import { reconcilePlayerPresence } from '../lib/online/presence/reconcile-player-presence.js';
@@ -26,25 +29,34 @@ describe('reconcilePlayerPresence', () => {
     vi.clearAllMocks();
     appState = 'active';
     rejoinExistingPlayer.mockResolvedValue(undefined);
-    markPlayerOnline.mockResolvedValue(undefined);
+    markResultsExited.mockResolvedValue(undefined);
   });
 
-  it('rejoins roster membership then marks the player online', async () => {
+  it('latches rematch opt-in then rejoins (online presence included in rejoin)', async () => {
     await reconcilePlayerPresence('ABCDE', 'uid-1', profile);
 
+    expect(markResultsExited).toHaveBeenCalledWith('ABCDE', 'uid-1');
     expect(rejoinExistingPlayer).toHaveBeenCalledWith('ABCDE', 'uid-1', profile);
-    expect(markPlayerOnline).toHaveBeenCalledWith('ABCDE', 'uid-1');
-    expect(rejoinExistingPlayer.mock.invocationCallOrder[0]).toBeLessThan(
-      markPlayerOnline.mock.invocationCallOrder[0]!,
+    expect(markResultsExited.mock.invocationCallOrder[0]).toBeLessThan(
+      rejoinExistingPlayer.mock.invocationCallOrder[0]!,
     );
   });
 
-  it('skips rejoin while backgrounded so AppState offline is not overwritten', async () => {
+  it('still writes rematch latch while backgrounded, but does not rejoin online', async () => {
     appState = 'background';
 
     await reconcilePlayerPresence('ABCDE', 'uid-1', profile);
 
+    expect(markResultsExited).toHaveBeenCalledWith('ABCDE', 'uid-1');
     expect(rejoinExistingPlayer).not.toHaveBeenCalled();
-    expect(markPlayerOnline).not.toHaveBeenCalled();
+  });
+
+  it('still writes rematch latch while inactive (multi-sim lock), but does not rejoin online', async () => {
+    appState = 'inactive';
+
+    await reconcilePlayerPresence('ABCDE', 'uid-1', profile);
+
+    expect(markResultsExited).toHaveBeenCalledWith('ABCDE', 'uid-1');
+    expect(rejoinExistingPlayer).not.toHaveBeenCalled();
   });
 });

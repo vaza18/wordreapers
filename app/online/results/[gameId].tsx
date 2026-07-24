@@ -25,6 +25,7 @@ import {
 import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
 import { persistLocalArchive } from '@/lib/online/coordinated-session-cleanup';
 import { isSessionWordsSnapshotReady } from '@/lib/online/session/session-words-bootstrap';
+import { shouldShowOnlineResultsWordsLoading } from '@/lib/online/session/should-show-online-results-words-loading';
 import {
   freezeFinishedRound,
   type FrozenFinishedRound,
@@ -56,15 +57,21 @@ export default function OnlineResultsScreen() {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const { gameId: rawGameId, baseWordRound: rawViewingRound } = useLocalSearchParams<{
+  const {
+    gameId: rawGameId,
+    baseWordRound: rawViewingRound,
+    fromJoin: rawFromJoin,
+  } = useLocalSearchParams<{
     gameId: string;
     baseWordRound?: string;
+    fromJoin?: string;
   }>();
   const gameId = rawGameId ?? '';
   const viewingBaseWordRound = useMemo(
     () => parseViewingBaseWordRoundParam(rawViewingRound),
     [rawViewingRound],
   );
+  const fromJoinIntoPlaying = rawFromJoin === '1';
   const myUid = useOnlineViewerUid();
 
   const [liveSessionCore, setLiveSessionCore] = useState<GameSessionSnapshot | null>(null);
@@ -147,6 +154,7 @@ export default function OnlineResultsScreen() {
     freezeAttemptedRef,
     archivedRef,
     setArchiveRecoveryPending,
+    fromJoinIntoPlaying,
   });
 
   // When a later round finishes in RTDB, keep the frozen snapshot the player is reviewing.
@@ -352,7 +360,15 @@ export default function OnlineResultsScreen() {
     );
   }
 
-  if (!viewData || (!wordsBootstrapComplete && !frozenRound)) {
+  if (
+    !viewData ||
+    shouldShowOnlineResultsWordsLoading({
+      frozenRound,
+      session,
+      wordsSnapshot,
+      wordsBootstrapComplete,
+    })
+  ) {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={colors.accent} />

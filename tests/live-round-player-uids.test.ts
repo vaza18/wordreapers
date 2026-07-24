@@ -5,6 +5,7 @@ import {
   appendLiveRoundPlayerUid,
   isActiveLivePlayer,
   isInLiveRound,
+  liveRoundPlayerUidsForRoundStart,
   waitingLobbyOptInUids,
 } from '../lib/online/presence/live-round-membership.js';
 
@@ -32,9 +33,10 @@ function playingSession(
 }
 
 describe('waitingLobbyOptInUids', () => {
-  it('returns only online roster members', () => {
+  it('returns only online roster members on round 1', () => {
     expect(
       waitingLobbyOptInUids({
+        baseWordRound: 0,
         players: {
           org: { name: 'Org', wordCount: 0, score: 0, online: true },
           p2: { name: 'Two', wordCount: 0, score: 0, online: true },
@@ -42,6 +44,55 @@ describe('waitingLobbyOptInUids', () => {
         },
       }),
     ).toEqual(['org', 'p2']);
+  });
+
+  it('keeps rematch opted-in peers who locked the screen (online false)', () => {
+    expect(
+      waitingLobbyOptInUids({
+        baseWordRound: 2,
+        baseWord: 'сівка',
+        baseWordChosenBy: 'org',
+        resultsExitedBy: { org: true, p2: true },
+        players: {
+          org: { name: 'Org', wordCount: 0, score: 0, online: true },
+          p2: { name: 'Two', wordCount: 0, score: 0, online: false },
+          p3: { name: 'Three', wordCount: 0, score: 0, online: false },
+        },
+      }),
+    ).toEqual(['org', 'p2']);
+  });
+
+  it('keeps the assigned picker seat while offline before word commit', () => {
+    expect(
+      waitingLobbyOptInUids({
+        baseWordRound: 2,
+        baseWord: '',
+        baseWordChosenBy: null,
+        baseWordPickerUid: 'org',
+        players: {
+          org: { name: 'Org', wordCount: 0, score: 0, online: false },
+          p2: { name: 'Two', wordCount: 0, score: 0, online: true },
+        },
+      }),
+    ).toEqual(['org', 'p2']);
+  });
+});
+
+describe('liveRoundPlayerUidsForRoundStart', () => {
+  it('always includes the round starter even if briefly offline', () => {
+    expect(
+      liveRoundPlayerUidsForRoundStart(
+        {
+          baseWordRound: 2,
+          resultsExitedBy: { org: true },
+          players: {
+            org: { name: 'Org', wordCount: 0, score: 0, online: false },
+            p2: { name: 'Two', wordCount: 0, score: 0, online: false },
+          },
+        },
+        'org',
+      ),
+    ).toEqual(['org']);
   });
 });
 

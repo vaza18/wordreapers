@@ -35,6 +35,12 @@ export type LobbyScreenContext = {
   myUid: string;
   /** Navigated from results «Грати ще» — skip eject while presence catches up. */
   justOptedIn?: boolean;
+  /**
+   * Local latch: this client already opted into the current rematch waiting round.
+   * Survives brief `online: false` (presence handoff / peer join races) so we do not
+   * bounce an opted-in player back to prior-round results.
+   */
+  rematchOptInLatched?: boolean;
 };
 
 export type LobbyScreenActions = {
@@ -141,7 +147,7 @@ export function resolveLobbyScreenActions(ctx: LobbyScreenContext): LobbyScreenA
       (session.baseWordRound ?? 0) > 0 &&
       player != null &&
       player.hasLeft !== true &&
-      (isRematchWaitingLobbyOptedIn(session, myUid) || session.organizerId === myUid) &&
+      isRematchWaitingLobbyOptedIn(session, myUid) &&
       !isInLiveRound(session, myUid);
     const shouldAutoJoinLiveRound =
       (isLiveParticipant(session, myUid) &&
@@ -157,7 +163,10 @@ export function resolveLobbyScreenActions(ctx: LobbyScreenContext): LobbyScreenA
 
   if (session.status === 'waiting' && isRematchWaitingLobby(session)) {
     const player = session.players[myUid];
-    const optedIn = isRematchWaitingLobbyOptedIn(session, myUid) || justOptedIn === true;
+    const optedIn =
+      isRematchWaitingLobbyOptedIn(session, myUid) ||
+      justOptedIn === true ||
+      ctx.rematchOptInLatched === true;
     return {
       shouldNavigateToPlay: false,
       shouldAutoJoinLiveRound: false,

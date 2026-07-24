@@ -42,6 +42,7 @@ import {
 import { sessionContentSafetyLocked } from '@/lib/online/public-lobby/content-safety';
 import { isPublicBaseWordSafeFromDisplay } from '@/lib/online/public-lobby/validate-public-base-word';
 import { baseWordPickerTurnNumber, isCurrentBaseWordPicker } from '@/lib/online/base-word-picker';
+import { shouldEnablePickWordPresence } from '@/lib/online/lobby-pick-word-navigation';
 import { handoffPlayerPresence } from '@/lib/online/presence/presence-handoff';
 import { usePlayerOnlinePresence } from '@/lib/online/presence/use-player-online-presence';
 import type { UniqueBonusMode } from '@/lib/game/scoring';
@@ -56,8 +57,12 @@ export default function OnlinePickWordScreen() {
   const { colors } = useTheme();
   const { buttonSize: headerButtonSize } = useHeaderIconButtonLayout();
   const { t } = useTranslation();
-  const { gameId: rawGameId } = useLocalSearchParams<{ gameId: string }>();
+  const { gameId: rawGameId, fromLobby: rawFromLobby } = useLocalSearchParams<{
+    gameId: string;
+    fromLobby?: string;
+  }>();
   const gameId = rawGameId ?? '';
+  const fromLobby = rawFromLobby === '1';
   const isFocused = useIsFocused();
 
   const [loading, setLoading] = useState(true);
@@ -116,7 +121,14 @@ export default function OnlinePickWordScreen() {
     });
   }, [gameId]);
 
-  usePlayerOnlinePresence(gameId, myUid ?? undefined, Boolean(gameId && myUid));
+  usePlayerOnlinePresence(
+    gameId,
+    myUid ?? undefined,
+    Boolean(gameId && myUid && shouldEnablePickWordPresence(fromLobby)),
+    // Same as rematch lobby: multi-sim `inactive` must not mark the picker offline
+    // while they are still on this waiting-phase screen (from rematch, not fromLobby).
+    'background-only',
+  );
 
   const { status: lexiconHintStatus, maxCount: lexiconMaxCount } = useSetupPlayableLexiconHint({
     baseWordInput,
@@ -126,9 +138,19 @@ export default function OnlinePickWordScreen() {
   });
 
   const goToLobby = useCallback(() => {
+    if (fromLobby) {
+      // Lobby stayed mounted under push — pop back; do not replace (avoids exit-home).
+      if (router.canGoBack()) {
+        router.back();
+        return;
+      }
+    }
     handoffPlayerPresence(gameId);
-    router.replace({ pathname: '/online/lobby/[gameId]', params: { gameId } });
-  }, [gameId]);
+    router.replace({
+      pathname: '/online/lobby/[gameId]',
+      params: { gameId, optedIn: '1' },
+    });
+  }, [fromLobby, gameId]);
 
   useEffect(() => {
     if (!isFocused || !session || !myUid) {

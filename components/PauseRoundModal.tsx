@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HeaderBarButton } from '@/components/HeaderBarButton';
 import { MenuIcon } from '@/components/HeaderIcons';
@@ -12,7 +12,6 @@ import { useHeaderIconButtonLayout } from '@/hooks/useHeaderIconButtonLayout';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useTheme } from '@/hooks/useTheme';
 import { useServerNowWhen } from '@/hooks/useServerNow';
-import { ConditionalModal } from '@/lib/ui/conditional-modal';
 import { modalCardChrome, modalOverlayBackground } from '@/lib/ui/modal-chrome';
 import { tGendered, type PlayerGender } from '@/lib/game/grammar';
 import type { GameSession, SessionVote } from '@/lib/firebase/types';
@@ -31,6 +30,7 @@ import { formatPlayerLeftLabel, formatVoteStatusLabel } from '@/lib/game/vote-st
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import { formatTimerMs } from '@/lib/game/timer-label';
 import { voteProposerName } from '@/lib/firebase/session-votes-service';
+import { resolvePauseOverlayResumeVote } from '@/lib/online/voting/pause-overlay-resume-vote';
 
 interface PauseRoundModalProps {
   visible: boolean;
@@ -90,34 +90,38 @@ function PauseBody({
     resolveGameSessionSettingsForSession(session).uniqueBonusEnabled,
   );
 
+  // Prefer live session field so overlay tracks RTDB even if a stale prop lags.
+  const activeResumeVote = resolvePauseOverlayResumeVote(session.resumeVote, resumeVote);
+
   const resumeHeadline = useMemo(() => {
-    if (!resumeVote) {
+    if (!activeResumeVote) {
       return null;
     }
-    if (resumeVote.proposedBy === myUid) {
+    if (activeResumeVote.proposedBy === myUid) {
       return t('game.voteResumeSent');
     }
-    const proposerId = resumeVote.proposedBy;
+    const proposerId = activeResumeVote.proposedBy;
     const proposerGender = playerGenderForDisplay(session, myUid, proposerId);
     return tGendered(t, 'game.voteResume', proposerGender, {
       name: voteProposerName(session, proposerId, myUid),
     });
-  }, [myUid, resumeVote, session, t]);
+  }, [activeResumeVote, myUid, session, t]);
 
   const resumeSecondsLeft = useMemo(() => {
-    if (!resumeVote) {
+    if (!activeResumeVote) {
       return 0;
     }
-    const proposedAt = resumeVote.proposedAt ?? serverNow;
+    const proposedAt = activeResumeVote.proposedAt ?? serverNow;
     const remaining = Math.ceil((proposedAt + RESUME_VOTE_TIMEOUT_MS - serverNow) / 1000);
     return Math.max(0, remaining);
-  }, [resumeVote, serverNow]);
+  }, [activeResumeVote, serverNow]);
 
-  const resumeParticipants = resumeVote
-    ? buildEarlyFinishParticipantRows(session, resumeVote, myUid)
+  const resumeParticipants = activeResumeVote
+    ? buildEarlyFinishParticipantRows(session, activeResumeVote, myUid)
     : [];
-  const needsResumeVote = resumeVote != null && viewerNeedsResumeVote(session, resumeVote, myUid);
-  const isResumeProposer = resumeVote?.proposedBy === myUid;
+  const needsResumeVote =
+    activeResumeVote != null && viewerNeedsResumeVote(session, activeResumeVote, myUid);
+  const isResumeProposer = activeResumeVote?.proposedBy === myUid;
 
   const earlyFinishHeadline = useMemo(() => {
     if (!earlyFinishVote) {
@@ -244,7 +248,7 @@ function PauseBody({
                 ))}
               </View>
             </View>
-          ) : resumeVote ? (
+          ) : activeResumeVote ? (
             <View style={styles.resumeVoteSection}>
               <Text style={styles.resumeHeadline}>{resumeHeadline}</Text>
               {resumeSecondsLeft > 0 ? (
@@ -315,7 +319,7 @@ function PauseBody({
                 />
               ) : null}
             </>
-          ) : resumeVote ? (
+          ) : activeResumeVote ? (
             <>
               {needsResumeVote ? (
                 <View style={styles.row}>
@@ -348,6 +352,11 @@ function PauseBody({
   );
 }
 
+/**
+ * Full-screen pause overlay in the play tree (not RN Modal).
+ * Modal portals can miss mid-pause `resumeVote` updates on an already-open overlay
+ * (common with two simulators / AppState inactive). Play routes use `headerShown: false`.
+ */
 export function PauseRoundModal({
   visible,
   serverNow: serverNowProp,
@@ -355,14 +364,23 @@ export function PauseRoundModal({
 }: PauseRoundModalProps) {
   const tickNow = useServerNowWhen(visible, 250);
   const serverNow = serverNowProp ?? tickNow;
+  if (!visible) {
+    return null;
+  }
   return (
-    <ConditionalModal transparent visible={visible} animationType="fade">
-      <SafeAreaProvider>
-        <PauseBody {...rest} serverNow={serverNow} />
-      </SafeAreaProvider>
-    </ConditionalModal>
+    <View style={hostStyles.host} pointerEvents="box-none">
+      <PauseBody {...rest} serverNow={serverNow} />
+    </View>
   );
 }
+
+const hostStyles = StyleSheet.create({
+  host: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 100,
+    elevation: 100,
+  },
+});
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({

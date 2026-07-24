@@ -13,9 +13,24 @@ import { restartRematchOnlineRound } from './restart-rematch-online-round.js';
 
 export type OptIntoLiveRoundRoute = ReturnType<typeof resolvePostJoinRoute>;
 
+function kickRematchWaitingPresence(gameId: string, myUid: string, profile: PlayerProfile): void {
+  void reconcilePlayerPresence(gameId, myUid, profile).catch((error) => {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.warn('optIntoLiveRound waiting presence', error);
+    }
+  });
+}
+
 /**
  * Opt-in to rematch or rejoin a live round after «Грати ще» on results.
  * Uses fresh RTDB reads so navigation matches room state after the action.
+ *
+ * For an already-open rematch `waiting` lobby, presence rejoin is kicked off in
+ * the background so results can navigate immediately (peers may already see this
+ * player online while the joiner would otherwise sit on results for seconds).
+ * The rematch latch is awaited before navigate — peers filter lobby visibility by
+ * RTDB `resultsExitedBy` / online, not this client's local opt-in latch.
+ * Live `playing` still awaits full presence so `liveRoundPlayerUids` is ready.
  */
 export async function optIntoLiveRound(
   gameId: string,
@@ -32,9 +47,14 @@ export async function optIntoLiveRound(
   } else {
     session = initial;
   }
-  if (session.status === 'waiting' || session.status === 'playing') {
+
+  if (session.status === 'playing') {
     await reconcilePlayerPresence(gameId, myUid, profile);
     session = await readGameSessionSnapshot(gameId);
+  } else if (session.status === 'waiting') {
+    // Confirm latch after rematch races (peer may have opened waiting first).
+    await markResultsExited(gameId, myUid);
+    kickRematchWaitingPresence(gameId, myUid, profile);
   }
 
   const route = resolvePostJoinRoute(session, myUid, gameId);

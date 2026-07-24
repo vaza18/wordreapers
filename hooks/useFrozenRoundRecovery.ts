@@ -24,6 +24,8 @@ export type UseFrozenRoundRecoveryOptions = {
   freezeAttemptedRef: { current: boolean };
   archivedRef: { current: boolean };
   setArchiveRecoveryPending: (pending: boolean) => void;
+  /** Post-join landed on results while live is still playing — skip prior-archive hydrate. */
+  fromJoinIntoPlaying?: boolean;
 };
 
 async function markArchivedIfAcked(
@@ -50,6 +52,7 @@ export function useFrozenRoundRecovery({
   freezeAttemptedRef,
   archivedRef,
   setArchiveRecoveryPending,
+  fromJoinIntoPlaying = false,
 }: UseFrozenRoundRecoveryOptions): void {
   useEffect(() => {
     if (!sessionLoaded || !gameId || frozenRound) {
@@ -99,7 +102,7 @@ export function useFrozenRoundRecovery({
     if (!sessionLoaded || !gameId || frozenRound) {
       return undefined;
     }
-    if (!shouldRecoverFinishedRoundFromArchive(liveSession)) {
+    if (!shouldRecoverFinishedRoundFromArchive(liveSession, { fromJoinIntoPlaying })) {
       return undefined;
     }
     if (viewingBaseWordRound != null) {
@@ -140,5 +143,6 @@ export function useFrozenRoundRecovery({
     setArchiveRecoveryPending,
     setFrozenRound,
     viewingBaseWordRound,
+    fromJoinIntoPlaying,
   ]);
 }

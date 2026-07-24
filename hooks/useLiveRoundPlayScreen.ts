@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useEffect, useRef, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AppState } from 'react-native';
+import { AppState, type AppStateStatus } from 'react-native';
 
 import type { GameSessionSnapshot } from '@/lib/firebase/game-session-service';
 import { markPlayerOffline } from '@/lib/firebase/game-session-service';
@@ -55,20 +55,11 @@ export function useLiveRoundPlayScreen({
 
   usePlayerOnlinePresence(gameId, myUid, Boolean(gameId && myUid && actions?.enablePresenceHook));
 
-  useEffect(() => {
-    if (!gameId || !myUid || !session || !actions?.shouldRejoin) {
-      return;
-    }
-    // Background offline sets online:false without hasLeft — same shape as presence lag.
-    // Do not auto-rejoin while backgrounded or the player flips back to «в грі».
-    if (!shouldMarkPresenceOnline(AppState.currentState)) {
-      return;
-    }
-    const roundKey = `${session.baseWordRound ?? 0}:${session.timerEndsAt ?? 0}`;
-    if (stalePresenceReconcileRef.current === roundKey) {
-      return;
-    }
+  const runPresenceReconcile = (roundKey: string) => {
     if (presenceReconcileInFlightRef.current) {
+      return;
+    }
+    if (!shouldMarkPresenceOnline(AppState.currentState)) {
       return;
     }
     const { name, gender, avatarColorIndex } = useProfileStore.getState();
@@ -87,6 +78,49 @@ export function useLiveRoundPlayScreen({
       .finally(() => {
         presenceReconcileInFlightRef.current = false;
       });
+  };
+
+  useEffect(() => {
+    if (!gameId || !myUid || !session || !actions?.shouldRejoin) {
+      return;
+    }
+    // Background offline sets online:false without hasLeft — same shape as presence lag.
+    // Do not auto-rejoin while backgrounded or the player flips back to «в грі».
+    if (!shouldMarkPresenceOnline(AppState.currentState)) {
+      return;
+    }
+    const roundKey = `${session.baseWordRound ?? 0}:${session.timerEndsAt ?? 0}`;
+    if (stalePresenceReconcileRef.current === roundKey) {
+      return;
+    }
+    runPresenceReconcile(roundKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- profile from store; reconcile on shouldRejoin/session
+  }, [actions?.shouldRejoin, frozenBaseWordRound, gameId, myUid, onJoinFailed, session, t]);
+
+  // Foreground after background: shouldRejoin may already be true without deps changing — re-run reconcile.
+  useEffect(() => {
+    if (!gameId || !myUid || !session || !actions?.shouldRejoin) {
+      return undefined;
+    }
+    const roundKey = `${session.baseWordRound ?? 0}:${session.timerEndsAt ?? 0}`;
+    const onAppState = (next: AppStateStatus) => {
+      if (next !== 'active') {
+        return;
+      }
+      if (!shouldMarkPresenceOnline(next)) {
+        return;
+      }
+      // Allow one more reconcile after resume even if this round was marked done while backgrounded.
+      if (stalePresenceReconcileRef.current === roundKey) {
+        stalePresenceReconcileRef.current = null;
+      }
+      runPresenceReconcile(roundKey);
+    };
+    const sub = AppState.addEventListener('change', onAppState);
+    return () => {
+      sub.remove();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- AppState listener; rebind when rejoin intent changes
   }, [actions?.shouldRejoin, frozenBaseWordRound, gameId, myUid, onJoinFailed, session, t]);
 
   useEffect(() => {

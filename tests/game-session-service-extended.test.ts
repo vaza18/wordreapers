@@ -131,19 +131,30 @@ describe('game-session-service extended', () => {
     await expect(joinGameSession('ABCDE', profile)).rejects.toThrow('ROOM_NOT_FOUND');
   });
 
+  it('throws ROOM_NOT_FOUND for orphan shells (no status/organizerId), not ROOM_NOT_JOINABLE', async () => {
+    getMock.mockResolvedValue({
+      exists: () => true,
+      val: () => ({
+        baseWord: 'екс-держсекретар',
+        baseWordChosenBy: 'org-1',
+        players: {
+          'org-1': { name: 'Org', wordCount: 0, score: 0, online: true },
+        },
+        settings: DEFAULT_SESSION_SETTINGS,
+      }),
+    });
+
+    await expect(joinGameSession('ABCDE', profile)).rejects.toThrow('ROOM_NOT_FOUND');
+  });
+
   it('rejoins an existing player and appends live round uid while playing', async () => {
-    getMock
-      .mockResolvedValueOnce({
-        exists: () => true,
-        val: () => ({ name: 'Guest', wordCount: 0, score: 0, online: false }),
-      })
-      .mockResolvedValueOnce({
-        exists: () => true,
-        val: () => ({
-          status: 'playing',
-          liveRoundPlayerUids: ['org-1'],
-        }),
-      });
+    getMock.mockResolvedValue({
+      exists: () => true,
+      val: () => ({
+        status: 'playing',
+        liveRoundPlayerUids: ['org-1'],
+      }),
+    });
 
     await rejoinExistingPlayer('ABCDE', 'guest-1', {
       name: 'Guest',
@@ -152,12 +163,13 @@ describe('game-session-service extended', () => {
     });
 
     expect(updateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ path: 'game_sessions/ABCDE/players/guest-1' }),
-      expect.objectContaining({ online: true, hasLeft: false }),
-    );
-    expect(updateMock).toHaveBeenCalledWith(
       expect.objectContaining({ path: 'game_sessions/ABCDE' }),
-      { liveRoundPlayerUids: ['org-1', 'guest-1'] },
+      expect.objectContaining({
+        'players/guest-1/online': true,
+        'players/guest-1/hasLeft': false,
+        'players/guest-1/name': 'Guest',
+        liveRoundPlayerUids: ['org-1', 'guest-1'],
+      }),
     );
   });
 
@@ -200,6 +212,31 @@ describe('game-session-service extended', () => {
         settings: DEFAULT_SESSION_SETTINGS,
       }),
     ).rejects.toThrow('NOT_AUTHORIZED');
+  });
+
+  it('rejects base word from organizer who is not current picker', async () => {
+    getMock.mockResolvedValue({
+      exists: () => true,
+      val: () => ({
+        ...waitingSession,
+        status: 'waiting',
+        baseWordRound: 1,
+        baseWord: '',
+        baseWordPickerOrder: ['org-1', 'guest'],
+        baseWordPickerUid: 'guest',
+        players: {
+          'org-1': { name: 'Org', wordCount: 0, score: 0, online: true },
+          guest: { name: 'Guest', wordCount: 0, score: 0, online: true },
+        },
+      }),
+    });
+
+    await expect(
+      updateGameSessionSetup('ABCDE', 'org-1', {
+        baseWord: 'портрет',
+        settings: DEFAULT_SESSION_SETTINGS,
+      }),
+    ).rejects.toThrow('NOT_BASE_WORD_PICKER');
   });
 
   it('updates base word for current picker', async () => {

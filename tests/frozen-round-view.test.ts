@@ -39,8 +39,9 @@ describe('shouldLoadViewingRoundFromArchive', () => {
     expect(shouldLoadViewingRoundFromArchive(0, sessionWithRound('finished', 1))).toBe(true);
   });
 
-  it('skips archive load when viewing matches live finished round', () => {
-    expect(shouldLoadViewingRoundFromArchive(1, sessionWithRound('finished', 1))).toBe(false);
+  it('loads pinned archive even when live finished matches the viewing round', () => {
+    // Rematch may deny/clear live player_words; navigate-to-results archive is source of truth.
+    expect(shouldLoadViewingRoundFromArchive(1, sessionWithRound('finished', 1))).toBe(true);
     expect(shouldLoadViewingRoundFromArchive(null, sessionWithRound('finished', 1))).toBe(false);
   });
 });
@@ -58,5 +59,18 @@ describe('shouldRecoverFinishedRoundFromArchive', () => {
 
   it('does not recover while the live session is still finished', () => {
     expect(shouldRecoverFinishedRoundFromArchive(gameSession({ status: 'finished' }))).toBe(false);
+  });
+
+  it('skips prior-archive recovery for join-into-playing without a pinned viewing round', () => {
+    expect(
+      shouldRecoverFinishedRoundFromArchive(gameSession({ status: 'playing' }), {
+        fromJoinIntoPlaying: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldRecoverFinishedRoundFromArchive(gameSession({ status: 'waiting' }), {
+        fromJoinIntoPlaying: true,
+      }),
+    ).toBe(true);
   });
 });

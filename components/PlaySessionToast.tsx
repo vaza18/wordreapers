@@ -150,25 +150,33 @@ function ToastBubble({
 
   useEffect(() => {
     if (!motionEnabled) {
-      opacity.setValue(1);
       translateY.setValue(targetTranslateY);
+      // Never revive opacity while fading — stack shifts used to force opacity back to 1.
+      if (!fading) {
+        opacity.setValue(1);
+      }
       return;
     }
-    Animated.parallel([
+    const animations = [
       Animated.timing(translateY, {
         toValue: targetTranslateY,
         duration: STACK_SHIFT_MS,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: STACK_SHIFT_MS,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [motionEnabled, opacity, targetTranslateY, translateY]);
+    ];
+    if (!fading) {
+      animations.push(
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: STACK_SHIFT_MS,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+      );
+    }
+    Animated.parallel(animations).start();
+  }, [fading, motionEnabled, opacity, targetTranslateY, translateY]);
 
   useEffect(() => {
     if (!fading) {

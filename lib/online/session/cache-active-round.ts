@@ -63,6 +63,10 @@ export async function loadActiveRoundLexiconSnapshot(
   if (!cached || cached.timerEndsAt !== session.timerEndsAt) {
     return null;
   }
+  const cachedBase = cached.sessionSnapshot?.baseWord;
+  if (cachedBase && session.baseWord && cachedBase !== session.baseWord) {
+    return null;
+  }
   return cached.playableLexicon ?? null;
 }
 

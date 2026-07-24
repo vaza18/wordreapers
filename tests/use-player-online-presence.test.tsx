@@ -70,6 +70,24 @@ describe('usePlayerOnlinePresence', () => {
     expect(markPlayerOffline).toHaveBeenCalledWith('ABCD', 'org');
   });
 
+  it('marks player offline on inactive (iOS lock screen) with default play policy', () => {
+    render(<HookHost gameId="ABCD" uid="org" />);
+    appStateHandlers[0]?.('inactive');
+    expect(markPlayerOffline).toHaveBeenCalledWith('ABCD', 'org');
+  });
+
+  it('does not mark offline on inactive when lobby uses background-only policy', () => {
+    function LobbyHost() {
+      usePlayerOnlinePresence('ABCD', 'org', true, 'background-only');
+      return null;
+    }
+    render(<LobbyHost />);
+    appStateHandlers[0]?.('inactive');
+    expect(markPlayerOffline).not.toHaveBeenCalled();
+    appStateHandlers[0]?.('background');
+    expect(markPlayerOffline).toHaveBeenCalledWith('ABCD', 'org');
+  });
+
   it('voluntarily leaves waiting lobby on unmount without handoff', () => {
     const { unmount } = render(<HookHost gameId="ABCD" uid="org" />);
     unmount();

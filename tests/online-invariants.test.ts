@@ -94,8 +94,25 @@ describe('online invariants (canonical spec)', () => {
             allowSlang: false,
           },
           players: {},
+          resultsExitedBy: { org: true },
         }),
       ).not.toThrow();
+      expect(() =>
+        assertRematchBootstrapSessionShape({
+          status: 'waiting',
+          baseWord: '',
+          timerEndsAt: null,
+          organizerId: 'org',
+          settings: {
+            durationSeconds: 300,
+            uniqueBonusEnabled: false,
+            language: 'uk',
+            allowProperNouns: false,
+            allowSlang: false,
+          },
+          players: {},
+        }),
+      ).toThrow(/resultsExitedBy/);
     });
   });
 
@@ -143,6 +160,14 @@ describe('online invariants (canonical spec)', () => {
           true,
         ),
       ).toThrow(/hasLeft players must not be visible/);
+      expect(() =>
+        assertLobbyVisiblePlayerState(
+          'left',
+          { name: 'Left', wordCount: 0, score: 0, hasLeft: true },
+          true,
+          true,
+        ),
+      ).not.toThrow();
     });
   });
 
@@ -295,6 +320,19 @@ describe('online invariants (canonical spec)', () => {
       expect(shouldRecoverFinishedRoundFromArchive({ status: 'finished' } as GameSession)).toBe(
         false,
       );
+    });
+
+    it('skips prior-archive recovery on fromJoinIntoPlaying while live playing', () => {
+      expect(
+        shouldRecoverFinishedRoundFromArchive({ status: 'playing' } as GameSession, {
+          fromJoinIntoPlaying: true,
+        }),
+      ).toBe(false);
+      expect(
+        shouldRecoverFinishedRoundFromArchive({ status: 'waiting' } as GameSession, {
+          fromJoinIntoPlaying: true,
+        }),
+      ).toBe(true);
     });
   });
 

@@ -8,6 +8,231 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — Late joiner «Гравці (1)» / blink after first rematcher already picked (JZ4Y5)
+
+- **Symptom:** Round N: organizer (scheduled + first rematcher) picks base word; late joiner’s lobby shows only themselves + Start / steals pick. First rematcher’s list blinks when the peer joins; peer still sees both.
+- **Cause:** (1) `hasLeft` short-circuited rematch visibility/eligibility and `shouldClearLobbyBaseWordForPicker` even when latch / `baseWordPickerUid` / committed word marked durable opt-in — late joiner treated the peer as absent (rule 1). (2) Every `setPlayerOnlinePresence` ran `reconcileLobbyPickerState`, so the joiner’s online write raced a briefly-offline / stale-hasLeft peer and cleared the rightful word (list blink). (3) Pick-word (non-`fromLobby`) used default `inactive→offline`, marking the waiting-phase picker offline under multi-sim focus.
+- **Fix:** Durable rematch seat (`isRematchDurableLobbyOptIn`) survives stale `hasLeft` for lobby visibility + picker eligibility + word clear; stop picker reconcile on presence online writes; pick-word uses `background-only` offline policy like lobby.
+- **Test:** `tests/rematch-waiting-lobby.test.ts`, `tests/lobby-base-word-picker-reconcile.test.ts`, `tests/online-base-word-picker.test.ts`
+- **Area:** `lib/online/rematch/rematch-waiting-lobby.ts`, `lib/online/base-word-picker.ts`, `lib/firebase/game-session-service.ts`, `app/online/pick-word/[gameId].tsx`
+
+### 2026-07 — Lobby shows peer offline while they still have Start / base word (multi-sim)
+
+- **Symptom:** Rematch lobby: peer has chosen base word + «Почати гру»; other client shows 📵 on that peer and «Чекаємо, поки … обере базове слово» with no word. Peer is not actually offline.
+- **Cause:** Focusing the other iOS simulator sets AppState `inactive` → `markPlayerOffline`. That policy is required for lock-screen votes during `playing`, but in waiting lobby it creates false offline and stale «waiting for pick» UI when the listener also missed `baseWord`.
+- **Fix:** Lobby / non-playing presence uses `background-only` offline policy (`inactive` ignored); play keeps `background-and-inactive`. Lobby re-heals RTDB every 2s while waiting for a rematch base word.
+- **Test:** `tests/app-presence-state.test.ts`, `tests/use-player-online-presence.test.tsx`
+- **Area:** `lib/online/presence/app-presence-state.ts`, `lib/online/presence/use-player-online-presence.ts`, `app/online/lobby/[gameId].tsx`
+
+### 2026-07 — Late rematch joiner thinks they are alone / steals pick (visibility)
+
+- **Symptom:** Rightful first rematcher (also scheduled) opens round N and picks; late joiner’s lobby shows «Гравці (1)» only themselves and treats rule 1 (alone → may pick), overwriting or racing the base word. Peer lobby correctly shows both.
+- **Cause:** Multi-sim focus marks the first rematcher `online: false`. Visibility/eligibility required latch or committed `chosenBy`+word; while they are still on pick-word (no word yet) and latch missing from the late joiner’s snapshot, they vanish → late joiner becomes sole eligible picker.
+- **Fix:** Treat `baseWordPickerUid` as rematch opt-in for lobby visibility + `waitingLobbyOptInUids` / picker eligibility; heal lobby RTDB on `optedIn=1`; keep latch-on-inactive from prior fix.
+- **Test:** `tests/rematch-waiting-lobby.test.ts`, `tests/online-base-word-picker.test.ts`, `tests/live-round-player-uids.test.ts`
+- **Area:** `lib/online/rematch/rematch-waiting-lobby.ts`, `lib/online/presence/live-round-membership.ts`, `app/online/lobby/[gameId].tsx`
+
+### 2026-07 — Rematch picker lobby shows only self while peer sees both (YZS46)
+
+- **Symptom:** First rematcher (organizer) sits in rematch lobby and sees both players; second (picker) sees «Гравці (1)» only themselves and can Start. Same room/word.
+- **Cause:** Multi-sim focus marks first rematcher `online: false`. Lobby list uses RTDB `online` / `resultsExitedBy` / chosenBy — not the local `rematchOptInLatched` that keeps the first player on the lobby screen. `reconcilePlayerPresence` skipped _all_ work (including latch refresh) while AppState was inactive; rematch `permission_denied` already-waiting path also returned without ensuring the actor latch leaf.
+- **Fix:** Always `markResultsExited` in reconcile even when inactive (still skip online rejoin); confirm latch after rematch success and on already-waiting catch; await latch again before navigating into rematch waiting from «Грати ще». Do **not** weaken inactive→offline for playing votes.
+- **Test:** `tests/reconcile-player-presence.test.ts`, `tests/rematch-waiting-lobby.test.ts`
+- **Area:** `lib/online/presence/reconcile-player-presence.ts`, `lib/online/rematch/opt-into-live-round.ts`, `lib/firebase/game-session-service.ts`
+
+### 2026-07 — After screen lock, play UI frozen but taps still submit words
+
+- **Symptom:** Player locks screen mid-round; after unlock UI looks frozen (timer stuck, no key press scale, draft empty, ghost letter floating, wordlist not updating) while taps still credit words in RTDB (peer standings ahead of local list).
+- **Cause:** iOS `inactive` pauses JS timer ticks and can stall native-driver `Animated` (letter fly / press scale). Touch + Firebase still run; fly handoff/`setTimeout` leaves glyphs hidden and a stuck ghost. Own-words listener may lag behind a successful submit.
+- **Fix:** On AppState `active`: refresh server clock immediately; clear draft flies + remount letter keyboard; reset press scales; refetch own `player_words` when remote has keys local lacks.
+- **Test:** `tests/compose-resume-heal.test.ts`
+- **Area:** `hooks/useServerNow.ts`, `hooks/usePressScale.ts`, `hooks/usePlaySessionSubscriptions.ts`, `components/online/OnlinePlayComposePanel.tsx`, `lib/game/compose-resume-heal.ts`
+
+### 2026-07 — Time-up «Переглянути результати» loops error; no way home
+
+- **Symptom:** Game finished modal shows «Не вдалося відкрити результати»; retry repeats the same error; backdrop cannot dismiss; no Home.
+- **Cause:** `navigateToResults` treated finish `timeout` as hard fail (no local archive fallback). Archive seed required `status === 'finished'` only. Metro reload logs are unrelated.
+- **Fix:** On timeout / rematch_advanced, seed local finished archive (coerce playing → finished); skip long ensure when local pin exists; show Home on the time-up modal when error is set.
+- **Test:** `tests/ensure-rematch-advanced-results-archive.test.ts`
+- **Area:** `app/online/play/[gameId].tsx`, `lib/online/ensure-rematch-advanced-results-archive.ts`, `components/GameTimeUpModal.tsx`
+
+### 2026-07 — Peer screen lock at round start drops them / starter hung on spinner
+
+- **Symptom:** Player 2 locks the phone in rematch lobby; player 1 starts (or is mid-start) and sees a blank loading screen with settings gear; player 2 unlocks and is already in the live round while player 1 stays stuck.
+- **Cause:** `liveRoundPlayerUids` at `waiting → playing` used only `online === true`. Screen lock → `online: false` excluded opted-in peers; empty/partial roster broke `isActiveLivePlayer` / navigation (starter can land on results/lobby loading).
+- **Fix:** `waitingLobbyOptInUids` includes rematch latch / chosenBy; `liveRoundPlayerUidsForRoundStart` always adds the starter.
+- **Test:** `tests/live-round-player-uids.test.ts`
+- **Area:** `lib/online/presence/live-round-membership.ts`, `lib/online/start-game-session-write.ts`
+
+### 2026-07 — «Грати ще» leaves joiner on results for 10+s while peer lobby already shows them
+
+- **Symptom:** Second player taps «Грати ще»; first player’s rematch lobby lists them quickly, but the joiner stays on results for many seconds.
+- **Cause:** `optIntoLiveRound` awaited full presence (`rejoin` + duplicate `markPlayerOnline` + `reconcileLobbyPickerState`) before `router.replace`.
+- **Fix:** For already-`waiting` rematch, kick presence in the background and navigate from the fresh session read; await presence only for live `playing`. Drop redundant `markPlayerOnline` after `rejoinExistingPlayer`; do not await picker reconcile on the presence path.
+- **Test:** `tests/opt-into-live-round.test.ts`, `tests/reconcile-player-presence.test.ts`
+- **Area:** `lib/online/rematch/opt-into-live-round.ts`, `lib/online/presence/reconcile-player-presence.ts`, `lib/firebase/game-session-service.ts`
+
+### 2026-07 — Second rematcher steals pick-word / clears rightful word (DSSN2)
+
+- **Symptom:** Round 3 (organizer’s turn): organizer rematches first, sets base word, waits in lobby. Peer presses «Грати ще», lands on pick-word, can replace the word; organizer’s word clears; peer lobby shows only themselves.
+- **Cause:** Multi-sim AppState marks organizer `online: false`. `reconcileLobbyPickerState` treated the peer as sole picker and cleared `baseWord` when `chosenBy !== pickerUid`. Peer routed to pick-word; organizer lost chosenBy visibility in rematch lobby.
+- **Fix:** Rightful committed chooser sticks (`currentBaseWordPickerUid` + `shouldClearLobbyBaseWordForPicker` force opt-in for `baseWordChosenBy` when deciding clear/steal). Rematch writes only `resultsExitedBy/{actor}` (rules forbid writing peers’ latch leaves).
+- **Test:** `tests/online-base-word-picker.test.ts`, `tests/lobby-base-word-picker-reconcile.test.ts`, `tests/post-join-route.test.ts`
+- **Area:** `lib/online/base-word-picker.ts`, `lib/firebase/game-session-service.ts`, `app/online/lobby/[gameId].tsx`
+
+### 2026-07 — Rematch lobby waits for non-opted picker (WXAGN seat-hold)
+
+- **Symptom:** First rematcher in round-2 lobby sees «Чекаємо, поки … обере базове слово» with only themselves in the roster; peer still on play finished modal / results and is not opted in.
+- **Cause:** Incorrect `shouldHoldRematchPickerSeatForScheduled` kept `currentBaseWordPickerUid` on the scheduled roster member until they opted in, blocking the sole first rematcher from picking/starting.
+- **Fix:** Remove seat hold. Picker = rotation among **opted-in** by stable room join order (`baseWordPickerOrder`); sole first rematcher may pick/start; when the rightful later joiner opts in before start, recalculate and hand them the seat (clear word if needed).
+- **Test:** `tests/online-base-word-picker.test.ts`, `tests/post-join-route.test.ts`
+- **Area:** `lib/online/base-word-picker.ts`, `docs/online-multiplayer-rules.md` §4
+
+### 2026-07 — Results «0 слів» while winner shows N words (QBQ4W / permission_denied)
+
+- **Symptom:** Player still on results sees winner line with word counts but «0 слів з …» empty list. Logs: `subscribeSessionPlayerWords … permission_denied` on `player_words`.
+- **Cause:** Rematch cleared / denied live `player_words` (peer reads require `status === finished`; after `waiting` subscribe fails). Results preferred live fetch when viewing round matched finished live, so UI painted empty after bootstrap with missing nodes.
+- **Fix:** Always hydrate pinned viewing round from local archive; rematch flips to `waiting` before clearing words; keep spinner until `isSessionWordsSnapshotReady` or frozen archive (`shouldShowOnlineResultsWordsLoading`).
+- **Test:** `tests/frozen-round-view.test.ts`, `tests/should-show-online-results-words-loading.test.ts`
+- **Area:** `lib/online/session/frozen-round-view.ts`, `lib/online/session/should-show-online-results-words-loading.ts`, `app/online/results/[gameId].tsx`, `lib/firebase/game-session-service.ts`
+
+### 2026-07 — First rematcher claims word while scheduled peer still on results (QBQ4W) — SUPERSEDED
+
+- **Symptom:** Organizer presses «Грати ще» first for round 2+ (peer still on results), opens pick-word / sets base word / Start. Peer was supposed to choose that round's word after opting in.
+- **Cause / Fix (wrong):** Seat hold until scheduled peer opted in. **Superseded** by «Rematch lobby waits for non-opted picker» — product rule is first rematcher may pick/start; scheduled peer takes over only after they join the rematch lobby before start.
+- **Test:** see superseding entry
+- **Area:** `lib/online/base-word-picker.ts`
+
+### 2026-07 — Rematch round-2 pick stuck on organizer after peer joins (QBQ4W)
+
+- **Symptom:** Organizer rematches first and sets base word for round 2. Second player opts in; both see each other, but organizer keeps «слово» / Start instead of rotating pick to the peer.
+- **Cause:** A temporary lock kept rematch `currentBaseWordPickerUid` on `baseWordChosenBy` while the word stood, blocking round-2+ rotation when a second opted-in player arrived.
+- **Fix:** Remove chosenBy lock; keep latch/chosenBy **eligibility** so brief offline does not drop the first rematcher from the rotation set. With 2+ opted-in, normal rotation applies and clears a word from the non-current picker.
+- **Test:** `tests/online-base-word-picker.test.ts` (`rotates rematch round-2 pick…`)
+- **Area:** `lib/online/base-word-picker.ts`
+
+### 2026-07 — Rematch lobby hides first rematcher after second «Грати ще» (XM8EW)
+
+- **Symptom:** Player A opts in first, picks base word, waits in lobby. Player B opts in second, may steal pick-word / set another word. B's lobby shows only B; A's lobby shows both.
+- **Cause:** (1) Concurrent `finished → waiting` wrote `resultsExitedBy: {actor}` as a whole-node replace, wiping the peer's latch. Focusing B marks A `online: false` → rematch lobby hides A. (2) Picker rotation made scheduled organizer the current picker while A's word stood → `reconcileLobbyPickerState` cleared A's word.
+- **Fix:** Rematch latch via leaf `resultsExitedBy/{uid}` writes; refresh latch on presence reconcile / mark online; lock rematch `currentBaseWordPickerUid` to opted-in `baseWordChosenBy` while word stands.
+- **Test:** `tests/online-base-word-picker.test.ts`, `tests/rematch-waiting-lobby.test.ts`, `tests/game-session-service.test.ts`
+- **Area:** `lib/online/base-word-picker.ts`, `lib/firebase/game-session-service.ts`, `lib/online/presence/reconcile-player-presence.ts`
+
+### 2026-07 — Join code says room closed while host still shows rematch lobby (L8NN5 orphan)
+
+- **Symptom:** Host lobby shows room code + base word + «Почати гру»; peer join with the same code gets «Кімнату не знайдено або приєднання закрито».
+- **Cause:** RTDB root is an **orphan shell** (`status` and `organizerId` missing) while leftover `baseWord` / `players` / `settings` remain. Join treated unknown status as `ROOM_NOT_JOINABLE`. Host kept a zombie lobby because focus/AppState heal ignored failed/null reads and did not clear local session.
+- **Fix:** Join maps orphan shells to `ROOM_NOT_FOUND`; lobby heal via `tryReadGameSessionSnapshot` clears session when the root is missing/orphan.
+- **Test:** `tests/game-session-service-extended.test.ts`, `tests/orphan-game-session.test.ts`
+- **Area:** `lib/firebase/game-session-service.ts`, `app/online/lobby/[gameId].tsx`, `lib/online/orphan-game-session.ts`
+
+### 2026-07 — Second «Грати ще» opens pick-word and hides first rematcher (L8NN5)
+
+- **Symptom:** Organizer (scheduled picker, odd rematch round) chooses a base word in lobby. Second player taps «Грати ще» and lands on pick-word, can set a different word, and does not see the organizer in «Гравці». Also seen: both clients show different base words / roster counts for the same room code.
+- **Cause:** Focusing the second simulator marks the first `online: false` (AppState `inactive`). Sole online joiner becomes `currentBaseWordPickerUid`; `reconcileLobbyPickerState` clears the first player's `baseWord`; `resolvePostJoinRoute` sends the joiner to pick-word. Lobby hides offline non-opt-in. ChosenBy-only guard is insufficient when the first rematcher is still offline **before** a word is committed (or when a client holds a stale local lobby fork).
+- **Fix:** Keep rematch opt-in in `resultsExitedBy` as a durable latch through waiting (cleared at round start); eligibility/visibility use latch + chosenBy; lobby re-reads RTDB on focus and AppState `active`.
+- **Test:** `tests/online-base-word-picker.test.ts`, `tests/rematch-waiting-lobby.test.ts`, `tests/bootstrap-rematch-waiting.test.ts`, `tests/online-invariants.test.ts`
+- **Area:** `lib/online/rematch/rematch-waiting-lobby.ts`, `lib/online/base-word-picker.ts`, `lib/firebase/game-session-service.ts`, `app/online/lobby/[gameId].tsx`
+
+### 2026-07 — Standings sheet covers GameTimeUp at 00:00
+
+- **Symptom:** At timer 00:00 one player still saw the «Рейтинг» bottom sheet (or play UI under it) while the peer already had «Гру завершено!» / view results.
+- **Cause:** Round-end effect closed `showStandings` only after paint. For one (or more) frames both RN Modals were eligible; standings stayed on top of `GameTimeUpModal`.
+- **Fix:** Declarative `shouldShowPlayStandingsSheet` requires `!roundEnded` in the same render as time-up; also dismiss stats explain on round end.
+- **Test:** `tests/play-menu-gates.test.ts`
+- **Area:** `lib/online/play-menu-gates.ts`, `app/online/play/[gameId].tsx`
+
+### 2026-07 — After accept, next word cannot reuse letters (П stuck gray after ПІ → ТО)
+
+- **Symptom:** Player types toward «ПІТ»; debounce accepts «ПІ». They continue with leftover «Т» toward «ТОП», but «П» stays gray/disabled on the keyboard while draft shows «ТО».
+- **Cause:** `submitDraft` cleared `draft` / `draftKeyIndices` state but not `draftKeyIndicesRef`. The next `pressKey` appends onto the stale ref, so accepted-letter indices remain “used”.
+- **Fix:** Sync-clear the ref on accept (and on remote-submit rollback restore) via `syncDraftKeyIndicesRef`.
+- **Test:** `tests/sync-draft-key-indices-ref.test.ts`
+- **Area:** `app/online/play/[gameId].tsx`, `app/online/solo/[gameId].tsx`, `lib/game/sync-draft-key-indices-ref.ts`
+
+### 2026-07 — Stale local timer → results while peer still playing (+20 min / pause)
+
+- **Symptom:** After background freeze / missed RTDB updates, one client kept an old `timerEndsAt`. Peer (solo while other offline) added 20 minutes and/or paused. Frozen client hit 00:00, opened results, and could not rejoin the live round (QR → results; «Грати ще» → rematch lobby alone). Not organizer-specific.
+- **Cause:** `finishGameSessionIfExpired` correctly refused (remote clock still running / paused), then `beginExpireFinishAttempt` counted failures and called `forceLocalRoundOver` based on the **stale local** endsAt.
+- **Fix:** After a failed expire finish, `resyncIfRemoteClockAlive` re-reads RTDB; if pause is active or `timerEndsAt` is still in the future, merge session and skip local round-over.
+- **Test:** `tests/play-remote-timer-alive.test.ts`
+- **Area:** `lib/online/play-expire-finish.ts`, `lib/online/play-remote-timer-alive.ts`, `app/online/play/[gameId].tsx`
+
+### 2026-07 — Pause vote invisible on peer + cancel stuck (proposer)
+
+- **Symptom:** Proposer sees pause proposal + «очікує відповіді»; peer still on normal play with no vote UI. Proposer «Скасувати запит» appears dead.
+- **Cause:** (1) Pause/add-time/early-finish vote UI used RN `Modal` — after background / multi-sim focus, Modal can paint without reliable presses and peers can miss updates the same way as resume. (2) Vote txs use `applyLocally: false`, so cancel only clears UI via listener; disconnect / stale listener leaves ghost proposer UI. (3) Concurrent Metro HMR presence crashes (`beginPresenceWrite`) worsened reconnect.
+- **Fix:** In-tree absolute vote overlay (no RN Modal); optimistic local vote clear on cancel + `tryReadGameSessionSnapshot` after vote ops; harden `presenceWriteQueue` methods.
+- **Test:** `tests/clear-local-session-vote.test.ts`, `tests/presence-write-queue.test.ts`
+- **Area:** `components/VoteParticipantCard.tsx`, `app/online/play/[gameId].tsx`, `lib/online/voting/clear-local-session-vote.ts`, `lib/online/presence/presence-write-queue.ts`
+
+### 2026-07 — Resume vote ghost UI + crash after background / disconnect
+
+- **Symptom:** After backgrounding (and sometimes AP/network change), proposer shows live resume vote + countdown while the peer still sees only «Готове продовжувати». Logs: `TypeError: undefined is not a function` at `latestPresenceIntent` / `shouldMarkPresenceOnline` from `repairPresenceIntentIfNeeded`, plus `FIREBASE WARNING: transaction … failed: disconnect`.
+- **Cause:** (1) Metro HMR left a stale binding so `latestPresenceIntent` was `undefined` while `markPlayerOffline` already called repair — uncaught promise. (2) Vote `runTransaction` with default `applyLocally: true` can echo `resumeVote` on the proposer even when the commit aborts on socket disconnect; peers never get the vote.
+- **Fix:** Call presence queue via stable `presenceWriteQueue` object + typeof guard; catch repair failures in `markPlayerOffline`; session vote transactions use `{ applyLocally: false }`.
+- **Test:** `tests/presence-write-queue.test.ts`
+- **Area:** `lib/online/presence/presence-write-queue.ts`, `lib/firebase/game-session-service.ts`, `lib/firebase/rtdb-transaction.ts`, `lib/firebase/session-votes-service.ts`
+
+### 2026-07 — Self «не в грі» after unlock while peer sees «в грі»
+
+- **Symptom:** Right player locks the screen during pause, unlocks, and still sees themselves as «не в грі» on the pause standings; left peer correctly shows them «в грі».
+- **Cause:** Unlock races: (1) AppState `active` `tryReadGameSessionSnapshot` could merge a pre-online snapshot, and/or local session missed the online echo; (2) `markPlayerOffline` wrote `online: false` then checked the presence queue — a late offline update could clobber a newer online write without repair.
+- **Fix:** Await `markPlayerOnline` before session re-read on `active`; after a superseded presence write, `repairPresenceIntentIfNeeded` re-applies the winning intent.
+- **Test:** `tests/presence-write-queue.test.ts`
+- **Area:** `hooks/usePlaySessionSubscriptions.ts`, `lib/firebase/game-session-service.ts`, `lib/online/presence/presence-write-queue.ts`
+
+### 2026-07 — Presence toasts stuck for minutes («в грі» + «не в грі»)
+
+- **Symptom:** After pause/resume (often with two simulators), peers saw stacked «знову в грі» / «не в грі» that stayed for minutes; duplicates of the same message also stuck.
+- **Cause:** (1) AppState `inactive` freezes JS `setTimeout`, so toast dismiss never ran while the other simulator was focused. (2) ToastBubble stack-shift effect forced `opacity → 1` even while `fading`, undoing fade. (3) Lock/focus presence flip-flops enqueued both offline and returned with no coalesce.
+- **Fix:** Wall-clock `expiresAt` + prune on interval / AppState `active`; do not revive opacity while fading; debounce presence offline↔returned (`PRESENCE_TOAST_DEBOUNCE_MS`) and cancel opposite flips.
+- **Test:** `tests/presence-toast-coalesce.test.ts`
+- **Area:** `hooks/useToastQueue.ts`, `hooks/usePlaySessionToasts.ts`, `components/PlaySessionToast.tsx`, `lib/online/presence-toast-coalesce.ts`, `lib/online/play-toast-wall-clock.ts`
+
+### 2026-07 — Peer on pause misses resume vote UI («Готове продовжувати» while proposer waits)
+
+- **Symptom:** Proposer sees resume vote + countdown + «очікує відповіді»; the required peer still sees only «Готове продовжувати» with no Так/Ні (common with two simulators).
+- **Cause:** `PauseRoundModal` used RN `Modal` (separate window). `resumeVote` can land in React state while the already-open Modal portal does not repaint; AppState `inactive` on the unfocused simulator worsens missed listener timing.
+- **Fix:** Render pause as an in-tree absolute overlay (play/solo are `headerShown: false`); prefer `session.resumeVote` in the overlay; one-shot `tryReadGameSessionSnapshot` merge on AppState `active`.
+- **Test:** `tests/pause-overlay-resume-vote.test.ts`, `tests/play-session-bootstrap.test.ts`
+- **Area:** `components/PauseRoundModal.tsx`, `hooks/usePlaySessionSubscriptions.ts`, `lib/firebase/game-session-service.ts`, `lib/online/voting/pause-overlay-resume-vote.ts`
+
+### 2026-07 — Organizer hung on spinner 20–30s after round 2 finish
+
+- **Symptom:** After round 2 ended, organizer saw a blank results spinner for ~20–30s while the peer already had results.
+- **Cause:** Local round-over (after failed `finishGameSessionIfExpired`) still allowed `navigateToResults` while RTDB status was `playing`. Results requires `status === 'finished'` + words bootstrap — spinner until finish eventually committed. Also `useLiveRosterPlayerWords` could thrash on unstable roster array identity and never mark bootstrap complete on fetch errors.
+- **Fix:** Keep retrying RTDB finish after local round-over; pin ended `baseWordRound` (+ local finished snapshot) on `forceLocalRoundOver` so rematch cannot rewrite `expectedBaseWordRound` / finish N+1; hold play round-key / skip expire ticks while time-up pending past rematch (natural `finished` pin or forced local — gated on `roundOverPendingResults` + pin, not only `localRoundOverForced`); archive before `replace` (live RTDB finished write, else seed/check local archive for `already_finished` and `rematch_advanced`); empty/disabled roster marks words bootstrap complete; add-time vote clears local time-up UI + aborts in-flight results nav / stale modal error; expire clears draft only when not deferring; `navigateToResults` catch → modal error; shared `beginExpireFinishAttempt`.
+- **Note (intentional residual):** Passive `fromJoin=1` results while live `playing` still skip prior-archive hydrate (empty until round ends). `rematch_advanced` / missing local archive shows `errorOpenResultsFailed` + retry instead of empty results. Seeded rematch archive may have empty peer word lists (viewer words only; no RTDB fetch after rematch). Before `forceLocalRoundOver` pins the round (~2s of failed finish ticks), a rematch to N+1 can still pass through the round-change effect — rare online (usually see `finished` first), more relevant offline→reconnect.
+- **Test:** `tests/play-round-reset-and-timer-gate.test.ts`, `tests/ensure-session-finished-for-results.test.ts`, `tests/play-local-time-up.test.ts`, `tests/ensure-rematch-advanced-results-archive.test.ts`
+- **Area:** `app/online/play/[gameId].tsx`, `lib/online/ensure-session-finished-for-results.ts`, `lib/online/ensure-rematch-advanced-results-archive.ts`, `lib/online/play-local-time-up.ts`, `lib/online/play-timer-submit-gate.ts`, `lib/online/play-expire-finish.ts`, `hooks/useLiveRosterPlayerWords.ts`
+
+### 2026-07 — QR rejoin during live round → prior results + all words
+
+- **Symptom:** After leaving home and rejoining an active multiplayer round via QR, the app opened results with the previous round’s full playable lexicon while peers were still playing.
+- **Cause:** `rejoinExistingPlayer` wrote player `online` and `liveRoundPlayerUids` in two updates (partial failure → inactive for `resolvePostJoinRoute`). Bare `/results` then ran `shouldRecoverFinishedRoundFromArchive` while live `playing`, hydrating the prior finished archive.
+- **Fix:** Atomic session update for rejoin (player + live roster); route live participants (`isLiveParticipant`) to play; pass `fromJoin=1` on playing→results and skip prior-archive recovery; one rejoin retry if still inactive after join.
+- **Note (intentional residual):** True passive joiners (`fromJoin=1`, not in live roster) still land on results without prior-archive hydrate while live `playing` — UI may look empty/odd until the round finishes. Wrong prior lexicon is avoided on purpose.
+- **Test:** `tests/post-join-route.test.ts`, `tests/frozen-round-view.test.ts`, `tests/game-session-service-extended.test.ts`
+- **Area:** `lib/firebase/game-session-service.ts`, `lib/online/post-join-route.ts`, `lib/online/session/frozen-round-view.ts`, `hooks/useFrozenRoundRecovery.ts`, `app/online/results/[gameId].tsx`
+
+### 2026-07 — Old word list + new keyboard after rematch / resume
+
+- **Symptom:** From round 2+, the found-word list could stay from the previous round while the letter keyboard already showed the new base word (often after screen-off / pause / rejoin).
+- **Cause:** On `baseWordRound` change the play screen reset nav flags only — not `myWords` / `optimisticWords` / lexicon restore. Split UI sources (keyboard ← `displaySession.baseWord`, list ← local words).
+- **Fix:** Hard-clear local play word state when `baseWordRound` changes; reject lexicon cache restore when cached `baseWord` mismatches live session; foreground presence reconcile when AppState becomes `active`.
+- **Test:** `tests/play-round-reset-and-timer-gate.test.ts`
+- **Area:** `app/online/play/[gameId].tsx`, `lib/online/play-round-local-reset.ts`, `lib/online/session/cache-active-round.ts`, `hooks/useLiveRoundPlayScreen.ts`
+
+### 2026-07 — Online play stuck at 00:00 still validating draft
+
+- **Symptom:** Timer showed `00:00` on online play with no time-up modal; toast «Ви вже вводили це слово» still appeared for leftover draft.
+- **Cause:** Online finish relies on `finishGameSessionIfExpired` (no local `onTimeUp`). If finish did not commit, `status` stayed `playing` so `roundEnded` stayed false. `pressKey` gated on `remainingMs<=0` but `submitDraft` did not.
+- **Fix:** Gate submit on timer elapsed / round-ended; clear draft at expire; after consecutive failed finish attempts past `timerEndsAt`, force local `roundOverPendingResults` (time-up path); shared `beginExpireFinishAttempt` for interval + AppState `active`.
+- **Test:** `tests/play-round-reset-and-timer-gate.test.ts`
+- **Area:** `app/online/play/[gameId].tsx`, `lib/online/play-timer-submit-gate.ts`, `lib/online/play-expire-finish.ts`
+
 ### 2026-07 — Store builds 1.4.x App Check 100% Invalid
 
 - **Symptom:** After first GitHub Actions → Play/TestFlight releases (v1.4.0–1.4.1), App Check Console showed **100% Unverified: invalid** for RTDB and Auth (enforcement still off).
@@ -96,10 +321,18 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 - **Test:** `tests/game-feedback-replay.test.ts`
 - **Area:** `lib/feedback/replay-from-start.ts`, `lib/feedback/game-feedback.ts`
 
+### 2026-07 — Pause/resume vote waits on peer with locked screen (`inactive`)
+
+- **Symptom:** Peer locks the phone (iOS lock screen); proposer still sees them as «в грі» / «очікує відповіді» on pause or resume votes.
+- **Cause:** `shouldMarkPresenceOffline` only treated AppState `background`. On iOS lock the app often stays `inactive` without reaching `background`, while the RTDB socket stays alive so `onDisconnect` does not fire.
+- **Fix:** Mark presence offline on `inactive` as well as `background`; online / rejoin only on `active`. Training auto-pause remains `background`-only.
+- **Test:** `tests/app-presence-state.test.ts`
+- **Area:** `lib/online/presence/app-presence-state.ts`, `docs/online-multiplayer-rules.md` §7
+
 ### 2026-07 — Pause vote waits on player who backgrounded the app
 
 - **Symptom:** After one player sent the app to the home screen or locked the phone (without force-killing), peers still saw them as «в грі» and pause / other votes waited for their response.
-- **Cause:** `usePlayerOnlinePresence` only re-marked `online` on AppState `active`; background did not call `markPlayerOffline`. While the RTDB socket stayed alive, `onDisconnect` did not fire. Open `pauseVote` also had no reconcile when the required set became empty.
+- **Cause:** `usePlayerOnlinePresence` only re-marked `online` on AppState `active`; background did not call `markPlayerOffline`. While the RTDB socket stayed alive, `onDisconnect` did not fire. Open `pauseVote` also had no reconcile when the required set became empty. (Later: lock screen often only emits `inactive` — see 2026-07 inactive entry.)
 - **Fix:** AppState `background` → `markPlayerOffline` (no `hasLeft`); reconnect → online only if AppState is `active`; `reconcileOpenSessionVotes` after offline/leave and on peer play screen; toasts `player_went_offline` / `player_returned`; UI label «не в грі».
 - **Test:** `tests/app-presence-state.test.ts`, `tests/play-toast-events.test.ts`, `tests/session-votes-service.test.ts`, `tests/online-invariants.test.ts`
 - **Area:** `lib/online/presence/use-player-online-presence.ts`, `lib/online/presence/app-presence-state.ts`, `lib/firebase/game-session-service.ts`, `lib/firebase/session-votes-service.ts`, `hooks/useReconcileOpenVotesOnPresence.ts`
@@ -232,13 +465,53 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 - **Test:** `tests/play-toast-events.test.ts` — “detects overtakes when equal score but fewer words”
 - **Area:** `lib/online/play-toast-events.ts`
 
+### 2026-07 — Archive rematch bootstrap kept stale `online` (opt-in bypass)
+
+- **Symptom:** After session purge / archive rematch, peers who were `online` in the finished archive appeared in rematch lobby and could enter `liveRoundPlayerUids` without «Грати ще».
+- **Cause:** `buildRematchWaitingSession` only zeroed scores and copied archive presence; live `rematchFinishedSessionToWaiting` used `rematchWaitingPlayerPatch`.
+- **Fix:** `buildRematchWaitingSession(source, actorUid)` applies the same patch (actor + `resultsExitedBy` → online; others offline, `hasLeft: false`).
+- **Test:** `tests/bootstrap-rematch-waiting.test.ts`
+- **Area:** `lib/online/rematch/build-rematch-waiting-session.ts`, `bootstrap-rematch-waiting-from-archive.ts`
+
+### 2026-07 — Non-opt-in organizer auto-joined live round from lobby
+
+- **Symptom:** Organizer who never pressed «Грати ще» could be pulled into rematch `playing` via lobby auto-join.
+- **Cause:** `missedLiveRosterWhileOptedIn` treated `organizerId === myUid` as opted-in.
+- **Fix:** Auto-join only when `isRematchWaitingLobbyOptedIn` (online / `resultsExitedBy`).
+- **Test:** `tests/live-round-screen-actions.test.ts`
+- **Area:** `lib/online/live-round-screen-actions.ts`
+
+### 2026-07 — Pause vote could hang forever (no 30s timeout)
+
+- **Symptom:** Open pause proposal with a silent online peer never resolved.
+- **Cause:** `shouldActivatePauseFromVote` required unanimous yes only; `useVoteExpiryResolver` omitted pause.
+- **Fix:** Silence-as-yes after 30s (same as early-finish/resume); expiry interval calls `resolvePauseVoteIfReady`.
+- **Test:** `tests/pause-resume-vote.test.ts`
+- **Area:** `lib/online/voting/pause-vote.ts`, `hooks/useVoteExpiryResolver.ts`, `lib/firebase/session-votes-service.ts`
+
+### 2026-07 — Rematch lobby ejects opted-in player to prior results when peer becomes picker
+
+- **Symptom:** Organizer (or first «Грати ще») picks a base word and sits in rematch lobby; second player opts in and takes the scheduled picker turn. First player is bounced to the **previous round results** instead of staying in lobby with the word cleared.
+- **Cause:** Rematch waiting redirects `!optedIn` viewers to results. Opt-in was only `online` / `resultsExitedBy` / one-shot `optedIn=1` query. After pick-word → lobby without `optedIn`, a brief `online: false` (presence handoff / peer-join race) made `shouldRedirectNonOptInViewer` true. (Later: rematch bootstrap keeps `resultsExitedBy` as a durable waiting latch — see L8NN5 entry.)
+- **Fix:** Latch rematch opt-in for the current `baseWordRound` once seen (`rematchOptInLatched`); pick-word → lobby passes `optedIn=1`; reconcile presence instead of eject when latched but briefly offline.
+- **Test:** `tests/live-round-screen-actions.test.ts`, `tests/rematch-lobby-opt-in-latch.test.ts`
+- **Area:** `hooks/useLiveRoundLobbyScreen.ts`, `lib/online/live-round-screen-actions.ts`, `lib/online/session/rematch-lobby-opt-in-latch.ts`, `app/online/pick-word/[gameId].tsx`
+
+### 2026-07 — Rematch lobby desync after early picker then scheduled picker re-picks
+
+- **Symptom:** Player A taps «Грати ще» first and sets a base word; Player B (scheduled picker) joins second and sets a different word. A still sees only themselves + their old word; B sees both + the new word. After fixing with lobby→pick-word `replace`, B (organizer) was dumped to **home** after saving a word while A stayed in lobby seeing B offline.
+- **Cause:** (1) Rematch sole-eligible early opt-in can commit a base word; when the scheduled picker comes online `reconcileLobbyPickerState` clears it and B re-picks — A must receive that RTDB update. (2) Lobby → pick-word `router.replace` removed the lobby screen; `useSyncedStackBack` treated `POP`/`GO_BACK` as leave → `exitOnlineToHome`, and organizer abandon marked them offline. (3) Organizer could still write `baseWord` via `updateGameSessionSetup` while not the current picker.
+- **Fix:** Lobby → pick-word **`push`** with `fromLobby=1` (lobby stays mounted + keeps presence); pick-word skips presence when `fromLobby`; return via `router.back()`. Lobby focus re-read of RTDB; `updateGameSessionSetup` requires current picker for base word; lobby «обрало …» uses `baseWordChosenBy`.
+- **Test:** `tests/lobby-pick-word-navigation.test.ts`, `tests/game-session-service-extended.test.ts` (organizer non-picker base word rejected)
+- **Area:** `app/online/lobby/[gameId].tsx`, `app/online/pick-word/[gameId].tsx`, `lib/online/lobby-pick-word-navigation.ts`, `lib/firebase/game-session-service.ts`
+
 ### 2026-07 — Presence handoff between online screens
 
 - **Symptom:** Navigating lobby → play → results in the same room briefly marked the player offline; others saw them leave/rejoin.
 - **Cause:** `usePlayerOnlinePresence` always called disconnect cleanup on unmount, even for in-room screen transitions.
-- **Fix:** Added `lib/online/presence-handoff.ts`; call `handoffPlayerPresence()` before navigating, and `consumePresenceHandoff()` on unmount to skip offline marking.
-- **Test:** `tests/presence-handoff.test.ts`
-- **Area:** `lib/online/presence/presence-handoff.ts`, `lib/online/presence/use-player-online-presence.ts`
+- **Fix:** Added `lib/online/presence-handoff.ts`; call `handoffPlayerPresence()` before navigating, and `consumePresenceHandoff()` on unmount to skip offline marking. Lobby → pick-word uses **push + `fromLobby`** (lobby keeps presence; do not `replace` — that fires leave-home).
+- **Test:** `tests/presence-handoff.test.ts`, `tests/lobby-pick-word-navigation.test.ts`
+- **Area:** `lib/online/presence/presence-handoff.ts`, `lib/online/presence/use-player-online-presence.ts`, `lib/online/lobby-pick-word-navigation.ts`
 
 ### 2026-07 — Left players visible in rematch waiting lobby
 

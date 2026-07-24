@@ -14,9 +14,12 @@ import { isFirebaseIgnorableRtdbError } from './rtdb-errors.js';
 export async function runRtdbTransaction(
   ref: DatabaseReference,
   updateFunction: (current: unknown) => unknown,
+  options?: { applyLocally?: boolean },
 ): Promise<TransactionResult> {
   try {
-    return await runTransaction(ref, updateFunction);
+    return options
+      ? await runTransaction(ref, updateFunction, options)
+      : await runTransaction(ref, updateFunction);
   } catch (error) {
     if (!isFirebaseIgnorableRtdbError(error)) {
       throw error;

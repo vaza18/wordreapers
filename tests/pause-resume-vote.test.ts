@@ -49,6 +49,35 @@ describe('pause vote', () => {
     const agreed = { ...pauseVote, votes: { org: 'yes', a: 'yes' } as const };
     expect(shouldActivatePauseFromVote(s, agreed)).toBe(true);
   });
+
+  it('activates pause after 30s silence when nobody rejected', () => {
+    const s = session({
+      org: { name: 'Org', wordCount: 0, score: 0, online: true },
+      a: { name: 'A', wordCount: 0, score: 0, online: true },
+    });
+    expect(
+      shouldActivatePauseFromVote(
+        s,
+        pauseVote,
+        pauseVote.proposedAt! + EARLY_FINISH_VOTE_TIMEOUT_MS,
+      ),
+    ).toBe(true);
+  });
+
+  it('does not activate pause on timeout when an online opponent voted no', () => {
+    const s = session({
+      org: { name: 'Org', wordCount: 0, score: 0, online: true },
+      a: { name: 'A', wordCount: 0, score: 0, online: true },
+    });
+    const rejected = { ...pauseVote, votes: { org: 'yes', a: 'no' } as const };
+    expect(
+      shouldActivatePauseFromVote(
+        s,
+        rejected,
+        pauseVote.proposedAt! + EARLY_FINISH_VOTE_TIMEOUT_MS,
+      ),
+    ).toBe(false);
+  });
 });
 
 describe('resume vote', () => {

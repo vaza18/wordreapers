@@ -14,6 +14,17 @@ describe('isOrphanGameSessionShell', () => {
     ).toBe(true);
   });
 
+  it('detects rich orphans that still have baseWord/settings but no status', () => {
+    expect(
+      isOrphanGameSessionShell({
+        baseWord: 'екс-держсекретар',
+        baseWordChosenBy: 'a',
+        settings: { durationSeconds: 300 },
+        players: { a: { name: 'A', wordCount: 0, score: 0, online: true } },
+      }),
+    ).toBe(true);
+  });
+
   it('ignores valid finished sessions', () => {
     expect(
       isOrphanGameSessionShell({

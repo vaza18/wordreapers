@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import {
   resolveAddTimeVoteIfExpired,
   resolveEarlyFinishVoteIfExpired,
+  resolvePauseVoteIfReady,
   resolveResumeVoteIfExpired,
 } from '@/lib/firebase/session-votes-service';
 
@@ -12,6 +13,7 @@ type VoteExpiryFlags = {
   earlyFinishVote: unknown;
   addTimeVote: unknown;
   resumeVote: unknown;
+  pauseVote: unknown;
   pauseActive: boolean;
   playing: boolean;
 };
@@ -25,13 +27,15 @@ export function useVoteExpiryResolver({
   earlyFinishVote,
   addTimeVote,
   resumeVote,
+  pauseVote,
   pauseActive,
   playing,
 }: VoteExpiryFlags): void {
   const hasEarlyFinish = Boolean(earlyFinishVote) && playing;
   const hasAddTime = Boolean(addTimeVote) && playing;
   const hasResume = Boolean(resumeVote) && pauseActive && playing;
-  const active = enabled && (hasEarlyFinish || hasAddTime || hasResume);
+  const hasPause = Boolean(pauseVote) && playing && !pauseActive;
+  const active = enabled && (hasEarlyFinish || hasAddTime || hasResume || hasPause);
 
   useEffect(() => {
     if (!active || !gameId) {
@@ -48,6 +52,9 @@ export function useVoteExpiryResolver({
       if (hasResume) {
         void resolveResumeVoteIfExpired(gameId);
       }
+      if (hasPause) {
+        void resolvePauseVoteIfReady(gameId);
+      }
     };
 
     resolve();
@@ -55,5 +62,5 @@ export function useVoteExpiryResolver({
     return () => {
       clearInterval(timer);
     };
-  }, [active, gameId, hasAddTime, hasEarlyFinish, hasResume]);
+  }, [active, gameId, hasAddTime, hasEarlyFinish, hasPause, hasResume]);
 }

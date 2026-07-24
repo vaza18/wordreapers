@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   beginPresenceWrite,
   isPresenceWriteCurrent,
+  latestPresenceIntent,
+  presenceWriteQueue,
   resetPresenceWriteQueueForTests,
 } from '../lib/online/presence/presence-write-queue.js';
 
@@ -30,5 +32,12 @@ describe('presence-write-queue', () => {
     const b = beginPresenceWrite('ABCDE', 'b', 'offline');
     expect(isPresenceWriteCurrent('ABCDE', 'a', a, 'online')).toBe(true);
     expect(isPresenceWriteCurrent('ABCDE', 'b', b, 'offline')).toBe(true);
+  });
+
+  it('exposes the latest intent for repair after a superseded write', () => {
+    beginPresenceWrite('ABCDE', 'uid', 'offline');
+    beginPresenceWrite('ABCDE', 'uid', 'online');
+    expect(latestPresenceIntent('ABCDE', 'uid')).toBe('online');
+    expect(presenceWriteQueue.latestIntent('ABCDE', 'uid')).toBe('online');
   });
 });
