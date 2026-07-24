@@ -12,15 +12,15 @@ import { AppState } from 'react-native';
 
 import { runRtdbTransaction } from './rtdb-transaction.js';
 import { shouldMarkPresenceOnline } from '../online/presence/app-presence-state.js';
-import {
-  beginPresenceWrite,
-  isPresenceWriteCurrent,
-} from '../online/presence/presence-write-queue.js';
+import { presenceWriteQueue } from '../online/presence/presence-write-queue.js';
 
 import { isOrphanGameSessionShell, orphanShellHasPlayer } from '../online/orphan-game-session.js';
 import type { PlayerProfile } from '../profile/player-profile.js';
 
-import { currentBaseWordPickerUid } from '../online/base-word-picker.js';
+import {
+  currentBaseWordPickerUid,
+  shouldClearLobbyBaseWordForPicker,
+} from '../online/base-word-picker.js';
 import { clearAllActiveRoundCachesForGame } from '../online/session/active-round-cache.js';
 import { setOrganizerWaitingRoom } from '../online/organizer-waiting-room.js';
 import {
@@ -35,7 +35,10 @@ import {
 } from './session-settings.js';
 import { buildPlayerTotalsUpdatePatch, recomputeSessionPlayerScores } from '../game/scoring.js';
 import { appendLiveRoundPlayerUid } from './live-round-player-uids.js';
-import { rematchWaitingPlayerPatch } from '../online/presence/live-round-membership.js';
+import {
+  isActiveLivePlayer,
+  rematchWaitingPlayerPatch,
+} from '../online/presence/live-round-membership.js';
 import { shouldOrganizerAbandonWaitingRoom } from '../online/should-organizer-abandon-waiting-room.js';
 import { computeRoundPlayedSecondsAtFinish } from '../game/round-duration.js';
 import { reconcileOpenSessionVotes } from './session-votes-service.js';
@@ -43,6 +46,7 @@ import {
   clearAllPlayerWords,
   clearWaitingLobbyPlayerWordsAsOrganizer,
 } from './player-words-service.js';
+import { markResultsExited } from './results-coordination-service.js';
 import { getServerNow } from './server-clock.js';
 import { PUBLIC_LOBBY_MAX_PLAYERS } from '../online/public-lobby/constants.js';
 import {
@@ -181,11 +185,11 @@ async function setPlayerOnlinePresence(gameId: string, uid: string): Promise<voi
   if (!shouldMarkPresenceOnline(AppState.currentState)) {
     return;
   }
-  const generation = beginPresenceWrite(normalized, uid, 'online');
+  const generation = presenceWriteQueue.begin(normalized, uid, 'online');
   const node = playerRef(normalized, uid);
   try {
     await onDisconnect(node).cancel();
-    if (!isPresenceWriteCurrent(normalized, uid, generation, 'online')) {
+    if (!presenceWriteQueue.isCurrent(normalized, uid, generation, 'online')) {
       return;
     }
     if (
@@ -195,11 +199,15 @@ async function setPlayerOnlinePresence(gameId: string, uid: string): Promise<voi
       return;
     }
     await update(node, { online: true });
-    if (!isPresenceWriteCurrent(normalized, uid, generation, 'online')) {
+    if (!presenceWriteQueue.isCurrent(normalized, uid, generation, 'online')) {
+      await repairPresenceIntentIfNeeded(normalized, uid);
       return;
     }
     await onDisconnect(node).update({ online: false });
-    await reconcileLobbyPickerState(normalized);
+    // Do not reconcile picker/word here: late joiner `online: true` raced
+    // `reconcileLobbyPickerState` against a peer briefly offline / stale hasLeft and
+    // cleared the rightful base word (lobby list blink + «Гравці (1)» steal). Lobby
+    // `useEffect` already calls `syncLobbyPickerState` when the session drifts.
   } catch (error) {
     if (isFirebasePermissionDenied(error)) {
       return;
@@ -230,12 +238,7 @@ async function reconcileLobbyPickerState(gameId: string): Promise<void> {
     updates.baseWordPickerUid = pickerUid;
   }
 
-  if (
-    session.baseWord &&
-    session.baseWord.length >= 2 &&
-    session.baseWordChosenBy &&
-    session.baseWordChosenBy !== pickerUid
-  ) {
+  if (shouldClearLobbyBaseWordForPicker(session)) {
     updates.baseWord = '';
     updates.baseWordChosenBy = null;
   }
@@ -269,6 +272,10 @@ export async function clearSessionRootForRecreate(gameId: string, uid: string): 
  * (especially Android), the JS runtime often suspends right after AppState `background`.
  * Canceling first removed the disconnect safety net and left the offline update unsent,
  * so peers kept seeing «в грі».
+ *
+ * If a newer `online` intent supersedes this write mid-flight, repair `online: true`
+ * so a late offline update cannot leave the unlocking client stuck «не в грі» locally
+ * while peers already saw the return (or the reverse on lock).
  */
 export async function markPlayerOffline(gameId: string, uid: string): Promise<void> {
   const normalized = normalizeRoomCode(gameId);
@@ -277,11 +284,18 @@ export async function markPlayerOffline(gameId: string, uid: string): Promise<vo
   if (isVoluntaryLeaveInFlight(normalized, uid)) {
     return;
   }
-  const generation = beginPresenceWrite(normalized, uid, 'offline');
+  const generation = presenceWriteQueue.begin(normalized, uid, 'offline');
   const node = playerRef(normalized, uid);
   try {
     await update(node, { online: false });
-    if (!isPresenceWriteCurrent(normalized, uid, generation, 'offline')) {
+    if (!presenceWriteQueue.isCurrent(normalized, uid, generation, 'offline')) {
+      try {
+        await repairPresenceIntentIfNeeded(normalized, uid);
+      } catch (error) {
+        if (__DEV__) {
+          console.warn('markPlayerOffline presence repair', error);
+        }
+      }
       return;
     }
     await cancelPlayerOnDisconnect(normalized, uid);
@@ -297,6 +311,33 @@ export async function markPlayerOffline(gameId: string, uid: string): Promise<vo
       return;
     }
     throw error;
+  }
+}
+
+/**
+ * After a superseded presence write, force RTDB to match the winning intent.
+ * Fixes unlock races where a late `online: false` lands after `markPlayerOnline`.
+ */
+async function repairPresenceIntentIfNeeded(gameId: string, uid: string): Promise<void> {
+  if (isVoluntaryLeaveInFlight(gameId, uid)) {
+    return;
+  }
+  let intent: 'online' | 'offline' | null;
+  try {
+    intent = presenceWriteQueue.latestIntent(gameId, uid);
+  } catch {
+    // Metro HMR can leave a stale module — skip repair rather than crash.
+    return;
+  }
+  if (intent === 'online') {
+    if (!shouldMarkPresenceOnline(AppState.currentState)) {
+      return;
+    }
+    await setPlayerOnlinePresence(gameId, uid);
+    return;
+  }
+  if (intent === 'offline') {
+    await update(playerRef(gameId, uid), { online: false });
   }
 }
 
@@ -350,7 +391,11 @@ async function readSessionSnapshot(gameId: string): Promise<GameSessionSnapshot>
   if (!snapshot.exists()) {
     throw new Error('ROOM_NOT_FOUND');
   }
-  return { id: normalized, ...(snapshot.val() as GameSession) };
+  const parsed = gameSessionSnapshotFromRtdbVal(normalized, snapshot.val());
+  if (!parsed) {
+    throw new Error('ROOM_NOT_FOUND');
+  }
+  return parsed;
 }
 
 /** Fresh RTDB session read for routing after rematch / rejoin. */
@@ -377,6 +422,8 @@ export async function tryReadGameSessionSnapshot(
 
 /**
  * Rejoin a rostered player who left or went offline (clears `hasLeft`, restores presence).
+ * Player online + liveRoundPlayerUids append are one session update so routing cannot see
+ * online without roster membership (QR rejoin → results while peers still playing).
  */
 export async function rejoinExistingPlayer(
   gameId: string,
@@ -384,23 +431,22 @@ export async function rejoinExistingPlayer(
   profile: PlayerProfile,
 ): Promise<void> {
   const normalized = normalizeRoomCode(gameId);
-  const node = playerRef(normalized, uid);
-  await update(node, {
-    ...profilePatch(profile),
-    online: true,
-    hasLeft: false,
-  });
-  await setPlayerOnlinePresence(normalized, uid);
   const sessionSnapshot = await get(sessionRef(normalized));
+  const patch: Record<string, unknown> = {};
+  const profileFields = profilePatch(profile);
+  for (const [key, value] of Object.entries(profileFields)) {
+    patch[`players/${uid}/${key}`] = value;
+  }
+  patch[`players/${uid}/online`] = true;
+  patch[`players/${uid}/hasLeft`] = false;
   if (sessionSnapshot.exists()) {
     const session = sessionSnapshot.val() as GameSession;
     if (session.status === 'playing') {
-      const liveUids: string[] | null | undefined = session.liveRoundPlayerUids;
-      await update(sessionRef(normalized), {
-        liveRoundPlayerUids: appendLiveRoundPlayerUid(liveUids, uid),
-      });
+      patch.liveRoundPlayerUids = appendLiveRoundPlayerUid(session.liveRoundPlayerUids, uid);
     }
   }
+  await update(sessionRef(normalized), patch);
+  await setPlayerOnlinePresence(normalized, uid);
 }
 
 /**
@@ -634,6 +680,11 @@ async function joinGameSessionWithSnapshot(
   session: GameSession,
   options?: JoinGameSessionOptions,
 ): Promise<GameSessionSnapshot> {
+  // Presence-only / corrupted roots (no status + organizerId) are not joinable rooms.
+  if (isOrphanGameSessionShell(session)) {
+    throw new Error('ROOM_NOT_FOUND');
+  }
+
   if (
     session.status !== 'waiting' &&
     session.status !== 'playing' &&
@@ -644,7 +695,12 @@ async function joinGameSessionWithSnapshot(
 
   if (session.players[uid]) {
     await rejoinExistingPlayer(gameId, uid, profile);
-    const updated = await readSessionSnapshot(gameId);
+    let updated = await readSessionSnapshot(gameId);
+    // One retry if playing but not yet active (rare read/write lag after atomic rejoin).
+    if (updated.status === 'playing' && !isActiveLivePlayer(updated, uid)) {
+      await rejoinExistingPlayer(gameId, uid, profile);
+      updated = await readSessionSnapshot(gameId);
+    }
     if (updated.status === 'waiting' && updated.organizerId === uid) {
       await clearWaitingLobbyPlayerWordsAsOrganizer(gameId, updated, uid);
     }
@@ -761,6 +817,21 @@ export async function syncSessionPlayerScores(
   }
 }
 
+/** Parse an RTDB `game_sessions/{id}` payload into a client snapshot (or null). */
+export function gameSessionSnapshotFromRtdbVal(
+  gameId: string,
+  raw: unknown,
+): GameSessionSnapshot | null {
+  const normalized = normalizeRoomCode(gameId);
+  if (raw == null) {
+    return null;
+  }
+  if (isOrphanGameSessionShell(raw)) {
+    return null;
+  }
+  return { id: normalized, ...stripWordMapsFromSession(raw as GameSession) };
+}
+
 /**
  * Subscribe to session updates (lobby / play).
  */
@@ -799,8 +870,7 @@ export function subscribeGameSession(
             listener(null);
             return;
           }
-          const session = raw as GameSession;
-          listener({ id: normalized, ...stripWordMapsFromSession(session) });
+          listener(gameSessionSnapshotFromRtdbVal(normalized, raw));
         },
         (error) => {
           if (__DEV__) {
@@ -889,6 +959,7 @@ export function subscribePlayerOnlinePresence(gameId: string, uid: string): Unsu
 
 /**
  * Organizer or current base-word picker updates round settings (and optionally base word).
+ * Base word may only be set by the current picker (not merely the organizer).
  */
 export async function updateGameSessionSetup(
   gameId: string,
@@ -921,6 +992,9 @@ export async function updateGameSessionSetup(
     settings: applyPublicContentSafety(payload.settings, session),
   };
   if (payload.baseWord !== undefined) {
+    if (!isPicker) {
+      throw new Error('NOT_BASE_WORD_PICKER');
+    }
     if (!payload.baseWord || payload.baseWord.length < 2) {
       throw new Error('BASE_WORD_MISSING');
     }
@@ -963,7 +1037,7 @@ export async function updateGameSessionBaseWord(
 /** Fix parking from uniqueBonusMode - updateGameSessionSetup receives uniqueBonusEnabled boolean already */
 
 /**
- * Start the round: current base-word picker (or organizer) sets playing + server timer.
+ * Start the round: current base-word picker sets playing + server timer.
  */
 export async function startGameSession(gameId: string, actorUid: string): Promise<void> {
   const normalized = normalizeRoomCode(gameId);
@@ -1256,16 +1330,6 @@ export async function rematchFinishedSessionToWaiting(
     throw new Error('REMATCH_FAILED');
   }
 
-  // During `finished`: organizer may delete all; guest only own nodes (RTDB rules).
-  await clearAllPlayerWords(
-    normalized,
-    Object.keys(preSession.players),
-    actorUid,
-    preSession.organizerId,
-    { everyPlayer: actorUid === preSession.organizerId },
-  );
-  await clearSessionWordMaps(normalized);
-
   if (preSession.isPublic) {
     await unpublishPublicLobby(normalized, actorUid, { force: true });
   }
@@ -1292,7 +1356,7 @@ export async function rematchFinishedSessionToWaiting(
   const baseWordPickerUid = currentBaseWordPickerUid(waitingSession);
 
   try {
-    await update(sessionRef(normalized), {
+    const rematchUpdates: Record<string, unknown> = {
       status: 'waiting',
       settings: resolvedSettings,
       timerEndsAt: null,
@@ -1310,16 +1374,34 @@ export async function rematchFinishedSessionToWaiting(
       createdAt: getServerNow(),
       purgeAfterAt: null,
       finishedAt: null,
-      resultsExitedBy: null,
       liveRoundPlayerUids: null,
       isPublic: false,
       publicPublishedAt: null,
       players,
-    });
+    };
+    // Only the actor may write their latch leaf (rules: auth.uid == $uid). Peer
+    // exits from the finished phase already live under resultsExitedBy/{peer}.
+    rematchUpdates[`resultsExitedBy/${actorUid}`] = true;
+    await update(sessionRef(normalized), rematchUpdates);
   } catch (error) {
     if (isFirebasePermissionDenied(error)) {
       const again = await get(sessionRef(normalized));
       if (again.exists() && (again.val() as GameSession).status === 'waiting') {
+        // Peer already opened waiting — still ensure *this* actor's latch leaf.
+        // Without it, multi-sim inactive → online:false hides us from their lobby.
+        await markResultsExited(normalized, actorUid);
+        await clearAllPlayerWords(
+          normalized,
+          Object.keys(preSession.players),
+          actorUid,
+          preSession.organizerId,
+          { everyPlayer: actorUid === preSession.organizerId },
+        );
+        await clearSessionWordMaps(normalized);
+        await clearAllActiveRoundCachesForGame(normalized);
+        if (actorUid === preSession.organizerId) {
+          setOrganizerWaitingRoom(normalized);
+        }
         return;
       }
     }
@@ -1330,6 +1412,21 @@ export async function rematchFinishedSessionToWaiting(
   if (!after.exists() || (after.val() as GameSession).status !== 'waiting') {
     throw new Error('REMATCH_FAILED');
   }
+
+  // Confirm latch survived the multi-path rematch update (leaf write).
+  await markResultsExited(normalized, actorUid);
+
+  // Clear words AFTER `waiting` so peers still on results flip to archive hydrate
+  // instead of finished+empty `player_words` (permission_denied on peer reads in waiting).
+  await clearAllPlayerWords(
+    normalized,
+    Object.keys(preSession.players),
+    actorUid,
+    preSession.organizerId,
+    { everyPlayer: actorUid === preSession.organizerId },
+  );
+  await clearSessionWordMaps(normalized);
+
   await clearAllActiveRoundCachesForGame(normalized);
   if (actorUid === preSession.organizerId) {
     setOrganizerWaitingRoom(normalized);

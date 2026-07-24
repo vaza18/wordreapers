@@ -1,5 +1,5 @@
 import { currentBaseWordPickerUid } from './base-word-picker.js';
-import { isActiveLivePlayer } from './presence/live-round-membership.js';
+import { isLiveParticipant } from './presence/live-round-membership.js';
 import type { GameSession } from '../firebase/types.js';
 
 export interface PostJoinRoute {
@@ -9,7 +9,7 @@ export interface PostJoinRoute {
     | '/online/results/[gameId]'
     | '/online/pick-word/[gameId]'
     | '/online/setup';
-  params: { gameId: string };
+  params: { gameId: string; fromJoin?: string };
 }
 
 /**
@@ -20,12 +20,16 @@ export function resolvePostJoinRoute(
   uid: string,
   gameId: string,
 ): PostJoinRoute {
-  // INVARIANT (see docs/known-issues.md — 2026-06 Passive roster member routed to play): play only for active live-round members.
+  // INVARIANT (see docs/known-issues.md — 2026-06 Passive roster member routed to play):
+  // play only for live-round participants (`isLiveParticipant` includes active + briefly offline roster).
   if (session.status === 'playing') {
-    if (isActiveLivePlayer(session, uid)) {
+    if (isLiveParticipant(session, uid)) {
       return { pathname: '/online/play/[gameId]', params: { gameId } };
     }
-    return { pathname: '/online/results/[gameId]', params: { gameId } };
+    return {
+      pathname: '/online/results/[gameId]',
+      params: { gameId, fromJoin: '1' },
+    };
   }
   if (session.status === 'finished') {
     return { pathname: '/online/results/[gameId]', params: { gameId } };

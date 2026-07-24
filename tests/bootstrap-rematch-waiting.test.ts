@@ -5,7 +5,7 @@ import { resolveGameSessionSettings } from '../lib/firebase/session-settings.js'
 import { buildRematchWaitingSession } from '../lib/online/rematch/build-rematch-waiting-session.js';
 
 describe('bootstrap rematch waiting session shape', () => {
-  it('resets scores and clears round fields without player_words restore', () => {
+  it('applies rematch presence patch (actor online; peers offline unless resultsExitedBy)', () => {
     const finished: GameSession = {
       baseWord: 'альт',
       status: 'finished',
@@ -21,23 +21,54 @@ describe('bootstrap rematch waiting session shape', () => {
       baseWordRound: 2,
       players: {
         org: { name: 'Org', wordCount: 5, score: 12, online: true },
-        guest: { name: 'Guest', wordCount: 3, score: 8, online: false },
+        guest: { name: 'Guest', wordCount: 3, score: 8, online: true },
       },
       wordPlayers: { тест: { org: true } },
       purgeAfterAt: 1_800_000_000_000,
       resultsExitedBy: { org: true },
     };
 
-    const waiting = buildRematchWaitingSession(finished);
+    const waiting = buildRematchWaitingSession(finished, 'org');
     expect(waiting.status).toBe('waiting');
     expect(waiting.baseWord).toBe('');
     expect(waiting.baseWordRound).toBe(3);
     expect(waiting.players.org?.score).toBe(0);
+    expect(waiting.players.org?.online).toBe(true);
+    expect(waiting.players.org?.hasLeft).toBe(false);
     expect(waiting.players.guest?.wordCount).toBe(0);
+    expect(waiting.players.guest?.online).toBe(false);
+    expect(waiting.players.guest?.hasLeft).toBe(false);
     expect(waiting.wordPlayers).toBeUndefined();
     expect(waiting.purgeAfterAt).toBeUndefined();
-    expect(waiting.resultsExitedBy).toBeUndefined();
+    expect(waiting.resultsExitedBy).toEqual({ org: true });
     expect(typeof waiting.createdAt).toBe('number');
+  });
+
+  it('keeps peers with resultsExitedBy online when another actor bootstraps', () => {
+    const finished: GameSession = {
+      baseWord: 'альт',
+      status: 'finished',
+      settings: {
+        durationSeconds: 300,
+        uniqueBonusEnabled: false,
+        language: 'uk',
+        allowProperNouns: false,
+        allowSlang: false,
+      },
+      timerEndsAt: null,
+      organizerId: 'org',
+      baseWordRound: 1,
+      players: {
+        org: { name: 'Org', wordCount: 1, score: 2, online: true },
+        guest: { name: 'Guest', wordCount: 2, score: 4, online: true },
+      },
+      resultsExitedBy: { guest: true },
+    };
+
+    const waiting = buildRematchWaitingSession(finished, 'org');
+    expect(waiting.players.org?.online).toBe(true);
+    expect(waiting.players.guest?.online).toBe(true);
+    expect(waiting.resultsExitedBy).toEqual({ org: true, guest: true });
   });
 
   it('synthesizes organizer roster entry when missing from archived players', () => {
@@ -59,7 +90,7 @@ describe('bootstrap rematch waiting session shape', () => {
       },
     };
 
-    const waiting = buildRematchWaitingSession(finished);
+    const waiting = buildRematchWaitingSession(finished, 'guest');
     expect(waiting.players.org).toEqual({
       name: 'Organizer',
       wordCount: 0,
@@ -67,6 +98,7 @@ describe('bootstrap rematch waiting session shape', () => {
       online: false,
       hasLeft: true,
     });
+    expect(waiting.players.guest?.online).toBe(true);
   });
 });
 

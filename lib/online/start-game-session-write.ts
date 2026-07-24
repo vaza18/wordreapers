@@ -1,5 +1,8 @@
 import { currentBaseWordPickerUid } from './base-word-picker.js';
-import { waitingLobbyOptInUids } from './presence/live-round-membership.js';
+import {
+  liveRoundPlayerUidsForRoundStart,
+  waitingLobbyOptInUids,
+} from './presence/live-round-membership.js';
 import { buildPlayersPatchForRoundStart } from './presence/players-patch-for-round-start.js';
 import { resolveGameSessionSettings } from '../firebase/session-settings.js';
 import type { GameSession } from '../firebase/types.js';
@@ -40,7 +43,7 @@ export function buildRoundStartWritePaths(params: RoundStartWriteParams): Record
     pauseState: null,
     isPublic: false,
     publicPublishedAt: null,
-    liveRoundPlayerUids: waitingLobbyOptInUids(session),
+    liveRoundPlayerUids: liveRoundPlayerUidsForRoundStart(session, actorUid),
     resultsExitedBy: null,
   };
 

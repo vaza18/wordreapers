@@ -7,7 +7,7 @@ Micro-invariants for this folder only. Full rules: [`docs/online-multiplayer-rul
 - **Opt-in only** (ADR-001) — next round starts for players who pressed «Грати ще» or joined rematch `waiting` with `online: true`.
 - **Fresh RTDB read** (ADR-002) — `optIntoLiveRound()` never routes from stale cache; always re-read after `markResultsExited`.
 - Non-opt-in players: `online: false`, `hasLeft: false` — stay in roster, **not** in rematch lobby list.
-- `resultsExitedBy` cleared on `finished → waiting` bootstrap.
+- `resultsExitedBy` becomes durable rematch opt-in latch on `finished → waiting` (cleared only at round start).
 
 ## Tests
 

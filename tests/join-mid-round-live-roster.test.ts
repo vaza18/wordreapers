@@ -100,8 +100,8 @@ describe('joinGameSession mid-round live roster', () => {
       liveRoundPlayerUids: ['org', 'p2', 'joiner'],
     };
 
+    // Presence no longer triggers reconcileLobbyPickerState (extra get); final read is 3rd.
     getMock
-      .mockResolvedValueOnce({ exists: () => true, val: () => playing })
       .mockResolvedValueOnce({ exists: () => true, val: () => playing })
       .mockResolvedValueOnce({ exists: () => true, val: () => playing })
       .mockResolvedValueOnce({ exists: () => true, val: () => joined });

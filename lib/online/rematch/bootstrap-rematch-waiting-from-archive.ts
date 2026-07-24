@@ -128,7 +128,7 @@ export async function bootstrapRematchWaitingFromArchive(
     throw new Error('REMATCH_FAILED');
   }
 
-  const bootstrapSession = buildRematchWaitingSession(archive.session);
+  const bootstrapSession = buildRematchWaitingSession(archive.session, actorUid);
   return acquireRematchWaitingSession(
     gameId,
     actorUid,

@@ -33,13 +33,13 @@ export function assertRematchWaitingPlayerPatch(
   }
 }
 
-/** Rematch bootstrap must not carry finished-round coordination fields into waiting. */
+/** Rematch bootstrap must not carry finished-round word maps / purge into waiting. */
 export function assertRematchBootstrapSessionShape(session: GameSession): void {
   if (session.status !== 'waiting') {
     invariantFailure(`rematch bootstrap session must be waiting (got ${session.status})`);
   }
-  if (session.resultsExitedBy != null) {
-    invariantFailure('rematch bootstrap session must clear resultsExitedBy');
+  if (!session.resultsExitedBy || Object.keys(session.resultsExitedBy).length === 0) {
+    invariantFailure('rematch bootstrap session must latch resultsExitedBy opt-in');
   }
   if (session.wordPlayers != null) {
     invariantFailure('rematch bootstrap session must not include wordPlayers');
@@ -49,13 +49,18 @@ export function assertRematchBootstrapSessionShape(session: GameSession): void {
   }
 }
 
-/** Voluntarily left players must not appear in rematch waiting lobby visibility. */
+/**
+ * Voluntarily left players must not appear in rematch waiting lobby visibility,
+ * unless a durable rematch seat (latch / pickerUid / committed word) still marks
+ * them opted-in — stale `hasLeft` must not hide an already-joined peer.
+ */
 export function assertLobbyVisiblePlayerState(
   uid: string,
   player: GameSessionPlayer | undefined,
   visible: boolean,
+  durableRematchOptIn = false,
 ): void {
-  if (player?.hasLeft === true && visible) {
+  if (player?.hasLeft === true && visible && !durableRematchOptIn) {
     invariantFailure(`lobby visibility for ${uid}: hasLeft players must not be visible`);
   }
 }

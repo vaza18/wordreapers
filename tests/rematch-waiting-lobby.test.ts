@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { GameSession } from '../lib/firebase/types.js';
 import {
+  buildRematchOptInLatch,
   isLobbyVisiblePlayer,
   isRematchWaitingLobby,
   isRematchWaitingLobbyOptedIn,
@@ -38,6 +39,16 @@ describe('isRematchWaitingLobby', () => {
   });
 });
 
+describe('buildRematchOptInLatch', () => {
+  it('latches the rematch actor and prior exits', () => {
+    expect(buildRematchOptInLatch('org')).toEqual({ org: true });
+    expect(buildRematchOptInLatch('org', { guest: true, left: false })).toEqual({
+      org: true,
+      guest: true,
+    });
+  });
+});
+
 describe('isLobbyVisiblePlayer', () => {
   it('shows every rostered player in the first-round waiting lobby', () => {
     const s = session({ baseWordRound: 0 });
@@ -68,6 +79,25 @@ describe('isLobbyVisiblePlayer', () => {
     expect(isLobbyVisiblePlayer(s, 'p2')).toBe(false);
   });
 
+  it('keeps stale-hasLeft first rematcher visible via durable latch (JZ4Y5)', () => {
+    // Late joiner must still see the organizer who opened the round and may have a
+    // stale hasLeft from a leave/rejoin race while latch / word / pickerUid stand.
+    const s = session({
+      baseWordRound: 6,
+      baseWord: 'мінітракторець',
+      baseWordChosenBy: 'org',
+      baseWordPickerUid: 'org',
+      baseWordPickerOrder: ['org', 'p2'],
+      resultsExitedBy: { org: true, p2: true },
+      players: {
+        org: { name: 'Org', wordCount: 0, score: 0, online: false, hasLeft: true },
+        p2: { name: 'Two', wordCount: 0, score: 0, online: true },
+      },
+    });
+    expect(isLobbyVisiblePlayer(s, 'org')).toBe(true);
+    expect(isLobbyVisiblePlayer(s, 'p2')).toBe(true);
+  });
+
   it('shows only opt-in participants during rematch waiting', () => {
     const s = session();
     expect(isLobbyVisiblePlayer(s, 'org')).toBe(true);
@@ -78,6 +108,52 @@ describe('isLobbyVisiblePlayer', () => {
   it('treats resultsExitedBy as opt-in before online presence settles', () => {
     const s = session({ resultsExitedBy: { p2: true } });
     expect(isRematchWaitingLobbyOptedIn(s, 'p2')).toBe(true);
+    expect(isLobbyVisiblePlayer(s, 'p2')).toBe(true);
+  });
+
+  it('keeps offline rematcher visible via resultsExitedBy latch', () => {
+    const s = session({
+      resultsExitedBy: { p2: true },
+      players: {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        p2: { name: 'Two', wordCount: 0, score: 0, online: false },
+        p3: { name: 'Three', wordCount: 0, score: 0, online: false },
+      },
+    });
+    expect(isLobbyVisiblePlayer(s, 'org')).toBe(true);
+    expect(isLobbyVisiblePlayer(s, 'p2')).toBe(true);
+    expect(isLobbyVisiblePlayer(s, 'p3')).toBe(false);
+  });
+
+  it('keeps the rematch word-chooser visible while briefly offline', () => {
+    const s = session({
+      baseWord: 'карантинізація',
+      baseWordChosenBy: 'org',
+      players: {
+        org: { name: 'Org', wordCount: 0, score: 0, online: false },
+        p2: { name: 'Two', wordCount: 0, score: 0, online: true },
+      },
+    });
+    expect(isRematchWaitingLobbyOptedIn(s, 'org')).toBe(true);
+    expect(isLobbyVisiblePlayer(s, 'org')).toBe(true);
+  });
+
+  it('keeps the assigned baseWordPickerUid visible while offline without latch/word yet', () => {
+    // Rightful first rematcher opened round 3 / is on pick-word; multi-sim marks them
+    // offline before the late joiner's lobby snapshot has latch or committed word.
+    const s = session({
+      baseWordRound: 2,
+      baseWord: '',
+      baseWordChosenBy: null,
+      baseWordPickerUid: 'org',
+      baseWordPickerOrder: ['org', 'p2'],
+      players: {
+        org: { name: 'Org', wordCount: 0, score: 0, online: false },
+        p2: { name: 'Two', wordCount: 0, score: 0, online: true },
+      },
+    });
+    expect(isRematchWaitingLobbyOptedIn(s, 'org')).toBe(true);
+    expect(isLobbyVisiblePlayer(s, 'org')).toBe(true);
     expect(isLobbyVisiblePlayer(s, 'p2')).toBe(true);
   });
 

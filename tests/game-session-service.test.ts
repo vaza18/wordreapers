@@ -65,6 +65,10 @@ vi.mock('../lib/firebase/auth.js', () => ({
   getFirebaseUid: vi.fn().mockReturnValue('org-1'),
 }));
 
+vi.mock('../lib/firebase/results-coordination-service.js', () => ({
+  markResultsExited: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('../lib/firebase/session-ref.js', () => ({
   sessionRef: (gameId: string) => ({ path: `game_sessions/${gameId}` }),
 }));
@@ -299,6 +303,7 @@ describe('game-session-service', () => {
       expect.objectContaining({
         status: 'waiting',
         baseWordRound: 1,
+        'resultsExitedBy/org': true,
       }),
     );
   });

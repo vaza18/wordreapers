@@ -131,7 +131,7 @@ describe('resolvePlayScreenActions', () => {
 });
 
 describe('resolveLobbyScreenActions', () => {
-  it('auto-joins organizer when timer is live but status still reads waiting', () => {
+  it('auto-joins opted-in player when timer is live but they missed liveRoundPlayerUids', () => {
     const session: GameSession = {
       baseWord: 'тест',
       status: 'waiting',
@@ -149,6 +149,24 @@ describe('resolveLobbyScreenActions', () => {
     const actions = resolveLobbyScreenActions({ session, myUid: 'org' });
     expect(actions.shouldNavigateToPlay).toBe(false);
     expect(actions.shouldAutoJoinLiveRound).toBe(true);
+  });
+
+  it('does not auto-join non-opt-in organizer who missed the live roster', () => {
+    const session: GameSession = {
+      baseWord: 'тест',
+      status: 'playing',
+      baseWordRound: 1,
+      liveRoundPlayerUids: ['p1'],
+      settings,
+      timerEndsAt: Date.now() + 60_000,
+      organizerId: 'org',
+      players: {
+        org: { name: 'Org', wordCount: 0, score: 0, online: false },
+        p1: { name: 'One', wordCount: 0, score: 0, online: true },
+      },
+    };
+    const actions = resolveLobbyScreenActions({ session, myUid: 'org' });
+    expect(actions.shouldAutoJoinLiveRound).toBe(false);
   });
 
   it('redirects non-opt-in viewers away from rematch waiting lobby', () => {
@@ -202,6 +220,28 @@ describe('resolveLobbyScreenActions', () => {
       },
     };
     const actions = resolveLobbyScreenActions({ session, myUid: 'p2', justOptedIn: true });
+    expect(actions.shouldRedirectNonOptInViewer).toBe(false);
+    expect(actions.shouldReconcileRematchWaitingPresence).toBe(true);
+  });
+
+  it('keeps latched rematch opt-in when online briefly drops (peer join race)', () => {
+    const session: GameSession = {
+      baseWord: '',
+      status: 'waiting',
+      baseWordRound: 3,
+      settings,
+      timerEndsAt: null,
+      organizerId: 'org',
+      players: {
+        org: { name: 'Org', wordCount: 0, score: 0, online: false },
+        p1: { name: 'One', wordCount: 0, score: 0, online: true },
+      },
+    };
+    const actions = resolveLobbyScreenActions({
+      session,
+      myUid: 'org',
+      rematchOptInLatched: true,
+    });
     expect(actions.shouldRedirectNonOptInViewer).toBe(false);
     expect(actions.shouldReconcileRematchWaitingPresence).toBe(true);
   });

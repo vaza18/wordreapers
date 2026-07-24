@@ -13,6 +13,7 @@ import {
   claimPlayRouteNavigation,
   seedPlaySessionBootstrap,
 } from '@/lib/online/session/play-session-bootstrap';
+import { shouldLatchRematchLobbyOptIn } from '@/lib/online/session/rematch-lobby-opt-in-latch';
 import { reconcilePlayerPresence } from '@/lib/online/presence/reconcile-player-presence';
 import { useProfileStore } from '@/store/profile-store';
 
@@ -40,25 +41,51 @@ export function useLiveRoundLobbyScreen({
   const lateJoinRoundKeyRef = useRef<string | null>(null);
   const rematchPresenceReconcileKeyRef = useRef<string | null>(null);
   const rematchPresenceReconcileInFlightRef = useRef(false);
+  const rematchOptInLatchedRef = useRef(false);
+  const rematchOptInLatchRoundRef = useRef<number | null>(null);
   const sessionRef = useRef(session);
   sessionRef.current = session;
+
+  const rematchRound = session?.baseWordRound ?? 0;
+
+  useEffect(() => {
+    lateJoinRoundKeyRef.current = null;
+    rematchPresenceReconcileKeyRef.current = null;
+    rematchOptInLatchedRef.current = false;
+    rematchOptInLatchRoundRef.current = null;
+  }, [gameId]);
+
+  // Latch in render (not an effect) so a round bump cannot clear after we re-set from online.
+  if (rematchOptInLatchRoundRef.current !== rematchRound) {
+    rematchOptInLatchRoundRef.current = rematchRound;
+    rematchOptInLatchedRef.current = false;
+  }
+  if (
+    shouldLatchRematchLobbyOptIn({
+      session,
+      myUid,
+      justOptedIn,
+    })
+  ) {
+    rematchOptInLatchedRef.current = true;
+  }
 
   const lobbyFlags = useMemo(() => {
     if (!session || !myUid) {
       return null;
     }
-    const actions = resolveLobbyScreenActions({ session, myUid, justOptedIn });
+    const actions = resolveLobbyScreenActions({
+      session,
+      myUid,
+      justOptedIn,
+      rematchOptInLatched: rematchOptInLatchedRef.current,
+    });
     return {
       ...actions,
       baseWordRound: session.baseWordRound ?? 0,
       timerEndsAt: session.timerEndsAt ?? 0,
     };
   }, [justOptedIn, myUid, session]);
-
-  useEffect(() => {
-    lateJoinRoundKeyRef.current = null;
-    rematchPresenceReconcileKeyRef.current = null;
-  }, [gameId]);
 
   useEffect(() => {
     if (!isFocused || !myUid || !session || !lobbyFlags) {
