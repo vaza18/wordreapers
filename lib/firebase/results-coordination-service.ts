@@ -27,7 +27,7 @@ export async function markResultsExited(gameId: string, uid: string): Promise<vo
   const session = await readSession(gameId);
   if (
     !session ||
-    !session.players[uid] ||
+    !session.players?.[uid] ||
     (session.status !== 'finished' && session.status !== 'waiting')
   ) {
     return;

@@ -68,4 +68,17 @@ describe('mergePlaySessionSubscription', () => {
     const playing = snapshot('playing');
     expect(mergePlaySessionSubscription(waiting, playing)).toEqual(playing);
   });
+
+  it('accepts resumeVote while paused (playing + timerEndsAt null)', () => {
+    const paused = snapshot('playing', {
+      timerEndsAt: null,
+      pauseState: { active: true, frozenRemainingMs: 60_000, frozenAt: 1 },
+    });
+    const withResume = snapshot('playing', {
+      timerEndsAt: null,
+      pauseState: { active: true, frozenRemainingMs: 60_000, frozenAt: 1 },
+      resumeVote: { proposedBy: 'org', proposedAt: 2, votes: { org: 'yes' } },
+    });
+    expect(mergePlaySessionSubscription(paused, withResume)).toEqual(withResume);
+  });
 });

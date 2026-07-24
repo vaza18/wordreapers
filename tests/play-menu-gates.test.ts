@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isGameMenuBlockedByVote,
   isPauseUiObscuredByOverlays,
+  shouldShowPlayStandingsSheet,
 } from '../lib/online/play-menu-gates.js';
 
 describe('isGameMenuBlockedByVote', () => {
@@ -109,5 +110,34 @@ describe('isPauseUiObscuredByOverlays', () => {
         hasOnlineOpponentInRound: true,
       }),
     ).toBe(true);
+  });
+});
+
+describe('shouldShowPlayStandingsSheet', () => {
+  it('hides standings when the round has ended so GameTimeUp can present', () => {
+    expect(
+      shouldShowPlayStandingsSheet({
+        showStandings: true,
+        roundEnded: true,
+        gameMenuBlockedByVote: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('shows standings only while the round is live and not blocked by a vote', () => {
+    expect(
+      shouldShowPlayStandingsSheet({
+        showStandings: true,
+        roundEnded: false,
+        gameMenuBlockedByVote: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowPlayStandingsSheet({
+        showStandings: true,
+        roundEnded: false,
+        gameMenuBlockedByVote: true,
+      }),
+    ).toBe(false);
   });
 });

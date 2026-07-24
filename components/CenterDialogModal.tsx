@@ -13,9 +13,12 @@ interface CenterDialogModalProps {
   visible: boolean;
   title: string;
   body?: string;
+  /** Shown under body in danger color (e.g. retryable action failure). */
+  errorBody?: string | null;
   children?: ReactNode;
   primaryLabel: string;
   onPrimary: () => void;
+  primaryDisabled?: boolean;
   secondaryLabel?: string;
   onSecondary?: () => void;
   tertiaryLabel?: string;
@@ -54,6 +57,12 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
       textAlign: 'center',
     },
+    errorBody: {
+      fontSize: 14,
+      lineHeight: 20,
+      color: colors.danger,
+      textAlign: 'center',
+    },
     actions: {
       gap: spacing.sm,
     },
@@ -67,9 +76,11 @@ export function CenterDialogModal({
   visible,
   title,
   body,
+  errorBody,
   children,
   primaryLabel,
   onPrimary,
+  primaryDisabled = false,
   secondaryLabel,
   onSecondary,
   tertiaryLabel,
@@ -115,12 +126,13 @@ export function CenterDialogModal({
     >
       <Text style={styles.title}>{title}</Text>
       {body ? <Text style={styles.body}>{body}</Text> : null}
+      {errorBody ? <Text style={styles.errorBody}>{errorBody}</Text> : null}
       {children}
       <View style={styles.actions}>
         {secondaryLabel && onSecondary ? (
           <PrimaryButton label={secondaryLabel} variant="secondary" onPress={onSecondary} />
         ) : null}
-        <PrimaryButton label={primaryLabel} onPress={onPrimary} />
+        <PrimaryButton label={primaryLabel} onPress={onPrimary} disabled={primaryDisabled} />
         {tertiaryLabel && onTertiary ? (
           <PrimaryButton label={tertiaryLabel} variant="secondary" onPress={onTertiary} />
         ) : null}

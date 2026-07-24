@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text } from 'react-native';
 
 import { BottomSheetModal } from '@/components/BottomSheetModal';
-import { PrimaryButton } from '@/components/PrimaryButton';
+import { SheetHeader } from '@/components/SheetHeader';
 import { spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { ukWordForm } from '@/lib/i18n/uk-plural';
@@ -18,12 +18,6 @@ type PlayStatsExplainModalProps = {
 
 function createStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    title: {
-      fontSize: 18,
-      fontWeight: '600',
-      color: colors.textPrimary,
-      marginBottom: spacing.sm,
-    },
     body: {
       fontSize: 15,
       lineHeight: 22,
@@ -62,7 +56,7 @@ export function PlayStatsExplainModal({
 
   return (
     <BottomSheetModal visible={visible} onClose={onClose}>
-      <Text style={styles.title}>{t('game.statsExplainTitle')}</Text>
+      <SheetHeader title={t('game.statsExplainTitle')} onClose={onClose} />
       <Text style={styles.body}>
         {t('game.statsExplainFound', { found: wordCount, foundForm, max, maxForm })}
       </Text>
@@ -71,7 +65,6 @@ export function PlayStatsExplainModal({
           {t('training.unlockRemaining', { count: remaining, wordForm: remainingForm })}
         </Text>
       ) : null}
-      <PrimaryButton label={t('common.close')} variant="secondary" onPress={onClose} />
     </BottomSheetModal>
   );
 }

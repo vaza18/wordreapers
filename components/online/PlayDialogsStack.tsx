@@ -29,6 +29,9 @@ export type PlayDialogsStackProps = {
   sessionToasts: PlayToastItem[];
   timeUpModalVisible: boolean;
   onViewResults: () => void;
+  viewResultsBusy?: boolean;
+  viewResultsError?: string | null;
+  onGoHomeFromTimeUp?: () => void;
   extra?: ReactNode;
 };
 
@@ -54,6 +57,9 @@ export function PlayDialogsStack({
   sessionToasts,
   timeUpModalVisible,
   onViewResults,
+  viewResultsBusy = false,
+  viewResultsError = null,
+  onGoHomeFromTimeUp,
   extra,
 }: PlayDialogsStackProps) {
   return (
@@ -94,7 +100,13 @@ export function PlayDialogsStack({
 
       <HowToPlayDialog enabled={sessionPlaying && !isPaused} />
 
-      <GameTimeUpModal visible={timeUpModalVisible} onViewResults={onViewResults} />
+      <GameTimeUpModal
+        visible={timeUpModalVisible}
+        onViewResults={onViewResults}
+        viewResultsBusy={viewResultsBusy}
+        viewResultsError={viewResultsError}
+        onGoHome={onGoHomeFromTimeUp}
+      />
     </>
   );
 }

@@ -5,6 +5,8 @@ import {
   subscribeSessionPlayerWords,
 } from '@/lib/firebase/player-words-service';
 import { mergeAllPlayerWords, type AllPlayerWords } from '@/lib/online/session/clone-player-words';
+import { rosterPlayerIdsKey } from '@/lib/online/session/roster-player-ids-key';
+import { shouldCompleteWordsBootstrapWithoutFetch } from '@/lib/online/session/words-bootstrap-gate';
 
 const EMPTY_WORDS: AllPlayerWords = new Map();
 
@@ -26,6 +28,7 @@ export function useLiveRosterPlayerWords({
 } {
   const [liveWords, setLiveWords] = useState(EMPTY_WORDS);
   const [wordsBootstrapComplete, setWordsBootstrapComplete] = useState(false);
+  const rosterKey = rosterPlayerIdsKey(rosterPlayerIds);
 
   const mergeWords = useCallback((incoming: AllPlayerWords) => {
     setLiveWords((prev) => mergeAllPlayerWords(prev, incoming));
@@ -37,24 +40,46 @@ export function useLiveRosterPlayerWords({
   }, []);
 
   useEffect(() => {
-    if (!enabled || !gameId || rosterPlayerIds.length === 0) {
+    if (
+      shouldCompleteWordsBootstrapWithoutFetch({
+        enabled,
+        hasGameId: Boolean(gameId),
+        rosterLength: rosterPlayerIds.length,
+      })
+    ) {
+      // Empty / disabled roster must not leave results waiting on bootstrap forever
+      // (e.g. prior fetch cancelled by cleanup, then roster cleared).
+      setWordsBootstrapComplete(true);
       return undefined;
     }
 
     let cancelled = false;
-    void fetchSessionPlayerWords(gameId, rosterPlayerIds).then((words) => {
-      if (!cancelled) {
-        mergeWords(words);
-        setWordsBootstrapComplete(true);
-      }
-    });
+    setWordsBootstrapComplete(false);
+    void fetchSessionPlayerWords(gameId, rosterPlayerIds)
+      .then((words) => {
+        if (!cancelled) {
+          mergeWords(words);
+        }
+      })
+      .catch((error) => {
+        if (__DEV__) {
+          console.warn('fetchSessionPlayerWords', error);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setWordsBootstrapComplete(true);
+        }
+      });
 
     const unsubWords = subscribeSessionPlayerWords(gameId, rosterPlayerIds, mergeWords);
     return () => {
       cancelled = true;
       unsubWords();
     };
-  }, [enabled, gameId, mergeWords, rosterPlayerIds]);
+    // rosterKey is the stable identity for rosterPlayerIds contents
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- rosterPlayerIds via rosterKey
+  }, [enabled, gameId, mergeWords, rosterKey]);
 
   return { liveWords, wordsBootstrapComplete, resetWords };
 }

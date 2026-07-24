@@ -37,3 +37,16 @@ export function isPauseUiObscuredByOverlays(input: {
     (input.showEndEarlyConfirm && !input.hasOnlineOpponentInRound)
   );
 }
+
+/**
+ * Standings bottom sheet must not stay up at round end — it is an RN Modal and can
+ * cover `GameTimeUpModal` if both become visible in the same frame (effect closes
+ * standings only after paint).
+ */
+export function shouldShowPlayStandingsSheet(input: {
+  showStandings: boolean;
+  roundEnded: boolean;
+  gameMenuBlockedByVote: boolean;
+}): boolean {
+  return input.showStandings && !input.roundEnded && !input.gameMenuBlockedByVote;
+}

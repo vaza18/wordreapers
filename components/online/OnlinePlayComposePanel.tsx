@@ -1,5 +1,13 @@
-import { memo, useCallback, useLayoutEffect, useMemo, useRef } from 'react';
-import { Animated, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  Animated,
+  AppState,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+  type AppStateStatus,
+} from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { ClearDraftIcon } from '@/components/ComposeActionIcons';
@@ -17,6 +25,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { DRAFT_DISPLAY_LETTER_SPACING } from '@/constants/compose-draft';
 import { toDisplayUpper } from '@/lib/dictionary/normalize';
+import { shouldHealPlayUiOnAppState } from '@/lib/game/compose-resume-heal';
 import type { LetterKey } from '@/lib/game/letter-keyboard';
 import { letterKeyFontSizeForKeySize } from '@/lib/game/letter-key-style';
 import { playableGlyphFontSize } from '@/lib/typography/font-scale';
@@ -85,6 +94,23 @@ export const OnlinePlayComposePanel = memo(function OnlinePlayComposePanel({
     prunePendingFromCharIndex,
     isCharRevealing,
   } = useDraftLetterFly({ enabled: letterFly });
+
+  // After lock/wake, native-driver fly ghosts and press scales can stick while
+  // JS still accepts taps — remount keyboard/actions and drop in-flight flies.
+  const [composeAnimEpoch, setComposeAnimEpoch] = useState(0);
+  useEffect(() => {
+    const onAppState = (next: AppStateStatus) => {
+      if (!shouldHealPlayUiOnAppState(next)) {
+        return;
+      }
+      clearCharReveals();
+      setComposeAnimEpoch((epoch) => epoch + 1);
+    };
+    const sub = AppState.addEventListener('change', onAppState);
+    return () => {
+      sub.remove();
+    };
+  }, [clearCharReveals]);
 
   const flushPendingLaunches = useCallback(() => {
     if (pendingLaunchQueueRef.current.length === 0) {
@@ -264,6 +290,7 @@ export const OnlinePlayComposePanel = memo(function OnlinePlayComposePanel({
       </View>
 
       <LetterKeyboard
+        key={`keyboard-${composeAnimEpoch}`}
         keys={letterKeys}
         usedKeyIndices={usedKeyIndices}
         pressScaleEnabled={letterPress}

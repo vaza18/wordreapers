@@ -29,7 +29,9 @@ export function collectWordTimestamps(
 }
 
 /** Countdown budget in seconds (settings duration + approved add-time). */
-export function resolveRoundTimerBudgetSeconds(session: GameSession): number {
+export function resolveRoundTimerBudgetSeconds(
+  session: Pick<GameSession, 'settings' | 'roundTimerBudgetSeconds'>,
+): number {
   const configured = resolveGameSessionSettings(session.settings).durationSeconds;
   return typeof session.roundTimerBudgetSeconds === 'number'
     ? session.roundTimerBudgetSeconds

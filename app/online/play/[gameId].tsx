@@ -8,10 +8,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLiveRoundPlayScreen } from '@/hooks/useLiveRoundPlayScreen';
 import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
 import type { PlayableLexiconSnapshot } from '@/lib/dictionary/round-playable-lexicon';
-import { BottomSheetModal } from '@/components/BottomSheetModal';
 import { GameMenuModal } from '@/components/GameMenuModal';
 import { OnlinePlayActiveBody } from '@/components/online/OnlinePlayActiveBody';
 import { OnlinePlayTimerHeader } from '@/components/online/OnlinePlayTimerHeader';
+import { PlayStandingsSheet } from '@/components/online/PlayStandingsSheet';
 import { PlayStatsExplainModal } from '@/components/online/PlayStatsExplainModal';
 import { PlayDialogsStack } from '@/components/online/PlayDialogsStack';
 import { PlayVoteLayer } from '@/components/online/PlayVoteLayer';
@@ -43,7 +43,9 @@ import {
   finishGameSession,
   finishGameSessionIfExpired,
   leaveGameSession,
+  readGameSessionSnapshot,
   syncSessionPlayerScores,
+  tryReadGameSessionSnapshot,
   type GameSessionSnapshot,
 } from '@/lib/firebase/game-session-service';
 import { mergeSessionWithWordMaps } from '@/lib/firebase/session-word-maps';
@@ -72,7 +74,14 @@ import { onlineResultsRoute } from '@/lib/online/online-results-route';
 import { isReviewingPriorRoundOnPlayScreen } from '@/lib/online/session/is-reviewing-prior-round-on-play';
 import { resolveRoundEndSessionSnapshot } from '@/lib/online/session/resolve-round-end-session-snapshot';
 import { shouldKeepFrozenResultsOverLiveFinished } from '@/lib/online/session/frozen-round-view';
-import { consumePlaySessionBootstrap } from '@/lib/online/session/play-session-bootstrap';
+import {
+  consumePlaySessionBootstrap,
+  mergePlaySessionSubscription,
+} from '@/lib/online/session/play-session-bootstrap';
+import {
+  clearLocalSessionVoteField,
+  type LocalSessionVoteField,
+} from '@/lib/online/voting/clear-local-session-vote';
 import {
   submitOnlineWord,
   reconcileOwnPlayerWordsWithSession,
@@ -94,26 +103,47 @@ import {
   voteResume,
 } from '@/lib/firebase/session-votes-service';
 import { buildOnlineWordListDisplay } from '@/lib/online/online-word-display';
-import { displayPlayerName } from '@/lib/online/public-lobby/display-player-name';
-import { playerGenderForDisplay } from '@/lib/online/public-lobby/session-identity';
 import {
   buildLiveStandingsFromSession,
   sessionPlayerScoresMatchWordMaps,
 } from '@/lib/online/live-standings';
 import { formatPlayRulesLabel } from '@/lib/online/play-rules-label';
-import { isGameMenuBlockedByVote, isPauseUiObscuredByOverlays } from '@/lib/online/play-menu-gates';
+import {
+  isGameMenuBlockedByVote,
+  isPauseUiObscuredByOverlays,
+  shouldShowPlayStandingsSheet,
+} from '@/lib/online/play-menu-gates';
 import {
   resolveAddTimePickerDismissAction,
   shouldDeferClientTimerFinish,
   shouldShowTimeUpModal,
 } from '@/lib/online/voting/add-time-vote';
+import { shouldClearPlayLocalWordsOnRoundChange } from '@/lib/online/play-round-local-reset';
+import { ensureSessionFinishedForResults } from '@/lib/online/ensure-session-finished-for-results';
+import type { OpenResultsEnsureOutcome } from '@/lib/online/ensure-session-finished-for-results';
+import {
+  ensureLocalArchiveForRematchAdvancedResults,
+  resolveLocalFinishedSessionForResultsArchive,
+} from '@/lib/online/ensure-rematch-advanced-results-archive';
+import { beginExpireFinishAttempt } from '@/lib/online/play-expire-finish';
+import { isRemoteRoundClockStillRunning } from '@/lib/online/play-remote-timer-alive';
+import { syncDraftKeyIndicesRef } from '@/lib/game/sync-draft-key-indices-ref';
+import {
+  buildLocalTimeUpSessionSnapshot,
+  resolveExpectedResultsBaseWordRound,
+  shouldHoldPlayRoundKeyDuringLocalTimeUp,
+  shouldSkipExpireFinishForPinnedTimeUp,
+  shouldWriteFinishedRoundArchiveOnNavigate,
+} from '@/lib/online/play-local-time-up';
+import {
+  canOpenOnlineResults,
+  shouldBlockWordSubmitWhenTimerElapsed,
+} from '@/lib/online/play-timer-submit-gate';
 import {
   createSubmitWordProfile,
   flushSubmitLatencySummary,
 } from '@/lib/online/submit-word-profile';
 import { buildLetterKeys } from '@/lib/game/letter-keyboard';
-import { formatStandingRowMeta } from '@/lib/game/format-play-stats';
-import { formatPlayerLeftLabel } from '@/lib/game/vote-status-label';
 import { acceptWord } from '@/lib/game/play-word';
 import {
   playWordErrorMessage,
@@ -186,6 +216,8 @@ export default function OnlinePlayScreen() {
     null,
   );
   const [roundOverPendingResults, setRoundOverPendingResults] = useState(false);
+  const [viewResultsBusy, setViewResultsBusy] = useState(false);
+  const [viewResultsError, setViewResultsError] = useState<string | null>(null);
   const [roundEndWordsSnapshot, setRoundEndWordsSnapshot] = useState<Map<
     string,
     StoredPlayerWord
@@ -213,9 +245,22 @@ export default function OnlinePlayScreen() {
   const pendingListenerWordRef = useRef<string | null>(null);
   const activeSubmitProfileRef = useRef<ReturnType<typeof createSubmitWordProfile>>(null);
   const finishAttemptedRef = useRef(false);
+  /** Consecutive finishGameSessionIfExpired failures after the clock already elapsed. */
+  const expiredFinishFailCountRef = useRef(0);
+  /** Local time-up UI forced while RTDB may still be `playing` — keep retrying finish. */
+  const localRoundOverForcedRef = useRef(false);
+  /** Round pinned at local time-up — rematch must not rewrite expected results round. */
+  const localTimeUpBaseWordRoundRef = useRef<number | null>(null);
+  const [localTimeUpBaseWordRound, setLocalTimeUpBaseWordRound] = useState<number | null>(null);
+  /** Prevent overlapping finishGameSessionIfExpired calls from interval + AppState. */
+  const finishInFlightRef = useRef(false);
   /** Successful add-time propose — skip expire-finish on the modal's follow-up onClose. */
   const skipAddTimeDismissFinishRef = useRef(false);
   const resultsNavigatedRef = useRef(false);
+  /** Guards double-tap while awaiting ensureSessionFinishedForResults. */
+  const resultsNavInFlightRef = useRef(false);
+  /** Bumped to abort in-flight navigateToResults (e.g. add-time clears time-up). */
+  const resultsNavEpochRef = useRef(0);
   const leftNavigatedRef = useRef(false);
   const leavingIntentionallyRef = useRef(false);
   const playRoundKeyRef = useRef<number | null>(null);
@@ -229,6 +274,10 @@ export default function OnlinePlayScreen() {
   myWordsRef.current = myWords;
   const draftKeyIndicesRef = useRef(draftKeyIndices);
   draftKeyIndicesRef.current = draftKeyIndices;
+  const showAddTimeModalRef = useRef(showAddTimeModal);
+  showAddTimeModalRef.current = showAddTimeModal;
+  const addTimeVoteRef = useRef(session?.addTimeVote);
+  addTimeVoteRef.current = session?.addTimeVote;
 
   const navigateAfterLeave = useCallback(() => {
     if (!gameId || leftNavigatedRef.current) {
@@ -295,7 +344,8 @@ export default function OnlinePlayScreen() {
     session,
     loading,
     roundEnded,
-    frozenBaseWordRound: roundEndSessionSnapshot?.baseWordRound ?? playRoundKeyRef.current,
+    frozenBaseWordRound:
+      roundEndSessionSnapshot?.baseWordRound ?? localTimeUpBaseWordRound ?? playRoundKeyRef.current,
     isFocused: isPlayScreenFocused,
     leavingIntentionallyRef,
     onJoinFailed: setLoadError,
@@ -367,21 +417,53 @@ export default function OnlinePlayScreen() {
     if (round == null) {
       return;
     }
-    if (playRoundKeyRef.current !== null && playRoundKeyRef.current !== round) {
+    if (
+      shouldHoldPlayRoundKeyDuringLocalTimeUp({
+        liveBaseWordRound: round,
+        pinnedTimeUpRound: localTimeUpBaseWordRoundRef.current,
+        roundOverPendingResults,
+      })
+    ) {
+      // Rematch advanced while time-up modal is up — keep pinned round / modal / words.
+      return;
+    }
+    if (shouldClearPlayLocalWordsOnRoundChange(playRoundKeyRef.current, round)) {
       resultsNavigatedRef.current = false;
+      resultsNavInFlightRef.current = false;
       leftNavigatedRef.current = false;
       finishAttemptedRef.current = false;
+      expiredFinishFailCountRef.current = 0;
+      localRoundOverForcedRef.current = false;
+      localTimeUpBaseWordRoundRef.current = null;
+      setLocalTimeUpBaseWordRound(null);
+      finishInFlightRef.current = false;
       leavingIntentionallyRef.current = false;
       staleWordsReconcileKeyRef.current = null;
+      setOptimisticWords(new Map());
+      setMyWords(new Map());
+      setRoundEndWordsSnapshot(null);
+      setRestoredLexiconSnapshot(null);
+      setDraft('');
+      setDraftKeyIndices([]);
+      draftKeyIndicesRef.current = [];
+      lastValidatedDraft.current = '';
+      setFeedback(null);
+      setViewResultsBusy(false);
+      setViewResultsError(null);
     }
     playRoundKeyRef.current = round;
-  }, [session?.baseWordRound]);
+  }, [roundOverPendingResults, session?.baseWordRound]);
 
   useEffect(() => {
     if (session?.status === 'finished') {
       setRoundOverPendingResults(true);
+      if (localTimeUpBaseWordRoundRef.current == null) {
+        const round = session.baseWordRound ?? 0;
+        localTimeUpBaseWordRoundRef.current = round;
+        setLocalTimeUpBaseWordRound(round);
+      }
     }
-  }, [session?.status]);
+  }, [session?.status, session?.baseWordRound]);
 
   useEffect(() => {
     if (!roundEnded) {
@@ -436,34 +518,201 @@ export default function OnlinePlayScreen() {
     });
   }, [gameId, roundEndSessionSnapshot?.baseWordRound, session]);
 
+  const forceLocalRoundOver = useCallback(() => {
+    if (gameId && session) {
+      const pinnedRound =
+        localTimeUpBaseWordRoundRef.current ??
+        playRoundKeyRef.current ??
+        session.baseWordRound ??
+        0;
+      localTimeUpBaseWordRoundRef.current = pinnedRound;
+      setLocalTimeUpBaseWordRound(pinnedRound);
+      localRoundOverForcedRef.current = true;
+      setRoundEndSessionSnapshot((prev) => {
+        if (prev != null && (prev.baseWordRound ?? 0) === pinnedRound) {
+          return prev;
+        }
+        return buildLocalTimeUpSessionSnapshot({ ...session, baseWordRound: pinnedRound }, gameId);
+      });
+    }
+    setRoundOverPendingResults(true);
+    setDraft('');
+    setDraftKeyIndices([]);
+    draftKeyIndicesRef.current = [];
+    lastValidatedDraft.current = '';
+    setFeedback(null);
+  }, [gameId, session]);
+
+  const clearElapsedDraft = useCallback(() => {
+    setDraft('');
+    setDraftKeyIndices([]);
+    draftKeyIndicesRef.current = [];
+    lastValidatedDraft.current = '';
+    setFeedback(null);
+  }, []);
+
   const navigateToResults = useCallback(async () => {
-    if (!gameId || resultsNavigatedRef.current || !session) {
+    if (!gameId || resultsNavigatedRef.current || resultsNavInFlightRef.current || !session) {
       return;
     }
     if (session.status !== 'finished' && !roundOverPendingResults) {
       return;
     }
-    resultsNavigatedRef.current = true;
-    // Keep roundOverPendingResults true until unmount — clearing it switches displaySession to
-    // the live rematch round (e.g. paused round 2) and opens PauseRoundModal, which can leave
-    // an iOS ghost overlay blocking touches on the results screen after replace.
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-      debounceRef.current = null;
-    }
-    const archiveSession = roundEndSessionSnapshot ?? session;
-    const viewingRound = archiveSession.baseWordRound ?? null;
-    router.replace(onlineResultsRoute(gameId, viewingRound));
+    resultsNavInFlightRef.current = true;
+    const navEpoch = resultsNavEpochRef.current;
+    setViewResultsBusy(true);
+    setViewResultsError(null);
+    const expectedBaseWordRound = resolveExpectedResultsBaseWordRound({
+      pinnedLocalTimeUpRound: localTimeUpBaseWordRoundRef.current,
+      roundEndSnapshotRound: roundEndSessionSnapshot?.baseWordRound,
+      liveBaseWordRound: session.baseWordRound,
+    });
     try {
-      if (archiveSession.status === 'finished') {
-        await archiveFinishedRoundFromFirebase(gameId, archiveSession);
+      // Local round-over alone must not open results while RTDB is still `playing`
+      // (results spins until words bootstrap / finished — 20–30s hang for organizer).
+      // Use pinned round — live baseWordRound may already be rematch N+1.
+      let ensureOutcome: OpenResultsEnsureOutcome = 'already_finished';
+      if (
+        !canOpenOnlineResults(session.status) ||
+        (session.baseWordRound ?? 0) > expectedBaseWordRound
+      ) {
+        // Already have a local finished pin — one snapshot classify, skip ~10s finish spam.
+        if (localRoundOverForcedRef.current || roundEndSessionSnapshot?.status === 'finished') {
+          try {
+            const live = await readGameSessionSnapshot(gameId);
+            if (navEpoch !== resultsNavEpochRef.current) {
+              return;
+            }
+            if (
+              canOpenOnlineResults(live.status) &&
+              (live.baseWordRound ?? 0) === expectedBaseWordRound
+            ) {
+              ensureOutcome = 'finished';
+            } else {
+              ensureOutcome = 'rematch_advanced';
+            }
+          } catch {
+            ensureOutcome = 'rematch_advanced';
+          }
+        } else {
+          ensureOutcome = await ensureSessionFinishedForResults(
+            gameId,
+            wordMapsRef.current ?? undefined,
+            { expectedBaseWordRound },
+          );
+          if (navEpoch !== resultsNavEpochRef.current) {
+            return;
+          }
+          // Finish timeout: still open from local archive instead of trapping the user.
+          if (ensureOutcome === 'timeout') {
+            ensureOutcome = 'rematch_advanced';
+          }
+        }
+      }
+      // Keep roundOverPendingResults true until unmount — clearing it switches displaySession to
+      // the live rematch round (e.g. paused round 2) and opens PauseRoundModal, which can leave
+      // an iOS ghost overlay blocking touches on the results screen after replace.
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+      let liveForArchive: GameSessionSnapshot | null = null;
+      try {
+        const live = await readGameSessionSnapshot(gameId);
+        if (navEpoch !== resultsNavEpochRef.current) {
+          return;
+        }
+        if (
+          shouldWriteFinishedRoundArchiveOnNavigate({
+            ensureOutcome,
+            liveStatus: live.status,
+            liveBaseWordRound: live.baseWordRound,
+            expectedBaseWordRound,
+          })
+        ) {
+          liveForArchive = live;
+        }
+      } catch (error) {
+        if (__DEV__) {
+          console.warn('readGameSessionSnapshot before archive', error);
+        }
+      }
+      if (navEpoch !== resultsNavEpochRef.current) {
+        return;
+      }
+      // Archive must exist before replace — covers rematch_advanced and the
+      // already_finished race (tap Results before the finished archive effect runs).
+      let archiveReady = false;
+      if (liveForArchive) {
+        try {
+          await archiveFinishedRoundFromFirebase(gameId, liveForArchive);
+          archiveReady = true;
+        } catch (error) {
+          if (__DEV__) {
+            console.warn('archiveFinishedRoundFromFirebase', error);
+          }
+        }
+      }
+      if (navEpoch !== resultsNavEpochRef.current) {
+        return;
+      }
+      if (!archiveReady) {
+        const localFinished = resolveLocalFinishedSessionForResultsArchive({
+          gameId,
+          expectedBaseWordRound,
+          localFinishedSession: roundEndSessionSnapshot,
+          liveSession: session,
+        });
+        archiveReady = await ensureLocalArchiveForRematchAdvancedResults({
+          gameId,
+          expectedBaseWordRound,
+          localFinishedSession: localFinished,
+          myUid,
+          myWords: roundEndWordsSnapshot ?? myWordsRef.current,
+        });
+      }
+      if (navEpoch !== resultsNavEpochRef.current) {
+        return;
+      }
+      if (!archiveReady) {
+        setViewResultsError(t('online.errorOpenResultsFailed'));
+        return;
+      }
+      const viewingRound = liveForArchive?.baseWordRound ?? expectedBaseWordRound;
+      try {
+        router.replace(onlineResultsRoute(gameId, viewingRound));
+        // Only lock out retries after replace succeeds — failed replace must allow retry.
+        // Note: Expo Router replace rarely throws; busy may stick until unmount if nav no-ops.
+        resultsNavigatedRef.current = true;
+      } catch (error) {
+        if (__DEV__) {
+          console.warn('router.replace results', error);
+        }
+        setViewResultsError(t('online.errorOpenResultsFailed'));
+        return;
       }
     } catch (error) {
       if (__DEV__) {
-        console.warn('archiveFinishedRoundFromFirebase', error);
+        console.warn('navigateToResults', error);
+      }
+      if (navEpoch === resultsNavEpochRef.current) {
+        setViewResultsError(t('online.errorOpenResultsFailed'));
+      }
+    } finally {
+      if (!resultsNavigatedRef.current && navEpoch === resultsNavEpochRef.current) {
+        resultsNavInFlightRef.current = false;
+        setViewResultsBusy(false);
       }
     }
-  }, [gameId, roundEndSessionSnapshot, roundOverPendingResults, session]);
+  }, [
+    gameId,
+    myUid,
+    roundEndSessionSnapshot,
+    roundEndWordsSnapshot,
+    roundOverPendingResults,
+    session,
+    t,
+  ]);
 
   const endsAt = displaySession?.timerEndsAt ?? null;
   const resolvedSessionSettings = displaySession
@@ -495,7 +744,7 @@ export default function OnlinePlayScreen() {
   const isPaused = displaySession?.pauseState?.active === true;
   const reviewingPriorRound = isReviewingPriorRoundOnPlayScreen(
     roundEnded,
-    roundEndSessionSnapshot?.baseWordRound ?? null,
+    roundEndSessionSnapshot?.baseWordRound ?? localTimeUpBaseWordRound,
     session?.baseWordRound ?? null,
   );
   const showLivePauseModal = isPaused && !reviewingPriorRound;
@@ -506,6 +755,7 @@ export default function OnlinePlayScreen() {
     earlyFinishVote: session?.earlyFinishVote,
     addTimeVote: session?.addTimeVote,
     resumeVote: session?.resumeVote,
+    pauseVote: session?.pauseVote,
     pauseActive: isPaused,
     playing: session?.status === 'playing',
   });
@@ -530,42 +780,28 @@ export default function OnlinePlayScreen() {
   ]);
 
   useEffect(() => {
-    if (session?.addTimeVote) {
-      finishAttemptedRef.current = false;
+    if (!session?.addTimeVote) {
+      return;
     }
-  }, [session?.addTimeVote]);
-
-  useEffect(() => {
-    if (
-      isPaused ||
-      session?.status !== 'playing' ||
-      endsAt === null ||
-      shouldDeferClientTimerFinish({
-        addTimeVote: session?.addTimeVote,
-        showAddTimeModal,
-      })
-    ) {
-      return undefined;
+    // Allow finish retries after the vote clears; do not clear finishInFlight —
+    // an in-flight finish's finally owns that bit (avoids overlapping expire calls).
+    finishAttemptedRef.current = false;
+    expiredFinishFailCountRef.current = 0;
+    localRoundOverForcedRef.current = false;
+    // Drop local time-up UI so vote is not under a stuck GameTimeUpModal.
+    if (roundOverPendingResults && session.status === 'playing') {
+      setRoundOverPendingResults(false);
+      localTimeUpBaseWordRoundRef.current = null;
+      setLocalTimeUpBaseWordRound(null);
+      setRoundEndSessionSnapshot(null);
+      setRoundEndWordsSnapshot(null);
+      // Abort in-flight navigateToResults and clear stale modal error/busy.
+      resultsNavEpochRef.current += 1;
+      resultsNavInFlightRef.current = false;
+      setViewResultsBusy(false);
+      setViewResultsError(null);
     }
-    const tick = () => {
-      if (finishAttemptedRef.current || getServerNow() >= endsAt) {
-        if (!finishAttemptedRef.current) {
-          void finishGameSessionIfExpired(gameId, wordMapsRef.current ?? undefined).then(
-            (committed) => {
-              if (committed) {
-                finishAttemptedRef.current = true;
-              }
-            },
-          );
-        }
-      }
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => {
-      clearInterval(id);
-    };
-  }, [endsAt, gameId, isPaused, session?.addTimeVote, session?.status, showAddTimeModal]);
+  }, [roundOverPendingResults, session?.addTimeVote, session?.status]);
 
   const deferredWordMaps = useDeferredValue(wordMaps);
   const sessionForWordList = useMemo(() => {
@@ -640,6 +876,120 @@ export default function OnlinePlayScreen() {
   roundEndedRef.current = roundEnded;
   isPausedRef.current = isPaused;
 
+  const syncSessionFromRtdb = useCallback(async () => {
+    const snap = await tryReadGameSessionSnapshot(gameId);
+    if (!snap) {
+      return;
+    }
+    setSessionCore((prev) => mergePlaySessionSubscription(prev, snap));
+  }, [gameId]);
+
+  const resyncIfRemoteClockAlive = useCallback(async () => {
+    const snap = await tryReadGameSessionSnapshot(gameId);
+    if (!snap) {
+      return false;
+    }
+    if (!isRemoteRoundClockStillRunning(snap, getServerNow())) {
+      return false;
+    }
+    setSessionCore((prev) => mergePlaySessionSubscription(prev, snap));
+    return true;
+  }, [gameId]);
+
+  const attemptExpireFinish = useCallback(() => {
+    if (endsAt == null || session?.status !== 'playing') {
+      return;
+    }
+    if (
+      shouldSkipExpireFinishForPinnedTimeUp({
+        roundOverPendingResults,
+        pinnedTimeUpRound: localTimeUpBaseWordRoundRef.current,
+        liveStatus: session.status,
+        liveBaseWordRound: session.baseWordRound,
+      })
+    ) {
+      return;
+    }
+    beginExpireFinishAttempt({
+      endsAt,
+      now: getServerNow(),
+      deferFinish: shouldDeferClientTimerFinish({
+        addTimeVote: addTimeVoteRef.current,
+        showAddTimeModal: showAddTimeModalRef.current,
+      }),
+      refs: {
+        finishAttempted: finishAttemptedRef,
+        finishInFlight: finishInFlightRef,
+        expiredFailCount: expiredFinishFailCountRef,
+        localRoundOverForced: localRoundOverForcedRef,
+        draftKeyIndices: draftKeyIndicesRef,
+        lastValidatedDraft,
+      },
+      clearElapsedDraft,
+      onLocalRoundOver: forceLocalRoundOver,
+      finishIfExpired: () => finishGameSessionIfExpired(gameId, wordMapsRef.current ?? undefined),
+      getNow: getServerNow,
+      getDeferFinish: () =>
+        shouldDeferClientTimerFinish({
+          addTimeVote: addTimeVoteRef.current,
+          showAddTimeModal: showAddTimeModalRef.current,
+        }),
+      resyncIfRemoteClockAlive,
+    });
+  }, [
+    clearElapsedDraft,
+    endsAt,
+    forceLocalRoundOver,
+    gameId,
+    resyncIfRemoteClockAlive,
+    roundOverPendingResults,
+    session?.baseWordRound,
+    session?.status,
+  ]);
+
+  useEffect(() => {
+    if (
+      isPaused ||
+      session?.status !== 'playing' ||
+      endsAt === null ||
+      shouldDeferClientTimerFinish({
+        addTimeVote: session?.addTimeVote,
+        showAddTimeModal,
+      })
+    ) {
+      return undefined;
+    }
+    attemptExpireFinish();
+    const id = setInterval(attemptExpireFinish, 1000);
+    return () => {
+      clearInterval(id);
+    };
+  }, [
+    attemptExpireFinish,
+    endsAt,
+    isPaused,
+    session?.addTimeVote,
+    session?.status,
+    showAddTimeModal,
+  ]);
+
+  // After screen-off across timer end, run finish tick immediately on foreground.
+  useEffect(() => {
+    if (!gameId || session?.status !== 'playing' || endsAt == null) {
+      return undefined;
+    }
+    const onAppState = (next: string) => {
+      if (next !== 'active') {
+        return;
+      }
+      attemptExpireFinish();
+    };
+    const sub = AppState.addEventListener('change', onAppState);
+    return () => {
+      sub.remove();
+    };
+  }, [attemptExpireFinish, endsAt, gameId, session?.status]);
+
   const openGameMenu = useCallback(() => {
     const live = session;
     if (
@@ -670,12 +1020,12 @@ export default function OnlinePlayScreen() {
     if (action !== 'finish_round') {
       return;
     }
-    setRoundOverPendingResults(true);
+    forceLocalRoundOver();
     setShowAddTimeModal(false);
     if (gameId && session?.status === 'playing') {
       void finishGameSessionIfExpired(gameId, wordMapsRef.current ?? undefined);
     }
-  }, [endsAt, gameId, session?.addTimeVote, session?.status]);
+  }, [endsAt, forceLocalRoundOver, gameId, session?.addTimeVote, session?.status]);
 
   const handleSelectAddTime = useCallback(
     async (minutes: number) => {
@@ -794,6 +1144,14 @@ export default function OnlinePlayScreen() {
       ) {
         return;
       }
+      if (
+        shouldBlockWordSubmitWhenTimerElapsed({
+          remainingMs: remainingMsRef.current,
+          roundEnded: roundEndedRef.current,
+        })
+      ) {
+        return;
+      }
       if (draftValue === lastValidatedDraft.current) {
         return;
       }
@@ -848,7 +1206,10 @@ export default function OnlinePlayScreen() {
       });
       setScrollRequest({ normalized: result.normalized, id: Date.now() });
       setDraft('');
-      setDraftKeyIndices([]);
+      // Must clear ref before the next press — state updates are async; otherwise
+      // keys from the accepted word stay "used" while the draft text was reset
+      // (e.g. ПІ accepted → type ТО → П still grayed).
+      setDraftKeyIndices(syncDraftKeyIndicesRef(draftKeyIndicesRef, []));
       setFeedback(t('game.wordAccepted'));
       setFeedbackVariant('success');
       playWordAcceptedFeedback(wordAcceptedFeedback);
@@ -874,7 +1235,7 @@ export default function OnlinePlayScreen() {
             return next;
           });
           setDraft(savedDraft);
-          setDraftKeyIndices(savedKeyIndices);
+          setDraftKeyIndices(syncDraftKeyIndicesRef(draftKeyIndicesRef, savedKeyIndices));
           lastValidatedDraft.current = '';
           if (remote.error === 'DUPLICATE') {
             setFeedback(t('game.errorAlreadySubmitted'));
@@ -994,32 +1355,47 @@ export default function OnlinePlayScreen() {
     });
   };
 
+  const cancelSessionVoteProposal = useCallback(
+    async (field: LocalSessionVoteField, cancel: () => Promise<void>) => {
+      setSessionCore((prev) => (prev ? clearLocalSessionVoteField(prev, field) : null));
+      try {
+        await cancel();
+      } catch (error) {
+        if (__DEV__) {
+          console.warn('cancelSessionVoteProposal', field, error);
+        }
+      }
+      await syncSessionFromRtdb();
+    },
+    [syncSessionFromRtdb],
+  );
+
   const cancelEarlyFinishProposal = () => {
     if (!myUid) {
       return;
     }
-    void cancelEarlyFinishVote(gameId, myUid);
+    void cancelSessionVoteProposal('earlyFinishVote', () => cancelEarlyFinishVote(gameId, myUid));
   };
 
   const cancelPauseProposal = () => {
     if (!myUid) {
       return;
     }
-    void cancelPauseVote(gameId, myUid);
+    void cancelSessionVoteProposal('pauseVote', () => cancelPauseVote(gameId, myUid));
   };
 
   const cancelAddTimeProposal = () => {
     if (!myUid) {
       return;
     }
-    void cancelAddTimeVote(gameId, myUid);
+    void cancelSessionVoteProposal('addTimeVote', () => cancelAddTimeVote(gameId, myUid));
   };
 
   const cancelResumeProposal = () => {
     if (!myUid) {
       return;
     }
-    void cancelResumeVote(gameId, myUid);
+    void cancelSessionVoteProposal('resumeVote', () => cancelResumeVote(gameId, myUid));
   };
 
   const leaveNowFromEarlyFinish = () => {
@@ -1043,9 +1419,12 @@ export default function OnlinePlayScreen() {
       if (!myUid) {
         return;
       }
-      void voteEarlyFinish(gameId, myUid, choice);
+      void (async () => {
+        await voteEarlyFinish(gameId, myUid, choice);
+        await syncSessionFromRtdb();
+      })();
     },
-    [gameId, myUid],
+    [gameId, myUid, syncSessionFromRtdb],
   );
 
   const onVotePause = useCallback(
@@ -1053,9 +1432,12 @@ export default function OnlinePlayScreen() {
       if (!myUid) {
         return;
       }
-      void votePause(gameId, myUid, choice);
+      void (async () => {
+        await votePause(gameId, myUid, choice);
+        await syncSessionFromRtdb();
+      })();
     },
-    [gameId, myUid],
+    [gameId, myUid, syncSessionFromRtdb],
   );
 
   const onVoteAddTime = useCallback(
@@ -1063,9 +1445,12 @@ export default function OnlinePlayScreen() {
       if (!myUid) {
         return;
       }
-      void voteAddTime(gameId, myUid, choice);
+      void (async () => {
+        await voteAddTime(gameId, myUid, choice);
+        await syncSessionFromRtdb();
+      })();
     },
-    [gameId, myUid],
+    [gameId, myUid, syncSessionFromRtdb],
   );
 
   const hasOnlineOpponentInRound = useMemo(
@@ -1076,7 +1461,10 @@ export default function OnlinePlayScreen() {
   useAutoPauseOnAppBackground(
     session?.status === 'playing' && !isPaused && !hasOnlineOpponentInRound,
     () => {
-      void proposePause(gameId, myUid);
+      void (async () => {
+        await proposePause(gameId, myUid);
+        await syncSessionFromRtdb();
+      })();
     },
   );
 
@@ -1153,6 +1541,7 @@ export default function OnlinePlayScreen() {
     setShowExitConfirm(false);
     setShowEndEarlyConfirm(false);
     setShowAddTimeModal(false);
+    setShowStatsExplain(false);
   }, [roundEnded]);
 
   if (loadError || (!loading && (!session || !myUid))) {
@@ -1214,210 +1603,196 @@ export default function OnlinePlayScreen() {
   const canProposeAddTime = !isPaused && !earlyVote && !pauseVote && !addTimeVote;
 
   return (
-    <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
-      {!isPaused ? (
-        <>
-          <OnlinePlayTimerHeader
-            timerEndsAt={endsAt}
-            pauseFrozenRemainingMs={session?.pauseState?.frozenRemainingMs ?? null}
-            isPaused={false}
-            roundActive={session.status === 'playing'}
-            rank={playerRank}
-            wordCount={playerWordCount}
-            maxWordCount={maxWordCount}
-            score={playerScore}
-            showRank={hasMultiplayerRoundUi}
-            showScore={showPointUi}
-            roundEnded={roundEnded}
-            canProposeAddTime={canProposeAddTime}
-            hasOpponent={hasMultiplayerRoundUi}
-            timerAlertMode={timerAlertMode}
-            onOpenGameMenu={openGameMenu}
-            onOpenAddTimeModal={openAddTimeModal}
-            onOpenStandings={openStandings}
-            onOpenStatsExplain={openStatsExplain}
-          />
+    <View style={styles.root}>
+      <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+        {!isPaused ? (
+          <>
+            <OnlinePlayTimerHeader
+              timerEndsAt={endsAt}
+              pauseFrozenRemainingMs={session?.pauseState?.frozenRemainingMs ?? null}
+              isPaused={false}
+              roundActive={session.status === 'playing'}
+              rank={playerRank}
+              wordCount={playerWordCount}
+              maxWordCount={maxWordCount}
+              score={playerScore}
+              showRank={hasMultiplayerRoundUi}
+              showScore={showPointUi}
+              roundEnded={roundEnded}
+              canProposeAddTime={canProposeAddTime}
+              hasOpponent={hasMultiplayerRoundUi}
+              timerAlertMode={timerAlertMode}
+              onOpenGameMenu={openGameMenu}
+              onOpenAddTimeModal={openAddTimeModal}
+              onOpenStandings={openStandings}
+              onOpenStatsExplain={openStatsExplain}
+            />
 
-          <OnlinePlayActiveBody
-            myName={myName}
-            playRulesLabel={playRulesLabel}
-            entries={scoredWords}
-            displays={displays}
-            draft={draft}
-            draftKeyIndices={draftKeyIndices}
-            letterKeys={letterKeys}
-            scrollToNormalized={scrollRequest?.normalized ?? null}
-            scrollToRequestId={scrollRequest?.id}
-            feedback={feedback}
-            feedbackVariant={feedbackVariant}
-            backgroundSyncing={backgroundSyncing}
-            showScoreBadges={showPointUi && hasMultiplayerRoundUi}
-            showOverlapPeers={hasMultiplayerRoundUi}
-            onPressKey={pressKey}
-            onClearDraft={clearDraft}
-            onBackspaceDraft={backspaceDraft}
-          />
-        </>
-      ) : null}
+            <OnlinePlayActiveBody
+              myName={myName}
+              playRulesLabel={playRulesLabel}
+              entries={scoredWords}
+              displays={displays}
+              draft={draft}
+              draftKeyIndices={draftKeyIndices}
+              letterKeys={letterKeys}
+              scrollToNormalized={scrollRequest?.normalized ?? null}
+              scrollToRequestId={scrollRequest?.id}
+              feedback={feedback}
+              feedbackVariant={feedbackVariant}
+              backgroundSyncing={backgroundSyncing}
+              showScoreBadges={showPointUi && hasMultiplayerRoundUi}
+              showOverlapPeers={hasMultiplayerRoundUi}
+              onPressKey={pressKey}
+              onClearDraft={clearDraft}
+              onBackspaceDraft={backspaceDraft}
+            />
+          </>
+        ) : null}
 
-      <BottomSheetModal
-        visible={showStandings && !gameMenuBlockedByVote}
-        onClose={() => {
-          setShowStandings(false);
-        }}
-      >
-        <Text style={styles.modalTitle}>{t('game.standings')}</Text>
-        {standings.map((row, index) => {
-          const player = session.players[row.playerId];
-          const name = player
-            ? displayPlayerName(player, myUid, row.playerId, session)
-            : row.playerId;
-          const isMe = row.playerId === myUid;
-          const presence = player?.online
-            ? t('game.playerOnline')
-            : player?.hasLeft
-              ? formatPlayerLeftLabel(t, playerGenderForDisplay(session, myUid, row.playerId))
-              : t('game.playerOffline');
-          return (
-            <View key={row.playerId} style={styles.standingRow}>
-              <Text style={styles.standingRank}>{displayRanks.get(row.playerId) ?? index + 1}</Text>
-              <View style={styles.standingMain}>
-                <Text style={styles.standingName} numberOfLines={1}>
-                  {name}
-                  {isMe ? ` ${t('game.resultsYou')}` : ''}
-                </Text>
-                <Text style={styles.standingMeta}>
-                  {presence} ·{' '}
-                  {formatStandingRowMeta(row.wordCount, showPointUi ? row.score : null)}
-                </Text>
-              </View>
-            </View>
-          );
-        })}
-        <PrimaryButton
-          label={t('common.close')}
-          variant="secondary"
-          onPress={() => {
+        <PlayStandingsSheet
+          visible={shouldShowPlayStandingsSheet({
+            showStandings,
+            roundEnded,
+            gameMenuBlockedByVote,
+          })}
+          onClose={() => {
             setShowStandings(false);
           }}
-        />
-      </BottomSheetModal>
-
-      {showGameMenu && !gameMenuBlockedByVote ? (
-        <GameMenuModal
-          visible
-          endGameLabel={
-            hasOnlineOpponentInRound ? t('game.menuProposeEnd') : t('game.menuEndEarly')
-          }
-          showEndGame={hasOnlineOpponentInRound && !roundEnded}
-          onClose={() => {
-            setShowGameMenu(false);
-          }}
-          onPause={() => {
-            setShowGameMenu(false);
-            void proposePause(gameId, myUid);
-          }}
-          onProposeEnd={() => {
-            setShowGameMenu(false);
-            if (hasOnlineOpponentInRound) {
-              void proposeEarlyFinish(gameId, myUid);
-            } else {
-              setShowEndEarlyConfirm(true);
-            }
-          }}
-          showPause={!isPaused && !earlyVote && !pauseVote && !addTimeVote && !roundEnded}
-          pauseLabel={hasOnlineOpponentInRound ? t('game.menuPause') : t('game.menuPauseSolo')}
-          showInvite={canInviteOthers && !roundEnded}
-          showExit={!roundEnded}
-          onInvite={() => {
-            setShowGameMenu(false);
-            setShowInviteModal(true);
-          }}
-          onExit={() => {
-            setShowGameMenu(false);
-            if (hasOnlineOpponentInRound) {
-              setShowExitConfirm(true);
-            } else {
-              setShowEndEarlyConfirm(true);
-            }
-          }}
-          onOpenSettings={() => {
-            setShowGameMenu(false);
-            router.push('/settings');
-          }}
-        />
-      ) : null}
-
-      <RoomInviteModal
-        visible={showInviteModal && !roundEnded}
-        roomCode={gameId}
-        invitedByUid={myUid}
-        roundInProgress={session.status === 'playing'}
-        topContent={
-          showInviteModal ? (
-            <PlayVoteLayer
-              layout="banner"
-              isPaused={isPaused}
-              session={session}
-              myUid={myUid}
-              earlyVote={earlyVote}
-              pauseVote={pauseVote}
-              addTimeVote={addTimeVote}
-              onVoteEarlyFinish={onVoteEarlyFinish}
-              onCancelEarlyFinishProposal={cancelEarlyFinishProposal}
-              onLeaveNowFromEarlyFinish={leaveNowFromEarlyFinish}
-              onVotePause={onVotePause}
-              onCancelPauseProposal={cancelPauseProposal}
-              onVoteAddTime={onVoteAddTime}
-              onCancelAddTimeProposal={cancelAddTimeProposal}
-            />
-          ) : undefined
-        }
-        onClose={() => {
-          setShowInviteModal(false);
-        }}
-      />
-
-      {showLivePauseModal ? (
-        <PauseRoundModal
-          visible={isPlayScreenFocused && !pauseUiObscured}
-          session={session}
+          gameId={gameId}
+          session={displaySession ?? session}
           myUid={myUid}
-          viewerGender={viewerGender}
-          resumeVote={resumeVote}
-          earlyFinishVote={earlyVote}
-          hasOnlineOpponent={hasOnlineOpponentInRound}
-          onProposeResume={() => {
-            void proposeResume(gameId, myUid);
-          }}
-          onResumeYes={() => {
-            void voteResume(gameId, myUid, 'yes');
-          }}
-          onResumeNo={() => {
-            void voteResume(gameId, myUid, 'no');
-          }}
-          onCancelResumeProposal={
-            resumeVote?.proposedBy === myUid ? cancelResumeProposal : undefined
+          standings={standings}
+          displayRanks={displayRanks}
+          showPointUi={showPointUi}
+          maxPlayableWords={maxWordCount}
+        />
+
+        {showGameMenu && !gameMenuBlockedByVote ? (
+          <GameMenuModal
+            visible
+            endGameLabel={
+              hasOnlineOpponentInRound ? t('game.menuProposeEnd') : t('game.menuEndEarly')
+            }
+            showEndGame={hasOnlineOpponentInRound && !roundEnded}
+            onClose={() => {
+              setShowGameMenu(false);
+            }}
+            onPause={() => {
+              setShowGameMenu(false);
+              void (async () => {
+                await proposePause(gameId, myUid);
+                await syncSessionFromRtdb();
+              })();
+            }}
+            onProposeEnd={() => {
+              setShowGameMenu(false);
+              if (hasOnlineOpponentInRound) {
+                void (async () => {
+                  await proposeEarlyFinish(gameId, myUid);
+                  await syncSessionFromRtdb();
+                })();
+              } else {
+                setShowEndEarlyConfirm(true);
+              }
+            }}
+            showPause={!isPaused && !earlyVote && !pauseVote && !addTimeVote && !roundEnded}
+            pauseLabel={hasOnlineOpponentInRound ? t('game.menuPause') : t('game.menuPauseSolo')}
+            showInvite={canInviteOthers && !roundEnded}
+            showExit={!roundEnded}
+            onInvite={() => {
+              setShowGameMenu(false);
+              setShowInviteModal(true);
+            }}
+            onExit={() => {
+              setShowGameMenu(false);
+              if (hasOnlineOpponentInRound) {
+                setShowExitConfirm(true);
+              } else {
+                setShowEndEarlyConfirm(true);
+              }
+            }}
+            onOpenSettings={() => {
+              setShowGameMenu(false);
+              router.push('/settings');
+            }}
+          />
+        ) : null}
+
+        <RoomInviteModal
+          visible={showInviteModal && !roundEnded}
+          roomCode={gameId}
+          invitedByUid={myUid}
+          roundInProgress={session.status === 'playing'}
+          topContent={
+            showInviteModal ? (
+              <PlayVoteLayer
+                layout="banner"
+                isPaused={isPaused}
+                session={session}
+                myUid={myUid}
+                earlyVote={earlyVote}
+                pauseVote={pauseVote}
+                addTimeVote={addTimeVote}
+                onVoteEarlyFinish={onVoteEarlyFinish}
+                onCancelEarlyFinishProposal={cancelEarlyFinishProposal}
+                onLeaveNowFromEarlyFinish={leaveNowFromEarlyFinish}
+                onVotePause={onVotePause}
+                onCancelPauseProposal={cancelPauseProposal}
+                onVoteAddTime={onVoteAddTime}
+                onCancelAddTimeProposal={cancelAddTimeProposal}
+              />
+            ) : undefined
           }
-          onEarlyFinishYes={() => {
-            void voteEarlyFinish(gameId, myUid, 'yes');
-          }}
-          onEarlyFinishNo={() => {
-            void voteEarlyFinish(gameId, myUid, 'no');
-          }}
-          onCancelEarlyFinishProposal={
-            earlyVote?.proposedBy === myUid ? cancelEarlyFinishProposal : undefined
-          }
-          onLeaveNowFromEarlyFinish={
-            earlyVote?.proposedBy === myUid ? leaveNowFromEarlyFinish : undefined
-          }
-          onOpenMenu={openGameMenu}
-          canOpenMenu={!gameMenuBlockedByVote}
-          onOpenSettings={() => {
-            router.push('/settings');
+          onClose={() => {
+            setShowInviteModal(false);
           }}
         />
-      ) : null}
+
+        <PlayStatsExplainModal
+          visible={showStatsExplain && !roundEnded}
+          wordCount={playerWordCount}
+          maxWordCount={maxWordCount}
+          showTrainingUnlockHint={false}
+          onClose={() => {
+            setShowStatsExplain(false);
+          }}
+        />
+
+        <PlayDialogsStack
+          t={t}
+          roundEnded={roundEnded}
+          isPaused={isPaused}
+          sessionPlaying={session.status === 'playing'}
+          canProposeAddTime={canProposeAddTime}
+          showAddTimeModal={showAddTimeModal}
+          addTimeRemainingMs={
+            showAddTimeModal && endsAt != null ? Math.max(0, endsAt - getServerNow()) : 0
+          }
+          hasOpponent={hasOnlineOpponentInRound}
+          onCloseAddTime={handleCloseAddTimeModal}
+          onSelectAddTime={handleSelectAddTime}
+          showEndEarlyConfirm={showEndEarlyConfirm}
+          hasOnlineOpponentInRound={hasOnlineOpponentInRound}
+          onEndEarlyConfirm={handleEndEarlyConfirm}
+          onDismissEndEarlyConfirm={() => {
+            setShowEndEarlyConfirm(false);
+          }}
+          showExitConfirm={showExitConfirm}
+          onLeaveToHome={leaveToHome}
+          onDismissExitConfirm={() => {
+            setShowExitConfirm(false);
+          }}
+          sessionToasts={sessionToasts}
+          timeUpModalVisible={timeUpModalVisible}
+          onViewResults={() => {
+            void navigateToResults();
+          }}
+          viewResultsBusy={viewResultsBusy}
+          viewResultsError={viewResultsError}
+          onGoHomeFromTimeUp={leaveToHome}
+        />
+      </SafeAreaView>
 
       {!showInviteModal ? (
         <PlayVoteLayer
@@ -1438,47 +1813,62 @@ export default function OnlinePlayScreen() {
         />
       ) : null}
 
-      <PlayStatsExplainModal
-        visible={showStatsExplain}
-        wordCount={playerWordCount}
-        maxWordCount={maxWordCount}
-        showTrainingUnlockHint={false}
-        onClose={() => {
-          setShowStatsExplain(false);
-        }}
-      />
-
-      <PlayDialogsStack
-        t={t}
-        roundEnded={roundEnded}
-        isPaused={isPaused}
-        sessionPlaying={session.status === 'playing'}
-        canProposeAddTime={canProposeAddTime}
-        showAddTimeModal={showAddTimeModal}
-        addTimeRemainingMs={
-          showAddTimeModal && endsAt != null ? Math.max(0, endsAt - getServerNow()) : 0
-        }
-        hasOpponent={hasOnlineOpponentInRound}
-        onCloseAddTime={handleCloseAddTimeModal}
-        onSelectAddTime={handleSelectAddTime}
-        showEndEarlyConfirm={showEndEarlyConfirm}
-        hasOnlineOpponentInRound={hasOnlineOpponentInRound}
-        onEndEarlyConfirm={handleEndEarlyConfirm}
-        onDismissEndEarlyConfirm={() => {
-          setShowEndEarlyConfirm(false);
-        }}
-        showExitConfirm={showExitConfirm}
-        onLeaveToHome={leaveToHome}
-        onDismissExitConfirm={() => {
-          setShowExitConfirm(false);
-        }}
-        sessionToasts={sessionToasts}
-        timeUpModalVisible={timeUpModalVisible}
-        onViewResults={() => {
-          void navigateToResults();
-        }}
-      />
-    </SafeAreaView>
+      {showLivePauseModal ? (
+        <PauseRoundModal
+          visible={isPlayScreenFocused && !pauseUiObscured}
+          session={session}
+          myUid={myUid}
+          viewerGender={viewerGender}
+          resumeVote={resumeVote}
+          earlyFinishVote={earlyVote}
+          hasOnlineOpponent={hasOnlineOpponentInRound}
+          onProposeResume={() => {
+            void (async () => {
+              await proposeResume(gameId, myUid);
+              await syncSessionFromRtdb();
+            })();
+          }}
+          onResumeYes={() => {
+            void (async () => {
+              await voteResume(gameId, myUid, 'yes');
+              await syncSessionFromRtdb();
+            })();
+          }}
+          onResumeNo={() => {
+            void (async () => {
+              await voteResume(gameId, myUid, 'no');
+              await syncSessionFromRtdb();
+            })();
+          }}
+          onCancelResumeProposal={
+            resumeVote?.proposedBy === myUid ? cancelResumeProposal : undefined
+          }
+          onEarlyFinishYes={() => {
+            void (async () => {
+              await voteEarlyFinish(gameId, myUid, 'yes');
+              await syncSessionFromRtdb();
+            })();
+          }}
+          onEarlyFinishNo={() => {
+            void (async () => {
+              await voteEarlyFinish(gameId, myUid, 'no');
+              await syncSessionFromRtdb();
+            })();
+          }}
+          onCancelEarlyFinishProposal={
+            earlyVote?.proposedBy === myUid ? cancelEarlyFinishProposal : undefined
+          }
+          onLeaveNowFromEarlyFinish={
+            earlyVote?.proposedBy === myUid ? leaveNowFromEarlyFinish : undefined
+          }
+          onOpenMenu={openGameMenu}
+          canOpenMenu={!gameMenuBlockedByVote}
+          onOpenSettings={() => {
+            router.push('/settings');
+          }}
+        />
+      ) : null}
+    </View>
   );
 }
 
@@ -1506,36 +1896,9 @@ function createStyles(colors: ThemeColors) {
       paddingTop: spacing.xs,
       gap: spacing.sm,
     },
-    modalTitle: {
-      fontSize: 18,
-      fontWeight: '600',
-      color: colors.textPrimary,
-    },
-    standingRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.sm,
-      paddingVertical: spacing.xs,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.borderTertiary,
-    },
-    standingRank: {
-      width: 20,
-      fontWeight: '700',
-      color: colors.accent,
-    },
-    standingMain: {
+    root: {
       flex: 1,
-      minWidth: 0,
-      gap: 2,
-    },
-    standingName: {
-      fontSize: 15,
-      color: colors.textPrimary,
-    },
-    standingMeta: {
-      fontSize: 13,
-      color: colors.textSecondary,
+      backgroundColor: colors.backgroundSecondary,
     },
   });
 }

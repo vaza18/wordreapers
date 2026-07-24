@@ -1,5 +1,10 @@
 import type { GameSession, SessionVote } from '../../firebase/types.js';
-import { earlyFinishRequiredVoterIds } from './early-finish-vote.js';
+import {
+  allRequiredVotedYes,
+  anyRequiredVotedNo,
+  earlyFinishRequiredVoterIds,
+  earlyFinishVoteExpired,
+} from './early-finish-vote.js';
 import { viewerNeedsSessionVote } from './viewer-needs-session-vote.js';
 
 export function pauseVoteRequiredIds(session: GameSession, proposerId: string): string[] {
@@ -14,7 +19,21 @@ export function viewerNeedsPauseVote(
   return viewerNeedsSessionVote(session, vote, viewerId, pauseVoteRequiredIds);
 }
 
-export function shouldActivatePauseFromVote(session: GameSession, vote: SessionVote): boolean {
+/**
+ * Activate pause when all required voters agree, or after 30s with no rejection
+ * (same silence-as-yes rule as early-finish / resume).
+ */
+export function shouldActivatePauseFromVote(
+  session: GameSession,
+  vote: SessionVote,
+  now: number = 0,
+): boolean {
   const required = pauseVoteRequiredIds(session, vote.proposedBy);
-  return required.every((id) => vote.votes[id] === 'yes');
+  if (anyRequiredVotedNo(vote, required)) {
+    return false;
+  }
+  if (allRequiredVotedYes(vote, required)) {
+    return true;
+  }
+  return now > 0 && earlyFinishVoteExpired(vote, now);
 }

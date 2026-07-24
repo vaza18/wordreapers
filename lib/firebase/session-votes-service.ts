@@ -45,16 +45,22 @@ async function runSessionVoteTransaction(
     return false;
   }
   try {
-    const result = await runRtdbTransaction(sessionRef(roomId), (current) => {
-      if (current == null) {
-        return undefined;
-      }
-      const session = current as GameSession;
-      if (options?.requirePlaying && session.status !== 'playing') {
-        return undefined;
-      }
-      return mutate(session);
-    });
+    const result = await runRtdbTransaction(
+      sessionRef(roomId),
+      (current) => {
+        if (current == null) {
+          return undefined;
+        }
+        const session = current as GameSession;
+        if (options?.requirePlaying && session.status !== 'playing') {
+          return undefined;
+        }
+        return mutate(session);
+      },
+      // Avoid ghost vote UI when the socket drops mid-transaction (applyLocally echo
+      // would show resumeVote on the proposer while peers never receive a commit).
+      { applyLocally: false },
+    );
     return result.committed;
   } catch (error) {
     if (isFirebaseIgnorableRtdbError(error)) {
@@ -408,7 +414,7 @@ export async function votePause(gameId: string, uid: string, choice: VoteChoice)
 
       if (anyRequiredVotedNo(vote, required)) {
         session.pauseVote = null;
-      } else if (shouldActivatePauseFromVote(session, vote)) {
+      } else if (shouldActivatePauseFromVote(session, vote, getServerNow())) {
         return activatePauseState(session);
       }
       return session;
@@ -541,7 +547,8 @@ export async function resolveResumeVoteIfExpired(gameId: string): Promise<void> 
 
 /**
  * Activate pause when all remaining online required voters have agreed
- * (including when the required set becomes empty after someone goes offline).
+ * (including when the required set becomes empty after someone goes offline),
+ * or after the 30s silence timeout.
  */
 export async function resolvePauseVoteIfReady(gameId: string): Promise<void> {
   await runSessionVoteTransaction(
@@ -558,7 +565,7 @@ export async function resolvePauseVoteIfReady(gameId: string): Promise<void> {
         return session;
       }
 
-      if (shouldActivatePauseFromVote(session, vote)) {
+      if (shouldActivatePauseFromVote(session, vote, getServerNow())) {
         return activatePauseState(session);
       }
 

@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
-import { Modal, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
@@ -125,12 +125,21 @@ export function VoteParticipantModal({
     return body;
   }
 
+  // In-tree overlay (not RN Modal): after background / multi-sim focus, Modal can
+  // show stale vote UI while ignoring presses and missing peer updates.
   return (
-    <Modal transparent visible animationType="fade" accessibilityViewIsModal>
-      <SafeAreaProvider>{body}</SafeAreaProvider>
-    </Modal>
+    <View style={hostStyles.host} pointerEvents="box-none" accessibilityViewIsModal>
+      {body}
+    </View>
   );
 }
+
+const hostStyles = StyleSheet.create({
+  host: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 90,
+  },
+});
 
 function presenceLabel(t: TFunction, row: EarlyFinishParticipantRow, leftFirst: boolean): string {
   if (leftFirst) {

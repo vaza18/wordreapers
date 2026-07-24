@@ -24,12 +24,24 @@ export function shouldFreezeLiveFinishedOnResults(
   return viewingBaseWordRound >= liveBaseWordRound;
 }
 
+export type RecoverFinishedRoundFromArchiveOptions = {
+  /**
+   * Join/rejoin landed on results while live is still `playing` (no pinned viewing round).
+   * Do not hydrate a prior finished archive — that shows «all words» for an old round.
+   */
+  fromJoinIntoPlaying?: boolean;
+};
+
 /** Load archived finished round when live RTDB no longer reflects the viewed round. */
 export function shouldRecoverFinishedRoundFromArchive(
   liveSession: GameSession | null | undefined,
+  options?: RecoverFinishedRoundFromArchiveOptions,
 ): boolean {
   if (!liveSession) {
     return true;
+  }
+  if (options?.fromJoinIntoPlaying === true && liveSession.status === 'playing') {
+    return false;
   }
   return liveSession.status === 'waiting' || liveSession.status === 'playing';
 }
@@ -49,10 +61,9 @@ export function shouldLoadViewingRoundFromArchive(
     return true;
   }
   if (liveSession.status === 'finished') {
-    return shouldKeepFrozenResultsOverLiveFinished(
-      viewingBaseWordRound,
-      liveSession.baseWordRound ?? 0,
-    );
+    // Prefer the archive written on navigate-to-results. Rematch clears `player_words`
+    // (and may flip to `waiting`) so live subscribe often hits permission_denied / empty.
+    return true;
   }
   return false;
 }
