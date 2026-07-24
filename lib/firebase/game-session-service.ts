@@ -13,6 +13,7 @@ import { AppState } from 'react-native';
 import { runRtdbTransaction } from './rtdb-transaction.js';
 import { shouldMarkPresenceOnline } from '../online/presence/app-presence-state.js';
 import { presenceWriteQueue } from '../online/presence/presence-write-queue.js';
+import { devLogAction } from '../debug/dev-log.js';
 
 import { isOrphanGameSessionShell, orphanShellHasPlayer } from '../online/orphan-game-session.js';
 import type { PlayerProfile } from '../profile/player-profile.js';
@@ -35,8 +36,10 @@ import {
 } from './session-settings.js';
 import { buildPlayerTotalsUpdatePatch, recomputeSessionPlayerScores } from '../game/scoring.js';
 import { appendLiveRoundPlayerUid } from './live-round-player-uids.js';
+import { formatLiveRosterDetails } from '../debug/format-session-roster-log.js';
 import {
   isActiveLivePlayer,
+  liveRoundPlayerUidsForRoundStart,
   rematchWaitingPlayerPatch,
 } from '../online/presence/live-round-membership.js';
 import { shouldOrganizerAbandonWaitingRoom } from '../online/should-organizer-abandon-waiting-room.js';
@@ -112,6 +115,36 @@ export interface JoinGameSessionOptions {
   joinSource?: 'code' | 'browse';
   /** Player's game language when joining from browse. */
   playerLanguage?: string;
+}
+
+function joinSourceLabel(options?: JoinGameSessionOptions): string {
+  if (options?.joinSource === 'browse') {
+    return 'via browse';
+  }
+  if (options?.invitedByUid) {
+    return 'via invite/QR';
+  }
+  return 'via code';
+}
+
+function logLocalJoin(
+  session: GameSessionSnapshot,
+  actorName: string,
+  options?: JoinGameSessionOptions,
+): void {
+  const waiting = session.status === 'waiting';
+  const playing = session.status === 'playing';
+  const action = waiting
+    ? 'joined room; waiting in lobby'
+    : playing
+      ? 'joined live round'
+      : `joined room; status=${session.status}`;
+  devLogAction(action, {
+    actor: actorName,
+    room: session.id,
+    round: session.baseWordRound ?? 0,
+    details: joinSourceLabel(options),
+  });
 }
 
 function profileToPlayer(
@@ -447,6 +480,54 @@ export async function rejoinExistingPlayer(
   }
   await update(sessionRef(normalized), patch);
   await setPlayerOnlinePresence(normalized, uid);
+  if (sessionSnapshot.exists()) {
+    const session = sessionSnapshot.val() as GameSession;
+    const prior = session.players?.[uid];
+    const round = session.baseWordRound ?? 0;
+    const nextLive =
+      session.status === 'playing'
+        ? appendLiveRoundPlayerUid(session.liveRoundPlayerUids, uid)
+        : (session.liveRoundPlayerUids ?? []);
+    const selfPlayer = {
+      ...(prior ?? { name: profile.name, wordCount: 0, score: 0 }),
+      online: true as const,
+      hasLeft: false as const,
+    };
+    const rosterDetails = formatLiveRosterDetails(
+      {
+        ...session,
+        players: {
+          ...session.players,
+          [uid]: selfPlayer,
+        },
+        liveRoundPlayerUids: nextLive,
+      },
+      nextLive,
+    );
+    if (prior?.hasLeft === true) {
+      devLogAction('rejoined room after leaving', {
+        actor: profile.name,
+        room: normalized,
+        round,
+        details: `status=${session.status} ${rosterDetails}`,
+      });
+    } else if (prior && prior.online !== true) {
+      devLogAction('rejoined room (was offline)', {
+        actor: profile.name,
+        room: normalized,
+        round,
+        details: `status=${session.status} ${rosterDetails}`,
+      });
+    } else {
+      devLogAction('synced roster presence', {
+        level: 'detail',
+        actor: profile.name,
+        room: normalized,
+        round,
+        details: `status=${session.status} ${rosterDetails}`,
+      });
+    }
+  }
 }
 
 /**
@@ -527,11 +608,14 @@ async function blindJoinGameSession(
   const joined = await readSessionSnapshot(gameId);
   if (sessionIdentityMasked(joined)) {
     await syncPublicRosterAliases(gameId, joined);
-    return readSessionSnapshot(gameId);
+    const maskedJoined = await readSessionSnapshot(gameId);
+    logLocalJoin(maskedJoined, profile.name, options);
+    return maskedJoined;
   }
   if (joined.isPublic) {
     await syncPublicLobbyPlayerCount(gameId, joined);
   }
+  logLocalJoin(joined, profile.name, options);
   return joined;
 }
 
@@ -772,6 +856,7 @@ async function joinGameSessionWithSnapshot(
   if (joined.isPublic) {
     await syncPublicLobbyPlayerCount(gameId, joined);
   }
+  logLocalJoin(joined, profile.name, options);
   return joined;
 }
 
@@ -1004,6 +1089,20 @@ export async function updateGameSessionSetup(
   }
 
   await update(sessionRef(normalized), updates);
+  if (payload.baseWord !== undefined) {
+    devLogAction(`picked base word "${payload.baseWord}"`, {
+      room: normalized,
+      round: session.baseWordRound ?? 0,
+      details: `duration=${payload.settings.durationSeconds}s uniqueBonus=${payload.settings.uniqueBonusMode}`,
+    });
+  } else {
+    devLogAction('updated round settings', {
+      level: 'detail',
+      room: normalized,
+      round: session.baseWordRound ?? 0,
+      details: `duration=${payload.settings.durationSeconds}s uniqueBonus=${payload.settings.uniqueBonusMode}`,
+    });
+  }
 }
 
 /**
@@ -1032,6 +1131,10 @@ export async function updateGameSessionBaseWord(
   await assertSessionBaseWordAllowed(baseWord, session);
 
   await update(sessionRef(normalized), { baseWord, baseWordChosenBy: uid });
+  devLogAction(`picked base word "${baseWord}"`, {
+    room: normalized,
+    round: session.baseWordRound ?? 0,
+  });
 }
 
 /** Fix parking from uniqueBonusMode - updateGameSessionSetup receives uniqueBonusEnabled boolean already */
@@ -1090,6 +1193,12 @@ export async function startGameSession(gameId: string, actorUid: string): Promis
     settings,
   });
   await update(rootRef, multiPath);
+  const liveUids = liveRoundPlayerUidsForRoundStart(session, actorUid);
+  devLogAction('started round', {
+    room: normalized,
+    round: session.baseWordRound ?? 0,
+    details: `baseWord="${session.baseWord}" ${formatLiveRosterDetails(session, liveUids)}`,
+  });
 }
 
 /**
@@ -1102,6 +1211,7 @@ export async function leaveGameSession(gameId: string, uid: string): Promise<voi
     const node = playerRef(normalized, uid);
     await onDisconnect(node).cancel();
     await update(node, { online: false, hasLeft: true });
+    devLogAction('left the round early', { room: normalized });
     try {
       await syncLobbyPickerState(normalized);
     } catch (error) {
@@ -1313,8 +1423,44 @@ export async function restartGameSessionForRematch(
 }
 
 /**
+ * Peer already opened rematch `waiting` — latch + word cleanup only.
+ * Must not rewrite `players` / picker / base word (AH2TN: second «Грати ще»
+ * used a stale finished snapshot and clobbered the first rematcher's lobby).
+ */
+async function joinAlreadyOpenRematchWaitingLobby(
+  gameId: string,
+  actorUid: string,
+  waitingSession: GameSession,
+): Promise<void> {
+  const normalized = normalizeRoomCode(gameId);
+  await markResultsExited(normalized, actorUid);
+  await clearAllPlayerWords(
+    normalized,
+    Object.keys(waitingSession.players),
+    actorUid,
+    waitingSession.organizerId,
+    { everyPlayer: actorUid === waitingSession.organizerId },
+  );
+  await clearSessionWordMaps(normalized);
+  await clearAllActiveRoundCachesForGame(normalized);
+  if (actorUid === waitingSession.organizerId) {
+    setOrganizerWaitingRoom(normalized);
+  }
+  const after = await get(sessionRef(normalized));
+  const details = after.exists() ? (after.val() as GameSession) : waitingSession;
+  devLogAction('joined rematch lobby (peer already opened waiting)', {
+    room: normalized,
+    round: waitingSession.baseWordRound ?? 0,
+    details: formatLiveRosterDetails(details),
+  });
+}
+
+/**
  * Transition a live `finished` session back to `waiting` for rematch.
  * Any rostered participant may commit (RTDB rules allow the update).
+ *
+ * Uses a transaction so a stale client `get()` of `finished` cannot overwrite an
+ * already-open rematch lobby (players rewrite + picker steal).
  */
 export async function rematchFinishedSessionToWaiting(
   gameId: string,
@@ -1326,7 +1472,14 @@ export async function rematchFinishedSessionToWaiting(
     throw new Error('REMATCH_FAILED');
   }
   const preSession = preSnapshot.val() as GameSession;
-  if (preSession.status !== 'finished' || !preSession.players[actorUid]) {
+  if (!preSession.players[actorUid]) {
+    throw new Error('REMATCH_FAILED');
+  }
+  if (preSession.status === 'waiting') {
+    await joinAlreadyOpenRematchWaitingLobby(normalized, actorUid, preSession);
+    return;
+  }
+  if (preSession.status !== 'finished') {
     throw new Error('REMATCH_FAILED');
   }
 
@@ -1334,103 +1487,118 @@ export async function rematchFinishedSessionToWaiting(
     await unpublishPublicLobby(normalized, actorUid, { force: true });
   }
 
-  const playerIds = Object.keys(preSession.players);
-  const resolvedSettings = resolveGameSessionSettings(preSession.settings, playerIds.length);
-  const nextBaseWordRound = (preSession.baseWordRound ?? 0) + 1;
-  const players: Record<string, GameSessionPlayer> = {};
-  for (const uid of playerIds) {
-    players[uid] = {
-      ...preSession.players[uid],
-      ...rematchWaitingPlayerPatch(preSession, uid, actorUid),
-    };
-  }
-
-  const waitingSession: GameSession = {
-    ...preSession,
-    status: 'waiting',
-    baseWord: '',
-    baseWordChosenBy: null,
-    baseWordRound: nextBaseWordRound,
-    players,
-  };
-  const baseWordPickerUid = currentBaseWordPickerUid(waitingSession);
+  let nextBaseWordRound = (preSession.baseWordRound ?? 0) + 1;
+  let committedWaiting: GameSession | null = null;
 
   try {
-    const rematchUpdates: Record<string, unknown> = {
-      status: 'waiting',
-      settings: resolvedSettings,
-      timerEndsAt: null,
-      roundStartedAt: null,
-      roundTimerBudgetSeconds: null,
-      roundPlayedSeconds: null,
-      baseWord: '',
-      baseWordChosenBy: null,
-      baseWordRound: nextBaseWordRound,
-      baseWordPickerUid,
-      earlyFinishVote: null,
-      pauseVote: null,
-      pauseState: null,
-      resumeVote: null,
-      createdAt: getServerNow(),
-      purgeAfterAt: null,
-      finishedAt: null,
-      liveRoundPlayerUids: null,
-      isPublic: false,
-      publicPublishedAt: null,
-      players,
-    };
-    // Only the actor may write their latch leaf (rules: auth.uid == $uid). Peer
-    // exits from the finished phase already live under resultsExitedBy/{peer}.
-    rematchUpdates[`resultsExitedBy/${actorUid}`] = true;
-    await update(sessionRef(normalized), rematchUpdates);
-  } catch (error) {
-    if (isFirebasePermissionDenied(error)) {
-      const again = await get(sessionRef(normalized));
-      if (again.exists() && (again.val() as GameSession).status === 'waiting') {
-        // Peer already opened waiting — still ensure *this* actor's latch leaf.
-        // Without it, multi-sim inactive → online:false hides us from their lobby.
-        await markResultsExited(normalized, actorUid);
-        await clearAllPlayerWords(
-          normalized,
-          Object.keys(preSession.players),
-          actorUid,
-          preSession.organizerId,
-          { everyPlayer: actorUid === preSession.organizerId },
-        );
-        await clearSessionWordMaps(normalized);
-        await clearAllActiveRoundCachesForGame(normalized);
-        if (actorUid === preSession.organizerId) {
-          setOrganizerWaitingRoom(normalized);
+    const result = await runRtdbTransaction(
+      sessionRef(normalized),
+      (current) => {
+        if (current == null) {
+          return undefined;
         }
-        return;
-      }
+        const session = current as GameSession;
+        // Abort when a peer already opened waiting (or status moved on) — never
+        // rewrite an open rematch lobby from a stale finished snapshot.
+        if (session.status !== 'finished' || !session.players[actorUid]) {
+          return undefined;
+        }
+        const playerIds = Object.keys(session.players);
+        const resolvedSettings = resolveGameSessionSettings(session.settings, playerIds.length);
+        nextBaseWordRound = (session.baseWordRound ?? 0) + 1;
+        const players: Record<string, GameSessionPlayer> = {};
+        for (const uid of playerIds) {
+          players[uid] = {
+            ...session.players[uid],
+            ...rematchWaitingPlayerPatch(session, uid, actorUid),
+          };
+        }
+        const waitingForPicker: GameSession = {
+          ...session,
+          status: 'waiting',
+          baseWord: '',
+          baseWordChosenBy: null,
+          baseWordRound: nextBaseWordRound,
+          players,
+        };
+        const baseWordPickerUid = currentBaseWordPickerUid(waitingForPicker);
+        // Keep server `resultsExitedBy` intact — actor latch is a leaf write after
+        // commit (rules: auth.uid == $uid; whole-node replace wipes peers).
+        return {
+          ...session,
+          status: 'waiting',
+          settings: resolvedSettings,
+          timerEndsAt: null,
+          roundStartedAt: null,
+          roundTimerBudgetSeconds: null,
+          roundPlayedSeconds: null,
+          baseWord: '',
+          baseWordChosenBy: null,
+          baseWordRound: nextBaseWordRound,
+          baseWordPickerUid,
+          earlyFinishVote: null,
+          pauseVote: null,
+          pauseState: null,
+          resumeVote: null,
+          createdAt: getServerNow(),
+          purgeAfterAt: null,
+          finishedAt: null,
+          liveRoundPlayerUids: null,
+          isPublic: false,
+          publicPublishedAt: null,
+          players,
+        };
+      },
+      { applyLocally: false },
+    );
+
+    if (result.committed) {
+      committedWaiting = result.snapshot.val() as GameSession;
     }
-    throw error;
+  } catch (error) {
+    if (!isFirebasePermissionDenied(error)) {
+      throw error;
+    }
   }
 
-  const after = await get(sessionRef(normalized));
-  if (!after.exists() || (after.val() as GameSession).status !== 'waiting') {
+  if (!committedWaiting) {
+    const again = await get(sessionRef(normalized));
+    if (again.exists() && (again.val() as GameSession).status === 'waiting') {
+      await joinAlreadyOpenRematchWaitingLobby(normalized, actorUid, again.val() as GameSession);
+      return;
+    }
     throw new Error('REMATCH_FAILED');
   }
 
-  // Confirm latch survived the multi-path rematch update (leaf write).
+  if (committedWaiting.status !== 'waiting') {
+    throw new Error('REMATCH_FAILED');
+  }
+
+  // Confirm latch via leaf write (rules forbid writing peers' latch leaves).
   await markResultsExited(normalized, actorUid);
 
   // Clear words AFTER `waiting` so peers still on results flip to archive hydrate
   // instead of finished+empty `player_words` (permission_denied on peer reads in waiting).
   await clearAllPlayerWords(
     normalized,
-    Object.keys(preSession.players),
+    Object.keys(committedWaiting.players),
     actorUid,
-    preSession.organizerId,
-    { everyPlayer: actorUid === preSession.organizerId },
+    committedWaiting.organizerId,
+    { everyPlayer: actorUid === committedWaiting.organizerId },
   );
   await clearSessionWordMaps(normalized);
 
   await clearAllActiveRoundCachesForGame(normalized);
-  if (actorUid === preSession.organizerId) {
+  if (actorUid === committedWaiting.organizerId) {
     setOrganizerWaitingRoom(normalized);
   }
+  const after = await get(sessionRef(normalized));
+  const details = after.exists() ? (after.val() as GameSession) : committedWaiting;
+  devLogAction('opened rematch lobby', {
+    room: normalized,
+    round: nextBaseWordRound,
+    details: formatLiveRosterDetails(details),
+  });
 }
 
 /**

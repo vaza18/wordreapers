@@ -15,6 +15,7 @@ import {
 } from '@/lib/online/session/play-session-bootstrap';
 import { shouldLatchRematchLobbyOptIn } from '@/lib/online/session/rematch-lobby-opt-in-latch';
 import { reconcilePlayerPresence } from '@/lib/online/presence/reconcile-player-presence';
+import { isInLiveRound } from '@/lib/online/presence/live-round-membership';
 import { useProfileStore } from '@/store/profile-store';
 
 type UseLiveRoundLobbyScreenParams = {
@@ -179,9 +180,19 @@ export function useLiveRoundLobbyScreen({
         if (cancelled) {
           return;
         }
-        const liveSession = (await readGameSessionSnapshot(gameId)) ?? sessionRef.current;
+        let liveSession = (await readGameSessionSnapshot(gameId)) ?? sessionRef.current;
         if (!liveSession) {
           return;
+        }
+        // Rematch start may have omitted this opted-in peer from liveRoundPlayerUids;
+        // one rejoin can race — retry once before navigating into a solo-looking play.
+        if (
+          liveSession.status === 'playing' &&
+          (liveSession.baseWordRound ?? 0) > 0 &&
+          !isInLiveRound(liveSession, myUid)
+        ) {
+          await reconcilePlayerPresence(gameId, myUid, { name, gender, avatarColorIndex });
+          liveSession = (await readGameSessionSnapshot(gameId)) ?? liveSession;
         }
         const snapshot = { ...liveSession, id: gameId };
         if (claimPlayRouteNavigation(gameId, snapshot)) {

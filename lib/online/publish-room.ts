@@ -2,6 +2,7 @@ import { runRtdbTransaction } from '../firebase/rtdb-transaction.js';
 
 import type { OrganizerSoloWord } from '@/store/organizer-solo-store';
 
+import { devLogAction } from '../debug/dev-log.js';
 import type { PlayerProfile } from '../profile/player-profile.js';
 import { ensureAnonymousAuth } from '../firebase/auth.js';
 import { markPlayerOnline } from '../firebase/game-session-service.js';
@@ -128,6 +129,13 @@ export async function publishWaitingRoom(input: PublishWaitingRoomInput): Promis
   setLocalRoomPublishedGameId(input.draft.draftId, gameId);
   setOrganizerWaitingRoom(gameId);
 
+  devLogAction('created room', {
+    actor: input.draft.profile.name,
+    room: gameId,
+    round: 0,
+    details: input.setup.baseWord ? `baseWord="${input.setup.baseWord}"` : 'no base word yet',
+  });
+
   return gameId;
 }
 
@@ -206,6 +214,13 @@ export async function publishPlayingSoloRound(input: PublishPlayingSoloInput): P
 
   updateLocalRoomDraft(input.draft.draftId, { setup: input.setup, publishedGameId: gameId });
   setLocalRoomPublishedGameId(input.draft.draftId, gameId);
+
+  devLogAction('published playing solo round', {
+    actor: input.draft.profile.name,
+    room: normalized,
+    round: 0,
+    details: `baseWord="${input.setup.baseWord}"`,
+  });
 
   return gameId;
 }

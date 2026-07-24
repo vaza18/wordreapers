@@ -71,10 +71,22 @@ describe('resolvePlayScreenActions.shouldRejoin', () => {
       1,
       {
         org: { name: 'Org', wordCount: 0, score: 0, online: true },
-        p3: { name: 'Three', wordCount: 8, score: 8, online: false },
+        p3: { name: 'Three', wordCount: 0, score: 0, online: false },
       },
       ['org'],
     );
     expect(shouldRejoin(session, 'p3', false, 1)).toBe(false);
+  });
+
+  it('is true when online on play but missing from rematch liveRoundPlayerUids', () => {
+    const session = playingSession(
+      2,
+      {
+        org: { name: 'Org', wordCount: 1, score: 1, online: true },
+        p2: { name: 'Two', wordCount: 1, score: 1, online: true },
+      },
+      ['org'],
+    );
+    expect(shouldRejoin(session, 'p2', false, 2)).toBe(true);
   });
 });

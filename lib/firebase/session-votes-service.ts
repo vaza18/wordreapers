@@ -2,6 +2,7 @@ import { get } from 'firebase/database';
 
 import { runRtdbTransaction } from './rtdb-transaction.js';
 
+import { devLogAction } from '../debug/dev-log.js';
 import {
   allRequiredVotedYes,
   anyRequiredVotedNo,
@@ -27,6 +28,18 @@ import { normalizeRoomCode } from './room-code.js';
 import { sessionRef } from './session-ref.js';
 import type { GameSession, GameSessionPlayer } from './types.js';
 import { displayPlayerName } from '../online/public-lobby/display-player-name.js';
+
+function logVoteAction(
+  action: string,
+  gameId: string,
+  options?: { details?: string; level?: 'event' | 'detail' },
+): void {
+  devLogAction(action, {
+    level: options?.level,
+    room: normalizeRoomCode(gameId),
+    details: options?.details,
+  });
+}
 
 export type VoteChoice = 'yes' | 'no';
 
@@ -134,7 +147,7 @@ function resumePlayingSession(session: GameSession): GameSession {
  * When no online opponents remain, finishes immediately.
  */
 export async function proposeEarlyFinish(gameId: string, uid: string): Promise<void> {
-  await runSessionVoteTransaction(
+  const committed = await runSessionVoteTransaction(
     gameId,
     (session) => {
       const required = earlyFinishRequiredVoterIds(session, uid);
@@ -151,6 +164,9 @@ export async function proposeEarlyFinish(gameId: string, uid: string): Promise<v
     },
     { requirePlaying: true },
   );
+  if (committed) {
+    logVoteAction('proposed ending the round early', gameId);
+  }
 }
 
 /**
@@ -161,7 +177,7 @@ export async function voteEarlyFinish(
   uid: string,
   choice: VoteChoice,
 ): Promise<void> {
-  await runSessionVoteTransaction(
+  const committed = await runSessionVoteTransaction(
     gameId,
     (session) => {
       const vote = session.earlyFinishVote;
@@ -186,6 +202,14 @@ export async function voteEarlyFinish(
     },
     { requirePlaying: true },
   );
+  if (committed) {
+    logVoteAction(
+      choice === 'yes'
+        ? 'voted yes on ending the round early'
+        : 'voted no on ending the round early',
+      gameId,
+    );
+  }
 }
 
 /**
@@ -224,7 +248,7 @@ export async function resolveEarlyFinishVoteIfExpired(gameId: string): Promise<v
  * Cancel an active early-finish proposal (proposer only).
  */
 export async function cancelEarlyFinishVote(gameId: string, uid: string): Promise<void> {
-  await runSessionVoteTransaction(
+  const committed = await runSessionVoteTransaction(
     gameId,
     (session) => {
       const vote = session.earlyFinishVote;
@@ -236,6 +260,9 @@ export async function cancelEarlyFinishVote(gameId: string, uid: string): Promis
     },
     { requirePlaying: true },
   );
+  if (committed) {
+    logVoteAction('cancelled ending the round early', gameId, { level: 'detail' });
+  }
 }
 
 /**
@@ -248,7 +275,7 @@ export async function proposeAddTime(
   uid: string,
   addMinutes: number,
 ): Promise<boolean> {
-  return runSessionVoteTransaction(
+  const committed = await runSessionVoteTransaction(
     gameId,
     (session) => {
       if (!session.players[uid] || session.pauseState?.active) {
@@ -276,13 +303,17 @@ export async function proposeAddTime(
     },
     { requirePlaying: true },
   );
+  if (committed) {
+    logVoteAction('proposed adding time', gameId, { details: `+${addMinutes} min` });
+  }
+  return committed;
 }
 
 /**
  * Vote on adding time; extends timer when all online opponents agree.
  */
 export async function voteAddTime(gameId: string, uid: string, choice: VoteChoice): Promise<void> {
-  await runSessionVoteTransaction(
+  const committed = await runSessionVoteTransaction(
     gameId,
     (session) => {
       const vote = session.addTimeVote;
@@ -309,13 +340,19 @@ export async function voteAddTime(gameId: string, uid: string, choice: VoteChoic
     },
     { requirePlaying: true },
   );
+  if (committed) {
+    logVoteAction(
+      choice === 'yes' ? 'voted yes on adding time' : 'voted no on adding time',
+      gameId,
+    );
+  }
 }
 
 /**
  * Cancel an active add-time proposal (proposer only).
  */
 export async function cancelAddTimeVote(gameId: string, uid: string): Promise<void> {
-  await runSessionVoteTransaction(
+  const committed = await runSessionVoteTransaction(
     gameId,
     (session) => {
       const vote = session.addTimeVote;
@@ -327,6 +364,9 @@ export async function cancelAddTimeVote(gameId: string, uid: string): Promise<vo
     },
     { requirePlaying: true },
   );
+  if (committed) {
+    logVoteAction('cancelled adding time', gameId, { level: 'detail' });
+  }
 }
 
 /**
@@ -366,7 +406,7 @@ export async function resolveAddTimeVoteIfExpired(gameId: string): Promise<void>
  * Propose pausing the round. Pauses immediately when no online opponents remain.
  */
 export async function proposePause(gameId: string, uid: string): Promise<void> {
-  await runSessionVoteTransaction(
+  const committed = await runSessionVoteTransaction(
     gameId,
     (session) => {
       if (session.pauseState?.active) {
@@ -390,13 +430,16 @@ export async function proposePause(gameId: string, uid: string): Promise<void> {
     },
     { requirePlaying: true },
   );
+  if (committed) {
+    logVoteAction('proposed pausing the round', gameId);
+  }
 }
 
 /**
  * Vote on pause; activates pause when all online opponents agree.
  */
 export async function votePause(gameId: string, uid: string, choice: VoteChoice): Promise<void> {
-  await runSessionVoteTransaction(
+  const committed = await runSessionVoteTransaction(
     gameId,
     (session) => {
       const vote = session.pauseVote;
@@ -421,13 +464,19 @@ export async function votePause(gameId: string, uid: string, choice: VoteChoice)
     },
     { requirePlaying: true },
   );
+  if (committed) {
+    logVoteAction(
+      choice === 'yes' ? 'voted yes on pausing the round' : 'voted no on pausing the round',
+      gameId,
+    );
+  }
 }
 
 /**
  * Cancel an active pause proposal (proposer only).
  */
 export async function cancelPauseVote(gameId: string, uid: string): Promise<void> {
-  await runSessionVoteTransaction(
+  const committed = await runSessionVoteTransaction(
     gameId,
     (session) => {
       const vote = session.pauseVote;
@@ -439,13 +488,16 @@ export async function cancelPauseVote(gameId: string, uid: string): Promise<void
     },
     { requirePlaying: true },
   );
+  if (committed) {
+    logVoteAction('cancelled pausing the round', gameId, { level: 'detail' });
+  }
 }
 
 /**
  * Propose leaving pause. Resumes immediately when no online opponents remain.
  */
 export async function proposeResume(gameId: string, uid: string): Promise<void> {
-  await runSessionVoteTransaction(
+  const committed = await runSessionVoteTransaction(
     gameId,
     (session) => {
       if (!session.pauseState?.active || session.resumeVote) {
@@ -466,13 +518,16 @@ export async function proposeResume(gameId: string, uid: string): Promise<void> 
     },
     { requirePlaying: true },
   );
+  if (committed) {
+    logVoteAction('proposed resuming after pause', gameId);
+  }
 }
 
 /**
  * Vote on leaving pause; resumes when all online opponents agree or after 30s.
  */
 export async function voteResume(gameId: string, uid: string, choice: VoteChoice): Promise<void> {
-  await runSessionVoteTransaction(
+  const committed = await runSessionVoteTransaction(
     gameId,
     (session) => {
       const vote = session.resumeVote;
@@ -497,13 +552,19 @@ export async function voteResume(gameId: string, uid: string, choice: VoteChoice
     },
     { requirePlaying: true },
   );
+  if (committed) {
+    logVoteAction(
+      choice === 'yes' ? 'voted yes on resuming after pause' : 'voted no on resuming after pause',
+      gameId,
+    );
+  }
 }
 
 /**
  * Cancel an active resume proposal (proposer only).
  */
 export async function cancelResumeVote(gameId: string, uid: string): Promise<void> {
-  await runSessionVoteTransaction(
+  const committed = await runSessionVoteTransaction(
     gameId,
     (session) => {
       const vote = session.resumeVote;
@@ -515,6 +576,9 @@ export async function cancelResumeVote(gameId: string, uid: string): Promise<voi
     },
     { requirePlaying: true },
   );
+  if (committed) {
+    logVoteAction('cancelled resuming after pause', gameId, { level: 'detail' });
+  }
 }
 
 /**

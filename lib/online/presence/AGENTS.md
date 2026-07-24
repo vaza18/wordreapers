@@ -4,7 +4,7 @@ Micro-invariants for this folder only. Full rules: [`docs/online-multiplayer-rul
 
 ## Must not break
 
-- **Presence handoff** (ADR-004) — in-room navigation (lobby ↔ play ↔ results) must call `handoffPlayerPresence()` before navigate; unmount must not mark offline when handoff is consumed.
+- **Lobby presence policy** — always `background-only` via `lobbyPresenceOfflinePolicy` while the lobby screen is mounted; never flip to play `inactive` policy on `waiting → playing` (remount cleanup false-marks offline before handoff).
 - `online` / `hasLeft` / `liveRoundPlayerUids` drive lobby visibility and round membership — see `live-round-membership.ts`.
 - Voluntary leave: `hasLeft === true` **and** `online === false`. Stale `hasLeft` while `online === true` still counts as active.
 - **Intentional leave ≠ background offline** — `beginVoluntaryLeave` before navigate to left; `markPlayerOffline` / presence-unmount must not write `online: false` alone while leave is in flight (avoids «не в грі» toast before «залишив гру»).
@@ -19,6 +19,8 @@ Micro-invariants for this folder only. Full rules: [`docs/online-multiplayer-rul
 - `tests/presence-handoff.test.ts`
 - `tests/play-toast-events.test.ts`
 - `tests/app-presence-state.test.ts`
+- `tests/lobby-presence-policy.test.ts`
+- `tests/use-player-online-presence.test.tsx`
 
 ## Regression log
 

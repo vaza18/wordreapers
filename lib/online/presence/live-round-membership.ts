@@ -1,10 +1,7 @@
 import type { GameSession, GameSessionPlayer } from '../../firebase/types.js';
 
 import { assertRematchWaitingPlayerPatch } from '../invariants.js';
-import {
-  isRematchDurableLobbyOptIn,
-  isRematchWaitingLobbyOptedIn,
-} from '../rematch/rematch-waiting-lobby.js';
+import { isRematchWaitingLobbyOptedIn } from '../rematch/rematch-waiting-lobby.js';
 
 /**
  * Who enters `liveRoundPlayerUids` when waiting → playing.
@@ -27,11 +24,9 @@ export function waitingLobbyOptInUids(
     if (!player) {
       return false;
     }
+    // Voluntary leave opts out of the next round — latch must not resurrect them.
     if (player.hasLeft === true) {
-      if (!rematchRound || !isRematchDurableLobbyOptIn(session, uid)) {
-        return false;
-      }
-      // Stale hasLeft with durable rematch seat still counts for round-start roster.
+      return false;
     }
     if (player.online === true) {
       return true;
@@ -201,14 +196,22 @@ export function hasMultiplayerRound(
   if ((session.liveRoundPlayerUids ?? []).some((id) => id !== myUid)) {
     return true;
   }
-  // Mid-round joiners may appear in `players` before `liveRoundPlayerUids` catches up
-  // (join metadata write raced). Online peers → multipplayer UI for the solo starter.
+  // Mid-round joiners / presence lag: peer may be missing from liveRoundPlayerUids or
+  // briefly `online: false` (multi-sim) while already scoring in this rematch round.
+  // Without this the starter keeps solo chrome (stats explain, no rank) while the peer
+  // votes and sees both players (WAGTJ round 2).
   return Object.keys(session.players).some((id) => {
     if (id === myUid) {
       return false;
     }
     const player = session.players[id];
-    return player != null && player.hasLeft !== true && player.online === true;
+    if (!player || player.hasLeft === true) {
+      return false;
+    }
+    if (player.online === true) {
+      return true;
+    }
+    return (player.wordCount ?? 0) > 0 || (player.score ?? 0) > 0;
   });
 }
 

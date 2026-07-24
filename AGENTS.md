@@ -8,19 +8,20 @@ Almost all code is written and maintained by AI agents. This file is the single 
 
 ## Where to find the truth
 
-| Topic                                                                   | Source of truth                                                                                        |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Online room state machine (rematch, presence, opt-in, frozen round)     | [`docs/online-multiplayer-rules.md`](docs/online-multiplayer-rules.md)                                 |
-| Firebase RTDB schema and read/write policies                            | [`docs/firebase_schema.md`](docs/firebase_schema.md)                                                   |
-| Word validation and normalization                                       | [`docs/validation_test_cases.md`](docs/validation_test_cases.md), [`lib/dictionary/`](lib/dictionary/) |
-| Feature status and milestones                                           | [`docs/wordreapers_plan.md`](docs/wordreapers_plan.md)                                                 |
-| Screen flows and UX mockups                                             | [`docs/wordreapers_screens.html`](docs/wordreapers_screens.html)                                       |
-| Past bugs and regression lessons                                        | [`docs/known-issues.md`](docs/known-issues.md)                                                         |
-| Why non-obvious design choices exist                                    | [`docs/decisions.md`](docs/decisions.md)                                                               |
-| Rolling agent session notes (promote to permanent docs when stable)     | [`docs/agent-notes.md`](docs/agent-notes.md)                                                           |
-| Legal / about copy                                                      | [`docs/legal/`](docs/legal/), [`docs/wordreapers_about.md`](docs/wordreapers_about.md)                 |
-| Release CI (GitHub Release → Firebase backend gate → Play / TestFlight) | [`docs/release-ci.md`](docs/release-ci.md)                                                             |
-| Firebase backend CI (rules + functions deploy)                          | [`docs/firebase-deploy-ci.md`](docs/firebase-deploy-ci.md)                                             |
+| Topic                                                                   | Source of truth                                                                                                      |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Online room state machine (rematch, presence, opt-in, frozen round)     | [`docs/online-multiplayer-rules.md`](docs/online-multiplayer-rules.md)                                               |
+| Firebase RTDB schema and read/write policies                            | [`docs/firebase_schema.md`](docs/firebase_schema.md)                                                                 |
+| Word validation and normalization                                       | [`docs/validation_test_cases.md`](docs/validation_test_cases.md), [`lib/dictionary/`](lib/dictionary/)               |
+| Feature status and milestones                                           | [`docs/wordreapers_plan.md`](docs/wordreapers_plan.md)                                                               |
+| Screen flows and UX mockups                                             | [`docs/wordreapers_screens.html`](docs/wordreapers_screens.html)                                                     |
+| Past bugs and regression lessons                                        | [`docs/known-issues.md`](docs/known-issues.md)                                                                       |
+| Why non-obvious design choices exist                                    | [`docs/decisions.md`](docs/decisions.md)                                                                             |
+| Rolling agent session notes (promote to permanent docs when stable)     | [`docs/agent-notes.md`](docs/agent-notes.md)                                                                         |
+| Legal / about copy                                                      | [`docs/legal/`](docs/legal/), [`docs/wordreapers_about.md`](docs/wordreapers_about.md)                               |
+| Release CI (GitHub Release → Firebase backend gate → Play / TestFlight) | [`docs/release-ci.md`](docs/release-ci.md)                                                                           |
+| Firebase backend CI (rules + functions deploy)                          | [`docs/firebase-deploy-ci.md`](docs/firebase-deploy-ci.md)                                                           |
+| Dev Metro action logs (`EXPO_PUBLIC_LOG_LEVEL`)                         | [`lib/debug/dev-log.ts`](lib/debug/dev-log.ts), [`.env.example`](.env.example), [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 
 Types for Firebase live in [`lib/firebase/types.ts`](lib/firebase/types.ts). Shared game logic is in [`lib/game/`](lib/game/). Online session logic is in [`lib/online/`](lib/online/) (~100 files — highest regression risk).
 

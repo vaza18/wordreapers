@@ -6,10 +6,17 @@ import { createLocalRoomDraft } from '@/lib/online/local-room-draft';
 import type { PlayerProfile } from '@/lib/profile/player-profile';
 import { abandonTrackedOrganizerWaitingRoom } from '@/lib/online/abandon-tracked-waiting-room';
 import { useFirebaseStore } from '@/store/firebase-store';
+import { devLogAction } from '@/lib/debug/dev-log';
 
 function openLocalRoomSetup(profile: PlayerProfile): void {
   const code = generateRoomCode();
   createLocalRoomDraft(code, profile);
+  devLogAction('started local room setup', {
+    actor: profile.name,
+    room: code,
+    round: 0,
+    level: 'detail',
+  });
   router.push({ pathname: '/online/setup', params: { gameId: code } });
 }
 

@@ -79,9 +79,27 @@ describe('isLobbyVisiblePlayer', () => {
     expect(isLobbyVisiblePlayer(s, 'p2')).toBe(false);
   });
 
-  it('keeps stale-hasLeft first rematcher visible via durable latch (JZ4Y5)', () => {
-    // Late joiner must still see the organizer who opened the round and may have a
-    // stale hasLeft from a leave/rejoin race while latch / word / pickerUid stand.
+  it('hides voluntarily left rematch players even with durable latch (75AGB)', () => {
+    // Picker left to home — must not stay visible as «waiting for them to pick».
+    const s = session({
+      baseWordRound: 6,
+      baseWord: '',
+      baseWordChosenBy: null,
+      baseWordPickerUid: 'p2',
+      baseWordPickerOrder: ['org', 'p2'],
+      resultsExitedBy: { org: true, p2: true },
+      players: {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        p2: { name: 'Two', wordCount: 0, score: 0, online: false, hasLeft: true },
+      },
+    });
+    expect(isLobbyVisiblePlayer(s, 'p2')).toBe(false);
+    expect(isLobbyVisiblePlayer(s, 'org')).toBe(true);
+  });
+
+  it('keeps briefly offline first rematcher visible via durable latch (JZ4Y5)', () => {
+    // Late joiner must still see the organizer who opened the round while multi-sim
+    // marks them online:false — without hasLeft (true leave uses the test above).
     const s = session({
       baseWordRound: 6,
       baseWord: 'мінітракторець',
@@ -90,7 +108,7 @@ describe('isLobbyVisiblePlayer', () => {
       baseWordPickerOrder: ['org', 'p2'],
       resultsExitedBy: { org: true, p2: true },
       players: {
-        org: { name: 'Org', wordCount: 0, score: 0, online: false, hasLeft: true },
+        org: { name: 'Org', wordCount: 0, score: 0, online: false },
         p2: { name: 'Two', wordCount: 0, score: 0, online: true },
       },
     });

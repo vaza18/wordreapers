@@ -8,6 +8,34 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 <!-- Add dated notes at the top -->
 
+### 2026-07-24 — Review follow-up: §5 roster + capped lobby heal
+
+- Synced §5 `liveRoundPlayerUids` wording with §3 / `waitingLobbyOptInUids` (latch-inclusive at start). Rematch lobby base-word RTDB heal poll capped at 15×2s via `lobby-rematch-base-word-heal`; focus/AppState/`justOptedIn` heals unchanged.
+
+### 2026-07-24 — 75AGB picker leave must transfer seat
+
+- `hasLeft` forfeits rematch picker/visibility even with latch; only brief offline without hasLeft keeps durable seat. `leaveGameSession` already calls `syncLobbyPickerState`.
+
+### 2026-07-24 — AH2TN second rematch rewrite
+
+- Symptom log: first `opened rematch lobby` then second also `opened rematch lobby` (not `joined…`) with peer `off` and no latch → divergent base words. Fix: rematch transition is transactional; already-waiting → join only.
+
+### 2026-07-24 — Roster details in multiplayer Metro logs
+
+- `formatLiveRosterDetails`: `liveUids=[…] roster=Name#uid[on|off,live,latch,pick,chose,wN]` on start / rematch / rejoin / opt-in.
+
+### 2026-07-24 — WAGTJ solo play UI vs peer vote
+
+- Starter solo chrome while peer has words + early-finish vote: `hasMultiplayerRound` ignored offline peers who already scored; missing `liveRoundPlayerUids` entry. Heal via score-aware multipplayer + play shouldRejoin when online/scoring but not in live uids.
+
+### 2026-07-24 — WAGTJ false offline at round start
+
+- Lobby must not flip presence policy to `background-and-inactive` on `waiting→playing` while still mounted — remount cleanup marks offline before play handoff. Always `lobbyPresenceOfflinePolicy()` → `background-only`.
+
+### 2026-07-24 — Dev multiplayer action logs
+
+- Unified logger: `lib/debug/dev-log.ts` + `EXPO_PUBLIC_LOG_LEVEL` (`none|error|event|detail|all`). Prod always silent (`!__DEV__`). Default in dev: `event` (local actions). Remote peer observations need `detail+`. Lexicon / submitWord timings need `all` (no longer emit on bare `__DEV__`).
+
 ### 2026-07-24 — JZ4Y5 late joiner hides first rematcher
 
 - Blink on peer list when late joiner comes online was `setPlayerOnlinePresence` → `reconcileLobbyPickerState` clearing word. Stale `hasLeft` also blocked durable latch/picker/word visibility. Fix: durable opt-in survives hasLeft; no picker reconcile on presence; pick-word `background-only`.

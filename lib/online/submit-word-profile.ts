@@ -1,6 +1,9 @@
 /**
  * Dev-only timing for online word submit (debounce → Firebase → UI).
+ * Emits only when `EXPO_PUBLIC_LOG_LEVEL=all` (and `__DEV__`).
  */
+import { devLog, isDevLogEnabled } from '../debug/dev-log.js';
+
 export interface SubmitWordProfile {
   mark(label: string): void;
   finish(): void;
@@ -24,13 +27,14 @@ function logSubmitLatencySummary(): void {
   const sorted = [...submitLatencyTotals].sort((a, b) => a - b);
   const p50 = percentile(sorted, 50);
   const p95 = percentile(sorted, 95);
-  console.log(
+  devLog(
+    'all',
     `[submitWord latency] n=${sorted.length} p50=${p50.toFixed(1)}ms p95=${p95.toFixed(1)}ms`,
   );
 }
 
 export function createSubmitWordProfile(normalized: string): SubmitWordProfile | null {
-  if (typeof __DEV__ === 'undefined' || !__DEV__) {
+  if (!isDevLogEnabled('all')) {
     return null;
   }
   const startedAt = performance.now();
@@ -53,7 +57,10 @@ export function createSubmitWordProfile(normalized: string): SubmitWordProfile |
       }
       finished = true;
       const totalMs = performance.now() - startedAt;
-      console.log(`[submitWord ${normalized}] total ${totalMs.toFixed(1)}ms`, segments.join(' | '));
+      devLog(
+        'all',
+        `[submitWord ${normalized}] total ${totalMs.toFixed(1)}ms ${segments.join(' | ')}`,
+      );
       submitLatencyTotals.push(totalMs);
       if (submitLatencyTotals.length >= SUBMIT_LATENCY_SUMMARY_EVERY) {
         logSubmitLatencySummary();
@@ -65,7 +72,7 @@ export function createSubmitWordProfile(normalized: string): SubmitWordProfile |
 
 /** Dev-only: log rolling submit latency summary (e.g. on app background). */
 export function flushSubmitLatencySummary(): void {
-  if (typeof __DEV__ === 'undefined' || !__DEV__) {
+  if (!isDevLogEnabled('all')) {
     return;
   }
   logSubmitLatencySummary();

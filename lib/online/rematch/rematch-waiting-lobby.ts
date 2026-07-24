@@ -76,19 +76,16 @@ export function isLobbyVisiblePlayer(session: GameSession, uid: string): boolean
   if (!player) {
     return false;
   }
-  // INVARIANT (see docs/known-issues.md — 2026-07 Left players visible in rematch waiting lobby):
-  // hasLeft without durable rematch seat → not visible. Stale hasLeft while latch /
-  // pickerUid / committed word still mark rematch opt-in must stay visible — otherwise
-  // the late joiner sees «Гравці (1)» and steals pick (JZ4Y5).
+  // INVARIANT (see docs/known-issues.md — Left players / 75AGB picker leave):
+  // Voluntary `hasLeft` hides the player even with rematch latch / pickerUid / word.
+  // Brief `online: false` without hasLeft still uses durable opt-in below (JZ4Y5).
   if (player.hasLeft === true) {
-    if (!isRematchWaitingLobby(session) || !isRematchDurableLobbyOptIn(session, uid)) {
-      return false;
-    }
+    return false;
   }
   if (!isRematchWaitingLobby(session)) {
     return true;
   }
   const visible = isRematchWaitingLobbyOptedIn(session, uid);
-  assertLobbyVisiblePlayerState(uid, player, visible, isRematchDurableLobbyOptIn(session, uid));
+  assertLobbyVisiblePlayerState(uid, player, visible);
   return visible;
 }

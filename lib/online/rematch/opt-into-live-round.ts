@@ -4,6 +4,8 @@ import {
   tryReadGameSessionSnapshot,
   type GameSessionSnapshot,
 } from '../../firebase/game-session-service.js';
+import { formatLiveRosterDetails } from '../../debug/format-session-roster-log.js';
+import { devLogAction } from '../../debug/dev-log.js';
 import type { PlayerProfile } from '../../profile/player-profile.js';
 
 import { resolvePostJoinRoute } from '../post-join-route.js';
@@ -61,5 +63,11 @@ export async function optIntoLiveRound(
   if (route.pathname === '/online/play/[gameId]') {
     seedPlaySessionBootstrap(session);
   }
+  devLogAction('opted into rematch / live round', {
+    actor: profile.name,
+    room: gameId,
+    round: session.baseWordRound ?? finishedBaseWordRound,
+    details: `status=${session.status} → ${route.pathname} ${formatLiveRosterDetails(session)}`,
+  });
   return route;
 }

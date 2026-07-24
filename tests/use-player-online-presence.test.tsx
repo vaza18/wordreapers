@@ -88,6 +88,19 @@ describe('usePlayerOnlinePresence', () => {
     expect(markPlayerOffline).toHaveBeenCalledWith('ABCD', 'org');
   });
 
+  it('policy remount without handoff marks offline (waiting→playing race if lobby flips policy)', () => {
+    function PolicyHost({ policy }: { policy: 'background-only' | 'background-and-inactive' }) {
+      usePlayerOnlinePresence('ABCD', 'org', true, policy);
+      return null;
+    }
+    const { rerender, unmount } = render(<PolicyHost policy="background-only" />);
+    expect(voluntaryLeaveWaitingLobbyIfMember).not.toHaveBeenCalled();
+    // Simulates old lobby bug: status becomes playing → switch to play offline policy.
+    rerender(<PolicyHost policy="background-and-inactive" />);
+    expect(voluntaryLeaveWaitingLobbyIfMember).toHaveBeenCalledWith('ABCD', 'org');
+    unmount();
+  });
+
   it('voluntarily leaves waiting lobby on unmount without handoff', () => {
     const { unmount } = render(<HookHost gameId="ABCD" uid="org" />);
     unmount();

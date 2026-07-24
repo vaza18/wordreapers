@@ -94,8 +94,16 @@ export function resolvePlayScreenActions(ctx: PlayScreenContext): PlayScreenActi
   let shouldRejoin = false;
   if (session.status === 'playing' && myUid && !reviewingPriorRound) {
     const player = session.players[myUid];
-    if (player && (player.hasLeft === true || player.online !== true)) {
-      shouldRejoin = isInLiveRound(fullSession, myUid) && player.hasLeft !== true;
+    if (player && player.hasLeft !== true) {
+      const inLive = isInLiveRound(fullSession, myUid);
+      if ((session.baseWordRound ?? 0) > 0 && !inLive) {
+        // Self-heal only when we look opted-in (online / already scoring) — not a
+        // passive offline roster member still listed from a prior round.
+        shouldRejoin =
+          player.online === true || (player.wordCount ?? 0) > 0 || (player.score ?? 0) > 0;
+      } else if (inLive && player.online !== true) {
+        shouldRejoin = true;
+      }
     }
   }
 
