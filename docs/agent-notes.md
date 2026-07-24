@@ -8,6 +8,113 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 <!-- Add dated notes at the top -->
 
+### 2026-07-24 — JZ4Y5 late joiner hides first rematcher
+
+- Blink on peer list when late joiner comes online was `setPlayerOnlinePresence` → `reconcileLobbyPickerState` clearing word. Stale `hasLeft` also blocked durable latch/picker/word visibility. Fix: durable opt-in survives hasLeft; no picker reconcile on presence; pick-word `background-only`.
+
+### 2026-07-24 — False lobby offline from multi-sim inactive
+
+- Waiting lobby presence: `background-only` (not inactive). Play keeps inactive→offline for lock-screen votes. Heal while waiting for rematch baseWord.
+
+### 2026-07-24 — Rematch visibility: late joiner steals pick
+
+- Root was not rotation math: late joiner’s client hid offline first rematcher (no latch/word yet on pick-word). `baseWordPickerUid` now counts as opt-in for visibility/eligibility.
+
+### 2026-07-24 — Rematch lobby asymmetric roster (YZS46)
+
+- First rematcher sees 2; picker sees 1. Local `rematchOptInLatched` ≠ RTDB latch. Latch refresh must run even when AppState inactive; do not mark online while inactive.
+
+### 2026-07-24 — Play UI frozen after screen lock (taps still submit)
+
+- Screenshot: peer standings 6 words vs local 5; timer ~1 min ahead; floating ghost «К»; empty draft. Heal on AppState `active`: clock, clear flies, remount keyboard, refetch own words.
+
+### 2026-07-24 — Standings sheet room progress
+
+- Standings sheet room progress = `Object.keys(displaySession.wordPlayers).length` (same as results `totalDistinctWords`); details must read `displaySession`, not live rematch session. ✕ close (no «Закрити»); tap room code copies via `expo-clipboard` (needs native rebuild after pod install).
+- `pod install` failing with Expo* Local Podspecs / Podfile.lock snapshot mismatch after adding a native Expo module: regenerate lock — `cd ios && rm -f Podfile.lock && pod install` (then `npm run ios`).
+
+### 2026-07-24 — Time-up results error trapped user (no Home)
+
+- timeout skipped local archive; modal had no escape. Seed coerce + Home on error.
+
+### 2026-07-24 — Screen lock at rematch start drops liveRoundPlayerUids
+
+- `waitingLobbyOptInUids` was online-only; latch/chosenBy + always include starter.
+
+### 2026-07-24 — «Грати ще» stuck on results while peer lobby shows joiner
+
+- Waiting rematch: navigate after latch+read; presence backgrounded. Playing still awaits presence.
+
+### 2026-07-24 — Second rematcher steals pick (DSSN2)
+
+- Round-3 rightful chooser’s word cleared when peer opted in (multi-sim offline). Sticky chosenBy + clear only when another player is rightful; rematch latch write self-only.
+
+### 2026-07-23 — Empty results list + player_words permission_denied
+
+- Rematch/waiting denies peer `player_words` reads; results showed «0 слів» with standings. Archive-first for pinned viewing round; clear words after `waiting`; spinner until words ready.
+
+### 2026-07-24 — Seat hold removed (WXAGN)
+
+- Product: first rematcher picks/starts; room-join-order rotation among opted-in; rightful later joiner takes seat before start. Seat hold contradicted §4 — removed.
+
+### 2026-07-23 — Round-2 pick stuck on organizer (QBQ4W)
+
+- chosenBy lock blocked rotation when second rematcher joined. Removed lock; latch eligibility remains for inactive steal case.
+
+### 2026-07-23 — Rematch lobby hides first rematcher (XM8EW)
+
+- Second «Грати ще» + multi-sim focus: peer `online:false` without latch → hidden. Concurrent rematch `resultsExitedBy: {actor}` object replace wiped first rematcher's latch; picker rotation cleared their word. Fix: leaf latch writes + presence re-latch + lock picker to chosenBy while word stands.
+
+### 2026-07-23 — Join fails on L8NN5 while host lobby looks open
+
+- RTDB truth: orphan shell (no `status`/`organizerId`) with leftover word/players. Join → `ROOM_NOT_JOINABLE` mislabeled as «приєднання закрито»; host zombie UI from heal that did not clear on null. Fix: orphan → `ROOM_NOT_FOUND`; lobby heal clears local session.
+
+### 2026-07-23 — Rematch second joiner steals pick-word (L8NN5)
+
+- ChosenBy-only was not enough (screenshot: org БЕРЕЗЕЦЬ/2 players vs peer ЛЕПІДОСИРЕН/1; RTDB had org word). Durable `resultsExitedBy` latch through rematch waiting + lobby AppState/focus RTDB heal. Full Metro reload before retesting two sims.
+
+### 2026-07-23 — Stale timer local finish vs remote add-time/pause
+
+- Frozen client (missed listener) keeps old `timerEndsAt`; peer extends/pauses solo. Expire finish fails on RTDB then forced local results. Heal: resync before `forceLocalRoundOver`. Hang not tied to organizer role.
+
+### 2026-07-23 — Pause vote peer miss + stuck cancel
+
+- Same class as resume: RN Modal for session votes + cancel with `applyLocally: false` and no local clear → dead cancel. Overlay + optimistic clear + RTDB re-read. Full Metro reload required if presence HMR still throws `beginPresenceWrite`.
+
+### 2026-07-23 — Presence repair crash + ghost resume after disconnect
+
+- After background: `repairPresenceIntentIfNeeded` threw `undefined is not a function` (`latestPresenceIntent` / HMR stale binding). Soften via `presenceWriteQueue.latestIntent` + guard. Vote txs: `applyLocally: false` so aborted disconnect cannot leave proposer-only `resumeVote` UI. Full Metro reload if HMR still looks wrong.
+
+### 2026-07-23 — Self offline on pause UI after unlock
+
+- Lock → unlock on pause: peer correctly saw «в грі»; unlocking client still showed self «не в грі». Heal: `markPlayerOnline` then `tryRead` on active; repair superseded offline writes.
+
+### 2026-07-23 — Stuck presence toasts after pause (two simulators)
+
+- Timer 16:32 → 13:33 (~3 min) with toasts still up — dismiss was frozen under AppState `inactive`, not a 3.8s UX wait. Fixed via wall-clock prune + opacity/fade fix + presence coalesce.
+
+### 2026-07-23 — Resume vote invisible on peer pause overlay
+
+- Peer kept «Готове продовжувати» while proposer had live `resumeVote` (two simulators). Pause overlay moved off RN Modal → absolute fill; AppState `active` re-reads session via `tryReadGameSessionSnapshot`.
+- Related: inactive→offline presence still applies when switching simulator focus — required set can shrink / auto-resume if peer is offline in RTDB.
+
+### 2026-07-23 — Review follow-ups (results ensure UX + expire dedupe)
+
+- `navigateToResults`: pin local time-up round; hold rematch round-key; ensure fail-fast incl. finished N+1; archive before replace for both `already_finished` and `rematch_advanced` (RTDB write else local seed); catch → modal error; expire draft clear only when not deferring.
+- Expire skip: `shouldSkipExpireFinishForPinnedTimeUp` uses `roundOverPendingResults` + pin (covers natural RTDB finish, not only `localRoundOverForced`).
+- Add-time clearing time-up: bumps `resultsNavEpochRef`, clears busy/error/inFlight so stale `errorOpenResultsFailed` cannot reappear on next time-up.
+- `useLiveRosterPlayerWords`: early-return (`!enabled` / empty roster) sets bootstrap complete via `shouldCompleteWordsBootstrapWithoutFetch`.
+- Rematch lobby: lobby→pick-word is **`push` + `fromLobby`** (not `replace` — that fired leave-home via `useSyncedStackBack`); pick-word skips presence when stacked; focus RTDB re-read; picker-only baseWord write; **opt-in latch** so peer becoming picker does not bounce first player to prior results.
+- High audit fixes (2026-07-23): archive rematch uses `rematchWaitingPlayerPatch`; lobby auto-join no longer treats organizer as opted-in by default; pause vote 30s silence → activate.
+- Presence: AppState `inactive` (iOS lock) also → `markPlayerOffline` — lock often never reaches `background`.
+- Residual: ~2s pre-`forceLocalRoundOver` rematch window (known-issues); `router.replace` rarely throws — busy may stick until unmount if nav no-ops.
+- Commit hygiene: prefer 3–4 commits (rejoin/routing | timer/results | word reset | docs) — not one mixed commit. Branch may be diverged from `origin/dev`.
+
+### 2026-07-21 — Post-1.3.5 multiplayer stability fixes
+
+- Shipped surgical fixes (not full online rollback): atomic `rejoinExistingPlayer`, post-join `isLiveParticipant` + `fromJoin` archive skip, play local word clear on `baseWordRound` bump, AppState-active presence reconcile, 00:00 submit gate + local round-over after failed `finishGameSessionIfExpired`.
+- App Check field metrics: see 2026-07-18 note (ops only until installs on 1.4.2+).
+
 ### 2026-07-18 — Store App Check 100% Invalid (web appId + missing EXPO_PUBLIC prod flag)
 
 - Confirmed via Firebase MCP: Android `…:android:6c8ea52a…`, iOS `…:ios:1bf134e3…`, web `…:web:a2fdb146…`. Local/CI used a **web** single `EXPO_PUBLIC_FIREBASE_APP_ID` (removed — platform ids only; see ADR-016).
