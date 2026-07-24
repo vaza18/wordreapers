@@ -8,6 +8,14 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 <!-- Add dated notes at the top -->
 
+### 2026-07-24 — Review follow-up: §5 roster + capped lobby heal
+
+- Synced §5 `liveRoundPlayerUids` wording with §3 / `waitingLobbyOptInUids` (latch-inclusive at start). Rematch lobby base-word RTDB heal poll capped at 15×2s via `lobby-rematch-base-word-heal`; focus/AppState/`justOptedIn` heals unchanged.
+
+### 2026-07-24 — 75AGB picker leave must transfer seat
+
+- `hasLeft` forfeits rematch picker/visibility even with latch; only brief offline without hasLeft keeps durable seat. `leaveGameSession` already calls `syncLobbyPickerState`.
+
 ### 2026-07-24 — AH2TN second rematch rewrite
 
 - Symptom log: first `opened rematch lobby` then second also `opened rematch lobby` (not `joined…`) with peer `off` and no latch → divergent base words. Fix: rematch transition is transactional; already-waiting → join only.

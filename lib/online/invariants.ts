@@ -50,17 +50,15 @@ export function assertRematchBootstrapSessionShape(session: GameSession): void {
 }
 
 /**
- * Voluntarily left players must not appear in rematch waiting lobby visibility,
- * unless a durable rematch seat (latch / pickerUid / committed word) still marks
- * them opted-in — stale `hasLeft` must not hide an already-joined peer.
+ * Voluntarily left players must not appear in rematch waiting lobby visibility.
+ * Durable latch does not override `hasLeft` (true leave forfeits the seat).
  */
 export function assertLobbyVisiblePlayerState(
   uid: string,
   player: GameSessionPlayer | undefined,
   visible: boolean,
-  durableRematchOptIn = false,
 ): void {
-  if (player?.hasLeft === true && visible && !durableRematchOptIn) {
+  if (player?.hasLeft === true && visible) {
     invariantFailure(`lobby visibility for ${uid}: hasLeft players must not be visible`);
   }
 }

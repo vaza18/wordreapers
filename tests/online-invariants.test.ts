@@ -164,8 +164,7 @@ describe('online invariants (canonical spec)', () => {
         assertLobbyVisiblePlayerState(
           'left',
           { name: 'Left', wordCount: 0, score: 0, hasLeft: true },
-          true,
-          true,
+          false,
         ),
       ).not.toThrow();
     });

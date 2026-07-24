@@ -8,6 +8,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — Picker left rematch lobby; peer stuck waiting for them (75AGB)
+
+- **Symptom:** Rightful rematch picker leaves to home; remaining player sees them offline in the list and UI still says «Чекаємо, поки … обере базове слово» — cannot pick/start.
+- **Cause:** Durable rematch opt-in (`resultsExitedBy` / `baseWordPickerUid` / chosenBy) kept `hasLeft` players eligible and lobby-visible, so `currentBaseWordPickerUid` / `syncLobbyPickerState` after `leaveGameSession` never transferred the seat.
+- **Fix:** Any `hasLeft` forfeits picker eligibility, rematch lobby visibility, and waiting-round opt-in roster; brief `online: false` without `hasLeft` still uses durable latch. Leave → sync moves seat to next online in rotation.
+- **Test:** `tests/online-base-word-picker.test.ts`, `tests/rematch-waiting-lobby.test.ts`, `tests/lobby-base-word-picker-reconcile.test.ts`
+- **Area:** `lib/online/base-word-picker.ts`, `lib/online/rematch/rematch-waiting-lobby.ts`, `lib/online/presence/live-round-membership.ts`
+
 ### 2026-07 — Second «Грати ще» reopens rematch and both pick different words (AH2TN)
 
 - **Symptom:** After round N results, first rematcher opens waiting + pick-word; second taps «Грати ще» and also lands on pick-word with «Гравці (1)» only self. Each commits a different base word; lobbies disagree on roster and word.
@@ -44,9 +52,9 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 - **Symptom:** Rematch lobby: peer has chosen base word + «Почати гру»; other client shows 📵 on that peer and «Чекаємо, поки … обере базове слово» with no word. Peer is not actually offline.
 - **Cause:** Focusing the other iOS simulator sets AppState `inactive` → `markPlayerOffline`. That policy is required for lock-screen votes during `playing`, but in waiting lobby it creates false offline and stale «waiting for pick» UI when the listener also missed `baseWord`.
-- **Fix:** Lobby / non-playing presence uses `background-only` offline policy (`inactive` ignored); play keeps `background-and-inactive`. Lobby re-heals RTDB every 2s while waiting for a rematch base word.
-- **Test:** `tests/app-presence-state.test.ts`, `tests/use-player-online-presence.test.tsx`
-- **Area:** `lib/online/presence/app-presence-state.ts`, `lib/online/presence/use-player-online-presence.ts`, `app/online/lobby/[gameId].tsx`
+- **Fix:** Lobby / non-playing presence uses `background-only` offline policy (`inactive` ignored); play keeps `background-and-inactive`. Lobby re-heals RTDB on focus / AppState `active` / `optedIn=1`, plus a **capped** 2s poll (~30s max) while rematch waiting still has no base word (`lobby-rematch-base-word-heal`).
+- **Test:** `tests/app-presence-state.test.ts`, `tests/use-player-online-presence.test.tsx`, `tests/lobby-rematch-base-word-heal.test.ts`
+- **Area:** `lib/online/presence/app-presence-state.ts`, `lib/online/presence/use-player-online-presence.ts`, `lib/online/lobby-rematch-base-word-heal.ts`, `app/online/lobby/[gameId].tsx`
 
 ### 2026-07 — Late rematch joiner thinks they are alone / steals pick (visibility)
 

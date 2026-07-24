@@ -55,7 +55,7 @@ describe('shouldClearLobbyBaseWordForPicker', () => {
     expect(shouldClearLobbyBaseWordForPicker(s)).toBe(true);
   });
 
-  it('does not clear word when chooser has stale hasLeft but durable latch', () => {
+  it('clears word when chooser voluntarily left even with durable latch (75AGB)', () => {
     const s = session({
       baseWordRound: 6,
       baseWord: 'мінітракторець',
@@ -64,6 +64,21 @@ describe('shouldClearLobbyBaseWordForPicker', () => {
       baseWordPickerOrder: ['org', 'p2'],
       players: {
         org: { name: 'Org', wordCount: 0, score: 0, online: false, hasLeft: true },
+        p2: { name: 'Two', wordCount: 0, score: 0, online: true },
+      },
+    });
+    expect(shouldClearLobbyBaseWordForPicker(s)).toBe(true);
+  });
+
+  it('does not clear word when chooser is briefly offline with durable latch', () => {
+    const s = session({
+      baseWordRound: 6,
+      baseWord: 'мінітракторець',
+      baseWordChosenBy: 'org',
+      resultsExitedBy: { org: true, p2: true },
+      baseWordPickerOrder: ['org', 'p2'],
+      players: {
+        org: { name: 'Org', wordCount: 0, score: 0, online: false },
         p2: { name: 'Two', wordCount: 0, score: 0, online: true },
       },
     });

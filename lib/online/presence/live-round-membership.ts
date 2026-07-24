@@ -1,10 +1,7 @@
 import type { GameSession, GameSessionPlayer } from '../../firebase/types.js';
 
 import { assertRematchWaitingPlayerPatch } from '../invariants.js';
-import {
-  isRematchDurableLobbyOptIn,
-  isRematchWaitingLobbyOptedIn,
-} from '../rematch/rematch-waiting-lobby.js';
+import { isRematchWaitingLobbyOptedIn } from '../rematch/rematch-waiting-lobby.js';
 
 /**
  * Who enters `liveRoundPlayerUids` when waiting → playing.
@@ -27,11 +24,9 @@ export function waitingLobbyOptInUids(
     if (!player) {
       return false;
     }
+    // Voluntary leave opts out of the next round — latch must not resurrect them.
     if (player.hasLeft === true) {
-      if (!rematchRound || !isRematchDurableLobbyOptIn(session, uid)) {
-        return false;
-      }
-      // Stale hasLeft with durable rematch seat still counts for round-start roster.
+      return false;
     }
     if (player.online === true) {
       return true;

@@ -314,7 +314,26 @@ describe('currentBaseWordPickerUid', () => {
     expect(currentBaseWordPickerUid(s)).toBe('org');
   });
 
-  it('keeps rightful chooser with stale hasLeft via durable latch', () => {
+  it('transfers picker to next online when current picker voluntarily left (75AGB)', () => {
+    // Round slot is p2; p2 left rematch lobby → org (online + latched) must pick/start.
+    const s = session({
+      baseWordRound: 5,
+      baseWord: '',
+      baseWordChosenBy: null,
+      baseWordPickerUid: 'p2',
+      baseWordPickerOrder: ['org', 'p2'],
+      resultsExitedBy: { org: true, p2: true },
+      players: {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        p2: { name: 'Two', wordCount: 0, score: 0, online: false, hasLeft: true },
+      },
+    });
+    expect(eligibleBaseWordPickerUids(s)).toEqual(['org']);
+    expect(currentBaseWordPickerUid(s)).toBe('org');
+    expect(isCurrentBaseWordPicker(s, 'p2')).toBe(false);
+  });
+
+  it('keeps rightful chooser while briefly offline via durable latch', () => {
     const s = session({
       baseWordRound: 6,
       baseWord: 'мінітракторець',
@@ -322,7 +341,7 @@ describe('currentBaseWordPickerUid', () => {
       baseWordPickerOrder: ['org', 'p2'],
       resultsExitedBy: { org: true, p2: true },
       players: {
-        org: { name: 'Org', wordCount: 0, score: 0, online: false, hasLeft: true },
+        org: { name: 'Org', wordCount: 0, score: 0, online: false },
         p2: { name: 'Two', wordCount: 0, score: 0, online: true },
       },
     });

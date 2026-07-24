@@ -3,7 +3,6 @@ import type { GameSession, GameSessionPlayer } from '../firebase/types.js';
 import { assertBaseWordPickerEligibility } from './invariants.js';
 
 import {
-  isRematchDurableLobbyOptIn,
   isRematchWaitingLobby,
   isRematchWaitingLobbyOptedIn,
 } from './rematch/rematch-waiting-lobby.js';
@@ -24,17 +23,16 @@ export function isEligibleBaseWordPickerPlayer(player: GameSessionPlayer | undef
  * Session-aware eligibility. Rematch waiting keeps opted-in players (durable
  * `resultsExitedBy` latch / committed base word) even when AppState briefly
  * marks them `online: false`, so the next «Грати ще» cannot steal the picker seat.
- * Stale `hasLeft` does not drop durable rematch seats (latch / pickerUid / word).
+ * Voluntary leave (`hasLeft`) always forfeits — latch / pickerUid must not keep a
+ * home-exited player as current picker (next online in rotation takes the seat).
  */
 export function isEligibleBaseWordPickerInSession(session: GameSession, uid: string): boolean {
   const player = session.players[uid];
   if (isEligibleBaseWordPickerPlayer(player)) {
     return true;
   }
-  if (!player || !isRematchWaitingLobby(session)) {
-    return false;
-  }
-  if (player.hasLeft === true && !isRematchDurableLobbyOptIn(session, uid)) {
+  // True leave (or stale hasLeft) — never pick/start, even with rematch latch.
+  if (!player || player.hasLeft === true || !isRematchWaitingLobby(session)) {
     return false;
   }
   return isRematchWaitingLobbyOptedIn(session, uid);
@@ -132,10 +130,8 @@ export function shouldClearLobbyBaseWordForPicker(session: GameSession): boolean
   if (!chooser) {
     return true;
   }
-  // True leave without rematch latch — clear. Stale hasLeft while still latched must
-  // not wipe their word when a late joiner comes online (chosenBy+word alone is not
-  // enough here: every committed chooser would look "durable").
-  if (chooser.hasLeft === true && session.resultsExitedBy?.[chosenBy] !== true) {
+  // Voluntary leave forfeits the committed word so the next online picker can choose.
+  if (chooser.hasLeft === true) {
     return true;
   }
   const round = session.baseWordRound ?? 0;
@@ -161,8 +157,7 @@ export function currentBaseWordPickerUid(session: GameSession): string {
   const chosenBy = session.baseWordChosenBy;
   const word = session.baseWord;
   const chooser = chosenBy ? session.players[chosenBy] : undefined;
-  const chooserStillInSeat =
-    chooser != null && (chooser.hasLeft !== true || isRematchDurableLobbyOptIn(session, chosenBy!));
+  const chooserStillInSeat = chooser != null && chooser.hasLeft !== true;
   if (
     isRematchWaitingLobby(session) &&
     chosenBy &&

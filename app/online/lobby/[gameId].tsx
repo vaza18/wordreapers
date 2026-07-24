@@ -47,6 +47,11 @@ import {
   shouldClearLobbyBaseWordForPicker,
 } from '@/lib/online/base-word-picker';
 import { formatLobbySettingsLabel } from '@/lib/online/lobby-settings-label';
+import {
+  LOBBY_REMATCH_BASE_WORD_HEAL_INTERVAL_MS,
+  shouldContinueLobbyRematchBaseWordHealTick,
+  shouldRunLobbyRematchBaseWordHealPoll,
+} from '@/lib/online/lobby-rematch-base-word-heal';
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
 import { useLiveRoundLobbyScreen } from '@/hooks/useLiveRoundLobbyScreen';
@@ -176,18 +181,29 @@ export default function LobbyScreen() {
   }, [gameId, justOptedIn, healLobbySessionFromRtdb]);
 
   // Peer may commit baseWord while this client's listener missed the update
-  // (multi-sim inactive). Re-heal until the word appears or we leave waiting.
+  // (multi-sim inactive). Bounded re-heal (~30s) until the word appears; focus /
+  // AppState / justOptedIn heals above stay event-driven without a cap.
   useEffect(() => {
-    if (!isFocused || !gameId || !session || session.status !== 'waiting') {
+    if (
+      !gameId ||
+      !shouldRunLobbyRematchBaseWordHealPoll({
+        focused: isFocused,
+        status: session?.status,
+        baseWordRound: session?.baseWordRound,
+        baseWord: session?.baseWord,
+      })
+    ) {
       return undefined;
     }
-    const hasWord = Boolean(session.baseWord && session.baseWord.length >= 2);
-    if (hasWord || (session.baseWordRound ?? 0) === 0) {
-      return undefined;
-    }
+    let ticks = 0;
     const id = setInterval(() => {
+      ticks += 1;
+      if (!shouldContinueLobbyRematchBaseWordHealTick(ticks)) {
+        clearInterval(id);
+        return;
+      }
       healLobbySessionFromRtdb();
-    }, 2000);
+    }, LOBBY_REMATCH_BASE_WORD_HEAL_INTERVAL_MS);
     return () => {
       clearInterval(id);
     };
@@ -195,7 +211,6 @@ export default function LobbyScreen() {
     gameId,
     healLobbySessionFromRtdb,
     isFocused,
-    session,
     session?.baseWord,
     session?.baseWordRound,
     session?.status,
