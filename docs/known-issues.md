@@ -8,6 +8,30 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — Second «Грати ще» reopens rematch and both pick different words (AH2TN)
+
+- **Symptom:** After round N results, first rematcher opens waiting + pick-word; second taps «Грати ще» and also lands on pick-word with «Гравці (1)» only self. Each commits a different base word; lobbies disagree on roster and word.
+- **Cause:** Second client still saw (or treated) RTDB as `finished` and ran full `rematchFinishedSessionToWaiting` via non-atomic `update`, rewriting `players` (peer → offline), stealing `baseWordPickerUid`, and clearing the first rematcher’s word. `players/.write` while status exists allows that overwrite even when the room was already `waiting`. Log marker: second client `opened rematch lobby` instead of `joined rematch lobby (peer already opened waiting)`.
+- **Fix:** Rematch `finished → waiting` is a transaction that aborts unless status is still `finished`; if waiting is already open (fresh read or stale-finished abort), join path only — latch leaf + word cleanup, no players/picker/word rewrite.
+- **Test:** `tests/game-session-service.test.ts` (already-waiting join; stale finished abort)
+- **Area:** `lib/firebase/game-session-service.ts` (`rematchFinishedSessionToWaiting`)
+
+### 2026-07 — Rematch starter solo UI while peer votes (WAGTJ round 2)
+
+- **Symptom:** After rematch start, one client looks fully solo (stats explain «Знайдено N слово», no rank/standings); peer’s early-finish vote lists both as «в грі» and waits on the solo client. Not a modal z-index issue.
+- **Cause:** `liveRoundPlayerUids` at start can omit the late rematcher (brief offline / latch race). Peer still reaches play and scores, but starter’s `hasMultiplayerRound` only treated **online** peers as multiplayer when uids lagged — offline+scored peer kept solo chrome; vote UI depended on a fresh session the starter might not surface over stats.
+- **Fix:** `hasMultiplayerRound` also counts rematch peers with `wordCount`/`score` > 0; play `shouldRejoin` self-heals when online/scoring but missing from `liveRoundPlayerUids`; lobby auto-join retries roster append; dismiss stats on multipplayer/vote; log `liveUids` on start.
+- **Test:** `tests/live-round-membership.test.ts`, `tests/should-rejoin-live-playing-round.test.ts`
+- **Area:** `lib/online/presence/live-round-membership.ts`, `lib/online/live-round-screen-actions.ts`, `hooks/useLiveRoundLobbyScreen.ts`, `app/online/play/[gameId].tsx`
+
+### 2026-07 — False «rejoined (was offline)» right after start (WAGTJ)
+
+- **Symptom:** Dev logs show both players `rejoined room (was offline) status=playing` within ~200ms of `started round`, though they were in the lobby and never backgrounded.
+- **Cause:** Lobby `usePlayerOnlinePresence` switched `offlinePolicy` to `background-and-inactive` when RTDB became `playing` while still on the lobby screen. That remounted the presence effect; cleanup ran without a play handoff and wrote `online: false`. Play then reconciled via `rejoinExistingPlayer`.
+- **Fix:** Lobby always uses `lobbyPresenceOfflinePolicy()` → `background-only` (stable across `waiting → playing`). Play still owns `inactive→offline` after handoff navigation.
+- **Test:** `tests/lobby-presence-policy.test.ts`, `tests/use-player-online-presence.test.tsx`
+- **Area:** `lib/online/presence/lobby-presence-policy.ts`, `app/online/lobby/[gameId].tsx`
+
 ### 2026-07 — Late joiner «Гравці (1)» / blink after first rematcher already picked (JZ4Y5)
 
 - **Symptom:** Round N: organizer (scheduled + first rematcher) picks base word; late joiner’s lobby shows only themselves + Start / steals pick. First rematcher’s list blinks when the peer joins; peer still sees both.

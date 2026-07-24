@@ -52,6 +52,7 @@ import { mergeSessionWithWordMaps } from '@/lib/firebase/session-word-maps';
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import type { SessionWordMaps } from '@/lib/firebase/types';
 import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
+import { devLogAction } from '@/lib/debug/dev-log';
 import { markPendingRoundArchive } from '@/lib/online/session/pending-round-archive';
 import {
   cacheActiveRoundProgress,
@@ -684,6 +685,10 @@ export default function OnlinePlayScreen() {
         // Only lock out retries after replace succeeds — failed replace must allow retry.
         // Note: Expo Router replace rarely throws; busy may stick until unmount if nav no-ops.
         resultsNavigatedRef.current = true;
+        devLogAction('opened round results', {
+          room: gameId,
+          round: viewingRound,
+        });
       } catch (error) {
         if (__DEV__) {
           console.warn('router.replace results', error);
@@ -1094,6 +1099,12 @@ export default function OnlinePlayScreen() {
   const playerRank = displayRankForPlayer(standings, myUid);
   const hasMultiplayerRoundUi =
     displaySession != null && myUid ? hasMultiplayerRound(displaySession, myUid) : false;
+
+  useEffect(() => {
+    if (hasMultiplayerRoundUi) {
+      setShowStatsExplain(false);
+    }
+  }, [hasMultiplayerRoundUi]);
   const playRulesLabel = formatPlayRulesLabel(t, displaySession?.settings);
 
   const clearFeedback = useCallback(() => {
@@ -1529,6 +1540,7 @@ export default function OnlinePlayScreen() {
     }
     setShowAddTimeModal(false);
     setShowStandings(false);
+    setShowStatsExplain(false);
   }, [session?.addTimeVote, session?.earlyFinishVote, session?.pauseVote, session?.status]);
 
   useEffect(() => {

@@ -289,23 +289,90 @@ describe('game-session-service', () => {
 
   it('transitions a finished session back to waiting for rematch', async () => {
     const session = finishedSession();
+    const waiting = {
+      ...session,
+      status: 'waiting' as const,
+      baseWordRound: 1,
+      baseWord: '',
+      baseWordChosenBy: null,
+    };
     getMock
       .mockResolvedValueOnce({ exists: () => true, val: () => session })
-      .mockResolvedValueOnce({
-        exists: () => true,
-        val: () => ({ ...session, status: 'waiting' }),
-      });
+      .mockResolvedValue({ exists: () => true, val: () => waiting });
+    runTransactionMock.mockImplementation(async (_ref, updater) => {
+      const next = updater(session);
+      return { committed: next != null, snapshot: { val: () => next } };
+    });
 
     await rematchFinishedSessionToWaiting('ABCDE', 'org');
 
-    expect(updateMock).toHaveBeenCalledWith(
-      expect.anything(),
+    expect(runTransactionMock).toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
+    const committed = runTransactionMock.mock.calls[0][1](session);
+    expect(committed).toEqual(
       expect.objectContaining({
         status: 'waiting',
         baseWordRound: 1,
-        'resultsExitedBy/org': true,
+        baseWord: '',
       }),
     );
+  });
+
+  it('joins an already-open rematch waiting lobby without rewriting players (AH2TN)', async () => {
+    const { markResultsExited } = await import('../lib/firebase/results-coordination-service.js');
+    const openWaiting = {
+      ...finishedSession({ org: true }),
+      status: 'waiting' as const,
+      baseWordRound: 2,
+      baseWord: '',
+      baseWordChosenBy: null,
+      baseWordPickerUid: 'org',
+      resultsExitedBy: { org: true },
+      players: {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        p2: { name: 'Two', wordCount: 0, score: 0, online: false },
+        p3: { name: 'Three', wordCount: 0, score: 0, online: false },
+      },
+    };
+    getMock.mockResolvedValue({ exists: () => true, val: () => openWaiting });
+
+    await rematchFinishedSessionToWaiting('ABCDE', 'p2');
+
+    expect(runTransactionMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(markResultsExited).toHaveBeenCalledWith('ABCDE', 'p2');
+  });
+
+  it('aborts stale finished rematch when server is already waiting (AH2TN)', async () => {
+    const { markResultsExited } = await import('../lib/firebase/results-coordination-service.js');
+    const staleFinished = finishedSession();
+    const openWaiting = {
+      ...staleFinished,
+      status: 'waiting' as const,
+      baseWordRound: 2,
+      baseWordPickerUid: 'org',
+      resultsExitedBy: { org: true },
+      players: {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        p2: { name: 'Two', wordCount: 5, score: 5, online: false },
+        p3: { name: 'Three', wordCount: 0, score: 0, online: false },
+      },
+    };
+    getMock
+      .mockResolvedValueOnce({ exists: () => true, val: () => staleFinished })
+      .mockResolvedValue({ exists: () => true, val: () => openWaiting });
+    runTransactionMock.mockImplementation(async (_ref, updater) => {
+      // Server truth is already waiting — transaction must abort.
+      const next = updater(openWaiting);
+      return { committed: next == null ? false : true, snapshot: { val: () => openWaiting } };
+    });
+
+    await rematchFinishedSessionToWaiting('ABCDE', 'p2');
+
+    expect(runTransactionMock).toHaveBeenCalled();
+    const updater = runTransactionMock.mock.calls[0][1] as (current: unknown) => unknown;
+    expect(updater(openWaiting)).toBeUndefined();
+    expect(markResultsExited).toHaveBeenCalledWith('ABCDE', 'p2');
   });
 
   it('starts a waiting session when the picker has a valid base word', async () => {

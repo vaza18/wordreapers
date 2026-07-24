@@ -163,4 +163,20 @@ describe('hasMultiplayerRound', () => {
       ),
     ).toBe(true);
   });
+
+  it('treats offline peer who already scored this rematch round as multipplayer (WAGTJ)', () => {
+    expect(
+      hasMultiplayerRound(
+        gameSession({
+          baseWordRound: 2,
+          liveRoundPlayerUids: ['org'],
+          players: {
+            org: { name: 'Org', wordCount: 1, score: 1, online: true },
+            peer: { name: 'Peer', wordCount: 1, score: 1, online: false },
+          },
+        }),
+        'org',
+      ),
+    ).toBe(true);
+  });
 });

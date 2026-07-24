@@ -71,6 +71,7 @@ import {
 import { needsPublicAliasReconcile } from '@/lib/online/public-lobby/public-alias';
 import { PUBLIC_LOBBY_TTL_MS } from '@/lib/online/public-lobby/constants';
 import { useOrganizerAbandonWaitingOnExit } from '@/lib/online/use-organizer-abandon-on-exit';
+import { lobbyPresenceOfflinePolicy } from '@/lib/online/presence/lobby-presence-policy';
 import { usePlayerOnlinePresence } from '@/lib/online/presence/use-player-online-presence';
 import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
 import { isLobbyVisiblePlayer } from '@/lib/online/rematch/rematch-waiting-lobby';
@@ -264,9 +265,9 @@ export default function LobbyScreen() {
         session?.status === 'finished' ||
         session?.status === 'playing'),
     ),
-    // Waiting lobby: multi-sim focus → inactive must not write false offline.
-    // Live `playing` presence on this screen is rare; play hook uses inactive.
-    session?.status === 'playing' ? 'background-and-inactive' : 'background-only',
+    // Always background-only on lobby — never flip to inactive on waiting→playing
+    // (that remounts presence without handoff and false-marks offline; see WAGTJ).
+    lobbyPresenceOfflinePolicy(),
   );
   const isOrganizer = session?.organizerId === myUid;
 

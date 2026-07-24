@@ -273,17 +273,26 @@ describe('game-session-service extended', () => {
 
   it('restarts finished session for organizer rematch', async () => {
     const session = finishedSession();
+    const waiting = {
+      ...session,
+      status: 'waiting' as const,
+      baseWordRound: 1,
+      baseWord: '',
+      baseWordChosenBy: null,
+    };
     getMock
       .mockResolvedValueOnce({ exists: () => true, val: () => session })
       .mockResolvedValueOnce({ exists: () => true, val: () => session })
-      .mockResolvedValueOnce({
-        exists: () => true,
-        val: () => ({ ...session, status: 'waiting' }),
-      });
+      .mockResolvedValue({ exists: () => true, val: () => waiting });
+    runTransactionMock.mockImplementation(async (_ref, updater) => {
+      const next = updater(session);
+      return { committed: next != null, snapshot: { val: () => next ?? waiting } };
+    });
 
     await restartGameSessionForRematch('ABCDE', 'org');
 
-    expect(updateMock).toHaveBeenCalledWith(
+    expect(runTransactionMock).toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ status: 'waiting' }),
     );
