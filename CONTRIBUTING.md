@@ -26,6 +26,20 @@ After changing native Firebase plugins or config files, rebuild the dev client (
 
 Install the **development client** once (`npm run android` or `npm run ios`), then use `npm start` for daily JS work — not Expo Go.
 
+### Dev multiplayer action logs
+
+In `__DEV__` only, Metro prints a unified timeline of online actions (`lib/debug/dev-log.ts`). Control verbosity with `EXPO_PUBLIC_LOG_LEVEL` in `.env` (restart Metro after changes):
+
+| Level    | Meaning                                                       |
+| -------- | ------------------------------------------------------------- |
+| `none`   | Silent                                                        |
+| `error`  | Failures only                                                 |
+| `event`  | Key **local** multiplayer actions (default when unset in dev) |
+| `detail` | `event` + secondary local + **observed remote** peer actions  |
+| `all`    | `detail` + lexicon / submitWord timing                        |
+
+Production builds never log (hard `__DEV__` gate). Copy Metro lines when filing multiplayer bugs — format is `[local time] [player] action …`.
+
 ## Quality checks
 
 Run these before opening a pull request:

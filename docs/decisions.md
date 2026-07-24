@@ -125,6 +125,13 @@ Format: **Decision → Alternatives → Why rejected → Date**
 - **Why rejected:** Hidden fallbacks mask misconfiguration, multiply edge cases for agent maintenance, and obscure what is actually required. Explicit request is the only exception.
 - **Date:** 2026-07 — `.cursor/rules/no-legacy-code.mdc`, `AGENTS.md`
 
+## ADR-018: Dev-only multiplayer action logs
+
+- **Decision:** Client action logs go through `lib/debug/dev-log.ts`, gated by `__DEV__` (always silent in production) and `EXPO_PUBLIC_LOG_LEVEL` (`none` \| `error` \| `event` \| `detail` \| `all`). Default in dev when unset: `event` (local key actions only). Observed remote peer events require `detail`+. Timings (lexicon, submitWord) require `all`. Format: local wall-clock + player name + action.
+- **Alternatives considered:** Always-on console in prod; in-app Settings toggle; remote events at every level.
+- **Why rejected:** Prod noise and privacy; ENV is enough for simulators; remote at `event` doubles noise across two Metro consoles.
+- **Date:** 2026-07 — `lib/debug/dev-log.ts`
+
 ---
 
 When adding a new ADR: keep it short; link the implementing file; do not duplicate `online-multiplayer-rules.md` tables.

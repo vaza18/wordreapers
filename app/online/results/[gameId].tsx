@@ -49,6 +49,7 @@ import { useFrozenRoundRecovery } from '@/hooks/useFrozenRoundRecovery';
 
 import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
 import { useProfileStore } from '@/store/profile-store';
+import { devLogAction } from '@/lib/debug/dev-log';
 
 /**
  * Online round results — local archive first, Firebase only for rematch routing and cleanup.
@@ -93,6 +94,19 @@ export default function OnlineResultsScreen() {
   const skipRematchToastRef = useRef(false);
   const skipResultsOfflineRef = useRef(false);
   const rematchToasts = useResultsRematchToast(liveSession, myUid, skipRematchToastRef);
+  const viewedResultsLoggedRef = useRef(false);
+
+  useEffect(() => {
+    if (viewedResultsLoggedRef.current || !gameId) {
+      return;
+    }
+    viewedResultsLoggedRef.current = true;
+    devLogAction('viewing round results', {
+      room: gameId,
+      round: viewingBaseWordRound ?? undefined,
+      details: fromJoinIntoPlaying ? 'from mid-round join' : undefined,
+    });
+  }, [fromJoinIntoPlaying, gameId, viewingBaseWordRound]);
 
   const rosterPlayerIds = useMemo(() => {
     if (frozenRound || !liveSession || liveSession.status !== 'finished') {

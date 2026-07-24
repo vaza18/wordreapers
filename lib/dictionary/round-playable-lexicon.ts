@@ -1,6 +1,7 @@
 import type { DictionaryIndex } from './dictionary-index.js';
 import { normalizeUk, toDisplayUpper } from './normalize.js';
 import { buildLetterMultiset } from './validate-word.js';
+import { devLog } from '../debug/dev-log.js';
 
 /** Compact snapshot stored in local finished-round archives (v3). */
 export interface PlayableLexiconSnapshot {
@@ -189,10 +190,8 @@ function logBuildDev(
   state: LexiconBuildState,
   yieldCount: number,
 ): void {
-  if (typeof __DEV__ === 'undefined' || !__DEV__) {
-    return;
-  }
-  console.log(
+  devLog(
+    'all',
     `[lexicon] ${label} filterMs=${filterMs.toFixed(0)} finalizeMs=${finalizeMs.toFixed(0)} buildMs=${(filterMs + finalizeMs).toFixed(0)} yields=${yieldCount} scanned=${state.scanned} accepted=${state.accepted}`,
   );
 }

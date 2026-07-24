@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { GameSessionSnapshot } from '@/lib/firebase/game-session-service';
+import { logObservedPlayToastEvents } from '@/lib/debug/log-observed-play-toasts';
 import { detectPlayToastEvents, detectRankEvents } from '@/lib/online/play-toast-events';
 import {
   playToastRankSignature,
@@ -102,6 +103,8 @@ export function usePlaySessionToasts(
     const events = detectRosterToastEvents(prev, current, myUid);
     const presenceEvents = events.filter(isPresenceToastEvent);
     const otherEvents = events.filter((event) => !isPresenceToastEvent(event));
+
+    logObservedPlayToastEvents(events, current.id, current.baseWordRound ?? 0);
 
     const otherItems = formatPlayToastEvents(t, otherEvents, viewerGender, current, myUid);
     enqueueToasts(otherItems);
