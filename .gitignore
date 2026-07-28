@@ -36,6 +36,7 @@ docs/wordreapers_growth_plan.md
 
 # Ephemeral agent brainstorm/plan drafts (promote durable decisions elsewhere)
 docs/superpowers/
+.superpowers/
 
 # Cursor IDE (commit shared rules; keep local settings ignored)
 .cursor/*
