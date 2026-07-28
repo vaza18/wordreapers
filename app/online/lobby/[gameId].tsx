@@ -385,7 +385,14 @@ export default function LobbyScreen() {
     try {
       await restartRematchOnlineRound(gameId, myUid, rematchArchive.baseWordRound);
       const { name, gender, avatarColorIndex } = useProfileStore.getState();
-      await rejoinExistingPlayer(gameId, myUid, { name, gender, avatarColorIndex });
+      await rejoinExistingPlayer(
+        gameId,
+        myUid,
+        { name, gender, avatarColorIndex },
+        {
+          reviveAfterLeave: true,
+        },
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : '';
       if (message === 'NO_FINISHED_ARCHIVE') {

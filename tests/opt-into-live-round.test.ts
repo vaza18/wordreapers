@@ -74,7 +74,13 @@ describe('optIntoLiveRound', () => {
     const route = await optIntoLiveRound('ABCDE', 'org', profile, 2);
 
     expect(restartRematchOnlineRound).toHaveBeenCalledWith('ABCDE', 'org', 2);
-    expect(reconcilePlayerPresence).toHaveBeenCalledWith('ABCDE', 'org', profile);
+    expect(markResultsExited).toHaveBeenCalled();
+    expect(vi.mocked(restartRematchOnlineRound).mock.invocationCallOrder[0]!).toBeLessThan(
+      vi.mocked(markResultsExited).mock.invocationCallOrder[0]!,
+    );
+    expect(reconcilePlayerPresence).toHaveBeenCalledWith('ABCDE', 'org', profile, {
+      reviveAfterLeave: true,
+    });
     expect(route).toEqual({ pathname: '/online/lobby/[gameId]', params: { gameId: 'ABCDE' } });
   });
 
@@ -95,8 +101,22 @@ describe('optIntoLiveRound', () => {
     const route = await optIntoLiveRound('ABCDE', 'org', profile, 2);
 
     expect(restartRematchOnlineRound).toHaveBeenCalledWith('ABCDE', 'org', 2);
-    expect(reconcilePlayerPresence).toHaveBeenCalledWith('ABCDE', 'org', profile);
+    expect(reconcilePlayerPresence).toHaveBeenCalledWith('ABCDE', 'org', profile, {
+      reviveAfterLeave: true,
+    });
     expect(route).toEqual({ pathname: '/online/pick-word/[gameId]', params: { gameId: 'ABCDE' } });
+  });
+
+  it('does not latch before rematch restart fails', async () => {
+    readGameSessionSnapshot.mockResolvedValueOnce(
+      sessionStub({ status: 'finished', baseWordRound: 0 }),
+    );
+    vi.mocked(restartRematchOnlineRound).mockRejectedValueOnce(new Error('REMATCH_FAILED'));
+
+    await expect(optIntoLiveRound('ABCDE', 'p2', profile, 0)).rejects.toThrow('REMATCH_FAILED');
+
+    expect(markResultsExited).not.toHaveBeenCalled();
+    expect(reconcilePlayerPresence).not.toHaveBeenCalled();
   });
 
   it('does not await presence when rematch lobby is already waiting', async () => {
@@ -114,8 +134,10 @@ describe('optIntoLiveRound', () => {
 
     expect(restartRematchOnlineRound).not.toHaveBeenCalled();
     // Latch is awaited before navigate; online rejoin stays backgrounded.
-    expect(markResultsExited).toHaveBeenCalledTimes(2);
-    expect(reconcilePlayerPresence).toHaveBeenCalledWith('ABCDE', 'p2', profile);
+    expect(markResultsExited).toHaveBeenCalled();
+    expect(reconcilePlayerPresence).toHaveBeenCalledWith('ABCDE', 'p2', profile, {
+      reviveAfterLeave: true,
+    });
     expect(route).toEqual({ pathname: '/online/lobby/[gameId]', params: { gameId: 'ABCDE' } });
     resolvePresence();
   });
@@ -140,7 +162,20 @@ describe('optIntoLiveRound', () => {
 
     expect(restartRematchOnlineRound).not.toHaveBeenCalled();
     expect(presenceResolved).toBe(true);
-    expect(reconcilePlayerPresence).toHaveBeenCalledWith('ABCDE', 'org', profile);
+    expect(reconcilePlayerPresence).toHaveBeenCalledWith('ABCDE', 'org', profile, {
+      reviveAfterLeave: true,
+    });
     expect(route).toEqual({ pathname: '/online/play/[gameId]', params: { gameId: 'ABCDE' } });
+  });
+
+  it('restarts when same-round playing is stuck expired (LRAHP)', async () => {
+    readGameSessionSnapshot
+      .mockResolvedValueOnce(sessionStub({ status: 'playing', baseWordRound: 0, timerEndsAt: 1 }))
+      .mockResolvedValueOnce(sessionStub({ status: 'waiting', baseWordRound: 1, baseWord: '' }));
+
+    const route = await optIntoLiveRound('ABCDE', 'org', profile, 0);
+
+    expect(restartRematchOnlineRound).toHaveBeenCalledWith('ABCDE', 'org', 0);
+    expect(route).toEqual({ pathname: '/online/pick-word/[gameId]', params: { gameId: 'ABCDE' } });
   });
 });

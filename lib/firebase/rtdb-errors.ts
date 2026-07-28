@@ -3,15 +3,15 @@ export function isFirebaseTransactionAbort(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
   }
-  switch (error.message) {
-    case 'disconnect':
-    case 'set':
-    case 'maxretries':
-    case 'overwrite':
-      return true;
-    default:
-      return false;
-  }
+  const message = error.message.trim().toLowerCase();
+  // Firebase SDK uses `maxretry` (no trailing s); keep `maxretries` as a defensive alias.
+  return (
+    message === 'disconnect' ||
+    message === 'set' ||
+    message === 'maxretry' ||
+    message === 'maxretries' ||
+    message === 'overwrite'
+  );
 }
 
 export function isFirebasePermissionDenied(error: unknown): boolean {
@@ -32,6 +32,7 @@ export function isFirebasePermissionDenied(error: unknown): boolean {
     code === 'PERMISSION_DENIED' ||
     code === 'permission-denied' ||
     error.message.includes('Permission denied') ||
+    /permission[-_]?denied/i.test(error.message) ||
     /doesn't have permission to access/i.test(error.message)
   );
 }

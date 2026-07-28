@@ -139,7 +139,9 @@ describe('resolvePostJoinRoute', () => {
     });
   });
 
-  it('routes rematch joiner to lobby when first picker already set the word but is briefly offline', () => {
+  it('routes rematch joiner to pick-word when first picker set a word then went offline', () => {
+    // Offline chooser's word is not sticky — joiner becomes picker and must re-pick after clear,
+    // but while the stale word is still on the snapshot, route to lobby (sync clears next).
     expect(
       resolvePostJoinRoute(
         sessionWithPlayers(
@@ -154,6 +156,7 @@ describe('resolvePostJoinRoute', () => {
             baseWordChosenBy: 'org',
             baseWordPickerOrder: ['org', 'a'],
             baseWordPickerUid: 'org',
+            resultsExitedBy: { org: true, a: true },
           },
         ),
         'a',

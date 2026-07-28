@@ -1,15 +1,31 @@
 import { get } from 'firebase/database';
 
-import { rematchFinishedSessionToWaiting } from '../../firebase/game-session-service.js';
+import {
+  finishGameSessionIfExpired,
+  rematchFinishedSessionToWaiting,
+} from '../../firebase/game-session-service.js';
 import { sessionRef } from '../../firebase/session-ref.js';
+import { getServerNow } from '../../firebase/server-clock.js';
 import { normalizeRoomCode } from '../../firebase/room-code.js';
+import type { GameSession } from '../../firebase/types.js';
 
 import { bootstrapRematchWaitingFromArchive } from './bootstrap-rematch-waiting-from-archive.js';
 import { planRematchAction } from './plan-rematch-action.js';
 import { resolveRematchRtdbPresence } from '../orphan-game-session.js';
 
+function isPlayingRoundExpired(session: GameSession): boolean {
+  if (session.status !== 'playing' || session.timerEndsAt == null) {
+    return false;
+  }
+  if (session.addTimeVote) {
+    return false;
+  }
+  return getServerNow() >= session.timerEndsAt;
+}
+
 /**
  * Start rematch. Any rostered participant can reopen the room from local archive or a live `finished` session.
+ * Stuck expired `playing` (finish write failed — LRAHP) is healed: finish then rematch.
  */
 export async function restartRematchOnlineRound(
   gameId: string,
@@ -30,10 +46,27 @@ export async function restartRematchOnlineRound(
     return;
   }
 
-  if (action === 'join_waiting' || action === 'join_live') {
+  if (action === 'join_waiting') {
+    // Latch + word cleanup only (AH2TN) — never rewrite an open rematch lobby.
+    await rematchFinishedSessionToWaiting(gameId, actorUid);
     return;
   }
-  if (action === 'failed') {
+
+  if (action === 'join_live') {
+    const live = raw as GameSession;
+    if (!isPlayingRoundExpired(live)) {
+      return;
+    }
+    await finishGameSessionIfExpired(gameId);
+    const after = await get(sessionRef(normalized));
+    if (!after.exists()) {
+      throw new Error('REMATCH_FAILED');
+    }
+    const afterSession = after.val() as GameSession;
+    if (afterSession.status === 'finished' || afterSession.status === 'waiting') {
+      await rematchFinishedSessionToWaiting(gameId, actorUid);
+      return;
+    }
     throw new Error('REMATCH_FAILED');
   }
 

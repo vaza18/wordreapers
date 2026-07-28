@@ -30,7 +30,6 @@
           }
         },
         "players": {
-          ".write": "auth != null && root.child('game_sessions').child($gameId).child('status').exists() && (root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() || (!root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && newData.hasChild(auth.uid) && (root.child('game_sessions').child($gameId).child('status').val() == 'waiting' || root.child('game_sessions').child($gameId).child('status').val() == 'playing')))",
           "$playerId": {
             ".write": "auth != null && ((auth.uid == $playerId && (!data.exists() || root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists())) || (root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && root.child('game_sessions').child($gameId).child('status').val() == 'finished' && newData.parent().parent().child('status').val() == 'waiting' && newData.child('score').val() == 0 && newData.child('wordCount').val() == 0))",
             "name": {
@@ -45,10 +44,12 @@
               ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 500"
             },
             "online": {
-              ".write": "auth != null && (auth.uid == $playerId || (root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && root.child('game_sessions').child($gameId).child('status').val() == 'finished' && newData.parent().parent().parent().child('status').val() == 'waiting'))"
+              ".write": "auth != null && (auth.uid == $playerId || (data.exists() && newData.val() === data.val()) || (root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && (root.child('game_sessions').child($gameId).child('status').val() == 'finished' && newData.parent().parent().parent().child('status').val() == 'waiting')) || (!root.child('game_sessions').child($gameId).child('status').exists() && newData.parent().parent().parent().child('status').val() == 'waiting' && newData.parent().parent().parent().child('players').child(auth.uid).exists()))",
+              ".validate": "newData.isBoolean() && (auth.uid == $playerId || (data.exists() && newData.val() === data.val()) || (root.child('game_sessions').child($gameId).child('status').val() == 'finished' && newData.parent().parent().parent().child('status').val() == 'waiting') || (!root.child('game_sessions').child($gameId).child('status').exists() && newData.parent().parent().parent().child('status').val() == 'waiting' && newData.parent().parent().parent().child('players').child(auth.uid).exists()))"
             },
             "hasLeft": {
-              ".write": "auth != null && (auth.uid == $playerId || (root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && root.child('game_sessions').child($gameId).child('status').val() == 'finished' && newData.parent().parent().parent().child('status').val() == 'waiting'))"
+              ".write": "auth != null && (auth.uid == $playerId || (data.exists() && newData.val() === data.val()) || (root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && (root.child('game_sessions').child($gameId).child('status').val() == 'finished' && newData.parent().parent().parent().child('status').val() == 'waiting')) || (!root.child('game_sessions').child($gameId).child('status').exists() && newData.parent().parent().parent().child('status').val() == 'waiting' && newData.parent().parent().parent().child('players').child(auth.uid).exists()))",
+              ".validate": "newData.isBoolean() && (auth.uid == $playerId || (data.exists() && newData.val() === data.val()) || (root.child('game_sessions').child($gameId).child('status').val() == 'finished' && newData.parent().parent().parent().child('status').val() == 'waiting') || (!root.child('game_sessions').child($gameId).child('status').exists() && newData.parent().parent().parent().child('status').val() == 'waiting' && newData.parent().parent().parent().child('players').child(auth.uid).exists()))"
             },
             "gender": {
               ".write": "auth != null && (auth.uid == $playerId || (root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && root.child('game_sessions').child($gameId).child('status').val() == 'finished' && newData.parent().parent().parent().child('status').val() == 'waiting'))"

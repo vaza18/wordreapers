@@ -9,6 +9,7 @@ import {
   isCurrentBaseWordPicker,
   isEligibleBaseWordPickerPlayer,
   scheduledBaseWordPickerUid,
+  shouldClearLobbyBaseWordForPicker,
 } from '../lib/online/base-word-picker';
 
 function session(overrides: Partial<GameSession> = {}): GameSession {
@@ -229,24 +230,26 @@ describe('currentBaseWordPickerUid', () => {
     expect(currentBaseWordPickerUid(s)).toBe('org');
   });
 
-  it('keeps rematch word-chooser as picker when briefly offline (multi-sim inactive)', () => {
-    // Round 5 (baseWordRound 4): org is scheduled. Org picked, then AppState inactive.
+  it('transfers picker to online peer when chooser is offline but keeps the word', () => {
+    // Lobby/pick-word use background-only — online:false is real background, not multi-sim inactive.
     const s = session({
       baseWordRound: 4,
       baseWord: 'каландрувальниця',
       baseWordChosenBy: 'org',
       baseWordPickerOrder: ['org', 'p2'],
+      resultsExitedBy: { org: true, p2: true },
       players: {
         org: { name: 'Org', wordCount: 0, score: 0, online: false },
         p2: { name: 'Two', wordCount: 0, score: 0, online: true },
       },
     });
-    expect(eligibleBaseWordPickerUids(s)).toEqual(['org', 'p2']);
-    expect(currentBaseWordPickerUid(s)).toBe('org');
+    expect(eligibleBaseWordPickerUids(s)).toEqual(['p2']);
+    expect(currentBaseWordPickerUid(s)).toBe('p2');
+    expect(shouldClearLobbyBaseWordForPicker(s)).toBe(false);
+    expect(canActorStartWaitingRound(s, 'p2')).toBe(true);
   });
 
-  it('keeps round-3 rightful chooser when second rematcher comes online (DSSN2)', () => {
-    // Org (scheduled for round 3) set the word first; peer opts in while org is briefly offline.
+  it('transfers seat when scheduled chooser goes offline but keeps their word', () => {
     const s = session({
       baseWordRound: 2,
       baseWord: 'випещеність',
@@ -259,32 +262,32 @@ describe('currentBaseWordPickerUid', () => {
       },
     });
     expect(scheduledBaseWordPickerUid(s, 2)).toBe('org');
-    expect(currentBaseWordPickerUid(s)).toBe('org');
-    expect(canActorStartWaitingRound(s, 'org')).toBe(true);
-    expect(canActorStartWaitingRound(s, 'p2')).toBe(false);
+    expect(currentBaseWordPickerUid(s)).toBe('p2');
+    expect(canActorStartWaitingRound(s, 'org')).toBe(false);
+    expect(canActorStartWaitingRound(s, 'p2')).toBe(true);
+    expect(shouldClearLobbyBaseWordForPicker(s)).toBe(false);
   });
 
-  it('does not let late joiner steal pick while rightful first rematcher is offline on pick-word', () => {
-    // Org opened round 3 first (scheduled + sole rematcher), still on pick-word — no word yet.
-    // Peer joins while org is AppState-inactive (online false, latch not on this snapshot).
+  it('lets late joiner take pick when first rematcher is offline on pick-word', () => {
+    // Org opened rematch first then backgrounded; peer must not wait forever.
     const s = session({
       baseWordRound: 2,
       baseWord: '',
       baseWordChosenBy: null,
       baseWordPickerUid: 'org',
       baseWordPickerOrder: ['org', 'p2'],
-      resultsExitedBy: { p2: true },
+      resultsExitedBy: { org: true, p2: true },
       players: {
         org: { name: 'Org', wordCount: 0, score: 0, online: false },
         p2: { name: 'Two', wordCount: 0, score: 0, online: true },
       },
     });
-    expect(eligibleBaseWordPickerUids(s)).toEqual(['org', 'p2']);
-    expect(currentBaseWordPickerUid(s)).toBe('org');
-    expect(isCurrentBaseWordPicker(s, 'p2')).toBe(false);
+    expect(eligibleBaseWordPickerUids(s)).toEqual(['p2']);
+    expect(currentBaseWordPickerUid(s)).toBe('p2');
+    expect(isCurrentBaseWordPicker(s, 'p2')).toBe(true);
   });
 
-  it('keeps rightful chooser even if latch is missing (chosenBy sticky)', () => {
+  it('keeps offline chooser word for the online peer who inherits the seat', () => {
     const s = session({
       baseWordRound: 2,
       baseWord: 'випещеність',
@@ -295,10 +298,12 @@ describe('currentBaseWordPickerUid', () => {
         p2: { name: 'Two', wordCount: 0, score: 0, online: true },
       },
     });
-    expect(currentBaseWordPickerUid(s)).toBe('org');
+    expect(currentBaseWordPickerUid(s)).toBe('p2');
+    expect(shouldClearLobbyBaseWordForPicker(s)).toBe(false);
+    expect(canActorStartWaitingRound(s, 'p2')).toBe(true);
   });
 
-  it('keeps first rematcher as picker via resultsExitedBy latch before any word is set', () => {
+  it('transfers picker to online peer when first rematcher is offline with latch only', () => {
     const s = session({
       baseWordRound: 4,
       baseWord: '',
@@ -310,8 +315,8 @@ describe('currentBaseWordPickerUid', () => {
         p2: { name: 'Two', wordCount: 0, score: 0, online: true },
       },
     });
-    expect(eligibleBaseWordPickerUids(s)).toEqual(['org', 'p2']);
-    expect(currentBaseWordPickerUid(s)).toBe('org');
+    expect(eligibleBaseWordPickerUids(s)).toEqual(['p2']);
+    expect(currentBaseWordPickerUid(s)).toBe('p2');
   });
 
   it('transfers picker to next online when current picker voluntarily left (75AGB)', () => {
@@ -333,7 +338,7 @@ describe('currentBaseWordPickerUid', () => {
     expect(isCurrentBaseWordPicker(s, 'p2')).toBe(false);
   });
 
-  it('keeps rightful chooser while briefly offline via durable latch', () => {
+  it('moves seat when rightful chooser is offline but keeps their committed word', () => {
     const s = session({
       baseWordRound: 6,
       baseWord: 'мінітракторець',
@@ -345,9 +350,28 @@ describe('currentBaseWordPickerUid', () => {
         p2: { name: 'Two', wordCount: 0, score: 0, online: true },
       },
     });
-    expect(eligibleBaseWordPickerUids(s)).toEqual(['org', 'p2']);
-    expect(currentBaseWordPickerUid(s)).toBe('org');
-    expect(isCurrentBaseWordPicker(s, 'p2')).toBe(false);
+    expect(eligibleBaseWordPickerUids(s)).toEqual(['p2']);
+    expect(currentBaseWordPickerUid(s)).toBe('p2');
+    expect(shouldClearLobbyBaseWordForPicker(s)).toBe(false);
+    expect(canActorStartWaitingRound(s, 'p2')).toBe(true);
+  });
+
+  it('keeps early rematcher word when scheduled peer takes the seat', () => {
+    const s = session({
+      baseWordRound: 1,
+      baseWord: 'адонізид',
+      baseWordChosenBy: 'org',
+      baseWordPickerOrder: ['org', 'p2'],
+      resultsExitedBy: { org: true, p2: true },
+      players: {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        p2: { name: 'Two', wordCount: 0, score: 0, online: true },
+      },
+    });
+    expect(currentBaseWordPickerUid(s)).toBe('p2');
+    expect(shouldClearLobbyBaseWordForPicker(s)).toBe(false);
+    expect(canActorStartWaitingRound(s, 'p2')).toBe(true);
+    expect(canActorStartWaitingRound(s, 'org')).toBe(false);
   });
 
   it('skips players who permanently left the room', () => {

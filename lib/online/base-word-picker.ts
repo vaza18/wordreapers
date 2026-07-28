@@ -2,10 +2,7 @@ import type { GameSession, GameSessionPlayer } from '../firebase/types.js';
 
 import { assertBaseWordPickerEligibility } from './invariants.js';
 
-import {
-  isRematchWaitingLobby,
-  isRematchWaitingLobbyOptedIn,
-} from './rematch/rematch-waiting-lobby.js';
+import { isRematchWaitingLobby } from './rematch/rematch-waiting-lobby.js';
 
 /** True when the player may pick the base word this round (online, still in roster). */
 export function isEligibleBaseWordPickerPlayer(player: GameSessionPlayer | undefined): boolean {
@@ -20,22 +17,15 @@ export function isEligibleBaseWordPickerPlayer(player: GameSessionPlayer | undef
 }
 
 /**
- * Session-aware eligibility. Rematch waiting keeps opted-in players (durable
- * `resultsExitedBy` latch / committed base word) even when AppState briefly
- * marks them `online: false`, so the next «Грати ще» cannot steal the picker seat.
- * Voluntary leave (`hasLeft`) always forfeits — latch / pickerUid must not keep a
- * home-exited player as current picker (next online in rotation takes the seat).
+ * Session-aware eligibility for who may hold the base-word picker seat.
+ * Requires `online === true` (and not `hasLeft`). Durable rematch latch still keeps
+ * an offline player **visible** in the lobby list, but peers must not wait on a
+ * backgrounded / lock-screen / force-quit picker. Lobby and pick-word use
+ * `background-only` offline policy, so `online: false` means real background or disconnect
+ * — not multi-sim `inactive`.
  */
 export function isEligibleBaseWordPickerInSession(session: GameSession, uid: string): boolean {
-  const player = session.players[uid];
-  if (isEligibleBaseWordPickerPlayer(player)) {
-    return true;
-  }
-  // True leave (or stale hasLeft) — never pick/start, even with rematch latch.
-  if (!player || player.hasLeft === true || !isRematchWaitingLobby(session)) {
-    return false;
-  }
-  return isRematchWaitingLobbyOptedIn(session, uid);
+  return isEligibleBaseWordPickerPlayer(session.players[uid]);
 }
 
 /**
@@ -112,9 +102,10 @@ function sessionWithForcedRematchOptIn(session: GameSession, uid: string): GameS
 }
 
 /**
- * Clear a committed lobby word only when another opted-in player is the rightful
- * picker for this round. Never clear when the chooser remains rightful — even if
- * they are briefly `online: false` without a latch (multi-sim AppState race).
+ * Whether lobby sync should wipe a committed base word.
+ * A chosen word must **not** disappear when the picker seat moves (rightful joiner,
+ * offline transfer, leave). The new picker keeps it and may change it or start.
+ * Only clear when the chooser uid is missing from the roster (corrupt/orphan).
  */
 export function shouldClearLobbyBaseWordForPicker(session: GameSession): boolean {
   const word = session.baseWord;
@@ -122,38 +113,26 @@ export function shouldClearLobbyBaseWordForPicker(session: GameSession): boolean
   if (!word || word.length < 2 || !chosenBy) {
     return false;
   }
-  const chooser = session.players[chosenBy];
-  if (!chooser) {
-    return true;
-  }
-  // Voluntary leave forfeits the committed word so the next online picker can choose.
-  if (chooser.hasLeft === true) {
-    return true;
-  }
-  const round = session.baseWordRound ?? 0;
-  const rightful = firstEligibleFromRotation(
-    sessionWithForcedRematchOptIn(session, chosenBy),
-    round,
-  );
-  return rightful !== chosenBy;
+  return session.players[chosenBy] == null;
 }
 
 /**
  * Active picker uid for the current lobby round.
  * Round 1: first eligible in room join order (`baseWordPickerOrder`).
- * Later rounds: walk join order from the round slot among **opted-in / eligible**
- * players only — skip anyone who has not joined this rematch round yet.
+ * Later rounds: walk join order from the round slot among **online** eligible
+ * players only — skip anyone offline.
  * Sole first rematcher may pick and start; when the rightful later joiner opts in
- * before start, rotation recalculates and they take the seat (word from a
- * non-current picker is cleared by `syncLobbyPickerState`).
- * A committed word by the still-rightful chooser sticks across brief offline.
+ * before start, rotation recalculates and they take the seat — the committed word
+ * stays for them to keep, change, or start with.
+ * A committed word does not pin the seat to an offline chooser.
  */
 export function currentBaseWordPickerUid(session: GameSession): string {
   const round = session.baseWordRound ?? 0;
   const chosenBy = session.baseWordChosenBy;
   const word = session.baseWord;
   const chooser = chosenBy ? session.players[chosenBy] : undefined;
-  const chooserStillInSeat = chooser != null && chooser.hasLeft !== true;
+  // Sticky seat only while the chooser is still online and remains rightful.
+  const chooserStillInSeat = chooser != null && chooser.hasLeft !== true && chooser.online === true;
   if (
     isRematchWaitingLobby(session) &&
     chosenBy &&

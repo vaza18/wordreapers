@@ -100,7 +100,10 @@ export default function ArchivedRoundResultsScreen() {
       headerTitle: () => (
         <StackHeaderTitle
           title={viewData.baseWordDisplay}
-          subtitle={t('history.roomCode', { code: parsed.gameId })}
+          subtitle={t('history.roomCodeWithRound', {
+            code: parsed.gameId,
+            round: parsed.baseWordRound + 1,
+          })}
         />
       ),
       headerTitleAlign: 'center' as const,

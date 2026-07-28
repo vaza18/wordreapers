@@ -8,6 +8,34 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 <!-- Add dated notes at the top -->
 
+### 2026-07-28 — Finish must not rewrite peer presence (LRAHP)
+
+- R62F9 `online`/`hasLeft` validate blocked whole-session finish → stuck `playing` → rematch `REMATCH_FAILED`. Leaf-path finish + unchanged validate + rematch heal. Deploy rules.
+
+### 2026-07-28 — Rematch PD must not false-join (R62F9 forks)
+
+- Metro: both clients `update … permission_denied` then `joined rematch lobby (peer already opened waiting)` → divergent pick-word. Fix: status-only CAS + follow-up without peer presence; follow-up PD ≠ join. Promoted to `known-issues.md`.
+
+### 2026-07-28 — Second rematch must not rewrite players map (R62F9)
+
+- `players/.write` / session write cascade allowed peer `online` while already `waiting` → second «Грати ще» logged `opened rematch lobby` with peer `off` sans latch → Home/rejoin «Гравці (1)». Fix: rematch leaf paths + `.validate` on `online`/`hasLeft` (peer only `finished→waiting`); PD→join.
+
+### 2026-07-28 — Pick-word seat yield must not require focus (ZF6U4)
+
+- Direct rematch→pick-word + `isFocused` gate left early rematcher on pick-word while rightful peer opted in on the other sim. Fix: `shouldLeavePickWordScreen` without focus; sync picker from pick-word; re-check picker before base-word write.
+
+### 2026-07-28 — Rematch must not use whole-session transaction (T2ZJU)
+
+- Results `markPlayerOffline` on `players/$uid/online` aborts parent `runTransaction` → `maxretry`. Live rematch claims with **status-only** tx + follow-up `update` (no peer presence); AH2TN via join when status already waiting.
+
+### 2026-07-28 — Offline rematch picker must not hold seat
+
+- Product: background/lock/force-quit picker → transfer seat to next online. Latch = lobby visibility only. Promoted to `known-issues.md` + §4 Eligible.
+
+### 2026-07-28 — Rematch Home leave vs background rejoin (NLD7S)
+
+- Metro marker: `left the round early` then `rejoined room after leaving` within ~30ms. Results Home with frozen finished + live waiting needed leave guard; `rejoinExistingPlayer` must not clear `hasLeft` without `reviveAfterLeave`. Promoted to `known-issues.md`.
+
 ### 2026-07-24 — Review follow-up: §5 roster + capped lobby heal
 
 - Synced §5 `liveRoundPlayerUids` wording with §3 / `waitingLobbyOptInUids` (latch-inclusive at start). Rematch lobby base-word RTDB heal poll capped at 15×2s via `lobby-rematch-base-word-heal`; focus/AppState/`justOptedIn` heals unchanged.
@@ -18,7 +46,7 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 ### 2026-07-24 — AH2TN second rematch rewrite
 
-- Symptom log: first `opened rematch lobby` then second also `opened rematch lobby` (not `joined…`) with peer `off` and no latch → divergent base words. Fix: rematch transition is transactional; already-waiting → join only.
+- Symptom log: first `opened rematch lobby` then second also `opened rematch lobby` (not `joined…`) with peer `off` and no latch → divergent base words. Fix: rematch is atomic `update()`; already-waiting → join only (peer rewrite denied by rules once `waiting`).
 
 ### 2026-07-24 — Roster details in multiplayer Metro logs
 
