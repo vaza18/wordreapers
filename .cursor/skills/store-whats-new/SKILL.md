@@ -86,8 +86,24 @@ Write for **players / parents**, not engineers:
 - Short bullets or short sentences (Ukrainian).
 - Lead with the most user-visible wins.
 - Skip CI, refactors, dependency bumps, internal renames unless they fix a user-facing bug worth mentioning.
-- Prefer concrete wording («Виправили зависання кімнати після рематчу») over vague («Покращення стабільності»).
+- Prefer concrete wording («Виправили зависання кімнати після «Грати ще»») over vague («Покращення стабільності»).
 - Count characters carefully; stay **≤ 500**. If over, cut lowest-priority items first.
+
+#### Plain Ukrainian (no slang)
+
+Store text must read naturally for parents and kids. **Do not** use gamer/dev loanwords or slang in the published body or in the **Причина** line.
+
+| Avoid (slang / jargon) | Prefer |
+| ---------------------- | ------ |
+| рематч, rematch | новий раунд, «Грати ще», повторна гра |
+| лобі, lobby | кімната, екран очікування, очікування гравців |
+| пікер, picker | хто обирає слово, гравець що обирає базове слово |
+| онлайн-сесія, presence, sync, RTDB | кімната, підключення, гравці в кімнаті |
+| UI, UX, багфікс | екран, зручність, виправили |
+
+Also avoid: англіцизми на кшталт «фіча», «апдейт», «краш» — пиши «нова можливість», «оновлення», «аварійне завершення» / «зависання» за змістом.
+
+Internal commit messages may say rematch/lobby; **translate** them into plain Ukrainian before drafting.
 
 ### 5. Output format (exact)
 
@@ -122,14 +138,17 @@ Optional below the block (not inside it): brief bullet list of commits/files tha
 Good:
 
 ```text
-• Виправили відображення результатів після рематчу
+• Виправили відображення результатів після «Грати ще»
 • Стабільніша онлайн-кімната при підключенні посеред раунду
+• Зручніший екран очікування гравців і вибір базового слова
 • Дрібні покращення текстів і зручності
 ```
 
-Avoid:
+Avoid (slang or engineer-speak):
 
 ```text
+• Стабільніший рематч і лобі
+• Fix rematch Home leave / presence reconcile
 • Refactor lib/online presence helpers
 • Bump eslint and vitest
 • Sync firebase schema docs
