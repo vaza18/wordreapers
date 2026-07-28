@@ -108,7 +108,13 @@ export function resolvePlayScreenActions(ctx: PlayScreenContext): PlayScreenActi
   }
 
   let shouldRedirectToResults = false;
-  if (session.status === 'playing' && myUid && !leavingIntentionally && !activeInLiveRound) {
+  if (
+    session.status === 'playing' &&
+    myUid &&
+    !leavingIntentionally &&
+    !activeInLiveRound &&
+    !shouldRejoin
+  ) {
     const player = session.players[myUid];
     if (player && player.hasLeft !== true && player.online === true && !reviewingPriorRound) {
       shouldRedirectToResults = true;

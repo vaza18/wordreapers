@@ -76,15 +76,16 @@ describe('restartRematchOnlineRound', () => {
     expect(rematchFinishedSessionToWaiting).not.toHaveBeenCalled();
   });
 
-  it('ignores permission-denied RTDB reads and bootstraps from archive', async () => {
+  it('does not bootstrap from archive on permission-denied RTDB reads', async () => {
     const permissionDenied = Object.assign(new Error('PERMISSION_DENIED'), {
       code: 'PERMISSION_DENIED',
     });
     getMock.mockRejectedValue(permissionDenied);
 
-    await restartRematchOnlineRound('ABCDE', 'org', 0);
+    await expect(restartRematchOnlineRound('ABCDE', 'org', 0)).rejects.toBe(permissionDenied);
 
-    expect(bootstrapRematchWaitingFromArchive).toHaveBeenCalledWith('ABCDE', 'org', 0);
+    expect(bootstrapRematchWaitingFromArchive).not.toHaveBeenCalled();
+    expect(rematchFinishedSessionToWaiting).not.toHaveBeenCalled();
   });
 
   it('rethrows non-permission RTDB read errors', async () => {

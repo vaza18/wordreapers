@@ -427,6 +427,39 @@ describe('game-session-service extended', () => {
     expect(onSession.mock.calls[0][0]).not.toHaveProperty('wordPlayers');
   });
 
+  it('does not clear the session listener on transient RTDB subscribe errors', async () => {
+    onValueMock.mockImplementation(() => vi.fn());
+
+    const onSession = vi.fn();
+    subscribeGameSession('ABCDE', onSession);
+
+    await vi.waitFor(() => {
+      expect(onValueMock).toHaveBeenCalled();
+    });
+
+    const onNext = onValueMock.mock.calls[0]?.[1] as (snapshot: {
+      exists: () => boolean;
+      val: () => unknown;
+    }) => void;
+    const onError = onValueMock.mock.calls[0]?.[2] as ((error: Error) => void) | undefined;
+
+    onNext({
+      exists: () => true,
+      val: () => waitingSession,
+    });
+    expect(onSession).toHaveBeenCalledTimes(1);
+
+    onError?.(Object.assign(new Error('Permission denied'), { code: 'PERMISSION_DENIED' }));
+    expect(onSession).toHaveBeenCalledTimes(1);
+
+    onNext({
+      exists: () => false,
+      val: () => null,
+    });
+    expect(onSession).toHaveBeenCalledTimes(2);
+    expect(onSession).toHaveBeenLastCalledWith(null);
+  });
+
   it('subscribes to presence reconnect after app check', async () => {
     onValueMock.mockImplementation(() => vi.fn());
 

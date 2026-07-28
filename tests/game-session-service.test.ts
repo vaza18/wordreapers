@@ -167,6 +167,28 @@ describe('game-session-service', () => {
     }
   });
 
+  it('only marks offline on rematch waiting presence unmount (does not set hasLeft)', async () => {
+    getMock.mockResolvedValue({
+      exists: () => true,
+      val: () => ({
+        ...waitingSession,
+        baseWordRound: 2,
+        players: {
+          'org-1': { name: 'Org', wordCount: 0, score: 0, online: true },
+          guest: { name: 'Guest', wordCount: 0, score: 0, online: true },
+        },
+      }),
+    });
+
+    await voluntaryLeaveWaitingLobbyIfMember('ABCDE', 'guest');
+
+    expect(updateMock).toHaveBeenCalledWith(expect.anything(), { online: false });
+    expect(updateMock).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ hasLeft: true }),
+    );
+  });
+
   it('marks an existing player offline', async () => {
     await markPlayerOffline('ABCDE', 'org-1');
 
@@ -210,6 +232,13 @@ describe('game-session-service', () => {
     getMock.mockResolvedValue({ exists: () => false });
 
     await expect(tryReadGameSessionSnapshot('ABCDE')).resolves.toBeNull();
+  });
+
+  it('rethrows permission-denied instead of treating the room as missing', async () => {
+    const denied = Object.assign(new Error('PERMISSION_DENIED'), { code: 'PERMISSION_DENIED' });
+    getMock.mockRejectedValue(denied);
+
+    await expect(tryReadGameSessionSnapshot('ABCDE')).rejects.toBe(denied);
   });
 
   it('deletes a solo waiting room when the organizer abandons it', async () => {

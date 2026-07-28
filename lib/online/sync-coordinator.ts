@@ -22,6 +22,7 @@ import {
   markFinishedArchiveAckSent,
 } from './session/online-session-archive.js';
 import { allSessionPlayersOffline } from './presence/session-offline.js';
+import { shouldOrganizerAbandonWaitingRoom } from './should-organizer-abandon-waiting-room.js';
 import { notifyRoundFinishedOnce } from './round-finished-notification-once.js';
 import {
   buildSyncWorkQueue,
@@ -74,6 +75,10 @@ async function tryAbandonStaleWaitingRoom(
   uid?: string,
 ): Promise<void> {
   if (session.status !== 'waiting' || !uid || session.organizerId !== uid) {
+    return;
+  }
+  // Rematch latch / online peers must keep the room (same as explicit organizer leave).
+  if (!shouldOrganizerAbandonWaitingRoom(session, uid)) {
     return;
   }
   if (!allSessionPlayersOffline(session)) {

@@ -2,7 +2,6 @@ import { get } from 'firebase/database';
 
 import { rematchFinishedSessionToWaiting } from '../../firebase/game-session-service.js';
 import { sessionRef } from '../../firebase/session-ref.js';
-import { isFirebasePermissionDenied } from '../../firebase/rtdb-errors.js';
 import { normalizeRoomCode } from '../../firebase/room-code.js';
 
 import { bootstrapRematchWaitingFromArchive } from './bootstrap-rematch-waiting-from-archive.js';
@@ -18,15 +17,11 @@ export async function restartRematchOnlineRound(
   baseWordRound: number,
 ): Promise<void> {
   const normalized = normalizeRoomCode(gameId);
-  let raw: unknown = null;
-  try {
-    const snapshot = await get(sessionRef(normalized));
-    raw = snapshot.exists() ? snapshot.val() : null;
-  } catch (error) {
-    if (!isFirebasePermissionDenied(error)) {
-      throw error;
-    }
-  }
+  // Permission-denied must not be treated as «missing» — App Check / auth glitches
+  // would otherwise bootstrap from archive and race an active room (rules allow
+  // reading absent roots; PD means the read failed, not that the room is gone).
+  const snapshot = await get(sessionRef(normalized));
+  const raw: unknown = snapshot.exists() ? snapshot.val() : null;
   const presence = resolveRematchRtdbPresence(raw);
   const action = planRematchAction(presence);
 

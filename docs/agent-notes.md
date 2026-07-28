@@ -8,6 +8,11 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 <!-- Add dated notes at the top -->
 
+### 2026-07-28 — Multi-round eject hardening
+
+- Transient RTDB/App Check errors must not emit session `null` or sticky play `loadError`; rematch must not bootstrap on `permission_denied`; presence reconcile failures must not call `onJoinFailed`→eject.
+- Rematch waiting presence unmount must not `hasLeft`; sync abandon must respect rematch latch; prefer rejoin over results redirect when online∉liveUids.
+
 ### 2026-07-24 — Review follow-up: §5 roster + capped lobby heal
 
 - Synced §5 `liveRoundPlayerUids` wording with §3 / `waitingLobbyOptInUids` (latch-inclusive at start). Rematch lobby base-word RTDB heal poll capped at 15×2s via `lobby-rematch-base-word-heal`; focus/AppState/`justOptedIn` heals unchanged.

@@ -1,10 +1,10 @@
 import { router } from 'expo-router';
 import { useEffect, useRef, type RefObject } from 'react';
-import { useTranslation } from 'react-i18next';
 import { AppState, type AppStateStatus } from 'react-native';
 
 import type { GameSessionSnapshot } from '@/lib/firebase/game-session-service';
 import { markPlayerOffline } from '@/lib/firebase/game-session-service';
+import { devLogAction } from '@/lib/debug/dev-log';
 import { resolvePlayScreenActions } from '@/lib/online/live-round-screen-actions';
 import { onlineResultsRoute } from '@/lib/online/online-results-route';
 import { shouldMarkPresenceOnline } from '@/lib/online/presence/app-presence-state';
@@ -21,7 +21,6 @@ type UseLiveRoundPlayScreenParams = {
   frozenBaseWordRound: number | null | undefined;
   isFocused: boolean;
   leavingIntentionallyRef: RefObject<boolean>;
-  onJoinFailed: (message: string) => void;
 };
 
 /**
@@ -36,9 +35,7 @@ export function useLiveRoundPlayScreen({
   frozenBaseWordRound,
   isFocused,
   leavingIntentionallyRef,
-  onJoinFailed,
 }: UseLiveRoundPlayScreenParams): void {
-  const { t } = useTranslation();
   const stalePresenceReconcileRef = useRef<string | null>(null);
   const presenceReconcileInFlightRef = useRef(false);
 
@@ -69,11 +66,14 @@ export function useLiveRoundPlayScreen({
         stalePresenceReconcileRef.current = roundKey;
       })
       .catch((error) => {
+        // Do not set loadError / eject — flaky network or App Check must not
+        // end the round UI; shouldRejoin will retry on the next snapshot / foreground.
         stalePresenceReconcileRef.current = null;
-        onJoinFailed(t('online.errorJoinFailed'));
-        if (__DEV__) {
-          console.warn('rejoinExistingPlayer presence reconcile', error);
-        }
+        devLogAction('presence reconcile failed', {
+          level: 'detail',
+          room: gameId,
+          details: error instanceof Error ? error.message : String(error),
+        });
       })
       .finally(() => {
         presenceReconcileInFlightRef.current = false;
@@ -95,7 +95,7 @@ export function useLiveRoundPlayScreen({
     }
     runPresenceReconcile(roundKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- profile from store; reconcile on shouldRejoin/session
-  }, [actions?.shouldRejoin, frozenBaseWordRound, gameId, myUid, onJoinFailed, session, t]);
+  }, [actions?.shouldRejoin, frozenBaseWordRound, gameId, myUid, session]);
 
   // Foreground after background: shouldRejoin may already be true without deps changing — re-run reconcile.
   useEffect(() => {
@@ -121,7 +121,7 @@ export function useLiveRoundPlayScreen({
       sub.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- AppState listener; rebind when rejoin intent changes
-  }, [actions?.shouldRejoin, frozenBaseWordRound, gameId, myUid, onJoinFailed, session, t]);
+  }, [actions?.shouldRejoin, frozenBaseWordRound, gameId, myUid, session]);
 
   useEffect(() => {
     if (!isFocused || !gameId || !myUid || !session || !actions?.shouldRedirectToResults) {

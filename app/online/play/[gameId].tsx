@@ -349,7 +349,6 @@ export default function OnlinePlayScreen() {
       roundEndSessionSnapshot?.baseWordRound ?? localTimeUpBaseWordRound ?? playRoundKeyRef.current,
     isFocused: isPlayScreenFocused,
     leavingIntentionallyRef,
-    onJoinFailed: setLoadError,
   });
 
   useEffect(() => {
@@ -882,23 +881,40 @@ export default function OnlinePlayScreen() {
   isPausedRef.current = isPaused;
 
   const syncSessionFromRtdb = useCallback(async () => {
-    const snap = await tryReadGameSessionSnapshot(gameId);
-    if (!snap) {
-      return;
+    try {
+      const snap = await tryReadGameSessionSnapshot(gameId);
+      if (!snap) {
+        return;
+      }
+      setSessionCore((prev) => mergePlaySessionSubscription(prev, snap));
+    } catch (error) {
+      devLogAction('syncSessionFromRtdb failed', {
+        level: 'detail',
+        room: gameId,
+        details: error instanceof Error ? error.message : String(error),
+      });
     }
-    setSessionCore((prev) => mergePlaySessionSubscription(prev, snap));
   }, [gameId]);
 
   const resyncIfRemoteClockAlive = useCallback(async () => {
-    const snap = await tryReadGameSessionSnapshot(gameId);
-    if (!snap) {
+    try {
+      const snap = await tryReadGameSessionSnapshot(gameId);
+      if (!snap) {
+        return false;
+      }
+      if (!isRemoteRoundClockStillRunning(snap, getServerNow())) {
+        return false;
+      }
+      setSessionCore((prev) => mergePlaySessionSubscription(prev, snap));
+      return true;
+    } catch (error) {
+      devLogAction('resyncIfRemoteClockAlive failed', {
+        level: 'detail',
+        room: gameId,
+        details: error instanceof Error ? error.message : String(error),
+      });
       return false;
     }
-    if (!isRemoteRoundClockStillRunning(snap, getServerNow())) {
-      return false;
-    }
-    setSessionCore((prev) => mergePlaySessionSubscription(prev, snap));
-    return true;
   }, [gameId]);
 
   const attemptExpireFinish = useCallback(() => {

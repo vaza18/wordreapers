@@ -174,6 +174,51 @@ describe('sync-coordinator', () => {
     expect(abandonWaitingGameSession).toHaveBeenCalledWith('WAIT1', 'org');
   });
 
+  it('does not abandon rematch waiting when an offline peer still has the opt-in latch', async () => {
+    vi.mocked(listFinishedRoundArchives).mockResolvedValue([
+      {
+        gameId: 'WAIT2',
+        baseWordRound: 1,
+        savedAt: 1_000,
+        ackSent: false,
+        session: {
+          baseWord: 'тест',
+          status: 'waiting',
+          settings: DEFAULT_SESSION_SETTINGS,
+          timerEndsAt: null,
+          organizerId: 'org',
+          baseWordRound: 1,
+          resultsExitedBy: { peer: true },
+          players: {
+            org: { name: 'Org', wordCount: 0, score: 0, online: false },
+            peer: { name: 'Peer', wordCount: 0, score: 0, online: false },
+          },
+        },
+        playerWords: {},
+      },
+    ]);
+    getMock.mockResolvedValue({
+      exists: () => true,
+      val: () => ({
+        baseWord: 'тест',
+        status: 'waiting',
+        settings: DEFAULT_SESSION_SETTINGS,
+        timerEndsAt: null,
+        organizerId: 'org',
+        baseWordRound: 1,
+        resultsExitedBy: { peer: true },
+        players: {
+          org: { name: 'Org', wordCount: 0, score: 0, online: false },
+          peer: { name: 'Peer', wordCount: 0, score: 0, online: false },
+        },
+      }),
+    });
+
+    await syncFinishedRoundsCoordinator({ uid: 'org' });
+
+    expect(abandonWaitingGameSession).not.toHaveBeenCalled();
+  });
+
   it('skips sync work for the active play screen game', async () => {
     vi.mocked(listPendingRoundArchives).mockResolvedValue([
       { gameId: 'ABCDE', baseWordRound: 0, uid: 'org', markedAt: 1_000 },

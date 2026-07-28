@@ -39,6 +39,7 @@ import {
 import { syncPublicRosterAliases } from '@/lib/firebase/public-lobby-service';
 import { clearWaitingLobbyPlayerWordsAsOrganizer } from '@/lib/firebase/player-words-service';
 import { ensureAnonymousAuth } from '@/lib/firebase/auth';
+import { devLogAction } from '@/lib/debug/dev-log';
 import {
   baseWordPickerTurnNumber,
   currentBaseWordPickerUid,
@@ -140,6 +141,8 @@ export default function LobbyScreen() {
   // (focus return from pick-word, or AppState active after multi-sim inactive).
   // Missing / orphan RTDB roots must clear local state — otherwise a zombie lobby
   // keeps showing «Почати гру» while join correctly reports the room is gone.
+  // Permission-denied / other read failures must not clear — App Check glitches
+  // would otherwise eject players from an active rematch lobby.
   const healLobbySessionFromRtdb = useCallback(() => {
     if (!gameId) {
       return;
@@ -157,9 +160,11 @@ export default function LobbyScreen() {
         setLoading(false);
       })
       .catch((error) => {
-        if (__DEV__) {
-          console.warn('lobby tryReadGameSessionSnapshot heal', error);
-        }
+        devLogAction('lobby session heal failed', {
+          level: 'detail',
+          room: gameId,
+          details: error instanceof Error ? error.message : String(error),
+        });
       });
   }, [gameId]);
 
@@ -266,7 +271,6 @@ export default function LobbyScreen() {
     session,
     isFocused,
     justOptedIn,
-    onJoinFailed: setError,
   });
 
   usePlayerOnlinePresence(

@@ -60,8 +60,10 @@ export function mergePlaySessionSubscription(
   if (!prev) {
     return next;
   }
-  const prevRoundLive = prev.status === 'playing' || prev.timerEndsAt != null;
+  const prevRoundLive =
+    prev.status === 'playing' || prev.status === 'finished' || prev.timerEndsAt != null;
   const nextLooksWaiting = next.status === 'waiting' && next.timerEndsAt == null;
+  // Ignore rematch waiting while this client still shows the just-finished (or live) round.
   if (prevRoundLive && nextLooksWaiting) {
     return prev;
   }

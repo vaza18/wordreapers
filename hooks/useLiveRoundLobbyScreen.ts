@@ -1,11 +1,11 @@
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import {
   readGameSessionSnapshot,
   type GameSessionSnapshot,
 } from '@/lib/firebase/game-session-service';
+import { devLogAction } from '@/lib/debug/dev-log';
 import { resolveLobbyScreenActions } from '@/lib/online/live-round-screen-actions';
 import { onlineResultsRoute } from '@/lib/online/online-results-route';
 import { handoffPlayerPresence } from '@/lib/online/presence/presence-handoff';
@@ -24,7 +24,6 @@ type UseLiveRoundLobbyScreenParams = {
   session: GameSessionSnapshot | null;
   isFocused: boolean;
   justOptedIn?: boolean;
-  onJoinFailed: (message: string) => void;
 };
 
 /**
@@ -36,9 +35,7 @@ export function useLiveRoundLobbyScreen({
   session,
   isFocused,
   justOptedIn,
-  onJoinFailed,
 }: UseLiveRoundLobbyScreenParams): void {
-  const { t } = useTranslation();
   const lateJoinRoundKeyRef = useRef<string | null>(null);
   const rematchPresenceReconcileKeyRef = useRef<string | null>(null);
   const rematchPresenceReconcileInFlightRef = useRef(false);
@@ -140,11 +137,14 @@ export function useLiveRoundLobbyScreen({
         rematchPresenceReconcileKeyRef.current = roundKey;
       })
       .catch((error) => {
+        // Transient presence failures must not surface as join-failed on an
+        // otherwise healthy rematch lobby (retry on next session tick / focus).
         rematchPresenceReconcileKeyRef.current = null;
-        onJoinFailed(t('online.errorJoinFailed'));
-        if (__DEV__) {
-          console.warn('lobby rematch waiting presence reconcile', error);
-        }
+        devLogAction('lobby rematch presence reconcile failed', {
+          level: 'detail',
+          room: gameId,
+          details: error instanceof Error ? error.message : String(error),
+        });
       })
       .finally(() => {
         rematchPresenceReconcileInFlightRef.current = false;
@@ -157,9 +157,7 @@ export function useLiveRoundLobbyScreen({
     lobbyFlags?.baseWordRound,
     lobbyFlags?.shouldReconcileRematchWaitingPresence,
     myUid,
-    onJoinFailed,
     session,
-    t,
   ]);
 
   useEffect(() => {
@@ -203,10 +201,11 @@ export function useLiveRoundLobbyScreen({
       })
       .catch((error) => {
         lateJoinRoundKeyRef.current = null;
-        onJoinFailed(t('online.errorJoinFailed'));
-        if (__DEV__) {
-          console.warn('lobby late join live round', error);
-        }
+        devLogAction('lobby late join live round failed', {
+          level: 'detail',
+          room: gameId,
+          details: error instanceof Error ? error.message : String(error),
+        });
       });
 
     return () => {
@@ -219,8 +218,6 @@ export function useLiveRoundLobbyScreen({
     lobbyFlags?.shouldAutoJoinLiveRound,
     lobbyFlags?.timerEndsAt,
     myUid,
-    onJoinFailed,
     session,
-    t,
   ]);
 }

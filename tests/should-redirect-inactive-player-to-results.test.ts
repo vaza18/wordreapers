@@ -69,7 +69,7 @@ describe('resolvePlayScreenActions.shouldRedirectToResults', () => {
     ).toBe(false);
   });
 
-  it('returns true for online roster member not in liveRoundPlayerUids', () => {
+  it('prefers rejoin over redirect when online but missing from liveRoundPlayerUids', () => {
     expect(
       shouldRedirectInactivePlayerToResults(
         playingSession(
@@ -82,7 +82,7 @@ describe('resolvePlayScreenActions.shouldRedirectToResults', () => {
         false,
         null,
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('returns false while reviewing a frozen prior round on play', () => {

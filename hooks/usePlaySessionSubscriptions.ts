@@ -23,6 +23,8 @@ import {
 } from '@/lib/game/compose-resume-heal';
 import { shouldMarkPresenceOnline } from '@/lib/online/presence/app-presence-state';
 import { mergePlaySessionSubscription } from '@/lib/online/session/play-session-bootstrap';
+import { nextPlaySessionLoadError } from '@/lib/online/session/play-session-load-error';
+import { devLogAction } from '@/lib/debug/dev-log';
 
 type UsePlaySessionSubscriptionsParams = {
   gameId: string;
@@ -62,9 +64,9 @@ export function usePlaySessionSubscriptions({
       unsubSession = subscribeGameSession(gameId, (next) => {
         setSessionCore((prev) => mergePlaySessionSubscription(prev, next));
         setLoading(false);
-        if (!next) {
-          setLoadError(t('online.errorRoomNotFound'));
-        }
+        setLoadError((prevError) =>
+          nextPlaySessionLoadError(prevError, next, t('online.errorRoomNotFound')),
+        );
       });
       unsubMaps = subscribeSessionWordMaps(gameId, (maps) => {
         queueMicrotask(() => {
@@ -99,19 +101,30 @@ export function usePlaySessionSubscriptions({
         try {
           await markPlayerOnline(gameId, myUid);
         } catch (error) {
-          if (__DEV__) {
-            console.warn('markPlayerOnline on AppState active', error);
-          }
+          devLogAction('markPlayerOnline on AppState active failed', {
+            level: 'detail',
+            room: gameId,
+            details: error instanceof Error ? error.message : String(error),
+          });
         }
         if (!shouldMarkPresenceOnline(AppState.currentState)) {
           return;
         }
         const [snap, remoteWords] = await Promise.all([
-          tryReadGameSessionSnapshot(gameId),
+          tryReadGameSessionSnapshot(gameId).catch((error: unknown) => {
+            devLogAction('tryReadGameSessionSnapshot on AppState active failed', {
+              level: 'detail',
+              room: gameId,
+              details: error instanceof Error ? error.message : String(error),
+            });
+            return null;
+          }),
           getOwnPlayerWords(gameId, myUid).catch((error: unknown) => {
-            if (__DEV__) {
-              console.warn('getOwnPlayerWords on AppState active', error);
-            }
+            devLogAction('getOwnPlayerWords on AppState active failed', {
+              level: 'detail',
+              room: gameId,
+              details: error instanceof Error ? error.message : String(error),
+            });
             return null;
           }),
         ]);

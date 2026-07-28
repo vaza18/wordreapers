@@ -8,6 +8,22 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — Multi-round eject: presence unmount leave + sync abandon rematch
+
+- **Symptom:** Non-organizer on time-up while peer rematches gets `hasLeft` / disappears from rematch lobby; or sync coordinator deletes rematch waiting while latched peers are briefly offline.
+- **Cause:** Play disables presence on `roundEnded`; cleanup called `voluntaryLeaveWaitingLobbyIfMember` → full leave on any `waiting`. Sync abandon used only `allSessionPlayersOffline`, ignoring `resultsExitedBy`. Also: online∉`liveRoundPlayerUids` raced redirect-to-results ahead of rejoin.
+- **Fix:** Rematch waiting presence unmount only marks offline; sync abandon uses `shouldOrganizerAbandonWaitingRoom`; prefer rejoin over results redirect when heal applies.
+- **Test:** `tests/presence-unmount-leave.test.ts`, `tests/game-session-service.test.ts`, `tests/sync-coordinator.test.ts`, `tests/should-redirect-inactive-player-to-results.test.ts`
+- **Area:** `lib/online/presence/presence-unmount-leave.ts`, `lib/firebase/game-session-service.ts`, `lib/online/sync-coordinator.ts`, `lib/online/live-round-screen-actions.ts`
+
+### 2026-07 — Multi-round eject: RTDB glitch → «кімнату не знайдено»
+
+- **Symptom:** Testers leave (or appear ejected from) a multiplayer room after several rematch rounds, especially with pauses or flaky internet — play/lobby shows room-not-found / join-failed with Home.
+- **Cause:** (1) `subscribeGameSession` called `listener(null)` on any RTDB error (App Check / network), wiping session; play set sticky `loadError` that never cleared on recovery. (2) `tryReadGameSessionSnapshot` and rematch restart treated `permission_denied` as room-missing → lobby heal cleared UI; rematch could bootstrap from archive. (3) Presence reconcile failures called `onJoinFailed` → `setLoadError` and ejected mid-round. (4) Rematch `waiting` overwrote a local `finished` play snapshot, enabling lobby redirect.
+- **Fix:** Subscribe errors no longer emit null; play clears loadError when session recovers; tryRead/rematch rethrow PD; presence failures retry silently; merge keeps finished against rematch waiting.
+- **Test:** `tests/game-session-service-extended.test.ts`, `tests/game-session-service.test.ts`, `tests/restart-rematch-online-round-flow.test.ts`, `tests/play-session-load-error.test.ts`, `tests/play-session-bootstrap.test.ts`
+- **Area:** `lib/firebase/game-session-service.ts`, `hooks/usePlaySessionSubscriptions.ts`, `hooks/useLiveRoundPlayScreen.ts`, `hooks/useLiveRoundLobbyScreen.ts`, `lib/online/rematch/restart-rematch-online-round.ts`, `lib/online/session/play-session-bootstrap.ts`
+
 ### 2026-07 — Picker left rematch lobby; peer stuck waiting for them (75AGB)
 
 - **Symptom:** Rightful rematch picker leaves to home; remaining player sees them offline in the list and UI still says «Чекаємо, поки … обере базове слово» — cannot pick/start.

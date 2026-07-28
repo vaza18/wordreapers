@@ -13,6 +13,7 @@ import { AppState } from 'react-native';
 import { runRtdbTransaction } from './rtdb-transaction.js';
 import { shouldMarkPresenceOnline } from '../online/presence/app-presence-state.js';
 import { presenceWriteQueue } from '../online/presence/presence-write-queue.js';
+import { shouldLeaveWaitingLobbyOnPresenceUnmount } from '../online/presence/presence-unmount-leave.js';
 import { devLogAction } from '../debug/dev-log.js';
 
 import { isOrphanGameSessionShell, orphanShellHasPlayer } from '../online/orphan-game-session.js';
@@ -436,7 +437,10 @@ export async function readGameSessionSnapshot(gameId: string): Promise<GameSessi
   return readSessionSnapshot(gameId);
 }
 
-/** Like `readGameSessionSnapshot`, but returns null when the room root is absent. */
+/**
+ * Like `readGameSessionSnapshot`, but returns null when the room root is absent.
+ * Permission-denied is rethrown — callers must not treat App Check / auth glitches as room-gone.
+ */
 export async function tryReadGameSessionSnapshot(
   gameId: string,
 ): Promise<GameSessionSnapshot | null> {
@@ -444,9 +448,6 @@ export async function tryReadGameSessionSnapshot(
     return await readSessionSnapshot(gameId);
   } catch (error) {
     if (error instanceof Error && error.message === 'ROOM_NOT_FOUND') {
-      return null;
-    }
-    if (isFirebasePermissionDenied(error)) {
       return null;
     }
     throw error;
@@ -958,10 +959,13 @@ export function subscribeGameSession(
           listener(gameSessionSnapshotFromRtdbVal(normalized, raw));
         },
         (error) => {
-          if (__DEV__) {
-            console.warn('subscribeGameSession', error);
-          }
-          listener(null);
+          // Transient App Check / network / auth glitches must not wipe the last
+          // good snapshot — callers treat null as confirmed room-gone (eject UI).
+          devLogAction('subscribeGameSession listener error', {
+            level: 'error',
+            room: normalized,
+            details: error instanceof Error ? error.message : String(error),
+          });
         },
       );
     });
@@ -1267,7 +1271,7 @@ export async function voluntaryLeaveWaitingLobbyIfMember(
     if (player.hasLeft === true && player.online !== true) {
       return;
     }
-    if (session.status === 'waiting' && session.organizerId !== uid) {
+    if (shouldLeaveWaitingLobbyOnPresenceUnmount(session, uid)) {
       await leaveGameSession(normalized, uid);
       return;
     }

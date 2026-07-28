@@ -81,4 +81,14 @@ describe('mergePlaySessionSubscription', () => {
     });
     expect(mergePlaySessionSubscription(paused, withResume)).toEqual(withResume);
   });
+
+  it('keeps finished snapshot when rematch waiting arrives (peer opened rematch)', () => {
+    const finished = snapshot('finished', { timerEndsAt: null, baseWordRound: 2 });
+    const rematchWaiting = snapshot('waiting', {
+      timerEndsAt: null,
+      baseWordRound: 3,
+      baseWord: '',
+    });
+    expect(mergePlaySessionSubscription(finished, rematchWaiting)).toBe(finished);
+  });
 });
