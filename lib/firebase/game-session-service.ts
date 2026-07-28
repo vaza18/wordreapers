@@ -1,4 +1,5 @@
 import {
+  child,
   get,
   onDisconnect,
   onValue,
@@ -13,6 +14,7 @@ import { AppState } from 'react-native';
 import { runRtdbTransaction } from './rtdb-transaction.js';
 import { shouldMarkPresenceOnline } from '../online/presence/app-presence-state.js';
 import { presenceWriteQueue } from '../online/presence/presence-write-queue.js';
+import { shouldLeaveWaitingLobbyOnPresenceUnmount } from '../online/presence/presence-unmount-leave.js';
 import { devLogAction } from '../debug/dev-log.js';
 
 import { isOrphanGameSessionShell, orphanShellHasPlayer } from '../online/orphan-game-session.js';
@@ -436,7 +438,10 @@ export async function readGameSessionSnapshot(gameId: string): Promise<GameSessi
   return readSessionSnapshot(gameId);
 }
 
-/** Like `readGameSessionSnapshot`, but returns null when the room root is absent. */
+/**
+ * Like `readGameSessionSnapshot`, but returns null when the room root is absent.
+ * Permission-denied is rethrown — callers must not treat App Check / auth glitches as room-gone.
+ */
 export async function tryReadGameSessionSnapshot(
   gameId: string,
 ): Promise<GameSessionSnapshot | null> {
@@ -444,9 +449,6 @@ export async function tryReadGameSessionSnapshot(
     return await readSessionSnapshot(gameId);
   } catch (error) {
     if (error instanceof Error && error.message === 'ROOM_NOT_FOUND') {
-      return null;
-    }
-    if (isFirebasePermissionDenied(error)) {
       return null;
     }
     throw error;
@@ -457,14 +459,34 @@ export async function tryReadGameSessionSnapshot(
  * Rejoin a rostered player who left or went offline (clears `hasLeft`, restores presence).
  * Player online + liveRoundPlayerUids append are one session update so routing cannot see
  * online without roster membership (QR rejoin → results while peers still playing).
+ *
+ * Presence/lobby reconcile must not resurrect intentional Home/`hasLeft` leavers — only
+ * explicit opt-in (`reviveAfterLeave`, join, «Грати ще») may clear `hasLeft`.
  */
+export type RejoinExistingPlayerOptions = {
+  reviveAfterLeave?: boolean;
+};
+
 export async function rejoinExistingPlayer(
   gameId: string,
   uid: string,
   profile: PlayerProfile,
+  options?: RejoinExistingPlayerOptions,
 ): Promise<void> {
   const normalized = normalizeRoomCode(gameId);
+  if (isVoluntaryLeaveInFlight(normalized, uid)) {
+    return;
+  }
   const sessionSnapshot = await get(sessionRef(normalized));
+  if (sessionSnapshot.exists()) {
+    const prior = (sessionSnapshot.val() as GameSession).players?.[uid];
+    if (prior?.hasLeft === true && options?.reviveAfterLeave !== true) {
+      return;
+    }
+  }
+  if (isVoluntaryLeaveInFlight(normalized, uid)) {
+    return;
+  }
   const patch: Record<string, unknown> = {};
   const profileFields = profilePatch(profile);
   for (const [key, value] of Object.entries(profileFields)) {
@@ -778,11 +800,11 @@ async function joinGameSessionWithSnapshot(
   }
 
   if (session.players[uid]) {
-    await rejoinExistingPlayer(gameId, uid, profile);
+    await rejoinExistingPlayer(gameId, uid, profile, { reviveAfterLeave: true });
     let updated = await readSessionSnapshot(gameId);
     // One retry if playing but not yet active (rare read/write lag after atomic rejoin).
     if (updated.status === 'playing' && !isActiveLivePlayer(updated, uid)) {
-      await rejoinExistingPlayer(gameId, uid, profile);
+      await rejoinExistingPlayer(gameId, uid, profile, { reviveAfterLeave: true });
       updated = await readSessionSnapshot(gameId);
     }
     if (updated.status === 'waiting' && updated.organizerId === uid) {
@@ -958,10 +980,13 @@ export function subscribeGameSession(
           listener(gameSessionSnapshotFromRtdbVal(normalized, raw));
         },
         (error) => {
-          if (__DEV__) {
-            console.warn('subscribeGameSession', error);
-          }
-          listener(null);
+          // Transient App Check / network / auth glitches must not wipe the last
+          // good snapshot — callers treat null as confirmed room-gone (eject UI).
+          devLogAction('subscribeGameSession listener error', {
+            level: 'error',
+            room: normalized,
+            details: error instanceof Error ? error.message : String(error),
+          });
         },
       );
     });
@@ -1084,6 +1109,18 @@ export async function updateGameSessionSetup(
       throw new Error('BASE_WORD_MISSING');
     }
     await assertSessionBaseWordAllowed(payload.baseWord, session);
+    // Re-read: peer may have taken the seat while dictionary validation ran (ZF6U4).
+    const latestSnap = await get(sessionRef(normalized));
+    if (!latestSnap.exists()) {
+      throw new Error('ROOM_NOT_FOUND');
+    }
+    const latest = latestSnap.val() as GameSession;
+    if (latest.status !== 'waiting') {
+      throw new Error('ROOM_NOT_WAITING');
+    }
+    if (currentBaseWordPickerUid(latest) !== actorUid) {
+      throw new Error('NOT_BASE_WORD_PICKER');
+    }
     updates.baseWord = payload.baseWord;
     updates.baseWordChosenBy = actorUid;
   }
@@ -1267,7 +1304,7 @@ export async function voluntaryLeaveWaitingLobbyIfMember(
     if (player.hasLeft === true && player.online !== true) {
       return;
     }
-    if (session.status === 'waiting' && session.organizerId !== uid) {
+    if (shouldLeaveWaitingLobbyOnPresenceUnmount(session, uid)) {
       await leaveGameSession(normalized, uid);
       return;
     }
@@ -1291,6 +1328,8 @@ export async function gameSessionExists(gameId: string): Promise<boolean> {
 
 /**
  * End the round when server timer has elapsed (any connected client may commit).
+ * Uses leaf-path `update` (not a whole-session transaction) so peer `online`/`hasLeft`
+ * echoes cannot fail `.validate` (LRAHP) and results presence cannot `maxretry` the write.
  */
 export async function finishGameSessionIfExpired(
   gameId: string,
@@ -1313,55 +1352,25 @@ export async function finishGameSessionIfExpired(
     return false;
   }
   const wordMaps = mapsOverride ?? (await fetchSessionWordMaps(normalized));
+  const patch = buildExpiredFinishLeafPatch(preSession, wordMaps);
   try {
-    const result = await runRtdbTransaction(sessionRef(normalized), (current) => {
-      if (current == null) {
-        return undefined;
-      }
-      const session = current as GameSession;
-      if (session.status !== 'playing' || session.timerEndsAt === null) {
-        return undefined;
-      }
-      if (getServerNow() < session.timerEndsAt) {
-        return undefined;
-      }
-      if (session.addTimeVote) {
-        return undefined;
-      }
-      const uniqueBonusEnabled = resolveGameSessionSettingsForSession(session).uniqueBonusEnabled;
-      if (Object.keys(wordMaps.wordPlayers ?? {}).length > 0) {
-        recomputeSessionPlayerScores(
-          { ...session, wordPlayers: wordMaps.wordPlayers },
-          uniqueBonusEnabled,
-        );
-      }
-      const finishAt = session.timerEndsAt;
-      const roundPlayedSeconds = computeRoundPlayedSecondsAtFinish(session, finishAt);
-      return withFinishedPurgeFields(
-        {
-          ...session,
-          status: 'finished',
-          timerEndsAt: null,
-          addTimeVote: null,
-          pauseState: null,
-          pauseVote: null,
-          resumeVote: null,
-          roundPlayedSeconds,
-        },
-        finishAt,
-      );
-    });
-    return result.committed;
+    await update(sessionRef(normalized), patch);
+    return true;
   } catch (error) {
-    if (isFirebaseIgnorableRtdbError(error)) {
+    if (!isFirebaseIgnorableRtdbError(error)) {
+      throw error;
+    }
+    const again = await get(sessionRef(normalized));
+    if (!again.exists()) {
       return false;
     }
-    throw error;
+    return (again.val() as GameSession).status === 'finished';
   }
 }
 
 /**
  * Force-finish round (organizer / dev).
+ * Leaf-path update — same presence-safe contract as `finishGameSessionIfExpired`.
  */
 export async function finishGameSession(
   gameId: string,
@@ -1369,38 +1378,81 @@ export async function finishGameSession(
 ): Promise<void> {
   const normalized = normalizeRoomCode(gameId);
   await ensureAnonymousAuth();
+  const preSnapshot = await get(sessionRef(normalized));
+  if (!preSnapshot.exists()) {
+    return;
+  }
+  const preSession = preSnapshot.val() as GameSession;
+  if (preSession.status !== 'playing') {
+    return;
+  }
   const finishedAt = getServerNow();
   const wordMaps = mapsOverride ?? (await fetchSessionWordMaps(normalized));
-  await runRtdbTransaction(sessionRef(normalized), (current) => {
-    if (current == null) {
-      return undefined;
+  const patch = buildForceFinishLeafPatch(preSession, wordMaps, finishedAt);
+  try {
+    await update(sessionRef(normalized), patch);
+  } catch (error) {
+    if (!isFirebaseIgnorableRtdbError(error)) {
+      throw error;
     }
-    const session = current as GameSession;
-    if (session.status !== 'playing') {
-      return undefined;
-    }
-    const uniqueBonusEnabled = resolveGameSessionSettingsForSession(session).uniqueBonusEnabled;
-    if (Object.keys(wordMaps.wordPlayers ?? {}).length > 0) {
-      recomputeSessionPlayerScores(
-        { ...session, wordPlayers: wordMaps.wordPlayers },
-        uniqueBonusEnabled,
-      );
-    }
-    const roundPlayedSeconds = computeRoundPlayedSecondsAtFinish(session, finishedAt);
-    return withFinishedPurgeFields(
-      {
-        ...session,
-        status: 'finished',
-        timerEndsAt: null,
-        pauseState: null,
-        pauseVote: null,
-        resumeVote: null,
-        roundPlayedSeconds,
-      },
-      finishedAt,
-    );
-  });
+  }
   await clearAllActiveRoundCachesForGame(normalized);
+}
+
+/** Leaf patch for timer-expired finish — never writes `online`/`hasLeft`. */
+function buildExpiredFinishLeafPatch(
+  session: GameSession,
+  wordMaps: SessionWordMaps,
+): Record<string, unknown> {
+  const finishAt = session.timerEndsAt as number;
+  return buildFinishLeafPatch(session, wordMaps, finishAt);
+}
+
+function buildForceFinishLeafPatch(
+  session: GameSession,
+  wordMaps: SessionWordMaps,
+  finishedAt: number,
+): Record<string, unknown> {
+  return buildFinishLeafPatch(session, wordMaps, finishedAt);
+}
+
+function buildFinishLeafPatch(
+  session: GameSession,
+  wordMaps: SessionWordMaps,
+  finishedAt: number,
+): Record<string, unknown> {
+  const players: GameSession['players'] = {};
+  for (const [uid, player] of Object.entries(session.players)) {
+    players[uid] = { ...player };
+  }
+  const uniqueBonusEnabled = resolveGameSessionSettingsForSession(session).uniqueBonusEnabled;
+  if (Object.keys(wordMaps.wordPlayers ?? {}).length > 0) {
+    recomputeSessionPlayerScores(
+      { players, wordPlayers: wordMaps.wordPlayers },
+      uniqueBonusEnabled,
+    );
+  }
+  const roundPlayedSeconds = computeRoundPlayedSecondsAtFinish(session, finishedAt);
+  const purged = withFinishedPurgeFields(
+    {
+      status: 'finished' as const,
+      timerEndsAt: null,
+    },
+    finishedAt,
+  );
+  const patch: Record<string, unknown> = {
+    status: 'finished',
+    timerEndsAt: null,
+    addTimeVote: null,
+    pauseState: null,
+    pauseVote: null,
+    resumeVote: null,
+    roundPlayedSeconds,
+    finishedAt: purged.finishedAt,
+    purgeAfterAt: purged.purgeAfterAt,
+    ...buildPlayerTotalsUpdatePatch(players, session.players),
+  };
+  return patch;
 }
 
 /**
@@ -1456,11 +1508,71 @@ async function joinAlreadyOpenRematchWaitingLobby(
 }
 
 /**
+ * Follow-up after CAS `status: finished → waiting`.
+ * Does **not** write peer `online`/`hasLeft` (those leaves PD once waiting — R62F9).
+ * Scores reset for everyone; actor presence only.
+ */
+function buildRematchWaitingFollowUpPatch(
+  finishedSession: GameSession,
+  actorUid: string,
+  nextBaseWordRound: number,
+): { patch: Record<string, unknown>; players: Record<string, GameSessionPlayer> } {
+  const playerIds = Object.keys(finishedSession.players);
+  const resolvedSettings = resolveGameSessionSettings(finishedSession.settings, playerIds.length);
+  const players: Record<string, GameSessionPlayer> = {};
+  for (const uid of playerIds) {
+    players[uid] = {
+      ...finishedSession.players[uid],
+      ...rematchWaitingPlayerPatch(finishedSession, uid, actorUid),
+    };
+  }
+  const waitingForPicker: GameSession = {
+    ...finishedSession,
+    status: 'waiting',
+    baseWord: '',
+    baseWordChosenBy: null,
+    baseWordRound: nextBaseWordRound,
+    players,
+  };
+  const baseWordPickerUid = currentBaseWordPickerUid(waitingForPicker);
+  const patch: Record<string, unknown> = {
+    settings: resolvedSettings,
+    timerEndsAt: null,
+    roundStartedAt: null,
+    roundTimerBudgetSeconds: null,
+    roundPlayedSeconds: null,
+    baseWord: '',
+    baseWordChosenBy: null,
+    baseWordRound: nextBaseWordRound,
+    baseWordPickerUid,
+    earlyFinishVote: null,
+    pauseVote: null,
+    pauseState: null,
+    resumeVote: null,
+    createdAt: getServerNow(),
+    purgeAfterAt: null,
+    finishedAt: null,
+    liveRoundPlayerUids: null,
+    isPublic: false,
+    publicPublishedAt: null,
+    [`players/${actorUid}/online`]: true,
+    [`players/${actorUid}/hasLeft`]: false,
+  };
+  for (const uid of playerIds) {
+    patch[`players/${uid}/score`] = 0;
+    patch[`players/${uid}/wordCount`] = 0;
+  }
+  return { patch, players };
+}
+
+/**
  * Transition a live `finished` session back to `waiting` for rematch.
  * Any rostered participant may commit (RTDB rules allow the update).
  *
- * Uses a transaction so a stale client `get()` of `finished` cannot overwrite an
- * already-open rematch lobby (players rewrite + picker steal).
+ * CAS is a **status-only** transaction (`finished → waiting`) so results presence
+ * leaf writes cannot `maxretry` the claim. Follow-up `update` resets scores / round
+ * fields and the actor's presence — never peer `online`/`hasLeft` (those PD once
+ * waiting and previously caused false "joined rematch lobby" forks — R62F9).
  */
 export async function rematchFinishedSessionToWaiting(
   gameId: string,
@@ -1487,98 +1599,83 @@ export async function rematchFinishedSessionToWaiting(
     await unpublishPublicLobby(normalized, actorUid, { force: true });
   }
 
-  let nextBaseWordRound = (preSession.baseWordRound ?? 0) + 1;
+  const rematchAttempts = 3;
   let committedWaiting: GameSession | null = null;
+  let nextBaseWordRound = (preSession.baseWordRound ?? 0) + 1;
 
-  try {
-    const result = await runRtdbTransaction(
-      sessionRef(normalized),
-      (current) => {
-        if (current == null) {
-          return undefined;
-        }
-        const session = current as GameSession;
-        // Abort when a peer already opened waiting (or status moved on) — never
-        // rewrite an open rematch lobby from a stale finished snapshot.
-        if (session.status !== 'finished' || !session.players[actorUid]) {
-          return undefined;
-        }
-        const playerIds = Object.keys(session.players);
-        const resolvedSettings = resolveGameSessionSettings(session.settings, playerIds.length);
-        nextBaseWordRound = (session.baseWordRound ?? 0) + 1;
-        const players: Record<string, GameSessionPlayer> = {};
-        for (const uid of playerIds) {
-          players[uid] = {
-            ...session.players[uid],
-            ...rematchWaitingPlayerPatch(session, uid, actorUid),
-          };
-        }
-        const waitingForPicker: GameSession = {
-          ...session,
-          status: 'waiting',
-          baseWord: '',
-          baseWordChosenBy: null,
-          baseWordRound: nextBaseWordRound,
-          players,
-        };
-        const baseWordPickerUid = currentBaseWordPickerUid(waitingForPicker);
-        // Keep server `resultsExitedBy` intact — actor latch is a leaf write after
-        // commit (rules: auth.uid == $uid; whole-node replace wipes peers).
-        return {
-          ...session,
-          status: 'waiting',
-          settings: resolvedSettings,
-          timerEndsAt: null,
-          roundStartedAt: null,
-          roundTimerBudgetSeconds: null,
-          roundPlayedSeconds: null,
-          baseWord: '',
-          baseWordChosenBy: null,
-          baseWordRound: nextBaseWordRound,
-          baseWordPickerUid,
-          earlyFinishVote: null,
-          pauseVote: null,
-          pauseState: null,
-          resumeVote: null,
-          createdAt: getServerNow(),
-          purgeAfterAt: null,
-          finishedAt: null,
-          liveRoundPlayerUids: null,
-          isPublic: false,
-          publicPublishedAt: null,
-          players,
-        };
-      },
+  for (let attempt = 0; attempt < rematchAttempts && !committedWaiting; attempt += 1) {
+    const snap = attempt === 0 ? preSnapshot : await get(sessionRef(normalized));
+    if (!snap.exists()) {
+      throw new Error('REMATCH_FAILED');
+    }
+    const session = snap.val() as GameSession;
+    if (session.status === 'waiting') {
+      await joinAlreadyOpenRematchWaitingLobby(normalized, actorUid, session);
+      return;
+    }
+    if (session.status !== 'finished' || !session.players[actorUid]) {
+      throw new Error('REMATCH_FAILED');
+    }
+
+    nextBaseWordRound = (session.baseWordRound ?? 0) + 1;
+
+    // Claim rematch without reading/writing `players` (avoids presence maxretry).
+    const statusTx = await runRtdbTransaction(
+      child(sessionRef(normalized), 'status'),
+      (current) => (current === 'finished' ? 'waiting' : undefined),
       { applyLocally: false },
     );
 
-    if (result.committed) {
-      committedWaiting = result.snapshot.val() as GameSession;
+    if (!statusTx.committed) {
+      const again = await get(sessionRef(normalized));
+      if (!again.exists()) {
+        throw new Error('REMATCH_FAILED');
+      }
+      const againSession = again.val() as GameSession;
+      if (againSession.status === 'waiting') {
+        await joinAlreadyOpenRematchWaitingLobby(normalized, actorUid, againSession);
+        return;
+      }
+      if (againSession.status !== 'finished' || !againSession.players[actorUid]) {
+        throw new Error('REMATCH_FAILED');
+      }
+      continue;
     }
-  } catch (error) {
-    if (!isFirebasePermissionDenied(error)) {
-      throw error;
+
+    const { patch } = buildRematchWaitingFollowUpPatch(session, actorUid, nextBaseWordRound);
+    // Status CAS already won — never treat follow-up PD as "peer opened" (false join / R62F9).
+    for (let followAttempt = 0; followAttempt < 3; followAttempt += 1) {
+      try {
+        await update(sessionRef(normalized), patch);
+        break;
+      } catch (error) {
+        if (!isFirebaseIgnorableRtdbError(error)) {
+          throw error;
+        }
+        if (__DEV__) {
+          console.warn('rematchWaitingFollowUp', error);
+        }
+      }
     }
+
+    const afterWrite = await get(sessionRef(normalized));
+    if (!afterWrite.exists()) {
+      throw new Error('REMATCH_FAILED');
+    }
+    const afterSession = afterWrite.val() as GameSession;
+    if (afterSession.status !== 'waiting') {
+      throw new Error('REMATCH_FAILED');
+    }
+    committedWaiting = afterSession;
+    break;
   }
 
-  if (!committedWaiting) {
-    const again = await get(sessionRef(normalized));
-    if (again.exists() && (again.val() as GameSession).status === 'waiting') {
-      await joinAlreadyOpenRematchWaitingLobby(normalized, actorUid, again.val() as GameSession);
-      return;
-    }
+  if (!committedWaiting || committedWaiting.status !== 'waiting') {
     throw new Error('REMATCH_FAILED');
   }
 
-  if (committedWaiting.status !== 'waiting') {
-    throw new Error('REMATCH_FAILED');
-  }
-
-  // Confirm latch via leaf write (rules forbid writing peers' latch leaves).
   await markResultsExited(normalized, actorUid);
 
-  // Clear words AFTER `waiting` so peers still on results flip to archive hydrate
-  // instead of finished+empty `player_words` (permission_denied on peer reads in waiting).
   await clearAllPlayerWords(
     normalized,
     Object.keys(committedWaiting.players),

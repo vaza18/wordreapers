@@ -35,6 +35,16 @@ describe('runRtdbTransaction', () => {
     expect(result.snapshot?.exists()).toBe(false);
   });
 
+  it('treats Firebase maxretry aborts as non-committed', async () => {
+    runTransactionMock.mockRejectedValue(new Error('maxretry'));
+    getMock.mockResolvedValue({ exists: () => true, val: () => ({ status: 'finished' }) });
+
+    const result = await runRtdbTransaction({} as never, () => null);
+
+    expect(result.committed).toBe(false);
+    expect(result.snapshot?.exists()).toBe(true);
+  });
+
   it('rethrows non-ignorable errors', async () => {
     runTransactionMock.mockRejectedValue(new Error('network down'));
 

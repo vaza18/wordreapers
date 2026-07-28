@@ -19,3 +19,18 @@ export function lobbyToPickWordRoute(gameId: string): {
 export function shouldEnablePickWordPresence(fromLobby: boolean): boolean {
   return !fromLobby;
 }
+
+/**
+ * Leave pick-word when the room left `waiting` or this uid no longer holds the seat.
+ * Must not require screen focus — multi-sim / background still receive RTDB updates,
+ * and the early rematcher must yield when the rightful picker opts in (ZF6U4).
+ */
+export function shouldLeavePickWordScreen(
+  session: { status: string },
+  isCurrentPicker: boolean,
+): boolean {
+  if (session.status !== 'waiting') {
+    return true;
+  }
+  return !isCurrentPicker;
+}

@@ -27,7 +27,7 @@ function session(overrides: Partial<GameSession> = {}): GameSession {
 }
 
 describe('shouldClearLobbyBaseWordForPicker', () => {
-  it('keeps round-3 word when rightful chooser is briefly offline (DSSN2)', () => {
+  it('keeps word when chooser goes offline (seat may move; word stays)', () => {
     const s = session({
       baseWordRound: 2,
       baseWord: 'випещеність',
@@ -41,7 +41,7 @@ describe('shouldClearLobbyBaseWordForPicker', () => {
     expect(shouldClearLobbyBaseWordForPicker(s)).toBe(false);
   });
 
-  it('clears early rematcher word when scheduled peer opts in before start', () => {
+  it('keeps early rematcher word when scheduled peer opts in (they may change or start)', () => {
     const s = session({
       baseWordRound: 1,
       baseWord: 'адонізид',
@@ -52,10 +52,10 @@ describe('shouldClearLobbyBaseWordForPicker', () => {
         p2: { name: 'Two', wordCount: 0, score: 0, online: true },
       },
     });
-    expect(shouldClearLobbyBaseWordForPicker(s)).toBe(true);
+    expect(shouldClearLobbyBaseWordForPicker(s)).toBe(false);
   });
 
-  it('clears word when chooser voluntarily left even with durable latch (75AGB)', () => {
+  it('keeps word when chooser voluntarily left (next picker may start or change)', () => {
     const s = session({
       baseWordRound: 6,
       baseWord: 'мінітракторець',
@@ -64,35 +64,20 @@ describe('shouldClearLobbyBaseWordForPicker', () => {
       baseWordPickerOrder: ['org', 'p2'],
       players: {
         org: { name: 'Org', wordCount: 0, score: 0, online: false, hasLeft: true },
-        p2: { name: 'Two', wordCount: 0, score: 0, online: true },
-      },
-    });
-    expect(shouldClearLobbyBaseWordForPicker(s)).toBe(true);
-  });
-
-  it('does not clear word when chooser is briefly offline with durable latch', () => {
-    const s = session({
-      baseWordRound: 6,
-      baseWord: 'мінітракторець',
-      baseWordChosenBy: 'org',
-      resultsExitedBy: { org: true, p2: true },
-      baseWordPickerOrder: ['org', 'p2'],
-      players: {
-        org: { name: 'Org', wordCount: 0, score: 0, online: false },
         p2: { name: 'Two', wordCount: 0, score: 0, online: true },
       },
     });
     expect(shouldClearLobbyBaseWordForPicker(s)).toBe(false);
   });
 
-  it('clears word when chooser truly left without durable rematch seat', () => {
+  it('clears word only when chooser uid is missing from the roster', () => {
     const s = session({
       baseWordRound: 6,
       baseWord: 'мінітракторець',
-      baseWordChosenBy: 'org',
+      baseWordChosenBy: 'gone',
       baseWordPickerOrder: ['org', 'p2'],
       players: {
-        org: { name: 'Org', wordCount: 0, score: 0, online: false, hasLeft: true },
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
         p2: { name: 'Two', wordCount: 0, score: 0, online: true },
       },
     });

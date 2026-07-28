@@ -232,7 +232,7 @@ describe('players write', () => {
     );
   });
 
-  it('allows base-word picker nested players blob under current roster write rules', async () => {
+  it('denies peer online rewrite in nested players blob at round start', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await ctx
         .database()
@@ -249,7 +249,7 @@ describe('players write', () => {
         });
     });
     const now = Date.now();
-    await assertSucceeds(
+    await assertFails(
       authed('p2')
         .database()
         .ref('game_sessions/REMCH')
@@ -548,9 +548,9 @@ describe('waiting → playing round start player patch', () => {
     );
   });
 
-  it('allows peer player-node patch under current roster write rules (client uses child paths)', async () => {
+  it('denies peer online leaf at round start (client omits peer presence)', async () => {
     const now = Date.now();
-    await assertSucceeds(
+    await assertFails(
       authed('p1')
         .database()
         .ref()
@@ -668,6 +668,44 @@ describe('rematch finished → waiting', () => {
     );
   });
 
+  it('allows non-organizer leaf-path rematch from finished (R62F9 shape)', async () => {
+    await assertSucceeds(
+      authed('p1')
+        .database()
+        .ref('game_sessions/ABCDE')
+        .update({
+          status: 'waiting',
+          settings: { ...finishedSession.settings, uniqueBonusEnabled: true },
+          timerEndsAt: null,
+          roundStartedAt: null,
+          roundTimerBudgetSeconds: null,
+          roundPlayedSeconds: null,
+          baseWord: '',
+          baseWordRound: 1,
+          earlyFinishVote: null,
+          pauseVote: null,
+          pauseState: null,
+          resumeVote: null,
+          purgeAfterAt: null,
+          finishedAt: null,
+          isPublic: false,
+          publicPublishedAt: null,
+          'players/org/score': 0,
+          'players/org/wordCount': 0,
+          'players/org/online': false,
+          'players/org/hasLeft': false,
+          'players/p1/score': 0,
+          'players/p1/wordCount': 0,
+          'players/p1/online': true,
+          'players/p1/hasLeft': false,
+          'players/p2/score': 0,
+          'players/p2/wordCount': 0,
+          'players/p2/online': false,
+          'players/p2/hasLeft': false,
+        }),
+    );
+  });
+
   it('allows non-organizer atomic rematch with opted-in and peer offline flags', async () => {
     await assertSucceeds(
       authed('p1')
@@ -718,13 +756,164 @@ describe('rematch finished → waiting', () => {
     );
   });
 
-  it('allows peer player-node patch after rematch under current roster write rules', async () => {
+  it('allows status-only finished→waiting then follow-up without peer online (R62F9 CAS)', async () => {
+    await assertSucceeds(authed('p1').database().ref('game_sessions/ABCDE/status').set('waiting'));
     await assertSucceeds(
+      authed('p1')
+        .database()
+        .ref('game_sessions/ABCDE')
+        .update({
+          settings: { ...finishedSession.settings, uniqueBonusEnabled: true },
+          timerEndsAt: null,
+          roundStartedAt: null,
+          roundTimerBudgetSeconds: null,
+          roundPlayedSeconds: null,
+          baseWord: '',
+          baseWordRound: 1,
+          baseWordPickerUid: 'p1',
+          earlyFinishVote: null,
+          pauseVote: null,
+          pauseState: null,
+          resumeVote: null,
+          purgeAfterAt: null,
+          finishedAt: null,
+          isPublic: false,
+          publicPublishedAt: null,
+          'players/org/score': 0,
+          'players/org/wordCount': 0,
+          'players/p1/score': 0,
+          'players/p1/wordCount': 0,
+          'players/p1/online': true,
+          'players/p1/hasLeft': false,
+          'players/p2/score': 0,
+          'players/p2/wordCount': 0,
+        }),
+    );
+    // Peer presence must not be rewritten once waiting is open.
+    await assertFails(
+      authed('p1').database().ref('game_sessions/ABCDE/players/org/online').set(false),
+    );
+  });
+
+  it('allows unchanged peer online echo on whole-session finish (LRAHP)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .database()
+        .ref('game_sessions/ABCDE')
+        .set({
+          ...playingSession,
+          timerEndsAt: Date.now() - 1000,
+          players: {
+            org: { ...playingSession.players.org, online: false, hasLeft: false, score: 3 },
+            p1: { ...playingSession.players.p1, online: false, hasLeft: false, score: 5 },
+            p2: { name: 'Two', wordCount: 1, score: 1, online: true, hasLeft: false },
+          },
+        });
+    });
+    await assertSucceeds(
+      authed('p1')
+        .database()
+        .ref('game_sessions/ABCDE')
+        .transaction((current) => {
+          if (current == null || current.status !== 'playing') {
+            return undefined;
+          }
+          return {
+            ...current,
+            status: 'finished',
+            timerEndsAt: null,
+            finishedAt: Date.now(),
+            purgeAfterAt: Date.now() + 1000,
+            players: {
+              org: { ...current.players.org, score: 3, online: false, hasLeft: false },
+              p1: { ...current.players.p1, score: 5, online: false, hasLeft: false },
+              p2: { ...current.players.p2, score: 1, online: true, hasLeft: false },
+            },
+          };
+        }),
+    );
+  });
+
+  it('allows leaf-path finish without touching peer online (LRAHP)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .database()
+        .ref('game_sessions/ABCDE')
+        .set({
+          ...playingSession,
+          timerEndsAt: Date.now() - 1000,
+          players: {
+            ...playingSession.players,
+            p2: { name: 'Two', wordCount: 1, score: 1, online: true, hasLeft: false },
+          },
+        });
+    });
+    await assertSucceeds(
+      authed('p1')
+        .database()
+        .ref('game_sessions/ABCDE')
+        .update({
+          status: 'finished',
+          timerEndsAt: null,
+          finishedAt: Date.now(),
+          purgeAfterAt: Date.now() + 1000,
+          'players/org/score': 3,
+          'players/p1/score': 5,
+          'players/p2/score': 1,
+        }),
+    );
+  });
+
+  it('denies second rematch players rewrite once waiting is open (AH2TN)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .database()
+        .ref('game_sessions/ABCDE')
+        .set({
+          ...finishedSession,
+          status: 'waiting',
+          baseWord: '',
+          baseWordRound: 1,
+          baseWordPickerUid: 'org',
+          resultsExitedBy: { org: true },
+          players: {
+            org: { ...finishedSession.players.org, score: 0, wordCount: 0, online: true },
+            p1: { ...finishedSession.players.p1, score: 0, wordCount: 0, online: false },
+            p2: { ...finishedSession.players.p2, score: 0, wordCount: 0, online: false },
+          },
+        });
+    });
+    // Client rematch uses leaf paths — peer online/hasLeft only allowed finished→waiting.
+    await assertFails(
+      authed('p1').database().ref('game_sessions/ABCDE').update({
+        status: 'waiting',
+        baseWordRound: 1,
+        'players/org/score': 0,
+        'players/org/wordCount': 0,
+        'players/org/online': false,
+        'players/org/hasLeft': false,
+        'players/p1/score': 0,
+        'players/p1/wordCount': 0,
+        'players/p1/online': true,
+        'players/p1/hasLeft': false,
+        'players/p2/score': 0,
+        'players/p2/wordCount': 0,
+        'players/p2/online': false,
+        'players/p2/hasLeft': false,
+      }),
+    );
+  });
+
+  it('denies peer online patch while finished without status transition (R62F9)', async () => {
+    await assertFails(
       authed('p1').database().ref('game_sessions/ABCDE/players/org').update({
         score: 0,
         wordCount: 0,
         online: false,
       }),
+    );
+    await assertSucceeds(
+      authed('p1').database().ref('game_sessions/ABCDE/players/org/score').set(0),
     );
   });
 

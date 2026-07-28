@@ -1,5 +1,3 @@
-import { globalWordCount } from '../firebase/session-word-maps.js';
-
 /** Whether the x2 unique-word bonus applies: auto (3+ players) or off. */
 export type UniqueBonusMode = 'auto' | 'off';
 
@@ -202,20 +200,26 @@ export function recomputeSessionPlayerScores(
 ): void {
   const wordPlayers = session.wordPlayers ?? {};
 
-  for (const [playerId, player] of Object.entries(session.players)) {
-    let score = 0;
-    let wordCount = 0;
-    for (const [normalized, playersOnWord] of Object.entries(wordPlayers)) {
-      if (!playersOnWord[playerId]) {
+  for (const player of Object.values(session.players)) {
+    player.score = 0;
+    player.wordCount = 0;
+  }
+
+  for (const [normalized, playersOnWord] of Object.entries(wordPlayers)) {
+    const globalCount = Object.keys(playersOnWord).length;
+    const kind: WordScoreKind = globalCount > 1 ? 'normal' : 'unique';
+    const points = toScoredWordEntry(normalized, kind, uniqueBonusEnabled, globalCount).points;
+    for (const [playerId, onWord] of Object.entries(playersOnWord)) {
+      if (!onWord) {
         continue;
       }
-      const globalCount = globalWordCount(wordPlayers, normalized);
-      const kind: WordScoreKind = globalCount > 1 ? 'normal' : 'unique';
-      score += toScoredWordEntry(normalized, kind, uniqueBonusEnabled, globalCount).points;
-      wordCount += 1;
+      const player = session.players[playerId];
+      if (!player) {
+        continue;
+      }
+      player.score = (player.score ?? 0) + points;
+      player.wordCount = (player.wordCount ?? 0) + 1;
     }
-    player.score = score;
-    player.wordCount = wordCount;
   }
 }
 

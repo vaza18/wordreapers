@@ -8,6 +8,97 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — Finish PD leaves playing stuck; rematch REMATCH_FAILED (LRAHP)
+
+- **Symptom:** Round ends locally → results; Metro `transaction at /game_sessions/… failed: permission_denied` at time-up. «Грати ще» shows «Не вдалося підготувати новий раунд» / `REMATCH_FAILED`. RTDB stays `status: playing` with expired `timerEndsAt`.
+- **Cause:** R62F9 `.validate` on `online`/`hasLeft` rejected peer presence fields echoed by whole-session finish transactions (even when values were unchanged / racing with offline marks). Rematch requires `finished`; same-round stuck `playing` skipped heal and failed.
+- **Fix:** Allow unchanged peer `online`/`hasLeft` in rules; finish via leaf-path `update` (no presence leaves); «Грати ще» heals expired same-round `playing` (finish → rematch) without finishing a newer live round.
+- **Test:** `tests/firebase/database.rules.test.ts`, `tests/game-session-service.test.ts`, `tests/restart-rematch-online-round-flow.test.ts`, `tests/opt-into-live-round.test.ts`
+- **Area:** `firebase/database.rules.json`, `lib/firebase/game-session-service.ts`, `lib/online/rematch/restart-rematch-online-round.ts`, `lib/online/rematch/opt-into-live-round.ts`
+- **Deploy:** `npm run firebase:deploy:rules`
+
+### 2026-07 — Rematch PD false-join forks pick-word (R62F9)
+
+- **Symptom:** After round results, both players tap «Грати ще»; Metro shows `update … permission_denied` then **both** log `joined rematch lobby (peer already opened waiting)` with `liveUids=[]` and the other player `off` without latch. Each lands on pick-word / lobby with «Гравці (1)», picks a different base word, both see «Почати гру».
+- **Cause:** Rematch used a single multi-path `update` that wrote peer `online`/`hasLeft`. Once waiting was open (or validate denied peers), the whole update PD'd. The catch treated ignorable PD as “peer already opened” and ran the join path even when **nobody** had successfully opened — local clients navigated into divergent rematch forks.
+- **Fix:** Claim rematch with a **status-only** transaction (`finished → waiting`) so results presence cannot `maxretry` the claim. Follow-up `update` resets scores/round/actor presence only (no peer presence leaves). Follow-up PD retries and still counts as **opened**, never false-join.
+- **Test:** `tests/game-session-service.test.ts`, `tests/firebase/database.rules.test.ts` (status CAS + follow-up)
+- **Area:** `lib/firebase/game-session-service.ts` (`rematchFinishedSessionToWaiting`, `buildRematchWaitingFollowUpPatch`)
+- **Deploy:** rules already cover `finished→waiting` status; client change is the critical fix (`npm run firebase:deploy:rules` if peer-online validate not yet live)
+
+### 2026-07 — Rematch Home rejoin hides peer still in lobby (R62F9)
+
+- **Symptom:** After round 1, organizer rematches first; peer «Грати ще» then later Home + rejoin. Peer lobby shows «Гравці (1)» only self while organizer still in lobby sees both. Metro: peer `opened rematch lobby` with organizer `off` without `latch`, then `left the round early` / `rejoined room after leaving` still `off` without latch.
+- **Cause:** Rematch `update()` wrote peer `online`/`hasLeft` leaves. Session-level `.write` grants cascade so field `.write` could not revoke peer presence while already `waiting`; second rematcher clobbered the first to `online: false`. Rematch lobby hides offline peers without durable latch/`baseWordPickerUid`/word — after clobber the organizer vanished for the peer (including after leave+rejoin). Metro: peer `opened rematch lobby` with organizer `off` without `latch`.
+- **Fix:** Rematch uses leaf paths; `.validate` on `online`/`hasLeft` allows peer writes only on `finished → waiting` (or create waiting). Stale second open → PD → join. Later superseded by status-CAS rematch (see “Rematch PD false-join” above) so opener never false-joins on PD.
+- **Test:** `tests/firebase/database.rules.test.ts` (AH2TN leaf deny), `tests/game-session-service.test.ts`
+- **Area:** `firebase/database.rules.json`, `lib/firebase/game-session-service.ts` (`buildRematchWaitingFollowUpPatch`)
+- **Deploy:** `npm run firebase:deploy:rules`
+
+### 2026-07 — Early rematcher on pick-word misses peer join / both pick words (ZF6U4)
+
+- **Symptom:** Organizer rematches first → pick-word. Peer (rightful round picker) opts in later, picks a word; organizer never sees them join and can still confirm a different base word. Lobby then shows asymmetric «Гравці (1)» vs «Гравці (2)» / conflicting «слово» badges.
+- **Cause:** (1) Pick-word only yielded the seat when `useIsFocused()` — unfocused multi-sim ignored RTDB seat transfer. (2) Direct rematch→pick-word leaves lobby unmounted so `syncLobbyPickerState` never ran. (3) `updateGameSessionSetup` checked picker once before slow validation, allowing a stale save after the peer took the seat. (4) Pick-word UI had no rematch roster.
+- **Fix:** Leave pick-word on seat loss without focus gate; sync picker from pick-word; re-read picker before committing base word; show opted-in peers on pick-word.
+- **Test:** `tests/lobby-pick-word-navigation.test.ts`, `tests/online-base-word-picker.test.ts` (existing rotation)
+- **Area:** `app/online/pick-word/[gameId].tsx`, `lib/online/lobby-pick-word-navigation.ts`, `lib/firebase/game-session-service.ts`
+
+### 2026-07 — «Грати ще» fails with maxretry / REMATCH_FAILED after round 1 (T2ZJU)
+
+- **Symptom:** Organizer taps «Грати ще» on results; UI shows «Не вдалося підготувати новий раунд». Metro: `play again / rematch failed maxretry`, then after abort recognition: `REMATCH_FAILED`.
+- **Cause:** Rematch `finished → waiting` used a whole-session RTDB **transaction**. Results screens keep writing `players/$uid/online` (`markPlayerOffline`, including re-fires on `liveSession` ticks). Child presence writes abort parent transactions (`maxretry`). Treating `maxretry` as ignorable + 3 outer retries still lost to continuous presence. Also `isFirebaseTransactionAbort` initially only matched misspelled `maxretries`.
+- **Fix:** Rematch claims with a status-only RTDB transaction (`finished → waiting`), then leaf-path follow-up `update` (scores / round / actor presence — no peer `online`). Results marks offline once per room/round. Keep recognizing `maxretry` for other txs.
+- **Test:** `tests/game-session-service.test.ts`, `lib/firebase/__tests__/rtdb-errors.test.ts`, `tests/rtdb-transaction.test.ts`
+- **Area:** `lib/firebase/game-session-service.ts` (`rematchFinishedSessionToWaiting`), `app/online/results/[gameId].tsx`, `lib/firebase/rtdb-errors.ts`
+
+### 2026-07 — Committed base word must not auto-clear on seat transfer
+
+- **Symptom:** Rematch lobby base word disappears when the rightful picker joins, when the chooser goes offline, or when seat rotates — players see an empty word and must re-enter it.
+- **Cause:** `shouldClearLobbyBaseWordForPicker` cleared whenever rightful picker ≠ `baseWordChosenBy` (and later also on offline/hasLeft).
+- **Fix:** Never auto-clear a committed word on seat move; new picker inherits it and may change or start. Clear only if `chosenBy` is missing from `players`.
+- **Test:** `tests/lobby-base-word-picker-reconcile.test.ts`, `tests/online-base-word-picker.test.ts`
+- **Area:** `lib/online/base-word-picker.ts`
+
+### 2026-07 — Rematch lobby waits forever on offline base-word picker (NLD7S)
+
+- **Symptom:** Rematch lobby shows «Чекаємо, поки … обере базове слово» while that player is offline (lock screen / background / force-quit); online peer cannot pick or start.
+- **Cause:** `isEligibleBaseWordPickerInSession` treated durable rematch latch / pickerUid / chosenBy as enough for the picker seat even when `online: false` (meant to survive multi-sim `inactive`). After lobby/pick-word moved to `background-only`, real background left the seat stuck on the offline picker.
+- **Fix:** Picker seat requires `online === true`; latch still keeps lobby **visibility**. Committed word is **kept** when the seat moves (new picker may change or start); see «Committed base word must not auto-clear».
+- **Test:** `tests/online-base-word-picker.test.ts`, `tests/lobby-base-word-picker-reconcile.test.ts`
+- **Area:** `lib/online/base-word-picker.ts`
+
+### 2026-07 — Home from results resurrects rematch joiner (NLD7S)
+
+- **Symptom:** Peer already in rematch lobby waiting for player 2 to pick; player 2 taps Home from frozen results (or after failed «Грати ще») and lands on Home, but lobby still shows them offline/latched as picker — round cannot continue alone. Metro: `left the round early` then immediately `rejoined room after leaving`.
+- **Cause:** (1) Results `exitOnlineToHome` passed frozen `sessionStatus: finished` so voluntary-leave guard was skipped while live RTDB was already rematch `waiting`; `leaveGameSession` wrote `hasLeft`, then in-flight `rejoinExistingPlayer` (background rematch presence) cleared `hasLeft`. (2) Lobby presence reconcile/`rejoinExistingPlayer` always cleared `hasLeft`, so intentional leavers were resurrected as durable rematch opt-in and stole the picker seat.
+- **Fix:** Guard voluntary leave whenever live status is `waiting` (even if UI archive is finished); `rejoinExistingPlayer` no-ops on `hasLeft` / leave-in-flight unless `reviveAfterLeave` (join / «Грати ще» only); rematch latch only after room is waiting; `join_waiting` runs join path; log «Грати ще» attempt/failure.
+- **Test:** `tests/game-session-service-extended.test.ts`, `tests/exit-online-flow.test.ts`, `tests/opt-into-live-round.test.ts`, `tests/restart-rematch-online-round-flow.test.ts`, `tests/reconcile-player-presence.test.ts`
+- **Area:** `lib/firebase/game-session-service.ts`, `lib/online/exit-online-flow.ts`, `lib/online/rematch/opt-into-live-round.ts`, `lib/online/rematch/restart-rematch-online-round.ts`, `lib/online/presence/reconcile-player-presence.ts`, `app/online/results/[gameId].tsx`
+
+### 2026-07 — Multi-round eject: sync deletes rematch room on pause
+
+- **Symptom:** After several rematch rounds, pausing (or briefly going offline) in rematch lobby / while waiting alone for a peer can eject everyone — room-not-found / Home. Worse with many local finished archives for the same room.
+- **Cause:** (1) Sync coordinator skipped only play/results routes, not lobby/pick-word; on foreground it could `abandonWaitingGameSession` while players were still rematching. (2) Abandon eligibility ignored rematch durable signals (`baseWordPickerUid` / chosenBy). (3) First rematcher alone offline with latch still looked “abandonable” because abandon logic skipped the organizer. (4) Play presence reconcile latched success per round and blocked rejoin after mid-round RTDB offline without AppState change.
+- **Fix:** Protect all live online routes via `activeOnlineGameId` (play/results/lobby/pick-word **and** setup via `gameId` params); rematch sync refuse abandon while any durable opt-in remains (`shouldSyncKeepRematchWaitingRoom`); peer abandon uses `isRematchDurableLobbyOptIn`; clear presence reconcile latch on online→offline after success, or stuck-offline cooldown (~4s) via `createPresenceStuckOfflineRetry` (re-armed after every successful reconcile until session shows online — unbounded by design; add cap/backoff only if prod shows RTDB write spam); handoff presence on play→lobby/results redirects. Orphan rematch waiting with latch (all `online: false`, no `hasLeft`) is no longer client-sync-deleted — intentional; `purgeExpiredRtdbSessions` still removes abandoned waiting/playing after **7 days** from `createdAt` (refreshed on rematch).
+- **Test:** `tests/sync-coordinator.test.ts`, `tests/should-organizer-abandon-waiting-room.test.ts`, `tests/parse-active-online-game-id.test.ts`, `tests/should-sync-keep-rematch-waiting-room.test.ts`, `tests/should-clear-presence-reconcile-latch.test.ts`, `tests/presence-stuck-offline-retry.test.ts`
+- **Area:** `lib/online/sync-coordinator.ts`, `lib/online/should-organizer-abandon-waiting-room.ts`, `lib/online/should-sync-keep-rematch-waiting-room.ts`, `lib/online/parse-active-online-game-id.ts`, `hooks/useOnlineSyncCoordinator.ts`, `hooks/useLiveRoundPlayScreen.ts`, `lib/online/presence/should-clear-presence-reconcile-latch.ts`, `lib/online/presence/presence-stuck-offline-retry.ts`, `lib/online/presence/presence-handoff.ts`
+
+### 2026-07 — Multi-round eject: presence unmount leave + sync abandon rematch
+
+- **Symptom:** Non-organizer on time-up while peer rematches gets `hasLeft` / disappears from rematch lobby; or sync coordinator deletes rematch waiting while latched peers are briefly offline.
+- **Cause:** Play disables presence on `roundEnded`; cleanup called `voluntaryLeaveWaitingLobbyIfMember` → full leave on any `waiting`. Sync abandon used only `allSessionPlayersOffline`, ignoring `resultsExitedBy`. Also: online∉`liveRoundPlayerUids` raced redirect-to-results ahead of rejoin.
+- **Fix:** Rematch waiting presence unmount only marks offline; sync abandon uses `shouldOrganizerAbandonWaitingRoom`; prefer rejoin over results redirect when heal applies.
+- **Test:** `tests/presence-unmount-leave.test.ts`, `tests/game-session-service.test.ts`, `tests/sync-coordinator.test.ts`, `tests/should-redirect-inactive-player-to-results.test.ts`
+- **Area:** `lib/online/presence/presence-unmount-leave.ts`, `lib/firebase/game-session-service.ts`, `lib/online/sync-coordinator.ts`, `lib/online/live-round-screen-actions.ts`
+
+### 2026-07 — Multi-round eject: RTDB glitch → «кімнату не знайдено»
+
+- **Symptom:** Testers leave (or appear ejected from) a multiplayer room after several rematch rounds, especially with pauses or flaky internet — play/lobby shows room-not-found / join-failed with Home.
+- **Cause:** (1) `subscribeGameSession` called `listener(null)` on any RTDB error (App Check / network), wiping session; play set sticky `loadError` that never cleared on recovery. (2) `tryReadGameSessionSnapshot` and rematch restart treated `permission_denied` as room-missing → lobby heal cleared UI; rematch could bootstrap from archive. (3) Presence reconcile failures called `onJoinFailed` → `setLoadError` and ejected mid-round. (4) Rematch `waiting` overwrote a local `finished` play snapshot, enabling lobby redirect.
+- **Fix:** Subscribe errors no longer emit null; play clears loadError when session recovers; tryRead/rematch rethrow PD; presence failures retry silently; merge keeps finished against rematch waiting.
+- **Test:** `tests/game-session-service-extended.test.ts`, `tests/game-session-service.test.ts`, `tests/restart-rematch-online-round-flow.test.ts`, `tests/play-session-load-error.test.ts`, `tests/play-session-bootstrap.test.ts`
+- **Area:** `lib/firebase/game-session-service.ts`, `hooks/usePlaySessionSubscriptions.ts`, `hooks/useLiveRoundPlayScreen.ts`, `hooks/useLiveRoundLobbyScreen.ts`, `lib/online/rematch/restart-rematch-online-round.ts`, `lib/online/session/play-session-bootstrap.ts`
+
 ### 2026-07 — Picker left rematch lobby; peer stuck waiting for them (75AGB)
 
 - **Symptom:** Rightful rematch picker leaves to home; remaining player sees them offline in the list and UI still says «Чекаємо, поки … обере базове слово» — cannot pick/start.
@@ -20,9 +111,9 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 - **Symptom:** After round N results, first rematcher opens waiting + pick-word; second taps «Грати ще» and also lands on pick-word with «Гравці (1)» only self. Each commits a different base word; lobbies disagree on roster and word.
 - **Cause:** Second client still saw (or treated) RTDB as `finished` and ran full `rematchFinishedSessionToWaiting` via non-atomic `update`, rewriting `players` (peer → offline), stealing `baseWordPickerUid`, and clearing the first rematcher’s word. `players/.write` while status exists allows that overwrite even when the room was already `waiting`. Log marker: second client `opened rematch lobby` instead of `joined rematch lobby (peer already opened waiting)`.
-- **Fix:** Rematch `finished → waiting` is a transaction that aborts unless status is still `finished`; if waiting is already open (fresh read or stale-finished abort), join path only — latch leaf + word cleanup, no players/picker/word rewrite.
-- **Test:** `tests/game-session-service.test.ts` (already-waiting join; stale finished abort)
-- **Area:** `lib/firebase/game-session-service.ts` (`rematchFinishedSessionToWaiting`)
+- **Fix:** Rematch `finished → waiting` is an atomic leaf-path `update()` (not whole `players` map). Peer player leaves only allowed while status is still `finished` transitioning to `waiting`. If waiting is already open (fresh read or permission_denied on a stale rewrite), join path only — latch leaf + word cleanup, no players/picker/word rewrite.
+- **Test:** `tests/game-session-service.test.ts` (already-waiting join; PD → join), `tests/firebase/database.rules.test.ts` (AH2TN)
+- **Area:** `lib/firebase/game-session-service.ts` (`rematchFinishedSessionToWaiting`), `firebase/database.rules.json`
 
 ### 2026-07 — Rematch starter solo UI while peer votes (WAGTJ round 2)
 

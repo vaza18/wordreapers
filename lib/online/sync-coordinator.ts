@@ -22,6 +22,8 @@ import {
   markFinishedArchiveAckSent,
 } from './session/online-session-archive.js';
 import { allSessionPlayersOffline } from './presence/session-offline.js';
+import { shouldOrganizerAbandonWaitingRoom } from './should-organizer-abandon-waiting-room.js';
+import { shouldSyncKeepRematchWaitingRoom } from './should-sync-keep-rematch-waiting-room.js';
 import { notifyRoundFinishedOnce } from './round-finished-notification-once.js';
 import {
   buildSyncWorkQueue,
@@ -76,7 +78,15 @@ async function tryAbandonStaleWaitingRoom(
   if (session.status !== 'waiting' || !uid || session.organizerId !== uid) {
     return;
   }
+  // Rematch latch / online peers must keep the room (same as explicit organizer leave).
+  if (!shouldOrganizerAbandonWaitingRoom(session, uid)) {
+    return;
+  }
   if (!allSessionPlayersOffline(session)) {
+    return;
+  }
+  // Organizer-inclusive rematch gate — see shouldSyncKeepRematchWaitingRoom.
+  if (shouldSyncKeepRematchWaitingRoom(session)) {
     return;
   }
   await abandonWaitingGameSession(gameId, uid);
@@ -84,13 +94,7 @@ async function tryAbandonStaleWaitingRoom(
 
 async function syncWorkItem(item: SyncWorkItem, context: SyncCoordinatorContext): Promise<void> {
   const normalized = normalizeRoomCode(item.gameId);
-  if (context.activePlayGameId && normalizeRoomCode(context.activePlayGameId) === normalized) {
-    return;
-  }
-  if (
-    context.activeResultsGameId &&
-    normalizeRoomCode(context.activeResultsGameId) === normalized
-  ) {
+  if (context.activeOnlineGameId && normalizeRoomCode(context.activeOnlineGameId) === normalized) {
     return;
   }
 

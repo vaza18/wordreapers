@@ -36,10 +36,18 @@ describe('reconcilePlayerPresence', () => {
     await reconcilePlayerPresence('ABCDE', 'uid-1', profile);
 
     expect(markResultsExited).toHaveBeenCalledWith('ABCDE', 'uid-1');
-    expect(rejoinExistingPlayer).toHaveBeenCalledWith('ABCDE', 'uid-1', profile);
+    expect(rejoinExistingPlayer).toHaveBeenCalledWith('ABCDE', 'uid-1', profile, undefined);
     expect(markResultsExited.mock.invocationCallOrder[0]).toBeLessThan(
       rejoinExistingPlayer.mock.invocationCallOrder[0]!,
     );
+  });
+
+  it('forwards reviveAfterLeave to rejoin when opting into rematch after leave', async () => {
+    await reconcilePlayerPresence('ABCDE', 'uid-1', profile, { reviveAfterLeave: true });
+
+    expect(rejoinExistingPlayer).toHaveBeenCalledWith('ABCDE', 'uid-1', profile, {
+      reviveAfterLeave: true,
+    });
   });
 
   it('still writes rematch latch while backgrounded, but does not rejoin online', async () => {

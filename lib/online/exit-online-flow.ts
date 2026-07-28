@@ -44,10 +44,12 @@ async function readLiveSession(gameId: string): Promise<GameSession | null> {
   return snapshot.val() as GameSession;
 }
 
-async function runExitCleanup(options: ExitOnlineFlowOptions): Promise<void> {
+async function runExitCleanup(
+  options: ExitOnlineFlowOptions,
+  liveFromDb: GameSession | null,
+): Promise<void> {
   const { gameId, uid, isOrganizer, sessionStatus, exitedResults, wordsForArchive } = options;
 
-  const liveFromDb = await readLiveSession(gameId);
   const liveStatus = liveFromDb?.status ?? sessionStatus;
   const isLiveOrganizer = liveFromDb?.organizerId === uid;
 
@@ -93,6 +95,9 @@ async function runExitCleanup(options: ExitOnlineFlowOptions): Promise<void> {
 
 /**
  * Leave online flow. Waiting-room cleanup completes before navigation so abandon is reliable.
+ *
+ * Results may still show a frozen `finished` archive while RTDB is already rematch
+ * `waiting` — Home must leave that waiting room (`hasLeft`) so peers can continue alone.
  */
 export async function exitOnlineToHome(options: ExitOnlineFlowOptions): Promise<void> {
   const { gameId, uid, sessionStatus, session, myWords, exitedResults } = options;
@@ -104,8 +109,12 @@ export async function exitOnlineToHome(options: ExitOnlineFlowOptions): Promise<
     await cacheActiveRoundProgress(gameId, uid, session, myWords);
   }
 
-  const shouldAwaitCleanup = sessionStatus === 'waiting' || Boolean(exitedResults);
-  const guardWaitingLeave = shouldAwaitCleanup && sessionStatus === 'waiting' && Boolean(uid);
+  const liveFromDb = await readLiveSession(gameId);
+  const liveStatus = liveFromDb?.status ?? sessionStatus;
+  const leavingWaitingRoom = liveStatus === 'waiting';
+  const shouldAwaitCleanup =
+    leavingWaitingRoom || sessionStatus === 'waiting' || Boolean(exitedResults);
+  const guardWaitingLeave = leavingWaitingRoom && Boolean(uid);
 
   if (guardWaitingLeave && uid) {
     beginVoluntaryLeave(gameId, uid);
@@ -114,14 +123,14 @@ export async function exitOnlineToHome(options: ExitOnlineFlowOptions): Promise<
   try {
     if (shouldAwaitCleanup) {
       try {
-        await runExitCleanup(options);
+        await runExitCleanup(options, liveFromDb);
       } catch (error) {
         if (__DEV__) {
           console.warn('exitOnlineToHome cleanup', error);
         }
       }
     } else {
-      void runExitCleanup(options).catch((error) => {
+      void runExitCleanup(options, liveFromDb).catch((error) => {
         if (__DEV__) {
           console.warn('exitOnlineToHome cleanup', error);
         }

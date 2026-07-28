@@ -38,7 +38,6 @@ import {
 } from './paths.js';
 import { sessionRef } from './session-ref.js';
 import { normalizeRoomCode } from './room-code.js';
-import { globalWordCount } from './session-word-maps.js';
 import type { GameSession, SessionWordMaps } from './types.js';
 
 export {
@@ -344,25 +343,6 @@ export function subscribePlayerWords(
       listener(new Map());
     },
   );
-}
-
-export function storedWordsToScoredEntries(
-  words: Map<string, StoredPlayerWord>,
-  session: GameSession,
-  uniqueBonusEnabled: boolean,
-): {
-  entries: ScoredWordEntry[];
-  displays: string[];
-} {
-  const sorted = [...words.entries()].sort((a, b) => a[1].at - b[1].at);
-  return {
-    entries: sorted.map(([normalized]) => {
-      const globalCount = globalWordCount(session.wordPlayers, normalized) || 1;
-      const kind = globalCount > 1 ? 'normal' : 'unique';
-      return toScoredWordEntry(normalized, kind, uniqueBonusEnabled, globalCount);
-    }),
-    displays: sorted.map(([, row]) => row.display),
-  };
 }
 
 export type SubmitWordError = 'NOT_PLAYING' | 'DUPLICATE' | 'SESSION_MISSING' | 'PLAYER_MISSING';

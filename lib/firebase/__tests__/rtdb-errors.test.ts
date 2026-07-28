@@ -10,6 +10,8 @@ describe('isFirebaseTransactionAbort', () => {
   it('returns true for RTDB transaction abort messages', () => {
     expect(isFirebaseTransactionAbort(new Error('disconnect'))).toBe(true);
     expect(isFirebaseTransactionAbort(new Error('set'))).toBe(true);
+    // Firebase RTDB SDK abort reason is `maxretry` (see @firebase/database).
+    expect(isFirebaseTransactionAbort(new Error('maxretry'))).toBe(true);
     expect(isFirebaseTransactionAbort(new Error('maxretries'))).toBe(true);
     expect(isFirebaseTransactionAbort(new Error('overwrite'))).toBe(true);
   });
@@ -26,6 +28,7 @@ describe('isFirebaseIgnorableRtdbError', () => {
     denied.code = 'PERMISSION_DENIED';
     expect(isFirebaseIgnorableRtdbError(denied)).toBe(true);
     expect(isFirebaseIgnorableRtdbError(new Error('disconnect'))).toBe(true);
+    expect(isFirebaseIgnorableRtdbError(new Error('maxretry'))).toBe(true);
     expect(isFirebaseIgnorableRtdbError(new Error('boom'))).toBe(false);
   });
 });
@@ -36,5 +39,6 @@ describe('isFirebasePermissionDenied', () => {
     denied.code = 'PERMISSION_DENIED';
     expect(isFirebasePermissionDenied(denied)).toBe(true);
     expect(isFirebasePermissionDenied(new Error('Permission denied'))).toBe(true);
+    expect(isFirebasePermissionDenied(new Error('PERMISSION_DENIED'))).toBe(true);
   });
 });

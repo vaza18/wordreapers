@@ -19,6 +19,7 @@ vi.mock('firebase/database', () => ({
     update: (...args: unknown[]) => onDisconnectUpdate(...args),
   }),
   ref: (_db: unknown, path: string) => ({ path }),
+  child: (parent: { path: string }, sub: string) => ({ path: `${parent.path}/${sub}` }),
 }));
 
 vi.mock('../lib/firebase/init.js', () => ({
@@ -70,7 +71,13 @@ vi.mock('../lib/firebase/results-coordination-service.js', () => ({
 }));
 
 vi.mock('../lib/firebase/session-ref.js', () => ({
-  sessionRef: (gameId: string) => ({ path: `game_sessions/${gameId}` }),
+  sessionRef: (gameId: string) => {
+    const path = `game_sessions/${gameId}`;
+    return {
+      path,
+      child: (sub: string) => ({ path: `${path}/${sub}` }),
+    };
+  },
 }));
 
 import {
@@ -167,6 +174,28 @@ describe('game-session-service', () => {
     }
   });
 
+  it('only marks offline on rematch waiting presence unmount (does not set hasLeft)', async () => {
+    getMock.mockResolvedValue({
+      exists: () => true,
+      val: () => ({
+        ...waitingSession,
+        baseWordRound: 2,
+        players: {
+          'org-1': { name: 'Org', wordCount: 0, score: 0, online: true },
+          guest: { name: 'Guest', wordCount: 0, score: 0, online: true },
+        },
+      }),
+    });
+
+    await voluntaryLeaveWaitingLobbyIfMember('ABCDE', 'guest');
+
+    expect(updateMock).toHaveBeenCalledWith(expect.anything(), { online: false });
+    expect(updateMock).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ hasLeft: true }),
+    );
+  });
+
   it('marks an existing player offline', async () => {
     await markPlayerOffline('ABCDE', 'org-1');
 
@@ -210,6 +239,13 @@ describe('game-session-service', () => {
     getMock.mockResolvedValue({ exists: () => false });
 
     await expect(tryReadGameSessionSnapshot('ABCDE')).resolves.toBeNull();
+  });
+
+  it('rethrows permission-denied instead of treating the room as missing', async () => {
+    const denied = Object.assign(new Error('PERMISSION_DENIED'), { code: 'PERMISSION_DENIED' });
+    getMock.mockRejectedValue(denied);
+
+    await expect(tryReadGameSessionSnapshot('ABCDE')).rejects.toBe(denied);
   });
 
   it('deletes a solo waiting room when the organizer abandons it', async () => {
@@ -275,16 +311,19 @@ describe('game-session-service', () => {
       },
     };
     getMock.mockResolvedValue({ exists: () => true, val: () => session });
-    runTransactionMock.mockImplementation(async (_ref, updater) => {
-      const next = updater(session);
-      if (next) {
-        Object.assign(session, next);
-      }
-      return { committed: next != null, snapshot: { val: () => session } };
+    updateMock.mockImplementation(async (_ref, patch: Record<string, unknown>) => {
+      Object.assign(session, {
+        status: patch.status,
+        timerEndsAt: patch.timerEndsAt,
+      });
     });
 
     await expect(finishGameSessionIfExpired('ABCDE')).resolves.toBe(true);
-    expect(session.status).toBe('finished');
+    expect(updateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'game_sessions/ABCDE' }),
+      expect.objectContaining({ status: 'finished', timerEndsAt: null }),
+    );
+    expect(runTransactionMock).not.toHaveBeenCalled();
   });
 
   it('transitions a finished session back to waiting for rematch', async () => {
@@ -299,23 +338,30 @@ describe('game-session-service', () => {
     getMock
       .mockResolvedValueOnce({ exists: () => true, val: () => session })
       .mockResolvedValue({ exists: () => true, val: () => waiting });
-    runTransactionMock.mockImplementation(async (_ref, updater) => {
-      const next = updater(session);
-      return { committed: next != null, snapshot: { val: () => next } };
-    });
+    runTransactionMock.mockImplementation(
+      async (ref: { path: string }, updater: (c: unknown) => unknown) => {
+        expect(ref.path).toBe('game_sessions/ABCDE/status');
+        const next = updater('finished');
+        return { committed: next === 'waiting', snapshot: { val: () => next } };
+      },
+    );
+    updateMock.mockResolvedValue(undefined);
 
     await rematchFinishedSessionToWaiting('ABCDE', 'org');
 
     expect(runTransactionMock).toHaveBeenCalled();
-    expect(updateMock).not.toHaveBeenCalled();
-    const committed = runTransactionMock.mock.calls[0][1](session);
-    expect(committed).toEqual(
+    expect(updateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'game_sessions/ABCDE' }),
       expect.objectContaining({
-        status: 'waiting',
         baseWordRound: 1,
         baseWord: '',
+        'players/org/online': true,
+        'players/org/score': 0,
       }),
     );
+    const followUp = updateMock.mock.calls[0][1] as Record<string, unknown>;
+    expect(followUp).not.toHaveProperty('status');
+    expect(followUp).not.toHaveProperty('players/p2/online');
   });
 
   it('joins an already-open rematch waiting lobby without rewriting players (AH2TN)', async () => {
@@ -339,11 +385,14 @@ describe('game-session-service', () => {
     await rematchFinishedSessionToWaiting('ABCDE', 'p2');
 
     expect(runTransactionMock).not.toHaveBeenCalled();
-    expect(updateMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ baseWordRound: expect.any(Number) }),
+    );
     expect(markResultsExited).toHaveBeenCalledWith('ABCDE', 'p2');
   });
 
-  it('aborts stale finished rematch when server is already waiting (AH2TN)', async () => {
+  it('joins when status CAS loses to an already-open waiting lobby (AH2TN)', async () => {
     const { markResultsExited } = await import('../lib/firebase/results-coordination-service.js');
     const staleFinished = finishedSession();
     const openWaiting = {
@@ -361,18 +410,76 @@ describe('game-session-service', () => {
     getMock
       .mockResolvedValueOnce({ exists: () => true, val: () => staleFinished })
       .mockResolvedValue({ exists: () => true, val: () => openWaiting });
-    runTransactionMock.mockImplementation(async (_ref, updater) => {
-      // Server truth is already waiting — transaction must abort.
-      const next = updater(openWaiting);
-      return { committed: next == null ? false : true, snapshot: { val: () => openWaiting } };
+    runTransactionMock.mockImplementation(async (_ref, updater: (c: unknown) => unknown) => {
+      const next = updater('waiting');
+      return { committed: next != null, snapshot: { val: () => 'waiting' } };
     });
 
     await rematchFinishedSessionToWaiting('ABCDE', 'p2');
 
     expect(runTransactionMock).toHaveBeenCalled();
-    const updater = runTransactionMock.mock.calls[0][1] as (current: unknown) => unknown;
-    expect(updater(openWaiting)).toBeUndefined();
+    expect(updateMock).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ baseWordRound: 2 }),
+    );
     expect(markResultsExited).toHaveBeenCalledWith('ABCDE', 'p2');
+  });
+
+  it('opens rematch via status CAS so results presence cannot maxretry the claim (T2ZJU)', async () => {
+    const session = finishedSession();
+    const waiting = {
+      ...session,
+      status: 'waiting' as const,
+      baseWordRound: 1,
+      baseWord: '',
+      baseWordChosenBy: null,
+    };
+    getMock
+      .mockResolvedValueOnce({ exists: () => true, val: () => session })
+      .mockResolvedValue({ exists: () => true, val: () => waiting });
+    runTransactionMock.mockResolvedValue({
+      committed: true,
+      snapshot: { val: () => 'waiting' },
+    });
+    updateMock.mockResolvedValue(undefined);
+
+    await rematchFinishedSessionToWaiting('ABCDE', 'org');
+
+    expect(runTransactionMock).toHaveBeenCalled();
+    expect(updateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'game_sessions/ABCDE' }),
+      expect.objectContaining({ baseWordRound: 1, 'players/org/online': true }),
+    );
+  });
+
+  it('keeps opened rematch after follow-up PD instead of false-joining (R62F9)', async () => {
+    const { markResultsExited } = await import('../lib/firebase/results-coordination-service.js');
+    const session = finishedSession();
+    const waitingIncomplete = {
+      ...session,
+      status: 'waiting' as const,
+      // Follow-up failed — round not bumped yet, but status CAS already claimed.
+      baseWordRound: 0,
+      baseWord: 'старе',
+    };
+    getMock
+      .mockResolvedValueOnce({ exists: () => true, val: () => session })
+      .mockResolvedValue({ exists: () => true, val: () => waitingIncomplete });
+    runTransactionMock.mockResolvedValue({
+      committed: true,
+      snapshot: { val: () => 'waiting' },
+    });
+    updateMock.mockRejectedValue(new Error('PERMISSION_DENIED'));
+
+    await rematchFinishedSessionToWaiting('ABCDE', 'org');
+
+    expect(runTransactionMock).toHaveBeenCalled();
+    expect(updateMock).toHaveBeenCalled();
+    // Must not take join path (that logged "peer already opened" while nobody opened).
+    expect(markResultsExited).toHaveBeenCalledWith('ABCDE', 'org');
+    expect(
+      updateMock.mock.calls.some(([, patch]) => patch && 'baseWordRound' in (patch as object)),
+    ).toBe(true);
   });
 
   it('starts a waiting session when the picker has a valid base word', async () => {

@@ -23,6 +23,7 @@ vi.mock('firebase/database', () => ({
     update: (...args: unknown[]) => onDisconnectUpdate(...args),
   }),
   ref: (_db: unknown, path: string) => ({ path }),
+  child: (parent: { path: string }, sub: string) => ({ path: `${parent.path}/${sub}` }),
 }));
 
 vi.mock('../lib/firebase/init.js', () => ({
@@ -70,7 +71,13 @@ vi.mock('../lib/firebase/auth.js', () => ({
 }));
 
 vi.mock('../lib/firebase/session-ref.js', () => ({
-  sessionRef: (gameId: string) => ({ path: `game_sessions/${gameId}` }),
+  sessionRef: (gameId: string) => {
+    const path = `game_sessions/${gameId}`;
+    return {
+      path,
+      child: (sub: string) => ({ path: `${path}/${sub}` }),
+    };
+  },
 }));
 
 vi.mock('../lib/firebase/app-check.js', () => ({
@@ -78,7 +85,9 @@ vi.mock('../lib/firebase/app-check.js', () => ({
 }));
 
 import {
+  beginVoluntaryLeave,
   clearSessionRootForRecreate,
+  endVoluntaryLeave,
   joinGameSession,
   rejoinExistingPlayer,
   removeOrphanGameSessionShell,
@@ -153,6 +162,9 @@ describe('game-session-service extended', () => {
       val: () => ({
         status: 'playing',
         liveRoundPlayerUids: ['org-1'],
+        players: {
+          'guest-1': { name: 'Guest', wordCount: 0, score: 0, online: false, hasLeft: false },
+        },
       }),
     });
 
@@ -171,6 +183,65 @@ describe('game-session-service extended', () => {
         liveRoundPlayerUids: ['org-1', 'guest-1'],
       }),
     );
+  });
+
+  it('does not resurrect a hasLeft player unless reviveAfterLeave is set', async () => {
+    getMock.mockResolvedValue({
+      exists: () => true,
+      val: () => ({
+        status: 'waiting',
+        baseWordRound: 1,
+        players: {
+          'guest-1': { name: 'Guest', wordCount: 0, score: 0, online: false, hasLeft: true },
+        },
+      }),
+    });
+
+    await rejoinExistingPlayer('ABCDE', 'guest-1', {
+      name: 'Guest',
+      gender: 'f',
+      avatarColorIndex: 1,
+    });
+
+    expect(updateMock).not.toHaveBeenCalled();
+
+    await rejoinExistingPlayer(
+      'ABCDE',
+      'guest-1',
+      { name: 'Guest', gender: 'f', avatarColorIndex: 1 },
+      { reviveAfterLeave: true },
+    );
+
+    expect(updateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'game_sessions/ABCDE' }),
+      expect.objectContaining({
+        'players/guest-1/online': true,
+        'players/guest-1/hasLeft': false,
+      }),
+    );
+  });
+
+  it('skips rejoin while voluntary leave is in flight', async () => {
+    getMock.mockResolvedValue({
+      exists: () => true,
+      val: () => ({
+        status: 'waiting',
+        players: {
+          'guest-1': { name: 'Guest', wordCount: 0, score: 0, online: true, hasLeft: false },
+        },
+      }),
+    });
+    beginVoluntaryLeave('ABCDE', 'guest-1');
+    try {
+      await rejoinExistingPlayer('ABCDE', 'guest-1', {
+        name: 'Guest',
+        gender: 'f',
+        avatarColorIndex: 1,
+      });
+      expect(updateMock).not.toHaveBeenCalled();
+    } finally {
+      endVoluntaryLeave('ABCDE', 'guest-1');
+    }
   });
 
   it('updates lobby setup for organizer', async () => {
@@ -212,6 +283,42 @@ describe('game-session-service extended', () => {
         settings: DEFAULT_SESSION_SETTINGS,
       }),
     ).rejects.toThrow('NOT_AUTHORIZED');
+  });
+
+  it('rejects base word when peer takes the seat during validation (ZF6U4)', async () => {
+    const alone = {
+      ...waitingSession,
+      status: 'waiting' as const,
+      baseWordRound: 1,
+      baseWord: '',
+      baseWordPickerOrder: ['org-1', 'guest'],
+      baseWordPickerUid: 'org-1',
+      resultsExitedBy: { 'org-1': true },
+      players: {
+        'org-1': { name: 'Org', wordCount: 0, score: 0, online: true },
+        guest: { name: 'Guest', wordCount: 0, score: 0, online: false },
+      },
+    };
+    const bothOnline = {
+      ...alone,
+      baseWordPickerUid: 'guest',
+      resultsExitedBy: { 'org-1': true, guest: true },
+      players: {
+        'org-1': { name: 'Org', wordCount: 0, score: 0, online: true },
+        guest: { name: 'Guest', wordCount: 0, score: 0, online: true },
+      },
+    };
+    getMock
+      .mockResolvedValueOnce({ exists: () => true, val: () => alone })
+      .mockResolvedValueOnce({ exists: () => true, val: () => bothOnline });
+
+    await expect(
+      updateGameSessionSetup('ABCDE', 'org-1', {
+        baseWord: 'портрет',
+        settings: DEFAULT_SESSION_SETTINGS,
+      }),
+    ).rejects.toThrow('NOT_BASE_WORD_PICKER');
+    expect(updateMock).not.toHaveBeenCalled();
   });
 
   it('rejects base word from organizer who is not current picker', async () => {
@@ -284,18 +391,20 @@ describe('game-session-service extended', () => {
       .mockResolvedValueOnce({ exists: () => true, val: () => session })
       .mockResolvedValueOnce({ exists: () => true, val: () => session })
       .mockResolvedValue({ exists: () => true, val: () => waiting });
-    runTransactionMock.mockImplementation(async (_ref, updater) => {
-      const next = updater(session);
-      return { committed: next != null, snapshot: { val: () => next ?? waiting } };
+    runTransactionMock.mockResolvedValue({
+      committed: true,
+      snapshot: { val: () => 'waiting' },
     });
+    updateMock.mockResolvedValue(undefined);
 
     await restartGameSessionForRematch('ABCDE', 'org');
 
     expect(runTransactionMock).toHaveBeenCalled();
-    expect(updateMock).not.toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ status: 'waiting' }),
+    expect(updateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'game_sessions/ABCDE' }),
+      expect.objectContaining({ baseWordRound: 1, 'players/org/online': true }),
     );
+    expect(updateMock.mock.calls[0][1]).not.toHaveProperty('status');
   });
 
   it('rejects rematch restart for non-organizer', async () => {
@@ -326,7 +435,7 @@ describe('game-session-service extended', () => {
     await syncSessionPlayerScores('ABCDE');
 
     expect(updateMock).toHaveBeenCalledWith(
-      { path: 'game_sessions/ABCDE' },
+      expect.objectContaining({ path: 'game_sessions/ABCDE' }),
       expect.objectContaining({
         'players/org-1/score': expect.any(Number),
         'players/org-1/wordCount': expect.any(Number),
@@ -344,7 +453,7 @@ describe('game-session-service extended', () => {
     expect(updateMock).not.toHaveBeenCalled();
   });
 
-  it('realigns lobby picker when offline players invalidate chosen base word', async () => {
+  it('realigns lobby picker seat when chooser is offline but keeps the word', async () => {
     getMock.mockResolvedValue({
       exists: () => true,
       val: () => ({
@@ -352,7 +461,7 @@ describe('game-session-service extended', () => {
         baseWord: 'портрет',
         baseWordChosenBy: 'guest',
         baseWordPickerOrder: ['org-1', 'guest'],
-        baseWordPickerUid: 'org-1',
+        baseWordPickerUid: 'guest',
         players: {
           'org-1': { name: 'Org', wordCount: 0, score: 0, online: true },
           guest: { name: 'Guest', wordCount: 0, score: 0, online: false },
@@ -365,8 +474,7 @@ describe('game-session-service extended', () => {
     expect(updateMock).toHaveBeenCalledWith(
       expect.objectContaining({ path: 'game_sessions/ABCDE' }),
       {
-        baseWord: '',
-        baseWordChosenBy: null,
+        baseWordPickerUid: 'org-1',
       },
     );
   });
@@ -425,6 +533,39 @@ describe('game-session-service extended', () => {
       }),
     );
     expect(onSession.mock.calls[0][0]).not.toHaveProperty('wordPlayers');
+  });
+
+  it('does not clear the session listener on transient RTDB subscribe errors', async () => {
+    onValueMock.mockImplementation(() => vi.fn());
+
+    const onSession = vi.fn();
+    subscribeGameSession('ABCDE', onSession);
+
+    await vi.waitFor(() => {
+      expect(onValueMock).toHaveBeenCalled();
+    });
+
+    const onNext = onValueMock.mock.calls[0]?.[1] as (snapshot: {
+      exists: () => boolean;
+      val: () => unknown;
+    }) => void;
+    const onError = onValueMock.mock.calls[0]?.[2] as ((error: Error) => void) | undefined;
+
+    onNext({
+      exists: () => true,
+      val: () => waitingSession,
+    });
+    expect(onSession).toHaveBeenCalledTimes(1);
+
+    onError?.(Object.assign(new Error('Permission denied'), { code: 'PERMISSION_DENIED' }));
+    expect(onSession).toHaveBeenCalledTimes(1);
+
+    onNext({
+      exists: () => false,
+      val: () => null,
+    });
+    expect(onSession).toHaveBeenCalledTimes(2);
+    expect(onSession).toHaveBeenLastCalledWith(null);
   });
 
   it('subscribes to presence reconnect after app check', async () => {

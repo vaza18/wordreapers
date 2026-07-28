@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const navigateHomeClearingStack = vi.fn();
 const cacheActiveRoundProgress = vi.fn();
+const beginVoluntaryLeave = vi.fn();
+const endVoluntaryLeave = vi.fn();
+const getMock = vi.fn();
 const runExitCleanupMocks = {
   persistLocalArchive: vi.fn(),
   markResultsExitedAndOffline: vi.fn(),
@@ -18,8 +21,8 @@ vi.mock('@/lib/navigation/navigate-home', () => ({
 }));
 
 vi.mock('../lib/firebase/game-session-service.js', () => ({
-  beginVoluntaryLeave: vi.fn(),
-  endVoluntaryLeave: vi.fn(),
+  beginVoluntaryLeave: (...args: unknown[]) => beginVoluntaryLeave(...args),
+  endVoluntaryLeave: (...args: unknown[]) => endVoluntaryLeave(...args),
   markPlayerOffline: (...args: unknown[]) => runExitCleanupMocks.markPlayerOffline(...args),
   organizerLeaveWaitingLobby: (...args: unknown[]) =>
     runExitCleanupMocks.organizerLeaveWaitingLobby(...args),
@@ -57,7 +60,7 @@ vi.mock('../lib/online/organizer-waiting-room.js', () => ({
 }));
 
 vi.mock('firebase/database', () => ({
-  get: vi.fn().mockResolvedValue({ exists: () => false }),
+  get: (...args: unknown[]) => getMock(...args),
   ref: (_db: unknown, path: string) => ({ path }),
 }));
 
@@ -75,6 +78,7 @@ describe('exitOnlineToHome', () => {
       fn.mockResolvedValue(undefined);
     }
     cacheActiveRoundProgress.mockResolvedValue(undefined);
+    getMock.mockResolvedValue({ exists: () => false });
   });
 
   it('caches active round progress before navigating home', async () => {
@@ -99,6 +103,19 @@ describe('exitOnlineToHome', () => {
   });
 
   it('awaits waiting-room cleanup before navigation', async () => {
+    getMock.mockResolvedValue({
+      exists: () => true,
+      val: () => ({
+        ...finishedSession(),
+        status: 'waiting',
+        organizerId: 'org',
+        players: {
+          org: { name: 'Org', wordCount: 0, score: 0, online: true },
+          guest: { name: 'Guest', wordCount: 0, score: 0, online: true },
+        },
+      }),
+    });
+
     await exitOnlineToHome({
       gameId: 'ABCDE',
       uid: 'guest',
@@ -106,13 +123,48 @@ describe('exitOnlineToHome', () => {
       sessionStatus: 'waiting',
     });
 
+    expect(beginVoluntaryLeave).toHaveBeenCalledWith('ABCDE', 'guest');
     expect(runExitCleanupMocks.leaveGameSession).toHaveBeenCalledWith('ABCDE', 'guest');
+    expect(endVoluntaryLeave).toHaveBeenCalledWith('ABCDE', 'guest');
+    expect(navigateHomeClearingStack).toHaveBeenCalled();
+  });
+
+  it('leaves rematch waiting when results UI is still frozen finished', async () => {
+    getMock.mockResolvedValue({
+      exists: () => true,
+      val: () => ({
+        ...finishedSession(),
+        status: 'waiting',
+        baseWordRound: 1,
+        organizerId: 'org',
+        resultsExitedBy: { org: true },
+        players: {
+          org: { name: 'Org', wordCount: 0, score: 0, online: true },
+          guest: { name: 'Guest', wordCount: 0, score: 0, online: false },
+        },
+      }),
+    });
+
+    await exitOnlineToHome({
+      gameId: 'ABCDE',
+      uid: 'guest',
+      isOrganizer: false,
+      sessionStatus: 'finished',
+      session: finishedSession(),
+      exitedResults: true,
+    });
+
+    expect(beginVoluntaryLeave).toHaveBeenCalledWith('ABCDE', 'guest');
+    expect(runExitCleanupMocks.leaveGameSession).toHaveBeenCalledWith('ABCDE', 'guest');
+    expect(runExitCleanupMocks.markResultsExitedAndOffline).not.toHaveBeenCalled();
+    expect(endVoluntaryLeave).toHaveBeenCalledWith('ABCDE', 'guest');
     expect(navigateHomeClearingStack).toHaveBeenCalled();
   });
 
   it('archives finished results when exiting from the results screen', async () => {
     const session = finishedSession();
     const words = new Map([['org', new Map([['порт', { display: 'порт', at: 1 }]])]]);
+    getMock.mockResolvedValue({ exists: () => true, val: () => session });
 
     await exitOnlineToHome({
       gameId: 'ABCDE',
@@ -129,21 +181,24 @@ describe('exitOnlineToHome', () => {
   });
 
   it('clears organizer waiting-room tracking on exit', async () => {
+    const waiting = {
+      baseWord: 'тест',
+      status: 'waiting' as const,
+      settings: DEFAULT_SESSION_SETTINGS,
+      timerEndsAt: null,
+      organizerId: 'org-1',
+      players: {
+        'org-1': { name: 'Org', wordCount: 0, score: 0, online: true },
+      },
+    };
+    getMock.mockResolvedValue({ exists: () => true, val: () => waiting });
+
     await exitOnlineToHome({
       gameId: 'ABCDE',
       uid: 'org-1',
       isOrganizer: true,
       sessionStatus: 'waiting',
-      session: {
-        baseWord: 'тест',
-        status: 'waiting',
-        settings: DEFAULT_SESSION_SETTINGS,
-        timerEndsAt: null,
-        organizerId: 'org-1',
-        players: {
-          'org-1': { name: 'Org', wordCount: 0, score: 0, online: true },
-        },
-      },
+      session: waiting,
     });
 
     expect(runExitCleanupMocks.abandonTrackedOrganizerWaitingRoom).toHaveBeenCalledWith('org-1');

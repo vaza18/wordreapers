@@ -1,5 +1,4 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { useIsFocused } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -32,6 +31,7 @@ import { randomBaseWord, searchBaseWordPrefixResult } from '@/lib/game/base-word
 import { ensureAnonymousAuth } from '@/lib/firebase/auth';
 import {
   subscribeGameSession,
+  syncLobbyPickerState,
   updateGameSessionSetup,
   type GameSessionSnapshot,
 } from '@/lib/firebase/game-session-service';
@@ -41,10 +41,20 @@ import {
 } from '@/lib/firebase/session-settings';
 import { sessionContentSafetyLocked } from '@/lib/online/public-lobby/content-safety';
 import { isPublicBaseWordSafeFromDisplay } from '@/lib/online/public-lobby/validate-public-base-word';
-import { baseWordPickerTurnNumber, isCurrentBaseWordPicker } from '@/lib/online/base-word-picker';
-import { shouldEnablePickWordPresence } from '@/lib/online/lobby-pick-word-navigation';
+import {
+  baseWordPickerTurnNumber,
+  currentBaseWordPickerUid,
+  isCurrentBaseWordPicker,
+  shouldClearLobbyBaseWordForPicker,
+} from '@/lib/online/base-word-picker';
+import {
+  shouldEnablePickWordPresence,
+  shouldLeavePickWordScreen,
+} from '@/lib/online/lobby-pick-word-navigation';
 import { handoffPlayerPresence } from '@/lib/online/presence/presence-handoff';
 import { usePlayerOnlinePresence } from '@/lib/online/presence/use-player-online-presence';
+import { isLobbyVisiblePlayer } from '@/lib/online/rematch/rematch-waiting-lobby';
+import { displayPlayerName } from '@/lib/online/public-lobby/display-player-name';
 import type { UniqueBonusMode } from '@/lib/game/scoring';
 
 const SUGGEST_DROPDOWN_LIMIT = 50;
@@ -63,7 +73,6 @@ export default function OnlinePickWordScreen() {
   }>();
   const gameId = rawGameId ?? '';
   const fromLobby = rawFromLobby === '1';
-  const isFocused = useIsFocused();
 
   const [loading, setLoading] = useState(true);
   const [sessionLoaded, setSessionLoaded] = useState(false);
@@ -130,6 +139,20 @@ export default function OnlinePickWordScreen() {
     'background-only',
   );
 
+  // Direct rematch → pick-word leaves lobby unmounted; keep picker uid in sync when
+  // a rightful peer opts in (lobby normally owns this reconcile).
+  useEffect(() => {
+    if (!gameId || !session || session.status !== 'waiting') {
+      return;
+    }
+    const picker = currentBaseWordPickerUid(session);
+    const pickerDrifted = session.baseWordPickerUid !== picker;
+    const wordDrifted = shouldClearLobbyBaseWordForPicker(session);
+    if (pickerDrifted || wordDrifted) {
+      void syncLobbyPickerState(gameId);
+    }
+  }, [gameId, session]);
+
   const { status: lexiconHintStatus, maxCount: lexiconMaxCount } = useSetupPlayableLexiconHint({
     baseWordInput,
     allowProperNouns,
@@ -152,18 +175,24 @@ export default function OnlinePickWordScreen() {
     });
   }, [fromLobby, gameId]);
 
+  // Do not gate on isFocused: unfocused multi-sim still gets RTDB seat transfers.
   useEffect(() => {
-    if (!isFocused || !session || !myUid) {
+    if (!session || !myUid) {
       return;
     }
-    if (session.status !== 'waiting') {
-      goToLobby();
-      return;
-    }
-    if (!isCurrentBaseWordPicker(session, myUid)) {
+    if (shouldLeavePickWordScreen(session, isCurrentBaseWordPicker(session, myUid))) {
       goToLobby();
     }
-  }, [goToLobby, isFocused, myUid, session]);
+  }, [goToLobby, myUid, session]);
+
+  const rematchPeers = useMemo(() => {
+    if (!session || !myUid) {
+      return [];
+    }
+    return Object.keys(session.players)
+      .filter((uid) => uid !== myUid && isLobbyVisiblePlayer(session, uid))
+      .map((uid) => displayPlayerName(session.players[uid], myUid, uid, session));
+  }, [myUid, session]);
 
   useEffect(() => {
     if (!session || !dictionary || sessionPrefilledRef.current) {
@@ -232,7 +261,11 @@ export default function OnlinePickWordScreen() {
   );
 
   const handleSave = async () => {
-    if (!myUid || !canSave) {
+    if (!myUid || !canSave || !session) {
+      return;
+    }
+    if (!isCurrentBaseWordPicker(session, myUid)) {
+      goToLobby();
       return;
     }
     setSaving(true);
@@ -253,6 +286,8 @@ export default function OnlinePickWordScreen() {
       const message = err instanceof Error ? err.message : '';
       if (message === 'BASE_WORD_NOT_ALLOWED') {
         setError(t('online.publicRoomNeedsSafeBaseWord'));
+      } else if (message === 'NOT_BASE_WORD_PICKER') {
+        goToLobby();
       } else {
         setError(t('online.errorSaveSetup'));
       }
@@ -303,6 +338,11 @@ export default function OnlinePickWordScreen() {
       <Stack.Screen options={screenOptions} />
       <Screen keyboardShouldPersistTaps="handled">
         <Text style={styles.intro}>{t('online.pickWordIntro', { turn })}</Text>
+        {rematchPeers.length > 0 ? (
+          <Text style={styles.peersHint}>
+            {t('online.pickWordPeersInLobby', { names: rematchPeers.join(', ') })}
+          </Text>
+        ) : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         <Text style={styles.sectionLabel}>{t('game.baseWord')}</Text>
@@ -391,6 +431,13 @@ function createStyles(colors: ThemeColors) {
       lineHeight: 20,
       color: colors.textSecondary,
       textAlign: 'center',
+    },
+    peersHint: {
+      fontSize: 13,
+      lineHeight: 18,
+      color: colors.textPrimary,
+      textAlign: 'center',
+      fontWeight: '500',
     },
     sectionLabel: {
       fontSize: 15,

@@ -51,4 +51,41 @@ describe('shouldOrganizerAbandonWaitingRoom', () => {
     );
     expect(shouldOrganizerAbandonWaitingRoom(s, 'org')).toBe(false);
   });
+
+  it('keeps rematch room when offline peer still holds the picker seat', () => {
+    const s: GameSession = {
+      ...session({
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        p2: { name: 'Two', wordCount: 0, score: 0, online: false },
+      }),
+      baseWordRound: 2,
+      baseWordPickerUid: 'p2',
+    };
+    expect(shouldOrganizerAbandonWaitingRoom(s, 'org')).toBe(false);
+  });
+
+  it('keeps rematch room when offline peer committed the base word', () => {
+    const s: GameSession = {
+      ...session({
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        p2: { name: 'Two', wordCount: 0, score: 0, online: false },
+      }),
+      baseWordRound: 3,
+      baseWord: 'літо',
+      baseWordChosenBy: 'p2',
+    };
+    expect(shouldOrganizerAbandonWaitingRoom(s, 'org')).toBe(false);
+  });
+
+  it('abandons when peer hasLeft even if they still hold baseWordPickerUid', () => {
+    const s: GameSession = {
+      ...session({
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        p2: { name: 'Two', wordCount: 0, score: 0, online: false, hasLeft: true },
+      }),
+      baseWordRound: 2,
+      baseWordPickerUid: 'p2',
+    };
+    expect(shouldOrganizerAbandonWaitingRoom(s, 'org')).toBe(true);
+  });
 });

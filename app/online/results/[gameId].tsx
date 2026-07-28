@@ -93,6 +93,7 @@ export default function OnlineResultsScreen() {
   const freezeAttemptedRef = useRef(false);
   const skipRematchToastRef = useRef(false);
   const skipResultsOfflineRef = useRef(false);
+  const resultsOfflineMarkedKeyRef = useRef<string | null>(null);
   const rematchToasts = useResultsRematchToast(liveSession, myUid, skipRematchToastRef);
   const viewedResultsLoggedRef = useRef(false);
 
@@ -277,6 +278,13 @@ export default function OnlineResultsScreen() {
     if (!resolveResultsPresence({ liveSession, frozenBaseWordRound: frozenRoundNum })) {
       return;
     }
+    // Mark offline once per room/round — re-firing on every liveSession tick races
+    // rematch `finished → waiting` writes (and used to abort whole-session txs).
+    const offlineKey = `${gameId}:${frozenRoundNum ?? 'none'}`;
+    if (resultsOfflineMarkedKeyRef.current === offlineKey) {
+      return;
+    }
+    resultsOfflineMarkedKeyRef.current = offlineKey;
     void markPlayerOffline(gameId, myUid);
   }, [frozenRound, gameId, liveSession, myUid, viewingBaseWordRound]);
 
@@ -302,9 +310,15 @@ export default function OnlineResultsScreen() {
       } else {
         router.replace(route);
       }
-    } catch {
+    } catch (error) {
       skipRematchToastRef.current = false;
       skipResultsOfflineRef.current = false;
+      devLogAction('play again / rematch failed', {
+        level: 'error',
+        room: gameId,
+        round: session?.baseWordRound ?? frozenRound?.session.baseWordRound,
+        details: error instanceof Error ? error.message : String(error),
+      });
       setRematchError(t('online.errorRematchFailed'));
       setRematchLoading(false);
     }
@@ -324,6 +338,8 @@ export default function OnlineResultsScreen() {
 
   const onBack = useSyncedStackBack(handleHome);
 
+  const headerRoundNumber = (session?.baseWordRound ?? viewingBaseWordRound ?? 0) + 1;
+
   const screenOptions = useMemo(
     () => ({
       ...stackHeaderBack(onBack),
@@ -331,14 +347,17 @@ export default function OnlineResultsScreen() {
         viewData ? (
           <StackHeaderTitle
             title={viewData.baseWordDisplay}
-            subtitle={t('history.roomCode', { code: gameId })}
+            subtitle={t('history.roomCodeWithRound', {
+              code: gameId,
+              round: headerRoundNumber,
+            })}
           />
         ) : (
           <StackHeaderTitle title={t('online.resultsTitle')} />
         ),
       headerTitleAlign: 'center' as const,
     }),
-    [gameId, onBack, t, viewData],
+    [gameId, headerRoundNumber, onBack, t, viewData],
   );
 
   if (!gameId) {

@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
+import { SquarePenIcon } from '@/components/HeaderIcons';
 import { LobbyQrCode } from '@/components/LobbyQrCode';
 import { PlayerAvatar } from '@/components/PlayerAvatar';
 import { PrimaryButton } from '@/components/PrimaryButton';
@@ -22,6 +23,7 @@ import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { formatRoomCodeDisplay } from '@/lib/firebase/format-room-code';
+import { formatLobbyBaseWordMetaLine } from '@/lib/online/format-lobby-base-word-meta';
 import {
   loadBundledDictionary,
   loadBundledSupplements,
@@ -39,6 +41,7 @@ import {
 import { syncPublicRosterAliases } from '@/lib/firebase/public-lobby-service';
 import { clearWaitingLobbyPlayerWordsAsOrganizer } from '@/lib/firebase/player-words-service';
 import { ensureAnonymousAuth } from '@/lib/firebase/auth';
+import { devLogAction } from '@/lib/debug/dev-log';
 import {
   baseWordPickerTurnNumber,
   currentBaseWordPickerUid,
@@ -140,6 +143,8 @@ export default function LobbyScreen() {
   // (focus return from pick-word, or AppState active after multi-sim inactive).
   // Missing / orphan RTDB roots must clear local state — otherwise a zombie lobby
   // keeps showing «Почати гру» while join correctly reports the room is gone.
+  // Permission-denied / other read failures must not clear — App Check glitches
+  // would otherwise eject players from an active rematch lobby.
   const healLobbySessionFromRtdb = useCallback(() => {
     if (!gameId) {
       return;
@@ -157,9 +162,11 @@ export default function LobbyScreen() {
         setLoading(false);
       })
       .catch((error) => {
-        if (__DEV__) {
-          console.warn('lobby tryReadGameSessionSnapshot heal', error);
-        }
+        devLogAction('lobby session heal failed', {
+          level: 'detail',
+          room: gameId,
+          details: error instanceof Error ? error.message : String(error),
+        });
       });
   }, [gameId]);
 
@@ -266,7 +273,6 @@ export default function LobbyScreen() {
     session,
     isFocused,
     justOptedIn,
-    onJoinFailed: setError,
   });
 
   usePlayerOnlinePresence(
@@ -381,7 +387,14 @@ export default function LobbyScreen() {
     try {
       await restartRematchOnlineRound(gameId, myUid, rematchArchive.baseWordRound);
       const { name, gender, avatarColorIndex } = useProfileStore.getState();
-      await rejoinExistingPlayer(gameId, myUid, { name, gender, avatarColorIndex });
+      await rejoinExistingPlayer(
+        gameId,
+        myUid,
+        { name, gender, avatarColorIndex },
+        {
+          reviveAfterLeave: true,
+        },
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : '';
       if (message === 'NO_FINISHED_ARCHIVE') {
@@ -510,27 +523,36 @@ export default function LobbyScreen() {
     );
   }
 
+  const showBaseWordEditAffordance = Boolean(isPicker && session?.status === 'waiting');
+
   const baseWordBlock =
     hasBaseWord && session.baseWord ? (
-      <View style={styles.baseWordSection}>
+      <View
+        style={[
+          styles.baseWordSection,
+          showBaseWordEditAffordance ? styles.baseWordSectionEditable : null,
+        ]}
+      >
+        {showBaseWordEditAffordance ? (
+          <View style={styles.baseWordEditIcon} pointerEvents="none" importantForAccessibility="no">
+            <SquarePenIcon size={18} color={colors.textSecondary} />
+          </View>
+        ) : null}
         <Text style={styles.baseWordLabel}>{t('game.baseWord')}</Text>
         <Text style={styles.baseWordTitle}>{session.baseWord.toUpperCase()}</Text>
-        {!isFirstRound ? (
-          <Text style={styles.baseWordRound}>
-            {t('online.baseWordRoundLabel', { round: turnNumber })}
-          </Text>
-        ) : null}
         <Text style={styles.baseWordMeta}>
-          {tGendered(
-            t,
-            'online.baseWordChosenBy',
-            myUid && chosenByUid ? playerGenderForDisplay(session, myUid, chosenByUid) : null,
-            { name: chosenByName },
-          )}
+          {formatLobbyBaseWordMetaLine({
+            roundLabel: !isFirstRound
+              ? t('online.baseWordRoundLabel', { round: turnNumber })
+              : null,
+            chosenByLabel: tGendered(
+              t,
+              'online.baseWordChosenBy',
+              myUid && chosenByUid ? playerGenderForDisplay(session, myUid, chosenByUid) : null,
+              { name: chosenByName },
+            ),
+          })}
         </Text>
-        {isPicker && session.status === 'waiting' ? (
-          <Text style={styles.baseWordChangeHint}>{t('online.baseWordChangeHint')}</Text>
-        ) : null}
       </View>
     ) : null;
 
@@ -570,6 +592,7 @@ export default function LobbyScreen() {
           {baseWordBlock && isPicker && session.status === 'waiting' ? (
             <FeedbackPressable
               accessibilityRole="button"
+              accessibilityLabel={t('online.baseWordChangeA11y')}
               onPress={() => {
                 router.push(lobbyToPickWordRoute(gameId));
               }}
@@ -813,6 +836,19 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       gap: spacing.xs,
       paddingVertical: spacing.xs,
+      position: 'relative',
+    },
+    baseWordSectionEditable: {
+      paddingRight: 36,
+    },
+    baseWordEditIcon: {
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      width: 28,
+      height: 28,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     baseWordLabel: {
       fontSize: 14,
@@ -825,11 +861,6 @@ function createStyles(colors: ThemeColors) {
       color: colors.accent,
       textAlign: 'center',
     },
-    baseWordRound: {
-      fontSize: 13,
-      color: colors.textSecondary,
-      textAlign: 'center',
-    },
     baseWordMeta: {
       fontSize: 13,
       color: colors.textSecondary,
@@ -838,13 +869,9 @@ function createStyles(colors: ThemeColors) {
     baseWordBannerPressable: {
       backgroundColor: colors.accentMuted,
       borderRadius: radii.sm,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.xs,
-    },
-    baseWordChangeHint: {
-      fontSize: 12,
-      color: colors.textSecondary,
-      textAlign: 'center',
+      padding: spacing.sm,
+      borderWidth: 1,
+      borderColor: colors.accent,
     },
     settingsBanner: {
       fontSize: 12,

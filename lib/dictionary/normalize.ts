@@ -2,6 +2,16 @@
  * Ukrainian text normalization and display helpers.
  */
 
+/** Apostrophe code points stripped by {@link normalizeUk} (U+0027, U+02BC, U+0060). */
+const UK_APOSTROPHES = "'ʼ`";
+
+/**
+ * Whether `char` is a Ukrainian apostrophe variant stripped during normalization.
+ */
+export function isUkApostrophe(char: string): boolean {
+  return UK_APOSTROPHES.includes(char);
+}
+
 /**
  * Strip apostrophes and normalize for dictionary lookup (Ukrainian).
  */

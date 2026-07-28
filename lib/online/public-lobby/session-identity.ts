@@ -28,8 +28,10 @@ export function rosterJoinOrder(
   const order = session.baseWordPickerOrder ?? [session.organizerId];
   const ids = new Set(Object.keys(session.players));
   const sorted = order.filter((uid) => ids.has(uid));
+  const seen = new Set(sorted);
   for (const uid of Object.keys(session.players).sort()) {
-    if (!sorted.includes(uid)) {
+    if (!seen.has(uid)) {
+      seen.add(uid);
       sorted.push(uid);
     }
   }
