@@ -75,4 +75,27 @@ describe('buildOnlineWordListDisplay', () => {
     const { entries } = buildOnlineWordListDisplay(myWords, s, 'org');
     expect(entries[0]?.overlapPeers).toEqual([{ playerId: 'a', name: 'Аня', avatarColorIndex: 1 }]);
   });
+
+  it('scores multiple stored words using session word overlap maps', () => {
+    const s = session({
+      baseWord: 'портрет',
+      status: 'finished',
+      timerEndsAt: null,
+      wordPlayers: {
+        порт: { org: true },
+        ретро: { org: true, guest: true },
+      },
+      players: {
+        org: { name: 'Org', wordCount: 2, score: 10, online: false, avatarColorIndex: 0 },
+      },
+    });
+    const myWords = new Map([
+      ['порт', { display: 'порт', at: 100 }],
+      ['ретро', { display: 'ретро', at: 200 }],
+    ]);
+    const { entries, displays } = buildOnlineWordListDisplay(myWords, s, 'org');
+    expect(displays).toEqual(['порт', 'ретро']);
+    expect(entries[0]?.kind).toBe('unique');
+    expect(entries[1]?.kind).toBe('normal');
+  });
 });

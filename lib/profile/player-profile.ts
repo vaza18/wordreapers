@@ -33,10 +33,7 @@ export function parsePlayerProfile(raw: string | null): PlayerProfile {
   }
   try {
     const parsed = JSON.parse(raw) as Partial<PlayerProfile>;
-    const gender =
-      parsed.gender === 'm' || parsed.gender === 'f' || parsed.gender === null
-        ? parsed.gender
-        : null;
+    const gender = parsed.gender === 'm' || parsed.gender === 'f' ? parsed.gender : null;
     const index =
       typeof parsed.avatarColorIndex === 'number' && Number.isFinite(parsed.avatarColorIndex)
         ? clampAvatarColorIndex(parsed.avatarColorIndex)

@@ -45,8 +45,10 @@ export function isEligibleBaseWordPickerInSession(session: GameSession, uid: str
 export function baseWordPickerOrder(session: GameSession): string[] {
   const stored = session.baseWordPickerOrder ?? [];
   const order = stored.length > 0 ? [...stored] : [session.organizerId];
+  const seen = new Set(order);
   for (const uid of Object.keys(session.players)) {
-    if (!order.includes(uid)) {
+    if (!seen.has(uid)) {
+      seen.add(uid);
       order.push(uid);
     }
   }
@@ -90,12 +92,6 @@ function firstEligibleFromRotation(session: GameSession, startRound: number): st
   for (let offset = 0; offset < order.length; offset += 1) {
     const uid = order[(startIndex + offset) % order.length];
     if (uid && isEligibleBaseWordPickerInSession(session, uid)) {
-      return uid;
-    }
-  }
-
-  for (const uid of order) {
-    if (isEligibleBaseWordPickerInSession(session, uid)) {
       return uid;
     }
   }

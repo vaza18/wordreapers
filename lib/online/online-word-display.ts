@@ -28,14 +28,15 @@ export function buildOnlineWordListDisplay(
   viewerPlayerId: string,
 ): { entries: OnlineWordListRow[]; displays: string[] } {
   const sorted = [...myWords.entries()].sort((a, b) => a[1].at - b[1].at);
-  return {
-    entries: sorted.map(([normalized]) => {
-      const entry = resolveOnlineWordEntry(normalized, session);
-      return {
-        ...entry,
-        overlapPeers: overlapPeersFromSession(normalized, session, viewerPlayerId),
-      };
-    }),
-    displays: sorted.map(([, row]) => row.display),
-  };
+  const entries: OnlineWordListRow[] = [];
+  const displays: string[] = [];
+  for (const [normalized, row] of sorted) {
+    const entry = resolveOnlineWordEntry(normalized, session);
+    entries.push({
+      ...entry,
+      overlapPeers: overlapPeersFromSession(normalized, session, viewerPlayerId),
+    });
+    displays.push(row.display);
+  }
+  return { entries, displays };
 }

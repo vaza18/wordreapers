@@ -1,4 +1,4 @@
-import { letterCount, normalizeUk } from './normalize.js';
+import { normalizeUk } from './normalize.js';
 
 /**
  * Build a letter multiset from a base word (normalized, apostrophes stripped).
@@ -64,7 +64,7 @@ export function validateWord(
   const normalized = normalizeUk(input);
   const baseNormalized = normalizeUk(baseWord);
 
-  if (letterCount(normalized) < minWordLength) {
+  if (normalized.length < minWordLength) {
     return { valid: false, normalized, error: 'TOO_SHORT' };
   }
 

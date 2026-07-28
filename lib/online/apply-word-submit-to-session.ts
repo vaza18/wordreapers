@@ -2,27 +2,6 @@ import { toScoredWordEntry, type ScoredWordEntry, type WordScoreKind } from '@/l
 import { globalWordCount } from '@/lib/firebase/session-word-maps';
 import type { GameSession, GameSessionPlayer, SessionWordMaps } from '@/lib/firebase/types';
 
-/** Authoritative per-player totals from committed word maps (after shard write). */
-export function playerTotalsFromMaps(
-  maps: SessionWordMaps,
-  uid: string,
-  uniqueBonusEnabled: boolean,
-): { score: number; wordCount: number } {
-  let score = 0;
-  let wordCount = 0;
-  const wordPlayers = maps.wordPlayers ?? {};
-  for (const [normalized, playersOnWord] of Object.entries(wordPlayers)) {
-    if (!playersOnWord[uid]) {
-      continue;
-    }
-    const globalCount = globalWordCount(wordPlayers, normalized);
-    const kind: WordScoreKind = globalCount > 1 ? 'normal' : 'unique';
-    score += toScoredWordEntry(normalized, kind, uniqueBonusEnabled, globalCount).points;
-    wordCount += 1;
-  }
-  return { score, wordCount };
-}
-
 export type ApplyWordSubmitError = 'NOT_PLAYING' | 'DUPLICATE';
 
 export type ApplyWordMapsResult =

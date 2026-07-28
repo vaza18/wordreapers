@@ -6,7 +6,7 @@ import {
   LETTER_KEY_TABLET_MIN_WIDTH,
   LETTER_KEY_TABLET_MM,
 } from '@/constants/letter-keyboard';
-import { normalizeUk, toDisplayUpper } from '../dictionary/normalize.js';
+import { isUkApostrophe, normalizeUk, toDisplayUpper } from '../dictionary/normalize.js';
 
 const MM_PER_INCH = 25.4;
 /** Baseline logical px per inch (React Native dp). */
@@ -113,7 +113,7 @@ export function buildLetterKeys(baseWordDisplay: string): LetterKey[] {
     if (char === undefined) {
       continue;
     }
-    if (/[''ʼ`]/.test(char)) {
+    if (isUkApostrophe(char)) {
       keys.push({ id: `${index}-'`, label: "'", value: char });
       continue;
     }
@@ -139,7 +139,7 @@ export function isLetterKeyAvailable(
   const baseCounts = countChars(keys.map((item) => item.value).filter(Boolean));
   const draftCounts = countChars([...draftNormalized]);
 
-  if (/[''ʼ`]/.test(key.value)) {
+  if (isUkApostrophe(key.value)) {
     return true;
   }
 

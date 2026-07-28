@@ -32,11 +32,7 @@ export function useTimerAlerts(
     for (const threshold of ALERT_THRESHOLDS) {
       if (secs > threshold) {
         firedRef.current.delete(threshold);
-      }
-    }
-
-    for (const threshold of ALERT_THRESHOLDS) {
-      if (secs === threshold && !firedRef.current.has(threshold)) {
+      } else if (secs === threshold && !firedRef.current.has(threshold)) {
         firedRef.current.add(threshold);
         playTimerAlert(mode);
       }

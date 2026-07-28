@@ -27,7 +27,7 @@ import { useScrollablePanelMetrics } from '@/hooks/useScrollablePanelMetrics';
 import { useVirtualWordListProps } from '@/hooks/useVirtualWordListProps';
 import { spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
-import { normalizeUk } from '@/lib/dictionary/normalize';
+import { isUkApostrophe, normalizeUk } from '@/lib/dictionary/normalize';
 import { dismissWordOverlapTooltips } from '@/lib/ui/word-overlap-tooltip';
 import {
   findLastAddedNormalized,
@@ -144,7 +144,7 @@ function splitDisplayByNormalizedPrefix(
   let cutIndex = 0;
   for (let i = 0; i < display.length && normCount < prefixNormalized.length; i += 1) {
     const char = display[i];
-    if (char !== undefined && !/[''ʼ`]/.test(char)) {
+    if (char !== undefined && !isUkApostrophe(char)) {
       normCount += 1;
     }
     cutIndex = i + 1;

@@ -52,10 +52,9 @@ import {
   reconcileOwnPlayerWordsWithSession,
   resetOwnPlayerWordsNode,
   restorePlayerWordsToFirebase,
-  storedWordsToScoredEntries,
   submitOnlineWord,
 } from '../lib/firebase/player-words-service.js';
-import { DEFAULT_SESSION_SETTINGS, playingSession } from './helpers/game-session-fixtures.js';
+import { playingSession } from './helpers/game-session-fixtures.js';
 
 function permissionDenied(): Error & { code: string } {
   const error = new Error('Permission denied') as Error & { code: string };
@@ -102,33 +101,6 @@ describe('player-words-service', () => {
 
     expect(byPlayer.get('org-1')?.get('порт')).toEqual({ display: 'порт', at: 100 });
     expect(byPlayer.get('guest-1')?.size).toBe(0);
-  });
-
-  it('scores stored words using session word overlap maps', () => {
-    const words = new Map([
-      ['порт', { display: 'порт', at: 100 }],
-      ['ретро', { display: 'ретро', at: 200 }],
-    ]);
-    const session = {
-      baseWord: 'портрет',
-      status: 'finished' as const,
-      settings: { ...DEFAULT_SESSION_SETTINGS, uniqueBonusEnabled: true },
-      timerEndsAt: null,
-      organizerId: 'org',
-      players: {
-        org: { name: 'Org', wordCount: 2, score: 10, online: false },
-      },
-      wordPlayers: {
-        порт: { org: true },
-        ретро: { org: true, guest: true },
-      },
-    };
-
-    const { entries, displays } = storedWordsToScoredEntries(words, session, true);
-
-    expect(displays).toEqual(['порт', 'ретро']);
-    expect(entries[0]?.kind).toBe('unique');
-    expect(entries[1]?.kind).toBe('normal');
   });
 
   describe('restorePlayerWordsToFirebase', () => {
