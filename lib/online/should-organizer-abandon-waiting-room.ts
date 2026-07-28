@@ -1,8 +1,10 @@
 import type { GameSession } from '../firebase/types.js';
+import { isRematchDurableLobbyOptIn } from './rematch/rematch-waiting-lobby.js';
 
 /**
  * True when the organizer may delete the waiting room root.
- * Keep the session when another roster member is still in the lobby or opted into rematch.
+ * Keep the session when another roster member is still in the lobby or opted into rematch
+ * (online, latch, picker seat, or committed base word — same durable signals as lobby visibility).
  */
 export function shouldOrganizerAbandonWaitingRoom(
   session: GameSession,
@@ -18,7 +20,7 @@ export function shouldOrganizerAbandonWaitingRoom(
     if (player.online === true) {
       return false;
     }
-    if (session.resultsExitedBy?.[uid] === true) {
+    if (isRematchDurableLobbyOptIn(session, uid)) {
       return false;
     }
   }

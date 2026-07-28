@@ -219,14 +219,136 @@ describe('sync-coordinator', () => {
     expect(abandonWaitingGameSession).not.toHaveBeenCalled();
   });
 
+  it('does not abandon rematch waiting when the first rematcher is alone offline with latch', async () => {
+    vi.mocked(listFinishedRoundArchives).mockResolvedValue([
+      {
+        gameId: 'WAIT3',
+        baseWordRound: 4,
+        savedAt: 1_000,
+        ackSent: false,
+        session: {
+          baseWord: '',
+          status: 'waiting',
+          settings: DEFAULT_SESSION_SETTINGS,
+          timerEndsAt: null,
+          organizerId: 'org',
+          baseWordRound: 4,
+          resultsExitedBy: { org: true },
+          baseWordPickerUid: 'org',
+          players: {
+            org: { name: 'Org', wordCount: 0, score: 0, online: false },
+            peer: { name: 'Peer', wordCount: 0, score: 0, online: false },
+          },
+        },
+        playerWords: {},
+      },
+    ]);
+    getMock.mockResolvedValue({
+      exists: () => true,
+      val: () => ({
+        baseWord: '',
+        status: 'waiting',
+        settings: DEFAULT_SESSION_SETTINGS,
+        timerEndsAt: null,
+        organizerId: 'org',
+        baseWordRound: 4,
+        resultsExitedBy: { org: true },
+        baseWordPickerUid: 'org',
+        players: {
+          org: { name: 'Org', wordCount: 0, score: 0, online: false },
+          peer: { name: 'Peer', wordCount: 0, score: 0, online: false },
+        },
+      }),
+    });
+
+    await syncFinishedRoundsCoordinator({ uid: 'org' });
+
+    expect(abandonWaitingGameSession).not.toHaveBeenCalled();
+  });
+
+  it('abandons rematch waiting when durable opt-in players all have hasLeft', async () => {
+    vi.mocked(listFinishedRoundArchives).mockResolvedValue([
+      {
+        gameId: 'WAIT4',
+        baseWordRound: 3,
+        savedAt: 1_000,
+        ackSent: false,
+        session: {
+          baseWord: '',
+          status: 'waiting',
+          settings: DEFAULT_SESSION_SETTINGS,
+          timerEndsAt: null,
+          organizerId: 'org',
+          baseWordRound: 3,
+          resultsExitedBy: { org: true, peer: true },
+          baseWordPickerUid: 'org',
+          players: {
+            org: { name: 'Org', wordCount: 0, score: 0, online: false, hasLeft: true },
+            peer: { name: 'Peer', wordCount: 0, score: 0, online: false, hasLeft: true },
+          },
+        },
+        playerWords: {},
+      },
+    ]);
+    getMock.mockResolvedValue({
+      exists: () => true,
+      val: () => ({
+        baseWord: '',
+        status: 'waiting',
+        settings: DEFAULT_SESSION_SETTINGS,
+        timerEndsAt: null,
+        organizerId: 'org',
+        baseWordRound: 3,
+        resultsExitedBy: { org: true, peer: true },
+        baseWordPickerUid: 'org',
+        players: {
+          org: { name: 'Org', wordCount: 0, score: 0, online: false, hasLeft: true },
+          peer: { name: 'Peer', wordCount: 0, score: 0, online: false, hasLeft: true },
+        },
+      }),
+    });
+
+    await syncFinishedRoundsCoordinator({ uid: 'org' });
+
+    expect(abandonWaitingGameSession).toHaveBeenCalledWith('WAIT4', 'org');
+  });
+
   it('skips sync work for the active play screen game', async () => {
     vi.mocked(listPendingRoundArchives).mockResolvedValue([
       { gameId: 'ABCDE', baseWordRound: 0, uid: 'org', markedAt: 1_000 },
     ]);
 
-    await syncFinishedRoundsCoordinator({ uid: 'org', activePlayGameId: 'ABCDE' });
+    await syncFinishedRoundsCoordinator({ uid: 'org', activeOnlineGameId: 'ABCDE' });
 
     expect(getMock).not.toHaveBeenCalled();
     expect(persistLocalArchive).not.toHaveBeenCalled();
+  });
+
+  it('skips sync work for the active rematch lobby game', async () => {
+    vi.mocked(listFinishedRoundArchives).mockResolvedValue([
+      {
+        gameId: 'LOBBY',
+        baseWordRound: 2,
+        savedAt: 1_000,
+        ackSent: false,
+        session: {
+          baseWord: 'тест',
+          status: 'waiting',
+          settings: DEFAULT_SESSION_SETTINGS,
+          timerEndsAt: null,
+          organizerId: 'org',
+          baseWordRound: 2,
+          players: {
+            org: { name: 'Org', wordCount: 0, score: 0, online: false },
+          },
+        },
+        playerWords: {},
+      },
+    ]);
+
+    await syncFinishedRoundsCoordinator({ uid: 'org', activeOnlineGameId: 'LOBBY' });
+
+    expect(getMock).not.toHaveBeenCalled();
+    expect(abandonWaitingGameSession).not.toHaveBeenCalled();
   });
 });

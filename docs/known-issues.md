@@ -8,6 +8,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — Multi-round eject: sync deletes rematch room on pause
+
+- **Symptom:** After several rematch rounds, pausing (or briefly going offline) in rematch lobby / while waiting alone for a peer can eject everyone — room-not-found / Home. Worse with many local finished archives for the same room.
+- **Cause:** (1) Sync coordinator skipped only play/results routes, not lobby/pick-word; on foreground it could `abandonWaitingGameSession` while players were still rematching. (2) Abandon eligibility ignored rematch durable signals (`baseWordPickerUid` / chosenBy). (3) First rematcher alone offline with latch still looked “abandonable” because abandon logic skipped the organizer. (4) Play presence reconcile latched success per round and blocked rejoin after mid-round RTDB offline without AppState change.
+- **Fix:** Protect all live online routes via `activeOnlineGameId` (play/results/lobby/pick-word **and** setup via `gameId` params); rematch sync refuse abandon while any durable opt-in remains (`shouldSyncKeepRematchWaitingRoom`); peer abandon uses `isRematchDurableLobbyOptIn`; clear presence reconcile latch on online→offline after success, or stuck-offline cooldown (~4s) via `createPresenceStuckOfflineRetry` (re-armed after every successful reconcile until session shows online — unbounded by design; add cap/backoff only if prod shows RTDB write spam); handoff presence on play→lobby/results redirects. Orphan rematch waiting with latch (all `online: false`, no `hasLeft`) is no longer client-sync-deleted — intentional; `purgeExpiredRtdbSessions` still removes abandoned waiting/playing after **7 days** from `createdAt` (refreshed on rematch).
+- **Test:** `tests/sync-coordinator.test.ts`, `tests/should-organizer-abandon-waiting-room.test.ts`, `tests/parse-active-online-game-id.test.ts`, `tests/should-sync-keep-rematch-waiting-room.test.ts`, `tests/should-clear-presence-reconcile-latch.test.ts`, `tests/presence-stuck-offline-retry.test.ts`
+- **Area:** `lib/online/sync-coordinator.ts`, `lib/online/should-organizer-abandon-waiting-room.ts`, `lib/online/should-sync-keep-rematch-waiting-room.ts`, `lib/online/parse-active-online-game-id.ts`, `hooks/useOnlineSyncCoordinator.ts`, `hooks/useLiveRoundPlayScreen.ts`, `lib/online/presence/should-clear-presence-reconcile-latch.ts`, `lib/online/presence/presence-stuck-offline-retry.ts`, `lib/online/presence/presence-handoff.ts`
+
 ### 2026-07 — Multi-round eject: presence unmount leave + sync abandon rematch
 
 - **Symptom:** Non-organizer on time-up while peer rematches gets `hasLeft` / disappears from rematch lobby; or sync coordinator deletes rematch waiting while latched peers are briefly offline.

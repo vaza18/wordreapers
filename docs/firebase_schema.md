@@ -111,11 +111,11 @@ sequenceDiagram
 
 ## Cloud Functions (RTDB)
 
-| Function                            | Schedule / trigger                            | Role                                                                                           |
-| ----------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `guardPublicLobbyWrite`             | on write `public_lobbies/{language}/{gameId}` | Content safety + counter delta                                                                 |
-| `purgeStalePublicLobbiesScheduled`  | every 15 minutes                              | Drop expired/stale index rows; reconcile counts                                                |
-| `purgeExpiredRtdbSessionsScheduled` | every 24 hours                                | Purge finished (`purgeAfterAt`) and abandoned waiting/playing (`createdAt` / `roundStartedAt`) |
+| Function                            | Schedule / trigger                            | Role                                                                                                                                                                                                                                     |
+| ----------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `guardPublicLobbyWrite`             | on write `public_lobbies/{language}/{gameId}` | Content safety + counter delta                                                                                                                                                                                                           |
+| `purgeStalePublicLobbiesScheduled`  | every 15 minutes                              | Drop expired/stale index rows; reconcile counts                                                                                                                                                                                          |
+| `purgeExpiredRtdbSessionsScheduled` | every 24 hours                                | Purge finished (`purgeAfterAt`) and abandoned waiting/playing (`createdAt` / `roundStartedAt`, **7d**). Also the backstop for rematch `waiting` rooms that client sync keeps while durable latch remains (all offline without `hasLeft`) |
 
 One-shot orphan wipe (manual, after deploy): `npm run firebase:purge-orphans` (`scripts/purge-orphan-sessions.mjs`; loads `.env` / `.env.local`; supports `DRY_RUN=1`).
 

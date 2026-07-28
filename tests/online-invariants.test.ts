@@ -14,6 +14,7 @@ import {
   shouldAssertOnlineInvariants,
 } from '../lib/online/invariants.js';
 import { resolveResultsPresence } from '../lib/online/live-round-screen-actions.js';
+import { resolveActiveOnlineGameIdForSync } from '../lib/online/parse-active-online-game-id.js';
 import {
   hasOptedIntoNextRound,
   isActiveLivePlayer,
@@ -29,6 +30,7 @@ import {
   isLobbyVisiblePlayer,
   isRematchWaitingLobby,
 } from '../lib/online/rematch/rematch-waiting-lobby.js';
+import { shouldSyncKeepRematchWaitingRoom } from '../lib/online/should-sync-keep-rematch-waiting-room.js';
 import { resolveRoundEndSessionSnapshot } from '../lib/online/session/resolve-round-end-session-snapshot.js';
 import {
   shouldKeepFrozenResultsOverLiveFinished,
@@ -135,6 +137,64 @@ describe('online invariants (canonical spec)', () => {
         'ROOM1',
       );
       expect(route.pathname).toBe('/online/results/[gameId]');
+    });
+
+    it('protects lobby, pick-word, and setup rooms from sync via activeOnlineGameId', () => {
+      expect(resolveActiveOnlineGameIdForSync('/online/lobby/ABCDE')).toBe('ABCDE');
+      expect(resolveActiveOnlineGameIdForSync('/online/pick-word/ABCDE')).toBe('ABCDE');
+      expect(resolveActiveOnlineGameIdForSync('/online/setup', 'ABCDE')).toBe('ABCDE');
+      expect(resolveActiveOnlineGameIdForSync('/online/setup?gameId=ABCDE&from=lobby')).toBe(
+        'ABCDE',
+      );
+      // Stale global gameId must not protect unrelated routes.
+      expect(resolveActiveOnlineGameIdForSync('/online/results/OTHER', 'ABCDE')).toBe('OTHER');
+      expect(resolveActiveOnlineGameIdForSync('/', 'ABCDE')).toBeNull();
+    });
+
+    it('keeps rematch waiting for sync when durable opt-in remains; abandons after hasLeft', () => {
+      const kept = shouldSyncKeepRematchWaitingRoom({
+        baseWord: '',
+        status: 'waiting',
+        timerEndsAt: null,
+        organizerId: 'org',
+        baseWordRound: 2,
+        resultsExitedBy: { org: true },
+        baseWordPickerUid: 'org',
+        settings: {
+          durationSeconds: 300,
+          uniqueBonusEnabled: false,
+          language: 'uk',
+          allowProperNouns: false,
+          allowSlang: false,
+        },
+        players: {
+          org: { name: 'Org', wordCount: 0, score: 0, online: false },
+          peer: { name: 'Peer', wordCount: 0, score: 0, online: false },
+        },
+      });
+      expect(kept).toBe(true);
+
+      const abandoned = shouldSyncKeepRematchWaitingRoom({
+        baseWord: '',
+        status: 'waiting',
+        timerEndsAt: null,
+        organizerId: 'org',
+        baseWordRound: 2,
+        resultsExitedBy: { org: true },
+        baseWordPickerUid: 'org',
+        settings: {
+          durationSeconds: 300,
+          uniqueBonusEnabled: false,
+          language: 'uk',
+          allowProperNouns: false,
+          allowSlang: false,
+        },
+        players: {
+          org: { name: 'Org', wordCount: 0, score: 0, online: false, hasLeft: true },
+          peer: { name: 'Peer', wordCount: 0, score: 0, online: false, hasLeft: true },
+        },
+      });
+      expect(abandoned).toBe(false);
     });
   });
 

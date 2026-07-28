@@ -14,10 +14,11 @@ export interface SyncWorkItem {
 
 export interface SyncCoordinatorContext {
   uid?: string;
-  /** Skip sync/cleanup for this game while on the live play screen. */
-  activePlayGameId?: string | null;
-  /** Skip RTDB delete while viewing results (rematch window). */
-  activeResultsGameId?: string | null;
+  /**
+   * Skip sync/cleanup for this room while on any live online screen
+   * (play / results / lobby / pick-word / setup). Prevents rematch-room delete during pauses.
+   */
+  activeOnlineGameId?: string | null;
 }
 
 /** Merge pending entries and the newest local finished archives into a deduped work queue. */

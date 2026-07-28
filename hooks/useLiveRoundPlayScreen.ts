@@ -8,7 +8,10 @@ import { devLogAction } from '@/lib/debug/dev-log';
 import { resolvePlayScreenActions } from '@/lib/online/live-round-screen-actions';
 import { onlineResultsRoute } from '@/lib/online/online-results-route';
 import { shouldMarkPresenceOnline } from '@/lib/online/presence/app-presence-state';
+import { handoffPlayerPresence } from '@/lib/online/presence/presence-handoff';
 import { reconcilePlayerPresence } from '@/lib/online/presence/reconcile-player-presence';
+import { shouldClearPresenceReconcileLatch } from '@/lib/online/presence/should-clear-presence-reconcile-latch';
+import { createPresenceStuckOfflineRetry } from '@/lib/online/presence/presence-stuck-offline-retry';
 import { usePlayerOnlinePresence } from '@/lib/online/presence/use-player-online-presence';
 import { useProfileStore } from '@/store/profile-store';
 
@@ -37,7 +40,32 @@ export function useLiveRoundPlayScreen({
   leavingIntentionallyRef,
 }: UseLiveRoundPlayScreenParams): void {
   const stalePresenceReconcileRef = useRef<string | null>(null);
+  const sawOnlineSinceReconcileLatchRef = useRef(false);
+  const reconcileLatchAtRef = useRef<number | null>(null);
   const presenceReconcileInFlightRef = useRef(false);
+  const runPresenceReconcileRef = useRef<(roundKey: string) => void>(() => {});
+  const stuckOfflineRetryRef = useRef(
+    createPresenceStuckOfflineRetry({
+      getLatchedRoundKey: () => stalePresenceReconcileRef.current,
+      getSawOnlineSinceLatch: () => sawOnlineSinceReconcileLatchRef.current,
+      clearLatch: () => {
+        stalePresenceReconcileRef.current = null;
+        sawOnlineSinceReconcileLatchRef.current = false;
+        reconcileLatchAtRef.current = null;
+      },
+      onRetry: (roundKey) => {
+        runPresenceReconcileRef.current(roundKey);
+      },
+      shouldFireRetry: () => shouldMarkPresenceOnline(AppState.currentState),
+    }),
+  );
+
+  const clearPresenceReconcileLatch = () => {
+    stalePresenceReconcileRef.current = null;
+    sawOnlineSinceReconcileLatchRef.current = false;
+    reconcileLatchAtRef.current = null;
+    stuckOfflineRetryRef.current.clear();
+  };
 
   const actions =
     session && myUid
@@ -64,11 +92,14 @@ export function useLiveRoundPlayScreen({
     void reconcilePlayerPresence(gameId, myUid, { name, gender, avatarColorIndex })
       .then(() => {
         stalePresenceReconcileRef.current = roundKey;
+        reconcileLatchAtRef.current = Date.now();
+        // Re-arm even without a new session snapshot (onDisconnect / silent listener).
+        stuckOfflineRetryRef.current.onReconcileSuccess(roundKey);
       })
       .catch((error) => {
         // Do not set loadError / eject — flaky network or App Check must not
         // end the round UI; shouldRejoin will retry on the next snapshot / foreground.
-        stalePresenceReconcileRef.current = null;
+        clearPresenceReconcileLatch();
         devLogAction('presence reconcile failed', {
           level: 'detail',
           room: gameId,
@@ -79,18 +110,41 @@ export function useLiveRoundPlayScreen({
         presenceReconcileInFlightRef.current = false;
       });
   };
+  runPresenceReconcileRef.current = runPresenceReconcile;
 
   useEffect(() => {
     if (!gameId || !myUid || !session || !actions?.shouldRejoin) {
+      stuckOfflineRetryRef.current.clear();
       return;
     }
     // Background offline sets online:false without hasLeft — same shape as presence lag.
-    // Do not auto-rejoin while backgrounded or the player flips back to «в грі».
+    // Pause stuck-offline timer without clearing the latch (resume on AppState active).
     if (!shouldMarkPresenceOnline(AppState.currentState)) {
+      stuckOfflineRetryRef.current.clear();
       return;
     }
     const roundKey = `${session.baseWordRound ?? 0}:${session.timerEndsAt ?? 0}`;
-    if (stalePresenceReconcileRef.current === roundKey) {
+    const playerOnline = session.players[myUid]?.online === true;
+    if (playerOnline) {
+      sawOnlineSinceReconcileLatchRef.current = true;
+      stuckOfflineRetryRef.current.clear();
+    }
+    const msSinceLatch =
+      reconcileLatchAtRef.current != null ? Date.now() - reconcileLatchAtRef.current : null;
+    if (
+      shouldClearPresenceReconcileLatch({
+        latchedRoundKey: stalePresenceReconcileRef.current,
+        roundKey,
+        playerOnline,
+        sawOnlineSinceLatch: sawOnlineSinceReconcileLatchRef.current,
+        msSinceLatch,
+      })
+    ) {
+      clearPresenceReconcileLatch();
+    } else if (stalePresenceReconcileRef.current === roundKey) {
+      if (!playerOnline && !sawOnlineSinceReconcileLatchRef.current) {
+        stuckOfflineRetryRef.current.arm(roundKey);
+      }
       return;
     }
     runPresenceReconcile(roundKey);
@@ -112,7 +166,7 @@ export function useLiveRoundPlayScreen({
       }
       // Allow one more reconcile after resume even if this round was marked done while backgrounded.
       if (stalePresenceReconcileRef.current === roundKey) {
-        stalePresenceReconcileRef.current = null;
+        clearPresenceReconcileLatch();
       }
       runPresenceReconcile(roundKey);
     };
@@ -124,9 +178,17 @@ export function useLiveRoundPlayScreen({
   }, [actions?.shouldRejoin, frozenBaseWordRound, gameId, myUid, session]);
 
   useEffect(() => {
+    const stuckOfflineRetry = stuckOfflineRetryRef.current;
+    return () => {
+      stuckOfflineRetry.clear();
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isFocused || !gameId || !myUid || !session || !actions?.shouldRedirectToResults) {
       return;
     }
+    handoffPlayerPresence(gameId);
     router.replace(onlineResultsRoute(gameId, frozenBaseWordRound ?? undefined));
   }, [actions?.shouldRedirectToResults, frozenBaseWordRound, gameId, isFocused, myUid, session]);
 
@@ -135,10 +197,12 @@ export function useLiveRoundPlayScreen({
       return;
     }
     if (actions?.shouldRedirectToLobby) {
+      handoffPlayerPresence(gameId);
       router.replace({ pathname: '/online/lobby/[gameId]', params: { gameId } });
       return;
     }
     if (!roundEnded && session.status === 'finished') {
+      handoffPlayerPresence(gameId);
       router.replace(onlineResultsRoute(gameId, session.baseWordRound ?? undefined));
     }
   }, [actions?.shouldRedirectToLobby, gameId, loading, myUid, roundEnded, session]);
