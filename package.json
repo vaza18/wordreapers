@@ -124,9 +124,9 @@
   },
   "overrides": {
     "uuid": "11.1.1",
-    "postcss": "8.5.15",
+    "postcss": "8.5.24",
     "markdown-it": "14.2.0",
-    "js-yaml": "4.2.0"
+    "js-yaml": "4.3.0"
   },
   "packageManager": "npm@11.6.2",
   "version": "1.5.1"
