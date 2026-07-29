@@ -57,6 +57,7 @@ import {
 } from '@/lib/online/lobby-rematch-base-word-heal';
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
+import { shouldDisableLobbyStartForLexicon } from '@/lib/online/lobby-start-lexicon-gate';
 import { useLiveRoundLobbyScreen } from '@/hooks/useLiveRoundLobbyScreen';
 import { isLiveRoundStarted } from '@/lib/online/live-round-screen-actions';
 import { usePublicLobbyPublish } from '@/hooks/usePublicLobbyPublish';
@@ -748,7 +749,11 @@ export default function LobbyScreen() {
               <>
                 <PrimaryButton
                   label={t('game.start')}
-                  disabled={!canStart || starting || lobbyLexiconLoading}
+                  disabled={
+                    !canStart ||
+                    starting ||
+                    shouldDisableLobbyStartForLexicon(lobbyLexiconLoading, Boolean(lobbyLexicon))
+                  }
                   onPress={() => {
                     void handleStart();
                   }}

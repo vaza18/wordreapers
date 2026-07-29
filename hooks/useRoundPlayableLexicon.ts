@@ -95,6 +95,8 @@ export function useRoundPlayableLexicon({
 
     const normalized = normalizeUk(baseWord);
     const key = lexiconCacheKey(normalized, allowProperNouns, allowSlang);
+    // Keep any prior lexicon visible while rebuilding so lobby Start is not blocked by a
+    // stuck prefetch (network blip / pause → idle without ready/error).
     setLoading(true);
 
     const applyReady = () => {
@@ -125,7 +127,21 @@ export function useRoundPlayableLexicon({
         return;
       }
       if (status.kind === 'loading' && status.key === key) {
+        // Do not clear an already-shown lexicon; Start uses hasLexicon gate in lobby.
         setLoading(true);
+        return;
+      }
+      if (
+        (status.kind === 'idle' || status.kind === 'empty') &&
+        getCachedRoundPlayableLexicon(baseWord, allowProperNouns, allowSlang)
+      ) {
+        applyReady();
+        return;
+      }
+      if (status.kind === 'idle' || status.kind === 'empty') {
+        // Prefetch paused/cancelled (e.g. typing on pick-word while lobby stays mounted).
+        // Drop the blocking spinner; lobby Start must not wait forever.
+        setLoading(false);
       }
     });
 
@@ -139,6 +155,8 @@ export function useRoundPlayableLexicon({
         allowProperNouns,
         allowSlang,
       });
+    } else if (current.kind === 'ready' && current.key === key) {
+      applyReady();
     }
 
     return () => {

@@ -8,6 +8,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — Lobby «Почати гру» stuck disabled after Wi‑Fi blip (lexicon loading)
+
+- **Symptom:** Rematch lobby shows base word + «Можна зібрати до N слів» but **Почати гру** stays disabled until picker opens «редагувати базове слово» and returns. Often after Wi‑Fi hotspot switch / brief offline.
+- **Cause:** Start used `disabled={… || lobbyLexiconLoading}` even when a prior `lobbyLexicon` was still displayed. Prefetch could sit in `loading` then move to `idle` (pause / cancelled job after network) without `ready`/`error`, so `loading` never cleared while React kept the old lexicon.
+- **Fix:** Gate Start with `shouldDisableLobbyStartForLexicon(loading, hasLexicon)` (block only while loading **and** no lexicon). Prefetch `idle`/`empty` clears the blocking loading flag (or re-applies cache).
+- **Test:** `tests/lobby-start-lexicon-gate.test.ts`
+- **Area:** `app/online/lobby/[gameId].tsx`, `hooks/useRoundPlayableLexicon.ts`, `lib/online/lobby-start-lexicon-gate.ts`
+
 ### 2026-07 — Finish PD leaves playing stuck; rematch REMATCH_FAILED (LRAHP)
 
 - **Symptom:** Round ends locally → results; Metro `transaction at /game_sessions/… failed: permission_denied` at time-up. «Грати ще» shows «Не вдалося підготувати новий раунд» / `REMATCH_FAILED`. RTDB stays `status: playing` with expired `timerEndsAt`.
