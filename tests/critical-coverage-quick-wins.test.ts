@@ -148,7 +148,7 @@ describe('player-profile', () => {
     ).toEqual({
       name: 'A',
       gender: null,
-      avatarColorIndex: 5,
+      avatarColorIndex: 6,
     });
   });
 });

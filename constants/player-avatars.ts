@@ -1,6 +1,7 @@
 /**
  * Avatar hues — Ukrainian flag blue/yellow pair after green, then distinct warm/cool slots.
  * Mid orange vs deep red: separable from each other and from flag yellow.
+ * Sky cyan closes the rainbow gap vs navy blue without colliding with green.
  */
 export const PLAYER_AVATAR_PALETTE = [
   { swatch: '#16A34A', initials: '#FFFFFF' },
@@ -9,6 +10,7 @@ export const PLAYER_AVATAR_PALETTE = [
   { swatch: '#C026D3', initials: '#FFFFFF' },
   { swatch: '#F97316', initials: '#FFFFFF' },
   { swatch: '#B91C1C', initials: '#FFFFFF' },
+  { swatch: '#0EA5E9', initials: '#FFFFFF' },
 ] as const;
 
 export const PLAYER_AVATAR_COLOR_COUNT = PLAYER_AVATAR_PALETTE.length;
