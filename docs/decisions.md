@@ -132,6 +132,13 @@ Format: **Decision → Alternatives → Why rejected → Date**
 - **Why rejected:** Prod noise and privacy; ENV is enough for simulators; remote at `event` doubles noise across two Metro consoles.
 - **Date:** 2026-07 — `lib/debug/dev-log.ts`
 
+## ADR-019: Scheduled client expiry (no N×1s full-session polls)
+
+- **Decision:** Vote wall-clock expiry and round timer finish stay client-committed (RTDB has no server cron for these). Clients schedule a local wake at `expiresAt` / `timerEndsAt` instead of polling every second. Primary resolver is the lexicographically smallest online live-round uid; other online candidates failover after ~1.5s if the vote/status is still open. Cast-vote transactions and `reconcileOpenSessionVotes` on presence remain event-driven. Multiple screens on one room share one `subscribeGameSession` RTDB `onValue` (ref-counted).
+- **Alternatives considered:** Cloud Function scheduled expiry; every client keeps 1 Hz get+transaction; single resolver with no failover; narrowing live listeners / `onChild*` for word-maps (deferred).
+- **Why rejected:** Functions add latency/ops cost for a small game. 1 Hz × N full-session reads dominate RTDB downloads with tiny storage. No-failover hangs if primary is backgrounded at the deadline. Listener narrowing is higher regression risk — separate plan only if Usage stays high after this.
+- **Date:** 2026-07 — `lib/online/voting/expiry-resolver-role.ts`, `hooks/useVoteExpiryResolver.ts`, `lib/online/play-expire-finish-schedule.ts`, `lib/firebase/game-session-service.ts`
+
 ---
 
 When adding a new ADR: keep it short; link the implementing file; do not duplicate `online-multiplayer-rules.md` tables.

@@ -134,9 +134,11 @@ isActiveLivePlayer(session, uid) :=
 | Pause        | Пауза **активується** (silence = yes)                              |
 | Add-time     | Vote **скидається** (час **не** додається); далі finish-if-expired |
 
+**Хто комітить expiry / timer finish:** немає server cron — клієнтський wake на `expiresAt` / `timerEndsAt` (не N×1s poll). Primary = лексикографічно найменший online live-round uid; інші online кандидати — failover ~1.5s якщо vote/status ще відкриті. Unanimous і presence-offline лишаються event-driven (`cast` / `reconcileOpenSessionVotes`).
+
 **Соло в раунді** (`!hasOnlineOpponent`): немає жодного суперника з `online === true` (усі вийшли **або** «не в грі» / background). Тоді меню й дії як у одного гравця: «Пауза» / завершити / «Додати» час без голосування — так само, як коли останній суперник натиснув «Вийти».
 
-**Presence → reconcile vote:** коли required voter стає `online: false` (background або leave), клієнти викликають `reconcileOpenSessionVotes` — відкритий vote застосовується, якщо required-множина порожня або всі «так» (pause / early-finish / add-time / resume). Pause також резолвиться по 30s expiry interval (`resolvePauseVoteIfReady`).
+**Presence → reconcile vote:** коли required voter стає `online: false` (background або leave), клієнти викликають `reconcileOpenSessionVotes` — відкритий vote застосовується, якщо required-множина порожня або всі «так» (pause / early-finish / add-time / resume). Pause також резолвиться по scheduled 30s expiry (`resolvePauseVoteIfReady`).
 
 **Resume UI на паузі:** `PauseRoundModal` — in-tree overlay (не RN `Modal`), щоб `resumeVote`, що приходить уже під час відкритої паузи, одразу малював Так/Ні. Play-екран також робить one-shot `tryReadGameSessionSnapshot` на AppState `active`, якщо listener пропустив оновлення (два симулятори / inactive).
 

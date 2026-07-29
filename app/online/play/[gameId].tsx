@@ -127,7 +127,14 @@ import {
   resolveLocalFinishedSessionForResultsArchive,
 } from '@/lib/online/ensure-rematch-advanced-results-archive';
 import { beginExpireFinishAttempt } from '@/lib/online/play-expire-finish';
+import { finishRetryBackoffMs } from '@/lib/online/play-expire-finish-schedule';
 import { isRemoteRoundClockStillRunning } from '@/lib/online/play-remote-timer-alive';
+import {
+  msUntil,
+  nextExpiryNetworkWakeAt,
+  onlineExpiryResolverCandidateUids,
+  shouldAttemptExpiryNetworkResolve,
+} from '@/lib/online/voting/expiry-resolver-role';
 import { syncDraftKeyIndicesRef } from '@/lib/game/sync-draft-key-indices-ref';
 import {
   buildLocalTimeUpSessionSnapshot,
@@ -755,6 +762,7 @@ export default function OnlinePlayScreen() {
 
   useVoteExpiryResolver({
     gameId,
+    myUid,
     enabled: !resultsNavigatedRef.current,
     earlyFinishVote: session?.earlyFinishVote,
     addTimeVote: session?.addTimeVote,
@@ -762,6 +770,8 @@ export default function OnlinePlayScreen() {
     pauseVote: session?.pauseVote,
     pauseActive: isPaused,
     playing: session?.status === 'playing',
+    players: session?.players,
+    liveRoundPlayerUids: session?.liveRoundPlayerUids,
   });
 
   useReconcileOpenVotesOnPresence(gameId, session, !resultsNavigatedRef.current);
@@ -973,6 +983,7 @@ export default function OnlinePlayScreen() {
       isPaused ||
       session?.status !== 'playing' ||
       endsAt === null ||
+      !myUid ||
       shouldDeferClientTimerFinish({
         addTimeVote: session?.addTimeVote,
         showAddTimeModal,
@@ -980,21 +991,117 @@ export default function OnlinePlayScreen() {
     ) {
       return undefined;
     }
-    attemptExpireFinish();
-    const id = setInterval(attemptExpireFinish, 1000);
+
+    const candidateUids = onlineExpiryResolverCandidateUids(
+      session.players ?? {},
+      session.liveRoundPlayerUids,
+    );
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const clearTimer = () => {
+      if (timer !== undefined) {
+        clearTimeout(timer);
+        timer = undefined;
+      }
+    };
+
+    const scheduleAt = (wakeAt: number) => {
+      clearTimer();
+      if (cancelled) {
+        return;
+      }
+      timer = setTimeout(
+        () => {
+          if (cancelled) {
+            return;
+          }
+          const now = getServerNow();
+          if (
+            !shouldAttemptExpiryNetworkResolve({
+              myUid,
+              candidateUids,
+              now,
+              expiresAt: endsAt,
+            })
+          ) {
+            scheduleAt(
+              nextExpiryNetworkWakeAt({
+                myUid,
+                candidateUids,
+                expiresAt: endsAt,
+              }),
+            );
+            return;
+          }
+          beginExpireFinishAttempt({
+            endsAt,
+            now,
+            deferFinish: shouldDeferClientTimerFinish({
+              addTimeVote: addTimeVoteRef.current,
+              showAddTimeModal: showAddTimeModalRef.current,
+            }),
+            refs: {
+              finishAttempted: finishAttemptedRef,
+              finishInFlight: finishInFlightRef,
+              expiredFailCount: expiredFinishFailCountRef,
+              localRoundOverForced: localRoundOverForcedRef,
+              draftKeyIndices: draftKeyIndicesRef,
+              lastValidatedDraft,
+            },
+            clearElapsedDraft,
+            onLocalRoundOver: forceLocalRoundOver,
+            finishIfExpired: () =>
+              finishGameSessionIfExpired(gameId, wordMapsRef.current ?? undefined),
+            getNow: getServerNow,
+            getDeferFinish: () =>
+              shouldDeferClientTimerFinish({
+                addTimeVote: addTimeVoteRef.current,
+                showAddTimeModal: showAddTimeModalRef.current,
+              }),
+            resyncIfRemoteClockAlive,
+            onUncommitted: () => {
+              if (cancelled || finishAttemptedRef.current || localRoundOverForcedRef.current) {
+                return;
+              }
+              const fails = Math.max(1, expiredFinishFailCountRef.current);
+              scheduleAt(getServerNow() + finishRetryBackoffMs(fails));
+            },
+          });
+        },
+        msUntil(wakeAt, getServerNow()),
+      );
+    };
+
+    scheduleAt(
+      nextExpiryNetworkWakeAt({
+        myUid,
+        candidateUids,
+        expiresAt: endsAt,
+      }),
+    );
+
     return () => {
-      clearInterval(id);
+      cancelled = true;
+      clearTimer();
     };
   }, [
-    attemptExpireFinish,
+    clearElapsedDraft,
     endsAt,
+    forceLocalRoundOver,
+    gameId,
     isPaused,
+    myUid,
+    resyncIfRemoteClockAlive,
     session?.addTimeVote,
+    session?.liveRoundPlayerUids,
+    session?.players,
     session?.status,
     showAddTimeModal,
   ]);
 
   // After screen-off across timer end, run finish tick immediately on foreground.
+  // Any client may heal here (not primary-gated) so returning from background unsticks.
   useEffect(() => {
     if (!gameId || session?.status !== 'playing' || endsAt == null) {
       return undefined;
