@@ -941,59 +941,103 @@ export function gameSessionSnapshotFromRtdbVal(
 
 /**
  * Subscribe to session updates (lobby / play).
+ * Multiple callers for the same room share one RTDB `onValue` (ref-counted).
  */
+type SharedSessionSub = {
+  listeners: Set<(session: GameSessionSnapshot | null) => void>;
+  unsub: Unsubscribe | null;
+  last: GameSessionSnapshot | null | undefined;
+};
+
+const sharedGameSessionSubs = new Map<string, SharedSessionSub>();
+
+/** Test-only: drop shared session listeners between cases. */
+export function resetSharedGameSessionSubscriptionsForTests(): void {
+  for (const entry of sharedGameSessionSubs.values()) {
+    entry.unsub?.();
+  }
+  sharedGameSessionSubs.clear();
+}
+
 export function subscribeGameSession(
   gameId: string,
   listener: (session: GameSessionSnapshot | null) => void,
 ): Unsubscribe {
   const normalized = normalizeRoomCode(gameId);
-  let unsub: Unsubscribe | null = null;
-  let cancelled = false;
+  let entry = sharedGameSessionSubs.get(normalized);
+  if (!entry) {
+    entry = {
+      listeners: new Set(),
+      unsub: null,
+      last: undefined,
+    };
+    sharedGameSessionSubs.set(normalized, entry);
 
-  void import('./app-check.js')
-    .then(({ ensureFirebaseAppCheck }) => ensureFirebaseAppCheck())
-    .catch((error) => {
-      if (__DEV__) {
-        console.warn('subscribeGameSession app check', error);
-      }
-    })
-    .then(() => {
-      if (cancelled) {
-        return;
-      }
-      unsub = onValue(
-        sessionRef(normalized),
-        (snapshot) => {
-          if (!snapshot.exists()) {
-            listener(null);
-            return;
-          }
-          const raw = snapshot.val();
-          if (isOrphanGameSessionShell(raw)) {
-            const uid = getFirebaseUid();
-            if (uid && orphanShellHasPlayer(raw, uid)) {
-              void removeOrphanGameSessionShell(normalized, uid);
+    void import('./app-check.js')
+      .then(({ ensureFirebaseAppCheck }) => ensureFirebaseAppCheck())
+      .catch((error) => {
+        if (__DEV__) {
+          console.warn('subscribeGameSession app check', error);
+        }
+      })
+      .then(() => {
+        const current = sharedGameSessionSubs.get(normalized);
+        if (!current || current.listeners.size === 0) {
+          return;
+        }
+        current.unsub = onValue(
+          sessionRef(normalized),
+          (snapshot) => {
+            const live = sharedGameSessionSubs.get(normalized);
+            if (!live) {
+              return;
             }
-            listener(null);
-            return;
-          }
-          listener(gameSessionSnapshotFromRtdbVal(normalized, raw));
-        },
-        (error) => {
-          // Transient App Check / network / auth glitches must not wipe the last
-          // good snapshot — callers treat null as confirmed room-gone (eject UI).
-          devLogAction('subscribeGameSession listener error', {
-            level: 'error',
-            room: normalized,
-            details: error instanceof Error ? error.message : String(error),
-          });
-        },
-      );
-    });
+            let next: GameSessionSnapshot | null = null;
+            if (snapshot.exists()) {
+              const raw = snapshot.val();
+              if (isOrphanGameSessionShell(raw)) {
+                const uid = getFirebaseUid();
+                if (uid && orphanShellHasPlayer(raw, uid)) {
+                  void removeOrphanGameSessionShell(normalized, uid);
+                }
+                next = null;
+              } else {
+                next = gameSessionSnapshotFromRtdbVal(normalized, raw);
+              }
+            }
+            live.last = next;
+            for (const fn of [...live.listeners]) {
+              fn(next);
+            }
+          },
+          (error) => {
+            // Transient App Check / network / auth glitches must not wipe the last
+            // good snapshot — callers treat null as confirmed room-gone (eject UI).
+            devLogAction('subscribeGameSession listener error', {
+              level: 'error',
+              room: normalized,
+              details: error instanceof Error ? error.message : String(error),
+            });
+          },
+        );
+      });
+  }
+
+  entry.listeners.add(listener);
+  if (entry.last !== undefined) {
+    listener(entry.last);
+  }
 
   return () => {
-    cancelled = true;
-    unsub?.();
+    const current = sharedGameSessionSubs.get(normalized);
+    if (!current) {
+      return;
+    }
+    current.listeners.delete(listener);
+    if (current.listeners.size === 0) {
+      current.unsub?.();
+      sharedGameSessionSubs.delete(normalized);
+    }
   };
 }
 

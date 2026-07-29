@@ -48,6 +48,8 @@ export function usePlaySessionSubscriptions({
   setWordMaps,
   setMyWords,
 }: UsePlaySessionSubscriptionsParams): void {
+  const roomNotFoundMessage = t('online.errorRoomNotFound');
+
   useEffect(() => {
     if (!gameId || !myUid) {
       return undefined;
@@ -64,9 +66,7 @@ export function usePlaySessionSubscriptions({
       unsubSession = subscribeGameSession(gameId, (next) => {
         setSessionCore((prev) => mergePlaySessionSubscription(prev, next));
         setLoading(false);
-        setLoadError((prevError) =>
-          nextPlaySessionLoadError(prevError, next, t('online.errorRoomNotFound')),
-        );
+        setLoadError((prevError) => nextPlaySessionLoadError(prevError, next, roomNotFoundMessage));
       });
       unsubMaps = subscribeSessionWordMaps(gameId, (maps) => {
         queueMicrotask(() => {
@@ -84,7 +84,16 @@ export function usePlaySessionSubscriptions({
       unsubMaps?.();
       unsubWords?.();
     };
-  }, [gameId, myUid, setLoadError, setLoading, setMyWords, setSessionCore, setWordMaps, t]);
+  }, [
+    gameId,
+    myUid,
+    roomNotFoundMessage,
+    setLoadError,
+    setLoading,
+    setMyWords,
+    setSessionCore,
+    setWordMaps,
+  ]);
 
   // After unlock: wait for markPlayerOnline, then re-read so local pause UI is not stuck on
   // stale online:false while peers already see «в грі». Also heal own words if submit

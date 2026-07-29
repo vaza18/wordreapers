@@ -38,7 +38,7 @@ function maybeForceLocalRoundOver(
 }
 
 /**
- * Shared expire path for the 1s interval and AppState `active` — one place for
+ * Shared expire path for scheduled wake / AppState `active` — one place for
  * draft clear, in-flight lock, finish retry, and local round-over.
  */
 export function beginExpireFinishAttempt(options: {
@@ -58,6 +58,8 @@ export function beginExpireFinishAttempt(options: {
    * (add-time / pause). Return true to skip counting toward local round-over.
    */
   resyncIfRemoteClockAlive?: () => Promise<boolean>;
+  /** After an uncommitted finish (and no remote-clock heal) — schedule backoff retry. */
+  onUncommitted?: () => void;
 }): void {
   const { endsAt, now, deferFinish, refs } = options;
   const getNow = options.getNow ?? (() => now);
@@ -99,6 +101,7 @@ export function beginExpireFinishAttempt(options: {
         },
         true,
       );
+      options.onUncommitted?.();
     })
     .catch(async () => {
       if (await options.resyncIfRemoteClockAlive?.()) {
@@ -116,6 +119,7 @@ export function beginExpireFinishAttempt(options: {
         },
         true,
       );
+      options.onUncommitted?.();
     })
     .finally(() => {
       refs.finishInFlight.current = false;

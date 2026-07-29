@@ -98,6 +98,7 @@ import {
   syncSessionPlayerScores,
   updateGameSessionBaseWord,
   updateGameSessionSetup,
+  resetSharedGameSessionSubscriptionsForTests,
 } from '../lib/firebase/game-session-service.js';
 import { DEFAULT_SESSION_SETTINGS, finishedSession } from './helpers/game-session-fixtures.js';
 
@@ -118,6 +119,7 @@ const waitingSession = {
 
 describe('game-session-service extended', () => {
   beforeEach(() => {
+    resetSharedGameSessionSubscriptionsForTests();
     vi.clearAllMocks();
     onDisconnectCancel.mockResolvedValue(undefined);
     onDisconnectUpdate.mockResolvedValue(undefined);
@@ -533,6 +535,35 @@ describe('game-session-service extended', () => {
       }),
     );
     expect(onSession.mock.calls[0][0]).not.toHaveProperty('wordPlayers');
+  });
+
+  it('shares one RTDB onValue across multiple subscribeGameSession callers', async () => {
+    onValueMock.mockImplementation(() => vi.fn());
+
+    const a = vi.fn();
+    const b = vi.fn();
+    const unsubA = subscribeGameSession('ABCDE', a);
+    const unsubB = subscribeGameSession('ABCDE', b);
+
+    await vi.waitFor(() => {
+      expect(onValueMock).toHaveBeenCalledTimes(1);
+    });
+
+    const onNext = onValueMock.mock.calls[0]?.[1] as (snapshot: {
+      exists: () => boolean;
+      val: () => unknown;
+    }) => void;
+    onNext({
+      exists: () => true,
+      val: () => waitingSession,
+    });
+
+    expect(a).toHaveBeenCalledWith(expect.objectContaining({ id: 'ABCDE' }));
+    expect(b).toHaveBeenCalledWith(expect.objectContaining({ id: 'ABCDE' }));
+
+    unsubA();
+    expect(onValueMock).toHaveBeenCalledTimes(1);
+    unsubB();
   });
 
   it('does not clear the session listener on transient RTDB subscribe errors', async () => {

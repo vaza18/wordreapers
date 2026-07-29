@@ -1,28 +1,43 @@
 import { useEffect } from 'react';
 
+import { getServerNow } from '@/lib/firebase/server-clock';
 import {
   resolveAddTimeVoteIfExpired,
   resolveEarlyFinishVoteIfExpired,
   resolvePauseVoteIfReady,
   resolveResumeVoteIfExpired,
 } from '@/lib/firebase/session-votes-service';
+import type { GameSessionPlayer, SessionVote } from '@/lib/firebase/types';
+import { EARLY_FINISH_VOTE_TIMEOUT_MS } from '@/lib/online/voting/early-finish-vote';
+import {
+  earliestVoteExpiresAt,
+  msUntil,
+  nextExpiryNetworkWakeAt,
+  onlineExpiryResolverCandidateUids,
+  shouldAttemptExpiryNetworkResolve,
+} from '@/lib/online/voting/expiry-resolver-role';
 
 type VoteExpiryFlags = {
   gameId: string;
+  myUid: string;
   enabled: boolean;
-  earlyFinishVote: unknown;
-  addTimeVote: unknown;
-  resumeVote: unknown;
-  pauseVote: unknown;
+  earlyFinishVote: SessionVote | null | undefined;
+  addTimeVote: SessionVote | null | undefined;
+  resumeVote: SessionVote | null | undefined;
+  pauseVote: SessionVote | null | undefined;
   pauseActive: boolean;
   playing: boolean;
+  players: Record<string, GameSessionPlayer> | null | undefined;
+  liveRoundPlayerUids: readonly string[] | null | undefined;
 };
 
 /**
- * Single 1s interval for vote expiry resolution while any vote is active.
+ * Schedule wall-clock vote expiry (primary + failover) instead of N×1s full-session polls.
+ * Unanimous / presence reconcile paths stay event-driven elsewhere.
  */
 export function useVoteExpiryResolver({
   gameId,
+  myUid,
   enabled,
   earlyFinishVote,
   addTimeVote,
@@ -30,6 +45,8 @@ export function useVoteExpiryResolver({
   pauseVote,
   pauseActive,
   playing,
+  players,
+  liveRoundPlayerUids,
 }: VoteExpiryFlags): void {
   const hasEarlyFinish = Boolean(earlyFinishVote) && playing;
   const hasAddTime = Boolean(addTimeVote) && playing;
@@ -37,12 +54,35 @@ export function useVoteExpiryResolver({
   const hasPause = Boolean(pauseVote) && playing && !pauseActive;
   const active = enabled && (hasEarlyFinish || hasAddTime || hasResume || hasPause);
 
+  const expiresAt = earliestVoteExpiresAt(
+    [
+      hasEarlyFinish ? earlyFinishVote : null,
+      hasAddTime ? addTimeVote : null,
+      hasResume ? resumeVote : null,
+      hasPause ? pauseVote : null,
+    ],
+    EARLY_FINISH_VOTE_TIMEOUT_MS,
+  );
+
   useEffect(() => {
-    if (!active || !gameId) {
+    if (!active || !gameId || !myUid || expiresAt == null) {
       return undefined;
     }
 
-    const resolve = () => {
+    const candidateUids = onlineExpiryResolverCandidateUids(players ?? {}, liveRoundPlayerUids);
+
+    const resolveIfDue = () => {
+      const now = getServerNow();
+      if (
+        !shouldAttemptExpiryNetworkResolve({
+          myUid,
+          candidateUids,
+          now,
+          expiresAt,
+        })
+      ) {
+        return;
+      }
       if (hasEarlyFinish) {
         void resolveEarlyFinishVoteIfExpired(gameId);
       }
@@ -57,10 +97,26 @@ export function useVoteExpiryResolver({
       }
     };
 
-    resolve();
-    const timer = setInterval(resolve, 1000);
+    const wakeAt = nextExpiryNetworkWakeAt({
+      myUid,
+      candidateUids,
+      expiresAt,
+    });
+    const delay = msUntil(wakeAt, getServerNow());
+    const timer = setTimeout(resolveIfDue, delay);
     return () => {
-      clearInterval(timer);
+      clearTimeout(timer);
     };
-  }, [active, gameId, hasAddTime, hasEarlyFinish, hasPause, hasResume]);
+  }, [
+    active,
+    expiresAt,
+    gameId,
+    hasAddTime,
+    hasEarlyFinish,
+    hasPause,
+    hasResume,
+    liveRoundPlayerUids,
+    myUid,
+    players,
+  ]);
 }
