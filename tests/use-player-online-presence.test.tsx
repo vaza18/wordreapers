@@ -6,7 +6,6 @@ import { render } from '@testing-library/react';
 const markPlayerOnline = vi.fn();
 const markPlayerOffline = vi.fn();
 const subscribePlayerOnlinePresence = vi.fn();
-const voluntaryLeaveWaitingLobbyIfMember = vi.fn();
 const consumePresenceHandoff = vi.fn();
 const appStateHandlers: Array<(state: string) => void> = [];
 let currentAppState = 'active';
@@ -27,8 +26,6 @@ vi.mock('../lib/firebase/game-session-service.js', () => ({
   markPlayerOnline: (...args: unknown[]) => markPlayerOnline(...args),
   markPlayerOffline: (...args: unknown[]) => markPlayerOffline(...args),
   subscribePlayerOnlinePresence: (...args: unknown[]) => subscribePlayerOnlinePresence(...args),
-  voluntaryLeaveWaitingLobbyIfMember: (...args: unknown[]) =>
-    voluntaryLeaveWaitingLobbyIfMember(...args),
 }));
 
 vi.mock('../lib/online/presence/presence-handoff.js', () => ({
@@ -50,7 +47,6 @@ describe('usePlayerOnlinePresence', () => {
     markPlayerOnline.mockResolvedValue(undefined);
     markPlayerOffline.mockResolvedValue(undefined);
     subscribePlayerOnlinePresence.mockReturnValue(vi.fn());
-    voluntaryLeaveWaitingLobbyIfMember.mockResolvedValue(undefined);
     consumePresenceHandoff.mockReturnValue(false);
   });
 
@@ -88,31 +84,37 @@ describe('usePlayerOnlinePresence', () => {
     expect(markPlayerOffline).toHaveBeenCalledWith('ABCD', 'org');
   });
 
-  it('policy remount without handoff marks offline (waiting→playing race if lobby flips policy)', () => {
+  it('policy remount does not write offline on cleanup (CM2L7 flicker)', () => {
     function PolicyHost({ policy }: { policy: 'background-only' | 'background-and-inactive' }) {
       usePlayerOnlinePresence('ABCD', 'org', true, policy);
       return null;
     }
     const { rerender, unmount } = render(<PolicyHost policy="background-only" />);
-    expect(voluntaryLeaveWaitingLobbyIfMember).not.toHaveBeenCalled();
-    // Simulates old lobby bug: status becomes playing → switch to play offline policy.
+    markPlayerOffline.mockClear();
+    // waiting→playing style remount: cleanup must not flash peers offline.
     rerender(<PolicyHost policy="background-and-inactive" />);
-    expect(voluntaryLeaveWaitingLobbyIfMember).toHaveBeenCalledWith('ABCD', 'org');
+    expect(markPlayerOffline).not.toHaveBeenCalled();
+    expect(consumePresenceHandoff).toHaveBeenCalledWith('ABCD');
     unmount();
+    expect(markPlayerOffline).not.toHaveBeenCalled();
   });
 
-  it('voluntarily leaves waiting lobby on unmount without handoff', () => {
+  it('does not mark offline on unmount without handoff', () => {
     const { unmount } = render(<HookHost gameId="ABCD" uid="org" />);
+    markPlayerOffline.mockClear();
     unmount();
 
-    expect(voluntaryLeaveWaitingLobbyIfMember).toHaveBeenCalledWith('ABCD', 'org');
+    expect(markPlayerOffline).not.toHaveBeenCalled();
+    expect(consumePresenceHandoff).toHaveBeenCalledWith('ABCD');
   });
 
-  it('skips voluntary leave when presence handoff is active', () => {
+  it('still consumes handoff token on unmount when handoff is active', () => {
     consumePresenceHandoff.mockReturnValue(true);
     const { unmount } = render(<HookHost gameId="ABCD" uid="org" />);
+    markPlayerOffline.mockClear();
     unmount();
 
-    expect(voluntaryLeaveWaitingLobbyIfMember).not.toHaveBeenCalled();
+    expect(markPlayerOffline).not.toHaveBeenCalled();
+    expect(consumePresenceHandoff).toHaveBeenCalledWith('ABCD');
   });
 });

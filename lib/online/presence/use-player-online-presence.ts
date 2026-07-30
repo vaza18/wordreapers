@@ -6,7 +6,6 @@ import {
   markPlayerOffline,
   markPlayerOnline,
   subscribePlayerOnlinePresence,
-  voluntaryLeaveWaitingLobbyIfMember,
 } from '../../firebase/game-session-service.js';
 
 import {
@@ -42,12 +41,15 @@ function logPresenceAppState(gameId: string, nextState: AppStateStatus): void {
 
 /**
  * Keep `players/{uid}.online` accurate across reconnects, foreground, and background.
- * Background → offline (not left); active → online. On unmount, marks offline unless
- * another online screen claimed a presence handoff.
+ * Background → offline (not left); active → online.
+ *
+ * Cleanup does **not** write offline/hasLeft: `enabled` flicker / remount would flash
+ * peers as offline (CM2L7). Intentional leave is `exitOnlineToHome` / `leaveGameSession`;
+ * real background uses AppState; crash uses `onDisconnect`. Handoff still clears the
+ * navigation token when leaving an in-room screen.
  *
  * Lobby should pass `offlinePolicy: 'background-only'` (via `lobbyPresenceOfflinePolicy`)
- * so multi-sim `inactive` does not falsely mark the unfocused peer offline, and so
- * `waiting → playing` does not remount this hook under play policy before handoff.
+ * so multi-sim `inactive` does not falsely mark the unfocused peer offline.
  * Play keeps the default `background-and-inactive` for iOS lock-screen votes.
  */
 export function usePlayerOnlinePresence(
@@ -79,10 +81,8 @@ export function usePlayerOnlinePresence(
     return () => {
       unsubPresence();
       appSub.remove();
-      if (consumePresenceHandoff(gameId)) {
-        return;
-      }
-      void voluntaryLeaveWaitingLobbyIfMember(gameId, uid);
+      // Consume handoff so the next screen owns presence; never write offline here.
+      consumePresenceHandoff(gameId);
     };
   }, [enabled, gameId, offlinePolicy, uid]);
 }

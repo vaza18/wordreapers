@@ -27,12 +27,12 @@ Format: **Decision → Alternatives → Why rejected → Date**
 - **Why rejected:** Non-opt-in players reviewing round N must not jump to round N+1 results/play when another player starts rematch. RTDB cleanup on rematch must not empty their UI.
 - **Date:** 2026-06 — `lib/online/frozen-round-view.ts`
 
-## ADR-004: Presence handoff between in-room screens
+## ADR-004: Presence cleanup does not write offline
 
-- **Decision:** In-room navigation (lobby ↔ play ↔ results) sets a presence handoff token so unmount does not mark the player offline.
-- **Alternatives considered:** Longer onDisconnect delay; never mark offline on unmount.
-- **Why rejected:** Without handoff, brief offline flashes confused other players and triggered false toasts. Never marking offline broke voluntary-leave semantics.
-- **Date:** 2026-07 — `lib/online/presence-handoff.ts`
+- **Decision:** `usePlayerOnlinePresence` cleanup only unsubscribes and consumes the handoff token — it never writes `online` / `hasLeft`. Real offline comes from AppState, intentional leave (`leaveGameSession`), or `onDisconnect`. In-room navigation still sets a handoff token so the next screen owns presence without stale tokens.
+- **Alternatives considered:** Mark offline (or leave) on every unmount without handoff; offline-only on waiting unmount.
+- **Why rejected:** React remount / `enabled` flicker is not real offline — writing `online: false` flashed peers in lobby (CM2L7) and earlier full-leave paths stuck guests with `hasLeft`. Voluntary leave is explicit, not inferred from unmount.
+- **Date:** 2026-07 (updated) — `lib/online/presence/use-player-online-presence.ts`, `lib/online/presence/presence-handoff.ts`
 
 ## ADR-005: Passive roster members route to results during `playing`
 
