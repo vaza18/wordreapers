@@ -245,6 +245,53 @@ describe('fetchPublicLobbyPage', () => {
     expect(page.rows).toEqual([]);
   });
 
+  it('reconciles inflated counter when expired index rows leave a short first page', async () => {
+    const now = 1_000_000;
+    const liveEntry = {
+      baseWord: 'університет',
+      baseWordNorm: 'університет',
+      playerCount: 1,
+      maxPlayers: 8,
+      publishedAt: now - 60_000,
+      expiresAt: now + 240_000,
+    };
+    const expiredEntry = {
+      ...liveEntry,
+      baseWord: 'портрет',
+      baseWordNorm: 'портрет',
+      publishedAt: now - 400_000,
+      expiresAt: now - 100_000,
+    };
+    const entries: Record<string, typeof liveEntry> = {
+      LIVE1: liveEntry,
+      OLD1: expiredEntry,
+      OLD2: { ...expiredEntry, baseWord: 'компютер', baseWordNorm: 'компютер' },
+    };
+    const shardSnapshot = {
+      exists: () => true,
+      forEach: (fn: (child: { key: string; val: () => unknown }) => void) => {
+        for (const [key, value] of Object.entries(entries)) {
+          fn({ key, val: () => value });
+        }
+        return false;
+      },
+    };
+
+    getMock.mockImplementation(async (target: { path?: string }) => {
+      if (String(target?.path ?? '').includes('public_lobby_counts')) {
+        return rtdbSnapshot(3);
+      }
+      return shardSnapshot;
+    });
+
+    const page = await fetchPublicLobbyPage('uk-uk', 'newest', 1);
+
+    expect(page.rows).toHaveLength(1);
+    expect(page.rows[0]?.gameId).toBe('LIVE1');
+    expect(page.total).toBe(1);
+    expect(page.totalPages).toBe(1);
+  });
+
   it('awaits App Check before reading public lobby count directly', async () => {
     const callOrder: string[] = [];
     ensureFirebaseAppCheck.mockImplementation(async () => {

@@ -27,6 +27,7 @@ function lobbySnapshot(
 function createMockDb() {
   const mockRemove = vi.fn().mockResolvedValue(undefined);
   const mockSet = vi.fn().mockResolvedValue(undefined);
+  const mockUpdate = vi.fn().mockResolvedValue(undefined);
   const mockOnce = vi.fn();
 
   const db = {
@@ -34,10 +35,11 @@ function createMockDb() {
       once: () => mockOnce(path),
       remove: () => mockRemove(path),
       set: (value: unknown) => mockSet(path, value),
+      update: (value: unknown) => mockUpdate(path, value),
     }),
   };
 
-  return { db, mockRemove, mockSet, mockOnce };
+  return { db, mockRemove, mockSet, mockUpdate, mockOnce };
 }
 
 describe('PUBLIC_LOBBY_TTL_MS', () => {
@@ -132,7 +134,7 @@ describe('purgeStalePublicLobbies', () => {
 
   it('removes stale rows and reconciles shard counts', async () => {
     const now = 10_000;
-    const { db, mockOnce, mockRemove, mockSet } = createMockDb();
+    const { db, mockOnce, mockRemove, mockSet, mockUpdate } = createMockDb();
 
     mockOnce.mockImplementation(async (path: string) => {
       if (path === 'public_lobbies') {
@@ -190,6 +192,10 @@ describe('purgeStalePublicLobbies', () => {
 
     expect(result).toEqual({ scanned: 2, purged: 1 });
     expect(mockRemove).toHaveBeenCalledWith('public_lobbies/uk-uk/stale');
+    expect(mockUpdate).toHaveBeenCalledWith('game_sessions/stale', {
+      isPublic: false,
+      publicPublishedAt: null,
+    });
     expect(mockSet).toHaveBeenCalledWith('public_lobby_counts/uk-uk', 1);
   });
 });

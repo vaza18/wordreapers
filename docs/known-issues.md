@@ -8,6 +8,22 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — Public solo lobby: Start disabled; TTL auto-unpublish
+
+- **Symptom:** Organizer alone in a public waiting room could still press «Почати гру»; after browse TTL (~0 хв) the room stayed `isPublic` while browse already hid it.
+- **Cause:** No start gate for public+solo; purge removed index rows only and left `game_sessions.isPublic` true.
+- **Fix:** Disable Start when `isPublic` and lobby visible roster &lt; 2; organizer client auto-`setRoomPrivate` when listing TTL elapses; scheduled purge also clears `isPublic` / `publicPublishedAt`.
+- **Test:** `tests/public-lobby-waiting-rules.test.ts`, `tests/purge-stale-public-lobbies.test.ts`
+- **Area:** `lib/online/public-lobby/public-lobby-waiting-rules.ts`, `app/online/lobby/[gameId].tsx`, `functions/src/purge-stale-public-lobbies.ts`
+
+### 2026-07 — Browse «Показано 1–1 з 3» with one room card
+
+- **Symptom:** Public lobby browse shows range «Показано 1–1 з 3 публічних кімнат» while only one room card is listed.
+- **Cause:** `public_lobby_counts` can stay inflated after rooms expire (purge is every ~15 min). Browse filters expired index rows in `parseLobbyRows`, so the page is short while `total` still comes from the stale counter.
+- **Fix:** When the first page is under-filled vs the counter, recount live non-expired rows from the language shard (`shouldReconcilePublicLobbyBrowseTotal` + `fetchLivePublicLobbyTotal`).
+- **Test:** `tests/public-lobby-browse.test.ts`, `tests/public-lobby-service.test.ts` (inflated counter + expired ghosts)
+- **Area:** `lib/firebase/public-lobby-service.ts`, `lib/online/public-lobby/browse-total.ts`
+
 ### 2026-07 — Android App Check 100% Invalid (Upload SHA only)
 
 - **Symptom:** Production Android (1.5.2 / 1.5.3) multiplayer → App Check Console **Unverified: invalid** (~~100% on Android-only session `FPEU9`); GCP `ExchangePlayIntegrityToken` **100% errors** while `GeneratePlayIntegrityChallenge` and Play Integrity API were 0% errors. iOS App Attest exchange stayed 0% errors. Mixed Android+iPhone (~~`PTD45`) looked ~50/50 Verified/Invalid.
@@ -739,6 +755,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 - **Fix:** Treat unknown OS state as reduce motion enabled in `resolveVisualEffects`; gate `VictoryConfettiHost` on `victoryCelebration`.
 - **Test:** `tests/visual-effects.test.ts` (`null` OS state)
 - **Area:** `hooks/useReduceMotion.ts`, `lib/settings/visual-effects.ts`, `components/VictoryConfetti.tsx`
+
+### 2026-07 — Lobby «Лексикон: 492 слів» instead of «слова»
+
+- **Symptom:** Lobby showed «Лексикон: 492 слів» (wrong nominative paucal).
+- **Cause:** `online.lexiconWordCount` hard-coded the many form instead of `{{wordForm}}` via `ukWordForm`.
+- **Fix:** Template takes `{{wordForm}}`; lobby passes `ukWordForm(count)`. Keep `playableWordsMax` as fixed genitive «до N слів» (not nominative rules).
+- **Test:** `tests/uk-plural.test.ts` (`lexicon count copy`)
+- **Area:** `i18n/locales/uk.json`, `app/online/lobby/[gameId].tsx`
 
 ### 2026-07 — «Нова гра» crashed with useInsertionEffect prevent-remove
 

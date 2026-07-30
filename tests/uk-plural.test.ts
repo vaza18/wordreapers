@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import i18n from '@/i18n';
 import {
   formatUkPlayers,
   formatUkRounds,
@@ -70,7 +71,29 @@ describe('formatUkRounds', () => {
 describe('ukWordForm', () => {
   it('returns noun form without count', () => {
     expect(ukWordForm(1)).toBe('слово');
+    expect(ukWordForm(2)).toBe('слова');
     expect(ukWordForm(8)).toBe('слів');
     expect(ukWordForm(141)).toBe('слово');
+    expect(ukWordForm(492)).toBe('слова');
+  });
+});
+
+describe('lexicon count copy', () => {
+  function lexiconLabel(count: number): string {
+    return i18n.t('online.lexiconWordCount', {
+      count,
+      wordForm: ukWordForm(count),
+    });
+  }
+
+  it('declines nominative «слово» in lobby lexicon; genitive «до N слів» stays fixed', () => {
+    expect(lexiconLabel(1)).toBe(`Лексикон: 1${NBSP}слово`);
+    expect(lexiconLabel(492)).toBe(`Лексикон: 492${NBSP}слова`);
+    expect(lexiconLabel(5)).toBe(`Лексикон: 5${NBSP}слів`);
+    // «до» + numeral takes genitive plural for typical lexicon sizes.
+    expect(i18n.t('online.playableWordsMax', { count: 2 })).toBe(`Можна зібрати до 2${NBSP}слів`);
+    expect(i18n.t('online.playableWordsMax', { count: 492 })).toBe(
+      `Можна зібрати до 492${NBSP}слів`,
+    );
   });
 });
