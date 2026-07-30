@@ -113,6 +113,8 @@
     "baseWordChosenBy_n": "обрало {{name}}",
     "baseWordChosenBy": "обравно гравцем {{name}}",
     "playableWordsMax": "Можна зібрати до {{count}}\u00A0слів",
+    "lexiconWordCount": "Лексикон: {{count}}\u00A0слів",
+    "lexiconPrefix": "Лексикон:",
     "baseWordChangeA11y": "Натисни, щоб змінити",
     "baseWordRoundLabel": "раунд {{round}}",
     "inviteOthers": "Змагання",

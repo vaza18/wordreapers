@@ -29,4 +29,24 @@ describe('formatLobbyBaseWordMetaLine', () => {
       }),
     ).toBe('обрало Василь 7');
   });
+
+  it('prefixes lexicon when provided', () => {
+    expect(
+      formatLobbyBaseWordMetaLine({
+        lexiconLabel: 'Лексикон: 377 слів',
+        roundLabel: 'раунд 3',
+        chosenByLabel: 'обрала Василина',
+      }),
+    ).toBe('Лексикон: 377 слів · раунд 3 · обрала Василина');
+  });
+
+  it('prefixes lexicon without round on first round', () => {
+    expect(
+      formatLobbyBaseWordMetaLine({
+        lexiconLabel: 'Лексикон: 12 слів',
+        roundLabel: null,
+        chosenByLabel: 'обрала Василина',
+      }),
+    ).toBe('Лексикон: 12 слів · обрала Василина');
+  });
 });
