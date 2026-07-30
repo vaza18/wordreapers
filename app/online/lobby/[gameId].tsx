@@ -57,6 +57,7 @@ import {
 } from '@/lib/online/lobby-rematch-base-word-heal';
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
+import { ukWordForm } from '@/lib/i18n/uk-plural';
 import { shouldDisableLobbyStartForLexicon } from '@/lib/online/lobby-start-lexicon-gate';
 import { useLiveRoundLobbyScreen } from '@/hooks/useLiveRoundLobbyScreen';
 import { isLiveRoundStarted } from '@/lib/online/live-round-screen-actions';
@@ -557,7 +558,10 @@ export default function LobbyScreen() {
     <Text style={styles.baseWordMeta}>
       {formatLobbyBaseWordMetaLine({
         lexiconLabel: lobbyLexicon
-          ? t('online.lexiconWordCount', { count: lobbyLexicon.maxCount })
+          ? t('online.lexiconWordCount', {
+              count: lobbyLexicon.maxCount,
+              wordForm: ukWordForm(lobbyLexicon.maxCount),
+            })
           : null,
         roundLabel: baseWordRoundLabel,
         chosenByLabel: baseWordChosenByLabel,

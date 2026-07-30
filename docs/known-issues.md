@@ -740,6 +740,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 - **Test:** `tests/visual-effects.test.ts` (`null` OS state)
 - **Area:** `hooks/useReduceMotion.ts`, `lib/settings/visual-effects.ts`, `components/VictoryConfetti.tsx`
 
+### 2026-07 — Lobby «Лексикон: 492 слів» instead of «слова»
+
+- **Symptom:** Lobby showed «Лексикон: 492 слів» (wrong nominative paucal).
+- **Cause:** `online.lexiconWordCount` hard-coded the many form instead of `{{wordForm}}` via `ukWordForm`.
+- **Fix:** Template takes `{{wordForm}}`; lobby passes `ukWordForm(count)`. Keep `playableWordsMax` as fixed genitive «до N слів» (not nominative rules).
+- **Test:** `tests/uk-plural.test.ts` (`lexicon count copy`)
+- **Area:** `i18n/locales/uk.json`, `app/online/lobby/[gameId].tsx`
+
 ### 2026-07 — «Нова гра» crashed with useInsertionEffect prevent-remove
 
 - **Symptom:** Opening online setup («Нова гра») logged `useInsertionEffect must not schedule updates` and `Can't perform a React state update on a component that hasn't mounted yet` from `useSyncedStackBack`.
