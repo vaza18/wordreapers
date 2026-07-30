@@ -68,9 +68,11 @@ Single number: **how many public waiting rooms** exist for a language (not playe
 - **Clients:** read-only (RTDB rule `.write: false`)
 - **Maintained by Cloud Functions:**
   - `guardPublicLobbyWrite` — `+1` on new valid index row, `-1` on delete or invalid→removed
-  - `purgeStalePublicLobbiesScheduled` — removes stale rows and **reconciles** count from live shard scan every 15 minutes
+  - `purgeStalePublicLobbiesScheduled` — removes stale rows, clears `game_sessions.isPublic` / `publicPublishedAt` for purged rooms, and **reconciles** count from live shard scan every 15 minutes
 
-Browse pagination reads this node for `total` / page count; falls back to a full shard scan if the counter is missing or corrupt.
+Browse pagination reads this node for `total` / page count; falls back to a full shard scan if the counter is missing or corrupt. If the first browse page is shorter than the counter (expired ghost rows filtered client-side), the client **recounts** live non-expired rows from the language shard so the «Показано … з N» label matches the list.
+
+While a waiting room is still `isPublic` with only the organizer in the lobby, **Start** is disabled. When browse TTL elapses, the organizer client (and scheduled purge) turn the room private so solo start is allowed again.
 
 ## Browse → join flow
 
