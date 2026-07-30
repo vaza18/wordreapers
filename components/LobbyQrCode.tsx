@@ -31,7 +31,7 @@ function createStyles(colors: ThemeColors) {
 /**
  * QR encodes join deep link for the room (mockup lobby screen 4).
  */
-export function LobbyQrCode({ roomCode, size = 112, invitedByUid }: LobbyQrCodeProps) {
+export function LobbyQrCode({ roomCode, size = 128, invitedByUid }: LobbyQrCodeProps) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);

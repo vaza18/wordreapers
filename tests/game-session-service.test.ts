@@ -93,7 +93,6 @@ import {
   rematchFinishedSessionToWaiting,
   startGameSession,
   tryReadGameSessionSnapshot,
-  voluntaryLeaveWaitingLobbyIfMember,
 } from '../lib/firebase/game-session-service.js';
 import { DEFAULT_SESSION_SETTINGS, finishedSession } from './helpers/game-session-fixtures.js';
 
@@ -150,50 +149,6 @@ describe('game-session-service', () => {
     } finally {
       endVoluntaryLeave('ABCDE', 'guest');
     }
-  });
-
-  it('skips presence-unmount offline while voluntary leave is in flight', async () => {
-    getMock.mockResolvedValue({
-      exists: () => true,
-      val: () => ({
-        ...waitingSession,
-        status: 'playing' as const,
-        players: {
-          'org-1': { name: 'Org', wordCount: 0, score: 0, online: true },
-          guest: { name: 'Guest', wordCount: 0, score: 0, online: true },
-        },
-      }),
-    });
-    beginVoluntaryLeave('ABCDE', 'guest');
-    try {
-      await voluntaryLeaveWaitingLobbyIfMember('ABCDE', 'guest');
-
-      expect(updateMock).not.toHaveBeenCalled();
-    } finally {
-      endVoluntaryLeave('ABCDE', 'guest');
-    }
-  });
-
-  it('only marks offline on rematch waiting presence unmount (does not set hasLeft)', async () => {
-    getMock.mockResolvedValue({
-      exists: () => true,
-      val: () => ({
-        ...waitingSession,
-        baseWordRound: 2,
-        players: {
-          'org-1': { name: 'Org', wordCount: 0, score: 0, online: true },
-          guest: { name: 'Guest', wordCount: 0, score: 0, online: true },
-        },
-      }),
-    });
-
-    await voluntaryLeaveWaitingLobbyIfMember('ABCDE', 'guest');
-
-    expect(updateMock).toHaveBeenCalledWith(expect.anything(), { online: false });
-    expect(updateMock).not.toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ hasLeft: true }),
-    );
   });
 
   it('marks an existing player offline', async () => {

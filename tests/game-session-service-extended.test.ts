@@ -613,16 +613,37 @@ describe('game-session-service extended', () => {
     unsub();
   });
 
-  it('still subscribes to presence when app check fails', async () => {
-    ensureFirebaseAppCheck.mockRejectedValueOnce(new Error('APP_CHECK_TOKEN_EMPTY'));
+  it('does not subscribe to presence when app check fails', async () => {
+    ensureFirebaseAppCheck.mockRejectedValue(new Error('APP_CHECK_TOKEN_EMPTY'));
     onValueMock.mockImplementation(() => vi.fn());
 
     const unsub = subscribePlayerOnlinePresence('ABCDE', 'org-1');
 
-    await vi.waitFor(() => {
-      expect(onValueMock).toHaveBeenCalled();
-    });
-    expect(onValueMock.mock.calls[0]?.[0]).toEqual({ path: '.info/connected' });
+    await vi.waitFor(
+      () => {
+        expect(ensureFirebaseAppCheck.mock.calls.length).toBeGreaterThanOrEqual(3);
+      },
+      { timeout: 5000 },
+    );
+    expect(onValueMock).not.toHaveBeenCalled();
+    unsub();
+  });
+
+  it('does not subscribe to session when app check fails', async () => {
+    ensureFirebaseAppCheck.mockRejectedValue(new Error('APP_CHECK_TOKEN_EMPTY'));
+    onValueMock.mockImplementation(() => vi.fn());
+
+    const onSession = vi.fn();
+    const unsub = subscribeGameSession('ABCDE', onSession);
+
+    await vi.waitFor(
+      () => {
+        expect(ensureFirebaseAppCheck.mock.calls.length).toBeGreaterThanOrEqual(3);
+      },
+      { timeout: 5000 },
+    );
+    expect(onValueMock).not.toHaveBeenCalled();
+    expect(onSession).not.toHaveBeenCalled();
     unsub();
   });
 });

@@ -14,8 +14,8 @@ import { AppState } from 'react-native';
 import { runRtdbTransaction } from './rtdb-transaction.js';
 import { shouldMarkPresenceOnline } from '../online/presence/app-presence-state.js';
 import { presenceWriteQueue } from '../online/presence/presence-write-queue.js';
-import { shouldLeaveWaitingLobbyOnPresenceUnmount } from '../online/presence/presence-unmount-leave.js';
 import { devLogAction } from '../debug/dev-log.js';
+import { ensureAppCheckWithRetry } from './ensure-app-check-with-retry.js';
 
 import { isOrphanGameSessionShell, orphanShellHasPlayer } from '../online/orphan-game-session.js';
 import type { PlayerProfile } from '../profile/player-profile.js';
@@ -974,13 +974,24 @@ export function subscribeGameSession(
     sharedGameSessionSubs.set(normalized, entry);
 
     void import('./app-check.js')
-      .then(({ ensureFirebaseAppCheck }) => ensureFirebaseAppCheck())
-      .catch((error) => {
-        if (__DEV__) {
-          console.warn('subscribeGameSession app check', error);
+      .then(({ ensureFirebaseAppCheck }) =>
+        ensureAppCheckWithRetry(ensureFirebaseAppCheck, {
+          onAttemptError: (error) => {
+            if (__DEV__) {
+              console.warn('subscribeGameSession app check', error);
+            }
+            devLogAction('subscribeGameSession app check failed', {
+              level: 'error',
+              room: normalized,
+              details: error instanceof Error ? error.message : String(error),
+            });
+          },
+        }),
+      )
+      .then((ready) => {
+        if (!ready) {
+          return;
         }
-      })
-      .then(() => {
         const current = sharedGameSessionSubs.get(normalized);
         if (!current || current.listeners.size === 0) {
           return;
@@ -1086,18 +1097,24 @@ export function subscribePlayerOnlinePresence(gameId: string, uid: string): Unsu
   let cancelled = false;
 
   void import('./app-check.js')
-    .then(({ ensureFirebaseAppCheck }) => ensureFirebaseAppCheck())
-    .catch((error) => {
-      if (__DEV__) {
-        console.warn('subscribePlayerOnlinePresence app check', error);
-      }
-    })
-    .then(() => {
-      if (cancelled) {
+    .then(({ ensureFirebaseAppCheck }) =>
+      ensureAppCheckWithRetry(ensureFirebaseAppCheck, {
+        onAttemptError: (error) => {
+          if (__DEV__) {
+            console.warn('subscribePlayerOnlinePresence app check', error);
+          }
+          devLogAction('subscribePlayerOnlinePresence app check failed', {
+            level: 'error',
+            room: normalizeRoomCode(gameId),
+            details: error instanceof Error ? error.message : String(error),
+          });
+        },
+      }),
+    )
+    .then((ready) => {
+      if (cancelled || !ready) {
         return;
       }
-      // Still subscribe if App Check failed: presence must not silently drop while
-      // Console enforcement is off; RTDB will reject once enforcement is on.
       unsub = onValue(connectedRef, (snapshot) => {
         if (snapshot.val() === true && shouldMarkPresenceOnline(AppState.currentState)) {
           void markPlayerOnline(gameId, uid);
@@ -1320,44 +1337,6 @@ export async function leaveGameSession(gameId: string, uid: string): Promise<voi
     }
   } finally {
     endVoluntaryLeave(normalized, uid);
-  }
-}
-
-/**
- * Presence unmount safety net: full waiting-lobby leave for non-organizers.
- */
-export async function voluntaryLeaveWaitingLobbyIfMember(
-  gameId: string,
-  uid: string,
-): Promise<void> {
-  const normalized = normalizeRoomCode(gameId);
-  if (isVoluntaryLeaveInFlight(normalized, uid)) {
-    return;
-  }
-  try {
-    const snapshot = await get(sessionRef(normalized));
-    if (!snapshot.exists()) {
-      await markPlayerOffline(normalized, uid);
-      return;
-    }
-    const session = snapshot.val() as GameSession;
-    const player = session.players[uid];
-    if (!player) {
-      return;
-    }
-    if (player.hasLeft === true && player.online !== true) {
-      return;
-    }
-    if (shouldLeaveWaitingLobbyOnPresenceUnmount(session, uid)) {
-      await leaveGameSession(normalized, uid);
-      return;
-    }
-    await markPlayerOffline(normalized, uid);
-  } catch (error) {
-    if (isFirebasePermissionDenied(error)) {
-      return;
-    }
-    throw error;
   }
 }
 

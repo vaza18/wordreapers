@@ -526,6 +526,45 @@ export default function LobbyScreen() {
 
   const showBaseWordEditAffordance = Boolean(isPicker && session?.status === 'waiting');
 
+  const baseWordRoundLabel = !isFirstRound
+    ? t('online.baseWordRoundLabel', { round: turnNumber })
+    : null;
+  const baseWordChosenByLabel = tGendered(
+    t,
+    'online.baseWordChosenBy',
+    myUid && chosenByUid ? playerGenderForDisplay(session, myUid, chosenByUid) : null,
+    { name: chosenByName },
+  );
+  const baseWordMetaTail = formatLobbyBaseWordMetaLine({
+    roundLabel: baseWordRoundLabel,
+    chosenByLabel: baseWordChosenByLabel,
+  });
+  const lexiconLoadingInMeta = Boolean(hasBaseWord && lobbyLexiconLoading && !lobbyLexicon);
+  const baseWordMetaLine = lexiconLoadingInMeta ? (
+    <View
+      style={styles.baseWordMetaRow}
+      accessibilityLabel={`${t('online.lexiconPrefix')} ${baseWordMetaTail}`}
+    >
+      <Text style={styles.baseWordMeta}>{t('online.lexiconPrefix')}</Text>
+      <View style={styles.baseWordMetaSpinnerSlot}>
+        <ActivityIndicator color={colors.accent} size="small" style={styles.baseWordMetaSpinner} />
+      </View>
+      {baseWordMetaTail ? (
+        <Text style={styles.baseWordMeta}>{` · ${baseWordMetaTail}`}</Text>
+      ) : null}
+    </View>
+  ) : (
+    <Text style={styles.baseWordMeta}>
+      {formatLobbyBaseWordMetaLine({
+        lexiconLabel: lobbyLexicon
+          ? t('online.lexiconWordCount', { count: lobbyLexicon.maxCount })
+          : null,
+        roundLabel: baseWordRoundLabel,
+        chosenByLabel: baseWordChosenByLabel,
+      })}
+    </Text>
+  );
+
   const baseWordBlock =
     hasBaseWord && session.baseWord ? (
       <View
@@ -541,19 +580,7 @@ export default function LobbyScreen() {
         ) : null}
         <Text style={styles.baseWordLabel}>{t('game.baseWord')}</Text>
         <Text style={styles.baseWordTitle}>{session.baseWord.toUpperCase()}</Text>
-        <Text style={styles.baseWordMeta}>
-          {formatLobbyBaseWordMetaLine({
-            roundLabel: !isFirstRound
-              ? t('online.baseWordRoundLabel', { round: turnNumber })
-              : null,
-            chosenByLabel: tGendered(
-              t,
-              'online.baseWordChosenBy',
-              myUid && chosenByUid ? playerGenderForDisplay(session, myUid, chosenByUid) : null,
-              { name: chosenByName },
-            ),
-          })}
-        </Text>
+        {baseWordMetaLine}
       </View>
     ) : null;
 
@@ -604,14 +631,6 @@ export default function LobbyScreen() {
           ) : (
             baseWordBlock
           )}
-
-          {hasBaseWord && lobbyLexicon ? (
-            <Text style={styles.playableWordsHint}>
-              {t('online.playableWordsMax', { count: lobbyLexicon.maxCount })}
-            </Text>
-          ) : hasBaseWord && lobbyLexiconLoading ? (
-            <Text style={styles.playableWordsHint}>{t('game.playableWordsLoading')}</Text>
-          ) : null}
 
           <Text style={styles.settingsBanner}>{formatLobbySettingsLabel(t, session)}</Text>
 
@@ -871,6 +890,23 @@ function createStyles(colors: ThemeColors) {
       color: colors.textSecondary,
       textAlign: 'center',
     },
+    baseWordMetaRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.xs,
+    },
+    baseWordMetaSpinnerSlot: {
+      width: 13,
+      height: 13,
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    baseWordMetaSpinner: {
+      transform: [{ scale: 0.65 }],
+    },
     baseWordBannerPressable: {
       backgroundColor: colors.accentMuted,
       borderRadius: radii.sm,
@@ -899,11 +935,6 @@ function createStyles(colors: ThemeColors) {
       color: colors.accent,
       textAlign: 'center',
       fontWeight: '500',
-    },
-    playableWordsHint: {
-      fontSize: 13,
-      color: colors.textSecondary,
-      textAlign: 'center',
     },
     sectionLabel: {
       fontSize: 14,

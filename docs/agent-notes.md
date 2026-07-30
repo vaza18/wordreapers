@@ -8,6 +8,14 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 <!-- Add dated notes at the top -->
 
+### 2026-07-30 — Presence cleanup never writes RTDB
+
+- `usePlayerOnlinePresence` unmount/`enabled` flicker used to call `voluntaryLeaveWaitingLobbyIfMember` (later offline-only). That flashed lobby peers offline and caused CM2L7 `hasLeft`. Cleanup is now unsubscribe + `consumePresenceHandoff` only. Promoted: `known-issues.md`, ADR-004, §7.
+
+### 2026-07-30 — App Check Android: App signing SHA required (RN67E Verified)
+
+- Console Invalid on Android was Upload-only fingerprint (`DD:18`) vs store App signing (`41:D6`). Both must be in App Check Play Integrity. Confirmed: `RN67E` → RTDB 100% Verified. See `known-issues.md`. Client subscribe/presence no longer soft-fail App Check (retry then skip `onValue`).
+
 ### 2026-07-28 — Finish must not rewrite peer presence (LRAHP)
 
 - R62F9 `online`/`hasLeft` validate blocked whole-session finish → stuck `playing` → rematch `REMATCH_FAILED`. Leaf-path finish + unchanged validate + rematch heal. Deploy rules.

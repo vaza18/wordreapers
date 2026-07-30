@@ -8,6 +8,22 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — Android App Check 100% Invalid (Upload SHA only)
+
+- **Symptom:** Production Android (1.5.2 / 1.5.3) multiplayer → App Check Console **Unverified: invalid** (~~100% on Android-only session `FPEU9`); GCP `ExchangePlayIntegrityToken` **100% errors** while `GeneratePlayIntegrityChallenge` and Play Integrity API were 0% errors. iOS App Attest exchange stayed 0% errors. Mixed Android+iPhone (~~`PTD45`) looked ~50/50 Verified/Invalid.
+- **Cause:** App Check → Apps → Android Play Integrity had only the Play **Upload** key SHA-256 (`DD:18:…`). Store installs are re-signed with the Play **App signing** key (`41:D6:…`), so token exchange failed (typically 403 App attestation failed) and clients sent placeholder tokens counted as Invalid.
+- **Fix (ops, no new build):** Add App signing SHA-256 alongside Upload in App Check Play Integrity (and Firebase Project settings Android SHA certificates). Retest `RN67E` → RTDB App Check **100% Verified**.
+- **Test:** Manual: Android-only production game after both fingerprints registered; GCP `ExchangePlayIntegrityToken` errors drop; App Check → APIs Verified for that hour. Do **not** Enforce until Verified stays stable.
+- **Area:** Firebase / Play Console App Check config (not app code)
+
+### 2026-07 — Round-0 lobby guest invisible (CM2L7 hasLeft via presence unmount)
+
+- **Symptom:** First waiting room (`CM2L7`): invitee joined roster but neither phone showed them in the lobby list; guest did not press Back/Home; force-quit after the symptom. RTDB: guest `hasLeft: true`, organizer without `hasLeft`. Later: brief lobby offline flash from the same cleanup writing `online: false`.
+- **Cause:** Lobby presence `enabled` depends on `firebaseSessionLive`. A short flip disabled the presence hook → cleanup called `voluntaryLeaveWaitingLobbyIfMember` → round-0 non-organizer path ran `leaveGameSession` (`hasLeft`). Round-0 lobby UI hides `hasLeft` players. Softening to offline-only still flashed peers offline on remount/flicker.
+- **Fix:** Presence hook cleanup no longer writes RTDB (`voluntaryLeaveWaitingLobbyIfMember` removed). Offline only via AppState / intentional leave / `onDisconnect`.
+- **Test:** `tests/use-player-online-presence.test.tsx` (unmount / policy remount → no `markPlayerOffline`)
+- **Area:** `lib/online/presence/use-player-online-presence.ts`, `docs/online-multiplayer-rules.md` §7
+
 ### 2026-07 — Lobby «Почати гру» stuck disabled after Wi‑Fi blip (lexicon loading)
 
 - **Symptom:** Rematch lobby shows base word + «Можна зібрати до N слів» but **Почати гру** stays disabled until picker opens «редагувати базове слово» and returns. Often after Wi‑Fi hotspot switch / brief offline.
@@ -95,9 +111,9 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 - **Symptom:** Non-organizer on time-up while peer rematches gets `hasLeft` / disappears from rematch lobby; or sync coordinator deletes rematch waiting while latched peers are briefly offline.
 - **Cause:** Play disables presence on `roundEnded`; cleanup called `voluntaryLeaveWaitingLobbyIfMember` → full leave on any `waiting`. Sync abandon used only `allSessionPlayersOffline`, ignoring `resultsExitedBy`. Also: online∉`liveRoundPlayerUids` raced redirect-to-results ahead of rejoin.
-- **Fix:** Rematch waiting presence unmount only marks offline; sync abandon uses `shouldOrganizerAbandonWaitingRoom`; prefer rejoin over results redirect when heal applies.
-- **Test:** `tests/presence-unmount-leave.test.ts`, `tests/game-session-service.test.ts`, `tests/sync-coordinator.test.ts`, `tests/should-redirect-inactive-player-to-results.test.ts`
-- **Area:** `lib/online/presence/presence-unmount-leave.ts`, `lib/firebase/game-session-service.ts`, `lib/online/sync-coordinator.ts`, `lib/online/live-round-screen-actions.ts`
+- **Fix:** Rematch waiting presence unmount only marked offline (later: cleanup writes removed entirely — CM2L7); sync abandon uses `shouldOrganizerAbandonWaitingRoom`; prefer rejoin over results redirect when heal applies.
+- **Test:** `tests/use-player-online-presence.test.tsx`, `tests/game-session-service.test.ts`, `tests/sync-coordinator.test.ts`, `tests/should-redirect-inactive-player-to-results.test.ts`
+- **Area:** `lib/online/presence/use-player-online-presence.ts`, `lib/firebase/game-session-service.ts`, `lib/online/sync-coordinator.ts`, `lib/online/live-round-screen-actions.ts`
 
 ### 2026-07 — Multi-round eject: RTDB glitch → «кімнату не знайдено»
 
@@ -415,9 +431,9 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 ### 2026-07 — Intentional leave also toasted «не в грі»
 
 - **Symptom:** When a peer pressed «Вийти» mid-round, remaining players saw both «залишив гру» and «не в грі» (status then correctly showed «вийшов»).
-- **Cause:** `runIntentionalLeave` navigated to `/online/left` before `leaveGameSession` wrote `{ online: false, hasLeft: true }`. Play unmount ran `voluntaryLeaveWaitingLobbyIfMember` → `markPlayerOffline` (`online: false` only), so peers briefly saw the background-offline toast, then the leave toast.
-- **Fix:** Call `beginVoluntaryLeave` before navigate; `markPlayerOffline` / presence-unmount leave no-op while voluntary leave is in flight; write `leaveGameSession` before caching progress.
-- **Test:** `tests/game-session-service.test.ts` (skip offline / unmount offline during voluntary leave)
+- **Cause:** `runIntentionalLeave` navigated to `/online/left` before `leaveGameSession` wrote `{ online: false, hasLeft: true }`. Play unmount ran presence cleanup → `markPlayerOffline` (`online: false` only), so peers briefly saw the background-offline toast, then the leave toast.
+- **Fix:** Call `beginVoluntaryLeave` before navigate; `markPlayerOffline` no-op while voluntary leave is in flight; write `leaveGameSession` before caching progress. (Presence cleanup later stopped writing RTDB entirely.)
+- **Test:** `tests/game-session-service.test.ts` (skip offline during voluntary leave)
 - **Area:** `lib/firebase/game-session-service.ts`, `app/online/play/[gameId].tsx`
 
 ### 2026-07 — Process death on left screen loses «Повернутись до гри»

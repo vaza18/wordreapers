@@ -1,17 +1,23 @@
 const META_SEP = ' · ';
 
-/** One secondary line under the lobby base word: round + chooser. */
+/** One secondary line under the lobby base word: lexicon + round + chooser. */
 export function formatLobbyBaseWordMetaLine(input: {
+  lexiconLabel?: string | null;
   roundLabel?: string | null;
   chosenByLabel: string;
 }): string {
+  const parts: string[] = [];
+  const lexicon = input.lexiconLabel?.trim() || '';
   const round = input.roundLabel?.trim() || '';
   const chosen = input.chosenByLabel.trim();
-  if (!round) {
-    return chosen;
+  if (lexicon) {
+    parts.push(lexicon);
   }
-  if (!chosen) {
-    return round;
+  if (round) {
+    parts.push(round);
   }
-  return `${round}${META_SEP}${chosen}`;
+  if (chosen) {
+    parts.push(chosen);
+  }
+  return parts.join(META_SEP);
 }
