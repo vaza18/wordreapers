@@ -19,6 +19,7 @@ import {
   PUBLIC_LOBBY_PAGE_SIZE,
   PUBLIC_LOBBY_TTL_MS,
 } from '../online/public-lobby/constants.js';
+import { shouldReconcilePublicLobbyBrowseTotal } from '../online/public-lobby/browse-total.js';
 import {
   canPublishPublicRoom,
   withPublicSafeSettings,
@@ -215,10 +216,10 @@ export async function fetchPublicLobbyPage(
 }> {
   await ensureFirebaseAppCheck();
   const safePage = Math.max(1, page);
-  const total = await resolvePublicLobbyTotal(language);
-  const totalPages = total === null ? null : total === 0 ? 0 : Math.ceil(total / pageSize);
+  let total = await resolvePublicLobbyTotal(language);
+  let totalPages = total === 0 ? 0 : Math.ceil(total / pageSize);
 
-  if (totalPages !== null && safePage > totalPages && totalPages > 0) {
+  if (totalPages > 0 && safePage > totalPages) {
     const walked = await walkToPage(language, sort, totalPages, pageSize, knownCursors);
     return {
       rows: walked.rows,
@@ -230,6 +231,18 @@ export async function fetchPublicLobbyPage(
   }
 
   const walked = await walkToPage(language, sort, safePage, pageSize, knownCursors);
+  // Counter lags behind expiry filtering in parseLobbyRows (ghost index rows).
+  if (
+    shouldReconcilePublicLobbyBrowseTotal({
+      total,
+      rowCount: walked.rows.length,
+      pageSize,
+      page: safePage,
+    })
+  ) {
+    total = await fetchLivePublicLobbyTotal(language);
+    totalPages = total === 0 ? 0 : Math.ceil(total / pageSize);
+  }
   return {
     rows: walked.rows,
     page: safePage,

@@ -5,6 +5,7 @@ import {
   buildPageNumberWindow,
   totalPagesFromCount,
 } from '../lib/online/public-lobby/browse-pagination.js';
+import { shouldReconcilePublicLobbyBrowseTotal } from '../lib/online/public-lobby/browse-total.js';
 import { PUBLIC_LOBBY_PAGE_SIZE } from '../lib/online/public-lobby/constants.js';
 
 describe('buildPageNumberWindow', () => {
@@ -36,5 +37,40 @@ describe('browseRangeForPage', () => {
 
   it('clamps last page range to total', () => {
     expect(browseRangeForPage(3, 20, 55, 15)).toEqual({ from: 41, to: 55 });
+  });
+});
+
+describe('shouldReconcilePublicLobbyBrowseTotal', () => {
+  it('reconciles when first page is short vs inflated counter', () => {
+    expect(
+      shouldReconcilePublicLobbyBrowseTotal({
+        total: 3,
+        rowCount: 1,
+        pageSize: 20,
+        page: 1,
+      }),
+    ).toBe(true);
+  });
+
+  it('skips when first page is full', () => {
+    expect(
+      shouldReconcilePublicLobbyBrowseTotal({
+        total: 40,
+        rowCount: 20,
+        pageSize: 20,
+        page: 1,
+      }),
+    ).toBe(false);
+  });
+
+  it('skips when counter matches short first page', () => {
+    expect(
+      shouldReconcilePublicLobbyBrowseTotal({
+        total: 1,
+        rowCount: 1,
+        pageSize: 20,
+        page: 1,
+      }),
+    ).toBe(false);
   });
 });
