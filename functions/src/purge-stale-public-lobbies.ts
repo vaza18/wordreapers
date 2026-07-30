@@ -88,7 +88,7 @@ export async function purgeStalePublicLobbies(
 
   let scanned = 0;
   let purged = 0;
-  const removals: Array<{ language: string; gameId: string }> = [];
+  const removals: Array<{ language: string; gameId: string; clearSessionPublic: boolean }> = [];
 
   const languageNodes: Array<{ language: string; node: admin.database.DataSnapshot }> = [];
   rootSnap.forEach((languageNode) => {
@@ -115,12 +115,26 @@ export async function purgeStalePublicLobbies(
         continue;
       }
       purged += 1;
-      removals.push({ language, gameId });
+      removals.push({
+        language,
+        gameId,
+        clearSessionPublic: session?.isPublic === true,
+      });
     }
   }
 
   await Promise.all(
-    removals.map(({ language, gameId }) => db.ref(`public_lobbies/${language}/${gameId}`).remove()),
+    removals.map(async ({ language, gameId, clearSessionPublic }) => {
+      await db.ref(`public_lobbies/${language}/${gameId}`).remove();
+      if (!clearSessionPublic) {
+        return;
+      }
+      // Index TTL expiry must also clear the session flag (browse already hides the room).
+      await db.ref(`game_sessions/${gameId}`).update({
+        isPublic: false,
+        publicPublishedAt: null,
+      });
+    }),
   );
 
   for (const { language } of languageNodes) {

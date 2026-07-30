@@ -13,12 +13,13 @@ import {
 } from 'react-native';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
-import { SquarePenIcon } from '@/components/HeaderIcons';
+import { InfoIcon, SquarePenIcon } from '@/components/HeaderIcons';
 import { LobbyQrCode } from '@/components/LobbyQrCode';
 import { PlayerAvatar } from '@/components/PlayerAvatar';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { Screen } from '@/components/Screen';
 import { SettingSwitch } from '@/components/SettingSwitch';
+import { CenterDialogModal } from '@/components/CenterDialogModal';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
@@ -38,7 +39,7 @@ import {
   tryReadGameSessionSnapshot,
   type GameSessionSnapshot,
 } from '@/lib/firebase/game-session-service';
-import { syncPublicRosterAliases } from '@/lib/firebase/public-lobby-service';
+import { setRoomPrivate, syncPublicRosterAliases } from '@/lib/firebase/public-lobby-service';
 import { clearWaitingLobbyPlayerWordsAsOrganizer } from '@/lib/firebase/player-words-service';
 import { ensureAnonymousAuth } from '@/lib/firebase/auth';
 import { devLogAction } from '@/lib/debug/dev-log';
@@ -79,7 +80,11 @@ import {
   viewerPublicAlias,
 } from '@/lib/online/public-lobby/display-player-name';
 import { needsPublicAliasReconcile } from '@/lib/online/public-lobby/public-alias';
-import { PUBLIC_LOBBY_TTL_MS } from '@/lib/online/public-lobby/constants';
+import { PUBLIC_LOBBY_MAX_PLAYERS, PUBLIC_LOBBY_TTL_MS } from '@/lib/online/public-lobby/constants';
+import {
+  isPublicLobbyListingExpired,
+  shouldDisableLobbyStartForPublicSolo,
+} from '@/lib/online/public-lobby/public-lobby-waiting-rules';
 import { useOrganizerAbandonWaitingOnExit } from '@/lib/online/use-organizer-abandon-on-exit';
 import { lobbyPresenceOfflinePolicy } from '@/lib/online/presence/lobby-presence-policy';
 import { usePlayerOnlinePresence } from '@/lib/online/presence/use-player-online-presence';
@@ -120,6 +125,8 @@ export default function LobbyScreen() {
   const [starting, setStarting] = useState(false);
   const [rematchLoading, setRematchLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPublicRoomHint, setShowPublicRoomHint] = useState(false);
+  const [showPublicRoomConfirm, setShowPublicRoomConfirm] = useState(false);
   const [rematchArchive, setRematchArchive] = useState<FinishedRoundArchive | null | undefined>(
     undefined,
   );
@@ -361,6 +368,33 @@ export default function LobbyScreen() {
 
   const isFinished = session?.status === 'finished';
   const canStart = isPicker && firebaseSessionLive && session?.status === 'waiting' && hasBaseWord;
+  const disableStartForPublicSolo = shouldDisableLobbyStartForPublicSolo({
+    isPublic: session?.isPublic,
+    lobbyPlayerCount: players.length,
+  });
+  const autoUnpublishExpiredRef = useRef(false);
+
+  useEffect(() => {
+    if (
+      !isOrganizer ||
+      !myUid ||
+      !session ||
+      session.status !== 'waiting' ||
+      session.isPublic !== true ||
+      autoUnpublishExpiredRef.current ||
+      !isPublicLobbyListingExpired(session.publicPublishedAt, serverNow)
+    ) {
+      return;
+    }
+    autoUnpublishExpiredRef.current = true;
+    void setRoomPrivate(gameId, myUid)
+      .catch(() => {
+        setError(t('online.errorPublicRoomFailed'));
+      })
+      .finally(() => {
+        autoUnpublishExpiredRef.current = false;
+      });
+  }, [gameId, isOrganizer, myUid, serverNow, session, t]);
 
   const handleRematch = async () => {
     if (!myUid || !session) {
@@ -600,6 +634,24 @@ export default function LobbyScreen() {
 
   const showFooter = footerHasActions || Boolean(footerWaitingHint);
 
+  const publicListingMinutesLeft =
+    session.isPublic && session.publicPublishedAt
+      ? Math.max(
+          0,
+          Math.ceil((session.publicPublishedAt + PUBLIC_LOBBY_TTL_MS - serverNow) / 60_000),
+        )
+      : null;
+  const publicListingStatus =
+    publicListingMinutesLeft !== null ? (
+      <Text style={styles.publicExpiry}>
+        {t('online.publicRoomExpiresIn', {
+          count: players.length,
+          max: session.maxPlayers ?? PUBLIC_LOBBY_MAX_PLAYERS,
+          minutes: publicListingMinutesLeft,
+        })}
+      </Text>
+    ) : null;
+
   return (
     <>
       <Stack.Screen options={screenOptions} />
@@ -609,6 +661,63 @@ export default function LobbyScreen() {
             <View style={styles.joinCodeBlock}>
               <Text style={styles.code}>{formatRoomCodeDisplay(session.id)}</Text>
               <Text style={styles.codeLabel}>{t('online.roomCodeLabel')}</Text>
+              {session.status === 'waiting' && hasBaseWord && isOrganizer ? (
+                <>
+                  <View style={styles.publicExpirySlot}>{publicListingStatus}</View>
+                  <View style={styles.publicSection}>
+                    <SettingSwitch
+                      label={t('online.publicRoom')}
+                      variant="compact"
+                      value={session.isPublic === true}
+                      infoAccessibilityLabel={t('online.publicRoomHintTitle')}
+                      onInfoPress={() => setShowPublicRoomHint(true)}
+                      onChange={(value) => {
+                        if (publicPublish.toggling) {
+                          return;
+                        }
+                        if (!value) {
+                          void publicPublish.togglePublic(false).catch(() => {
+                            setError(t('online.errorPublicRoomFailed'));
+                          });
+                          return;
+                        }
+                        if (!publicPublish.canPublish) {
+                          return;
+                        }
+                        setShowPublicRoomConfirm(true);
+                      }}
+                    />
+                    {!publicPublish.canPublish &&
+                    publicPublish.publishBlockReason &&
+                    publicPublish.publishBlockReason !== 'BASE_WORDS_LOADING' ? (
+                      <Text style={styles.publicHint}>
+                        {t('online.publicRoomNeedsSafeBaseWord')}
+                      </Text>
+                    ) : null}
+                  </View>
+                </>
+              ) : null}
+              {session.status === 'waiting' &&
+              hasBaseWord &&
+              !isOrganizer &&
+              session.isPublic === true ? (
+                <>
+                  <View style={styles.publicExpirySlot}>{publicListingStatus}</View>
+                  <View style={styles.publicSection}>
+                    <View style={styles.publicReadonlyRow}>
+                      <Text style={styles.publicReadonlyLabel}>{t('online.publicRoom')}</Text>
+                      <FeedbackPressable
+                        accessibilityRole="button"
+                        accessibilityLabel={t('online.publicRoomHintTitle')}
+                        onPress={() => setShowPublicRoomHint(true)}
+                        style={styles.publicInfoButton}
+                      >
+                        <InfoIcon size={16} color={colors.accent} />
+                      </FeedbackPressable>
+                    </View>
+                  </View>
+                </>
+              ) : null}
             </View>
             <LobbyQrCode roomCode={session.id} invitedByUid={myUid || undefined} />
           </View>
@@ -637,45 +746,6 @@ export default function LobbyScreen() {
           )}
 
           <Text style={styles.settingsBanner}>{formatLobbySettingsLabel(t, session)}</Text>
-
-          {isOrganizer && session.status === 'waiting' && hasBaseWord ? (
-            <View style={styles.publicSection}>
-              <SettingSwitch
-                label={t('online.publicRoom')}
-                value={session.isPublic === true}
-                onChange={(value) => {
-                  if (publicPublish.toggling) {
-                    return;
-                  }
-                  if (value && !publicPublish.canPublish) {
-                    return;
-                  }
-                  void publicPublish.togglePublic(value).catch(() => {
-                    setError(t('online.errorPublicRoomFailed'));
-                  });
-                }}
-              />
-              {!publicPublish.canPublish &&
-              publicPublish.publishBlockReason &&
-              publicPublish.publishBlockReason !== 'BASE_WORDS_LOADING' ? (
-                <Text style={styles.publicHint}>{t('online.publicRoomNeedsSafeBaseWord')}</Text>
-              ) : publicPublish.canPublish ? (
-                <Text style={styles.publicHint}>{t('online.publicRoomHint')}</Text>
-              ) : null}
-              {session.isPublic && session.publicPublishedAt ? (
-                <Text style={styles.publicExpiry}>
-                  {t('online.publicRoomExpiresIn', {
-                    minutes: Math.max(
-                      0,
-                      Math.ceil(
-                        (session.publicPublishedAt + PUBLIC_LOBBY_TTL_MS - serverNow) / 60_000,
-                      ),
-                    ),
-                  })}
-                </Text>
-              ) : null}
-            </View>
-          ) : null}
         </View>
 
         <Text style={styles.sectionLabel}>
@@ -775,13 +845,18 @@ export default function LobbyScreen() {
                   disabled={
                     !canStart ||
                     starting ||
+                    disableStartForPublicSolo ||
                     shouldDisableLobbyStartForLexicon(lobbyLexiconLoading, Boolean(lobbyLexicon))
                   }
                   onPress={() => {
                     void handleStart();
                   }}
                 />
-                <Text style={styles.startHint}>{t('online.startHint')}</Text>
+                <Text style={styles.startHint}>
+                  {disableStartForPublicSolo
+                    ? t('online.startHintPublicSolo')
+                    : t('online.startHint')}
+                </Text>
               </>
             ) : null}
 
@@ -789,6 +864,30 @@ export default function LobbyScreen() {
           </View>
         ) : null}
       </Screen>
+
+      <CenterDialogModal
+        visible={showPublicRoomHint}
+        title={t('online.publicRoomHintTitle')}
+        body={t('online.publicRoomHint')}
+        primaryLabel={t('online.publicRoomHintClose')}
+        onPrimary={() => setShowPublicRoomHint(false)}
+        onRequestClose={() => setShowPublicRoomHint(false)}
+      />
+      <CenterDialogModal
+        visible={showPublicRoomConfirm}
+        title={t('online.publicRoom')}
+        body={`${t('online.publicRoomHint')}\n\n${t('online.publicRoomConfirmContinue')}`}
+        primaryLabel={t('game.voteYes')}
+        onPrimary={() => {
+          setShowPublicRoomConfirm(false);
+          void publicPublish.togglePublic(true).catch(() => {
+            setError(t('online.errorPublicRoomFailed'));
+          });
+        }}
+        secondaryLabel={t('game.voteNo')}
+        onSecondary={() => setShowPublicRoomConfirm(false)}
+        onRequestClose={() => setShowPublicRoomConfirm(false)}
+      />
     </>
   );
 }
@@ -813,7 +912,7 @@ function createStyles(colors: ThemeColors) {
     },
     joinCard: {
       flexDirection: 'row',
-      alignItems: 'center',
+      alignItems: 'stretch',
       justifyContent: 'space-between',
       backgroundColor: colors.backgroundPrimary,
       borderRadius: radii.md,
@@ -824,6 +923,7 @@ function createStyles(colors: ThemeColors) {
       flex: 1,
       alignItems: 'center',
       gap: spacing.xs,
+      minWidth: 0,
     },
     scrollBody: {
       flex: 1,
@@ -926,19 +1026,42 @@ function createStyles(colors: ThemeColors) {
       padding: spacing.sm,
       textAlign: 'center',
     },
+    publicExpirySlot: {
+      flex: 1,
+      alignSelf: 'stretch',
+      justifyContent: 'flex-end',
+      paddingHorizontal: spacing.sm,
+      minHeight: 0,
+    },
     publicSection: {
+      alignSelf: 'stretch',
       gap: spacing.xs,
+      paddingHorizontal: spacing.sm,
+    },
+    publicReadonlyRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    publicReadonlyLabel: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      fontWeight: '400',
+    },
+    publicInfoButton: {
+      padding: spacing.xs,
     },
     publicHint: {
       fontSize: 12,
       color: colors.textSecondary,
-      textAlign: 'center',
+      textAlign: 'left',
     },
     publicExpiry: {
       fontSize: 12,
       color: colors.accent,
-      textAlign: 'center',
+      textAlign: 'left',
       fontWeight: '500',
+      marginBottom: spacing.xs,
     },
     sectionLabel: {
       fontSize: 14,

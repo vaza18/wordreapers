@@ -1,6 +1,7 @@
 import { StyleSheet, Switch, Text, View } from 'react-native';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
+import { InfoIcon } from '@/components/HeaderIcons';
 import { playButtonFeedback } from '@/lib/feedback/game-feedback';
 import { useSettingsStore } from '@/store/settings-store';
 
@@ -18,6 +19,9 @@ interface SettingSwitchProps {
   onDisabledPress?: () => void;
   /** Smaller secondary styling for inline toggles (e.g. round results). */
   variant?: 'default' | 'compact';
+  /** Optional info affordance next to the label (opens an explanation modal). */
+  onInfoPress?: () => void;
+  infoAccessibilityLabel?: string;
 }
 
 function createStyles(colors: ThemeColors) {
@@ -31,11 +35,19 @@ function createStyles(colors: ThemeColors) {
     textBlock: {
       flex: 1,
       gap: 2,
+      minWidth: 0,
+    },
+    labelRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      flexWrap: 'wrap',
     },
     label: {
       fontSize: 15,
       color: colors.textPrimary,
       fontWeight: '500',
+      flexShrink: 1,
     },
     labelCompact: {
       fontSize: 13,
@@ -45,6 +57,9 @@ function createStyles(colors: ThemeColors) {
     hint: {
       fontSize: 12,
       color: colors.textSecondary,
+    },
+    infoButton: {
+      padding: spacing.xs,
     },
     switchWrap: {
       position: 'relative',
@@ -66,6 +81,8 @@ export function SettingSwitch({
   disabled = false,
   onDisabledPress,
   variant = 'default',
+  onInfoPress,
+  infoAccessibilityLabel,
 }: SettingSwitchProps) {
   const buttonFeedback = useSettingsStore((state) => state.buttonFeedback);
   const { colors } = useTheme();
@@ -107,9 +124,21 @@ export function SettingSwitch({
   const row = (
     <View style={styles.row}>
       <View style={styles.textBlock}>
-        <Text style={[styles.label, variant === 'compact' ? styles.labelCompact : null]}>
-          {label}
-        </Text>
+        <View style={styles.labelRow}>
+          <Text style={[styles.label, variant === 'compact' ? styles.labelCompact : null]}>
+            {label}
+          </Text>
+          {onInfoPress ? (
+            <FeedbackPressable
+              accessibilityRole="button"
+              accessibilityLabel={infoAccessibilityLabel ?? label}
+              onPress={onInfoPress}
+              style={styles.infoButton}
+            >
+              <InfoIcon size={16} color={colors.accent} />
+            </FeedbackPressable>
+          ) : null}
+        </View>
         {hint ? <Text style={styles.hint}>{hint}</Text> : null}
       </View>
       {switchControl}
