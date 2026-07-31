@@ -29,6 +29,8 @@ The `Legal pages (GitHub Pages)` workflow:
 - does not run for direct pushes to `dev`;
 - can be run manually with `workflow_dispatch` (deployment occurs only when run from `main`).
 
+Community / help pages on the same site are built from root docs markdown (not locale legal folders): [`docs/wordreapers_about.md`](../wordreapers_about.md) → `about.html`, [`docs/wordreapers_contribute.md`](../wordreapers_contribute.md) → `contribute.html`.
+
 ## App integration (future)
 
 The in-app “Legal” screen should load documents for the active locale, e.g. `docs/legal/uk-uk/privacy_policy.md`, with fallback to a default locale if a translation is missing.
