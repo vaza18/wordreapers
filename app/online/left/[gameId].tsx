@@ -37,6 +37,7 @@ import {
 import { markPendingRoundArchive } from '@/lib/online/session/pending-round-archive';
 import { maskResultsForEarlyExit } from '@/lib/online/mask-results-for-viewer';
 import { buildOnlineResultsView } from '@/lib/online/online-results-data';
+import { sessionBaseWordDisplay } from '@/lib/online/session-base-word-display';
 import { onlineResultsRoute } from '@/lib/online/online-results-route';
 import {
   isLiveSessionForLeftRound,
@@ -334,7 +335,7 @@ export default function OnlineLeftRoundScreen() {
     }
     const round = session.baseWordRound ?? 0;
     void (async () => {
-      const sent = await notifyRoundFinishedOnce(gameId, round, session.baseWord);
+      const sent = await notifyRoundFinishedOnce(gameId, round, sessionBaseWordDisplay(session));
       if (sent || (await isRoundFinishedNotified(gameId, round))) {
         finishedNotifyRef.current = true;
       }

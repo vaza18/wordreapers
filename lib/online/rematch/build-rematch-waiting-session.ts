@@ -43,6 +43,7 @@ export function buildRematchWaitingSession(source: GameSession, actorUid: string
 
   const session: GameSession = {
     baseWord: '',
+    baseWordDisplay: '',
     baseWordChosenBy: null,
     status: 'waiting',
     settings: resolveGameSessionSettings(source.settings, Object.keys(source.players).length),

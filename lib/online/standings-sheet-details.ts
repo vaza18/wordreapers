@@ -1,4 +1,4 @@
-import { toDisplayUpper } from '../dictionary/normalize.js';
+import { sessionBaseWordDisplay } from './session-base-word-display.js';
 import { formatRoomCodeDisplay } from '../firebase/format-room-code.js';
 import { resolveGameSessionSettingsForSession } from '../firebase/session-settings.js';
 import type { GameSession } from '../firebase/types.js';
@@ -59,7 +59,7 @@ export function buildStandingsSheetDetails(
   return {
     roomCodeRaw,
     roomCodeDisplay: formatRoomCodeDisplay(roomCodeRaw),
-    baseWordDisplay: toDisplayUpper(input.session.baseWord ?? ''),
+    baseWordDisplay: sessionBaseWordDisplay(input.session),
     /** 1-based human round (RTDB `baseWordRound` is 0-based). */
     round: (input.session.baseWordRound ?? 0) + 1,
     distinctWordCount,

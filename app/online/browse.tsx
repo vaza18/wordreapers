@@ -36,6 +36,7 @@ import { resolvePostJoinRoute } from '@/lib/online/post-join-route';
 import { continueWithProfileOrRedirect } from '@/lib/online/require-profile';
 import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
 import { UK_LOCALE } from '@/lib/dictionary/locale';
+import { toDisplayUpper } from '@/lib/dictionary/normalize';
 import { playerLanguageForBrowse } from '@/lib/online/public-lobby/content-safety';
 import { useFirebaseStore } from '@/store/firebase-store';
 import { useProfileStore } from '@/store/profile-store';
@@ -71,7 +72,7 @@ const BrowseLobbyRow = memo(function BrowseLobbyRow({
       }}
       style={[styles.card, full && styles.cardDisabled]}
     >
-      <Text style={styles.cardWord}>{row.baseWord.toUpperCase()}</Text>
+      <Text style={styles.cardWord}>{toDisplayUpper(row.baseWord)}</Text>
       <Text style={styles.cardMeta}>
         {full
           ? t('online.browseRoomFull', {

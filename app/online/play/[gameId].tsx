@@ -34,6 +34,7 @@ import { useReconcileOpenVotesOnPresence } from '@/hooks/useReconcileOpenVotesOn
 import { useTrainingMilestone } from '@/hooks/useTrainingMilestone';
 import { toDisplayUpper } from '@/lib/dictionary/normalize';
 import { getCachedRoundPlayableLexicon } from '@/lib/dictionary/round-playable-lexicon-cache';
+import { sessionBaseWordDisplay } from '@/lib/online/session-base-word-display';
 import { playWordAcceptedFeedback } from '@/lib/feedback/game-feedback';
 import { ensureAnonymousAuth } from '@/lib/firebase/auth';
 import { getServerNow } from '@/lib/firebase/server-clock';
@@ -826,7 +827,11 @@ export default function OnlinePlayScreen() {
   }, [deferredWordMaps, roundEnded, roundEndSessionSnapshot, sessionCore]);
 
   const baseWord = displaySession?.baseWord ?? '';
-  const letterKeys = useMemo(() => buildLetterKeys(baseWord), [baseWord]);
+  const baseWordDisplay = useMemo(
+    () => (displaySession ? sessionBaseWordDisplay(displaySession) : ''),
+    [displaySession],
+  );
+  const letterKeys = useMemo(() => buildLetterKeys(baseWordDisplay), [baseWordDisplay]);
   const cachedLexiconMaxCount = useMemo(() => {
     if (!baseWord) {
       return null;

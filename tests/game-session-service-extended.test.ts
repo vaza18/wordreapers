@@ -254,6 +254,7 @@ describe('game-session-service extended', () => {
 
     await updateGameSessionSetup('ABCDE', 'org-1', {
       baseWord: 'портрет',
+      baseWordDisplay: 'ПОРТРЕТ',
       settings: DEFAULT_SESSION_SETTINGS,
     });
 
@@ -261,6 +262,7 @@ describe('game-session-service extended', () => {
       expect.objectContaining({ path: 'game_sessions/ABCDE' }),
       expect.objectContaining({
         baseWord: 'портрет',
+        baseWordDisplay: 'ПОРТРЕТ',
         baseWordChosenBy: 'org-1',
       }),
     );
@@ -317,6 +319,7 @@ describe('game-session-service extended', () => {
     await expect(
       updateGameSessionSetup('ABCDE', 'org-1', {
         baseWord: 'портрет',
+        baseWordDisplay: 'ПОРТРЕТ',
         settings: DEFAULT_SESSION_SETTINGS,
       }),
     ).rejects.toThrow('NOT_BASE_WORD_PICKER');
@@ -343,6 +346,7 @@ describe('game-session-service extended', () => {
     await expect(
       updateGameSessionSetup('ABCDE', 'org-1', {
         baseWord: 'портрет',
+        baseWordDisplay: 'ПОРТРЕТ',
         settings: DEFAULT_SESSION_SETTINGS,
       }),
     ).rejects.toThrow('NOT_BASE_WORD_PICKER');
@@ -361,7 +365,7 @@ describe('game-session-service extended', () => {
 
     expect(updateMock).toHaveBeenCalledWith(
       expect.objectContaining({ path: 'game_sessions/ABCDE' }),
-      { baseWord: 'портрет', baseWordChosenBy: 'org-1' },
+      { baseWord: 'портрет', baseWordDisplay: 'портрет', baseWordChosenBy: 'org-1' },
     );
   });
 

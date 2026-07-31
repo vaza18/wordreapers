@@ -1,4 +1,4 @@
-import { toDisplayUpper } from '../dictionary/normalize.js';
+import { sessionBaseWordDisplay } from './session-base-word-display.js';
 import type { StoredPlayerWord } from '../firebase/player-words-service.js';
 import { resolveGameSessionSettingsForSession } from '../firebase/session-settings.js';
 import type { GameSession } from '../firebase/types.js';
@@ -83,7 +83,7 @@ export function buildOnlineResultsView(
 
   return {
     headline,
-    baseWordDisplay: toDisplayUpper(session.baseWord),
+    baseWordDisplay: sessionBaseWordDisplay(session),
     totalDistinctWords: globalWords.length,
     globalWords,
     playerRankGroups,

@@ -8,6 +8,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — Apostrophe missing from lobby base word and online letter keys
+
+- **Symptom:** Base words with apostrophes (e.g. `ВІЦЕПРЕМ'ЄР-МІНІСТЕРКА`) showed without `'` in the waiting lobby; online round blue letter keys omitted the apostrophe button. Training keyboard was correct; inviting others from training also dropped the apostrophe key.
+- **Cause:** Online RTDB only stored `baseWord` via `normalizeUk(...)` (apostrophes stripped). Lobby/play built title and `buildLetterKeys` from that string. Solo/training already had a separate in-memory `baseWordDisplay`.
+- **Fix:** Same contract as accepted words: keep `baseWord` normalized; persist `baseWordDisplay` for UI (lobby, keyboard, results, public index).
+- **Test:** `tests/session-base-word-display.test.ts`, `tests/publish-room.test.ts`
+- **Area:** `lib/online/session-base-word-display.ts`, `lib/online/publish-room.ts`, `lib/firebase/types.ts`, setup/pick-word/lobby/play
+
 ### 2026-07 — Lobby auto x2 stayed on after voluntary leave below 3
 
 - **Symptom:** Waiting lobby showed «бонус x2 увімк.» (and started rounds with x2) after a guest left and only 2 players remained; with `auto` and &lt;3 players the banner also showed «бонус x2 вимк.» instead of omitting the bonus segment.

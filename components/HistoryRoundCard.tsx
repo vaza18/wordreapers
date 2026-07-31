@@ -4,7 +4,7 @@ import { StyleSheet, Text } from 'react-native';
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
-import { toDisplayUpper } from '@/lib/dictionary/normalize';
+import { sessionBaseWordDisplay } from '@/lib/online/session-base-word-display';
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import { formatResultsHeadline } from '@/lib/game/results-headline';
 import { createOnlineResultsDirectory } from '@/lib/game/results-directory';
@@ -65,7 +65,7 @@ export function HistoryRoundCard({ archive, myUid, onPress }: HistoryRoundCardPr
     >
       <Text style={styles.cardDate}>{formatArchiveSavedAt(archive.savedAt)}</Text>
       <Text style={[styles.cardBaseWord, isSolo ? styles.cardBaseWordSolo : null]}>
-        {toDisplayUpper(archive.session.baseWord)}
+        {sessionBaseWordDisplay(archive.session)}
       </Text>
       <Text
         style={[styles.cardHeadline, isSolo ? styles.cardHeadlineSolo : null]}

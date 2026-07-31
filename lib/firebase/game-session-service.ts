@@ -275,6 +275,7 @@ async function reconcileLobbyPickerState(gameId: string): Promise<void> {
 
   if (shouldClearLobbyBaseWordForPicker(session)) {
     updates.baseWord = '';
+    updates.baseWordDisplay = '';
     updates.baseWordChosenBy = null;
   }
 
@@ -1137,6 +1138,8 @@ export async function updateGameSessionSetup(
   actorUid: string,
   payload: {
     baseWord?: string;
+    /** Surface form written with `baseWord` (like player_words display). */
+    baseWordDisplay?: string;
     settings: GameSessionSettings;
   },
 ): Promise<void> {
@@ -1158,6 +1161,7 @@ export async function updateGameSessionSetup(
   const updates: {
     settings: GameSessionSettings;
     baseWord?: string;
+    baseWordDisplay?: string;
     baseWordChosenBy?: string;
   } = {
     settings: applyPublicContentSafety(payload.settings, session),
@@ -1167,6 +1171,10 @@ export async function updateGameSessionSetup(
       throw new Error('NOT_BASE_WORD_PICKER');
     }
     if (!payload.baseWord || payload.baseWord.length < 2) {
+      throw new Error('BASE_WORD_MISSING');
+    }
+    const display = payload.baseWordDisplay?.trim();
+    if (!display) {
       throw new Error('BASE_WORD_MISSING');
     }
     await assertSessionBaseWordAllowed(payload.baseWord, session);
@@ -1183,6 +1191,7 @@ export async function updateGameSessionSetup(
       throw new Error('NOT_BASE_WORD_PICKER');
     }
     updates.baseWord = payload.baseWord;
+    updates.baseWordDisplay = display;
     updates.baseWordChosenBy = actorUid;
   }
 
@@ -1228,7 +1237,11 @@ export async function updateGameSessionBaseWord(
   }
   await assertSessionBaseWordAllowed(baseWord, session);
 
-  await update(sessionRef(normalized), { baseWord, baseWordChosenBy: uid });
+  await update(sessionRef(normalized), {
+    baseWord,
+    baseWordDisplay: baseWord,
+    baseWordChosenBy: uid,
+  });
   devLogAction(`picked base word "${baseWord}"`, {
     room: normalized,
     round: session.baseWordRound ?? 0,
@@ -1553,6 +1566,7 @@ function buildRematchWaitingFollowUpPatch(
     ...finishedSession,
     status: 'waiting',
     baseWord: '',
+    baseWordDisplay: '',
     baseWordChosenBy: null,
     baseWordRound: nextBaseWordRound,
     players,
@@ -1565,6 +1579,7 @@ function buildRematchWaitingFollowUpPatch(
     roundTimerBudgetSeconds: null,
     roundPlayedSeconds: null,
     baseWord: '',
+    baseWordDisplay: '',
     baseWordChosenBy: null,
     baseWordRound: nextBaseWordRound,
     baseWordPickerUid,

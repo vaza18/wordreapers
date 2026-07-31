@@ -113,6 +113,44 @@ describe('publish-room', () => {
     );
   });
 
+  it('publishes waiting and playing sessions with normalized baseWord and display form', async () => {
+    const apostropheSetup = {
+      ...setup,
+      baseWord: 'віцепремєр-міністерка',
+      baseWordDisplay: "ВІЦЕПРЕМ'ЄР-МІНІСТЕРКА",
+    };
+
+    await publishWaitingRoom({
+      draft,
+      setup: apostropheSetup,
+      organizerUid: 'org-1',
+    });
+    const waitingSession = runRtdbTransaction.mock.calls[0]?.[1]?.(null) as {
+      baseWord: string;
+      baseWordDisplay: string;
+    };
+    expect(waitingSession.baseWord).toBe('віцепремєр-міністерка');
+    expect(waitingSession.baseWordDisplay).toBe("ВІЦЕПРЕМ'ЄР-МІНІСТЕРКА");
+
+    runRtdbTransaction.mockClear();
+    await publishPlayingSoloRound({
+      draft,
+      setup: apostropheSetup,
+      organizerUid: 'org-1',
+      words: [],
+      score: 0,
+      wordCount: 0,
+      remainingMs: 60_000,
+      paused: false,
+    });
+    const playingSession = runRtdbTransaction.mock.calls[0]?.[1]?.(null) as {
+      baseWord: string;
+      baseWordDisplay: string;
+    };
+    expect(playingSession.baseWord).toBe('віцепремєр-міністерка');
+    expect(playingSession.baseWordDisplay).toBe("ВІЦЕПРЕМ'ЄР-МІНІСТЕРКА");
+  });
+
   it('publishes an in-progress solo round with words and timer fields', async () => {
     const gameId = await publishPlayingSoloRound({
       draft,

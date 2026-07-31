@@ -24,6 +24,7 @@ import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { formatRoomCodeDisplay } from '@/lib/firebase/format-room-code';
+import { sessionBaseWordDisplay } from '@/lib/online/session-base-word-display';
 import { formatLobbyBaseWordMetaLine } from '@/lib/online/format-lobby-base-word-meta';
 import {
   loadBundledDictionary,
@@ -617,7 +618,7 @@ export default function LobbyScreen() {
           </View>
         ) : null}
         <Text style={styles.baseWordLabel}>{t('game.baseWord')}</Text>
-        <Text style={styles.baseWordTitle}>{session.baseWord.toUpperCase()}</Text>
+        <Text style={styles.baseWordTitle}>{sessionBaseWordDisplay(session)}</Text>
         {baseWordMetaLine}
       </View>
     ) : null;

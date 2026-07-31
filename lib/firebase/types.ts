@@ -61,7 +61,10 @@ export interface GameSessionPlayer {
  * Top-level game session document under `game_sessions/{gameId}`.
  */
 export interface GameSession {
+  /** Normalized base word (apostrophes stripped) — identity for lexicon / validation. */
   baseWord: string;
+  /** Surface form for lobby / keyboard / results (like `player_words.*.display`). */
+  baseWordDisplay?: string;
   status: GameSessionStatus;
   settings: GameSessionSettings;
   timerEndsAt: number | null;

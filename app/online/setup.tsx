@@ -241,7 +241,7 @@ export default function OnlineSetupScreen() {
 
   const buildSetup = (): LocalRoomSetup => ({
     baseWord: normalizeUk(baseWordInput),
-    baseWordDisplay: baseWordInput.trim(),
+    baseWordDisplay: dictionary?.lookupDisplayUpper(baseWordInput) ?? toDisplayUpper(baseWordInput),
     durationMinutes,
     uniqueBonusMode: uniqueBonusMode as UniqueBonusMode,
     allowProperNouns,
@@ -296,6 +296,8 @@ export default function OnlineSetupScreen() {
     try {
       await updateGameSessionSetup(gameId, organizerUid, {
         baseWord: normalizeUk(baseWordInput),
+        baseWordDisplay:
+          dictionary?.lookupDisplayUpper(baseWordInput) ?? toDisplayUpper(baseWordInput),
         settings: gameSessionSettingsFromSetup(
           durationMinutes,
           uniqueBonusMode as UniqueBonusMode,

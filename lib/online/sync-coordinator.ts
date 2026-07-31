@@ -25,6 +25,7 @@ import { allSessionPlayersOffline } from './presence/session-offline.js';
 import { shouldOrganizerAbandonWaitingRoom } from './should-organizer-abandon-waiting-room.js';
 import { shouldSyncKeepRematchWaitingRoom } from './should-sync-keep-rematch-waiting-room.js';
 import { notifyRoundFinishedOnce } from './round-finished-notification-once.js';
+import { sessionBaseWordDisplay } from './session-base-word-display.js';
 import {
   buildSyncWorkQueue,
   type SyncCoordinatorContext,
@@ -104,7 +105,11 @@ async function syncWorkItem(item: SyncWorkItem, context: SyncCoordinatorContext)
       const existing = await getFinishedRoundArchive(item.gameId, item.baseWordRound);
       if (existing) {
         await clearPendingRoundArchive(item.gameId, item.baseWordRound);
-        void notifyRoundFinishedOnce(item.gameId, item.baseWordRound, existing.session.baseWord);
+        void notifyRoundFinishedOnce(
+          item.gameId,
+          item.baseWordRound,
+          sessionBaseWordDisplay(existing.session),
+        );
       }
     }
     return;
@@ -133,7 +138,7 @@ async function syncWorkItem(item: SyncWorkItem, context: SyncCoordinatorContext)
   }
 
   if (item.fromPending) {
-    void notifyRoundFinishedOnce(item.gameId, item.baseWordRound, session.baseWord);
+    void notifyRoundFinishedOnce(item.gameId, item.baseWordRound, sessionBaseWordDisplay(session));
   }
 
   if (uid && session.players[uid]) {
