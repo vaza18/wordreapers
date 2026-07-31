@@ -7,7 +7,7 @@ import {
 
 import { applyPublicContentSafety } from '../online/public-lobby/content-safety.js';
 import { assertUniqueBonusRoundLatch } from '../online/invariants.js';
-import { waitingLobbyOptInUids } from '../online/presence/live-round-membership.js';
+import { isLobbyVisiblePlayer } from '../online/rematch/rematch-waiting-lobby.js';
 
 import type { GameSession, GameSessionSettings } from './types.js';
 
@@ -38,20 +38,43 @@ export function playerCountForSession(session: Pick<GameSession, 'players'>): nu
   return Object.keys(session.players ?? {}).length;
 }
 
-/** Player count for auto x2: full roster in round 1; live-round roster in rematch rounds. */
+/** Lobby-visible waiting roster — same filter as the lobby player list. */
+export function lobbyVisiblePlayerCount(
+  session: Pick<GameSession, 'players' | 'status' | 'baseWordRound'> &
+    Partial<
+      Pick<
+        GameSession,
+        'resultsExitedBy' | 'baseWord' | 'baseWordChosenBy' | 'baseWordPickerUid' | 'organizerId'
+      >
+    >,
+): number {
+  return Object.keys(session.players ?? {}).filter((uid) =>
+    isLobbyVisiblePlayer(session as GameSession, uid),
+  ).length;
+}
+
+/** Player count for auto x2: lobby-visible roster while waiting; live-round roster while playing. */
 export function playerCountForUniqueBonus(
   session: Pick<GameSession, 'players' | 'baseWordRound' | 'liveRoundPlayerUids'> & {
     status?: GameSession['status'];
-  },
+  } & Partial<
+      Pick<
+        GameSession,
+        'resultsExitedBy' | 'baseWord' | 'baseWordChosenBy' | 'baseWordPickerUid' | 'organizerId'
+      >
+    >,
 ): number {
   const round = session.baseWordRound ?? 0;
-  if (round === 0) {
-    return playerCountForSession(session);
-  }
   if (session.status === 'playing' || session.status === 'finished') {
+    if (round === 0) {
+      return playerCountForSession(session);
+    }
     return session.liveRoundPlayerUids?.length ?? 0;
   }
-  return waitingLobbyOptInUids(session).length;
+  return lobbyVisiblePlayerCount({
+    ...session,
+    status: session.status ?? 'waiting',
+  });
 }
 
 /**

@@ -645,8 +645,6 @@ export default function LobbyScreen() {
     publicListingMinutesLeft !== null ? (
       <Text style={styles.publicExpiry}>
         {t('online.publicRoomExpiresIn', {
-          count: players.length,
-          max: session.maxPlayers ?? PUBLIC_LOBBY_MAX_PLAYERS,
           minutes: publicListingMinutesLeft,
         })}
       </Text>
@@ -749,7 +747,12 @@ export default function LobbyScreen() {
         </View>
 
         <Text style={styles.sectionLabel}>
-          {t('online.playersCount', { count: players.length })}
+          {session.isPublic === true
+            ? t('online.playersCountPublic', {
+                count: players.length,
+                max: session.maxPlayers ?? PUBLIC_LOBBY_MAX_PLAYERS,
+              })
+            : t('online.playersCount', { count: players.length })}
         </Text>
 
         <ScrollView

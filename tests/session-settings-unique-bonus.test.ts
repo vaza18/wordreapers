@@ -5,6 +5,7 @@ import {
   uniqueBonusLatchSettingsPatch,
   playerCountForUniqueBonus,
 } from '../lib/firebase/session-settings.js';
+import { resolveRoundStartSettings } from '../lib/online/start-game-session-write.js';
 import type { GameSession } from '../lib/firebase/types.js';
 
 function baseSession(overrides: Partial<GameSession> = {}): GameSession {
@@ -42,6 +43,38 @@ describe('uniqueBonusEnabledForActiveRound', () => {
         },
       }),
     ).toBe(true);
+  });
+
+  it('disables in waiting lobby when visible roster drops below 3 after a voluntary leave', () => {
+    expect(
+      uniqueBonusEnabledForActiveRound({
+        status: 'waiting',
+        settings: {
+          ...baseSession().settings!,
+          uniqueBonusEnabled: true,
+          uniqueBonusMode: 'auto',
+        },
+        players: {
+          org: { name: 'Org', wordCount: 0, score: 0, online: true },
+          p1: { name: 'One', wordCount: 0, score: 0, online: true },
+          left: { name: 'Left', wordCount: 0, score: 0, online: false, hasLeft: true },
+        },
+      }),
+    ).toBe(false);
+  });
+
+  it('counts only lobby-visible players for waiting unique-bonus threshold', () => {
+    expect(
+      playerCountForUniqueBonus({
+        status: 'waiting',
+        baseWordRound: 0,
+        players: {
+          org: { name: 'Org', wordCount: 0, score: 0, online: true },
+          p1: { name: 'One', wordCount: 0, score: 0, online: true },
+          left: { name: 'Left', wordCount: 0, score: 0, online: false, hasLeft: true },
+        },
+      }),
+    ).toBe(2);
   });
 
   it('returns latch patch when third player joins during playing', () => {
@@ -102,5 +135,27 @@ describe('uniqueBonusEnabledForActiveRound', () => {
     });
     expect(playerCountForUniqueBonus(session)).toBe(3);
     expect(uniqueBonusLatchSettingsPatch(session)?.uniqueBonusEnabled).toBe(true);
+  });
+});
+
+describe('resolveRoundStartSettings unique bonus', () => {
+  it('disables auto x2 at start when visible waiting roster is below 3 after leave', () => {
+    const session = baseSession({
+      status: 'waiting',
+      settings: {
+        durationSeconds: 600,
+        uniqueBonusEnabled: true,
+        uniqueBonusMode: 'auto',
+        language: 'uk-uk',
+        allowProperNouns: false,
+        allowSlang: false,
+      },
+      players: {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        p1: { name: 'One', wordCount: 0, score: 0, online: true },
+        left: { name: 'Left', wordCount: 0, score: 0, online: false, hasLeft: true },
+      },
+    });
+    expect(resolveRoundStartSettings(session).uniqueBonusEnabled).toBe(false);
   });
 });

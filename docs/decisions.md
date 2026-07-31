@@ -43,10 +43,10 @@ Format: **Decision → Alternatives → Why rejected → Date**
 
 ## ADR-006: Auto x2 latches on at 3+ live-round players, never off mid-round
 
-- **Decision:** In `auto` mode, `uniqueBonusEnabled` turns on when the **current round's live roster** reaches 3+ (`liveRoundPlayerUids` during `playing`/`finished` rematch rounds; full session roster in round 1) and scores recompute. Once on for a round (`settings.uniqueBonusEnabled === true` in RTDB or latched via join), it **never turns off** during that round even if live roster drops below 3. `off` mode never enables x2 or score recompute for bonus during the round. Each new round resolves fresh from the live roster at round start.
-- **Alternatives considered:** Freeze bonus strictly at round-start roster (never enable mid-round); recompute both on and off when roster crosses threshold.
-- **Why rejected:** Product spec requires x2 when 3+ join at any stage; disabling mid-round after someone leaves would unfairly strip points already earned under x2 rules.
-- **Date:** 2026-06 (updated 2026-07) — `lib/firebase/session-settings.ts`, `uniqueBonusEnabledForActiveRound()`
+- **Decision:** In `auto` mode, `uniqueBonusEnabled` turns on when the **current round's live roster** reaches 3+ (`liveRoundPlayerUids` during `playing`/`finished` rematch rounds; **lobby-visible** roster while `waiting` — same filter as the lobby player list / `isLobbyVisiblePlayer`, so voluntary `hasLeft` does not keep x2 on) and scores recompute. Once on for a round (`settings.uniqueBonusEnabled === true` in RTDB or latched via join), it **never turns off** during that round even if live roster drops below 3. While `waiting`, auto x2 **does** turn off again when lobby-visible count drops below 3. `off` mode never enables x2 or score recompute for bonus during the round. Each new round resolves fresh from the waiting/live roster at round start. Lobby settings banner omits the «бонус x2…» segment when mode is `auto` and visible count is below 3.
+- **Alternatives considered:** Freeze bonus strictly at round-start roster (never enable mid-round); recompute both on and off when roster crosses threshold; delete `players/{uid}` on lobby leave so counts shrink naturally.
+- **Why rejected:** Product spec requires x2 when 3+ join at any stage; disabling mid-round after someone leaves would unfairly strip points already earned under x2 rules. Deleting roster nodes on leave breaks rematch sticky base word, soft-rejoin, and mid-round standings — soft `hasLeft` stays; waiting x2 must follow lobby visibility instead.
+- **Date:** 2026-06 (updated 2026-07, 2026-07 lobby visibility) — `lib/firebase/session-settings.ts`, `uniqueBonusEnabledForActiveRound()`
 
 ## ADR-007: Expo SDK 55 + AGP 8.12 optimized resource shrinking
 
