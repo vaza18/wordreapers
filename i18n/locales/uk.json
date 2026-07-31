@@ -81,6 +81,7 @@
     "roomCodeLabel": "код кімнати",
     "qrJoinLabel": "QR для приєднання",
     "lobbySettingsSummary": "{{minutes}} хв • бонус x2 {{uniqueBonus}} • {{proper}} • {{slang}}",
+    "lobbySettingsSummaryNoBonus": "{{minutes}} хв • {{proper}} • {{slang}}",
     "lobbyUniqueBonusOn": "увімк.",
     "lobbyUniqueBonusOff": "вимк.",
     "lobbyProperOn": "власні назви",

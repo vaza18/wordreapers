@@ -8,6 +8,14 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-07 — Lobby auto x2 stayed on after voluntary leave below 3
+
+- **Symptom:** Waiting lobby showed «бонус x2 увімк.» (and started rounds with x2) after a guest left and only 2 players remained; with `auto` and &lt;3 players the banner also showed «бонус x2 вимк.» instead of omitting the bonus segment.
+- **Cause:** Round-0 `playerCountForUniqueBonus` / `resolveRoundStartSettings` counted all `players` keys, including voluntary `hasLeft` soft-leaves that the lobby list already hides via `isLobbyVisiblePlayer`.
+- **Fix:** Waiting auto x2 uses lobby-visible roster count; mid-round latch unchanged. Lobby settings banner omits «бонус x2…» when mode is `auto` and bonus is off.
+- **Test:** `tests/session-settings-unique-bonus.test.ts`, `tests/lobby-settings-label.test.ts`
+- **Area:** `lib/firebase/session-settings.ts`, `lib/online/start-game-session-write.ts`, `lib/online/lobby-settings-label.ts`
+
 ### 2026-07 — Public solo lobby: Start disabled; TTL auto-unpublish
 
 - **Symptom:** Organizer alone in a public waiting room could still press «Почати гру»; after browse TTL (~0 хв) the room stayed `isPublic` while browse already hid it.

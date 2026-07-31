@@ -1,10 +1,10 @@
 import { currentBaseWordPickerUid } from './base-word-picker.js';
-import {
-  liveRoundPlayerUidsForRoundStart,
-  waitingLobbyOptInUids,
-} from './presence/live-round-membership.js';
+import { liveRoundPlayerUidsForRoundStart } from './presence/live-round-membership.js';
 import { buildPlayersPatchForRoundStart } from './presence/players-patch-for-round-start.js';
-import { resolveGameSessionSettings } from '../firebase/session-settings.js';
+import {
+  playerCountForUniqueBonus,
+  resolveGameSessionSettings,
+} from '../firebase/session-settings.js';
 import type { GameSession } from '../firebase/types.js';
 import { gameSessionPath } from '../firebase/paths.js';
 
@@ -62,9 +62,5 @@ export function buildRoundStartWritePaths(params: RoundStartWriteParams): Record
 export function resolveRoundStartSettings(
   session: GameSession,
 ): ReturnType<typeof resolveGameSessionSettings> {
-  const playerCount =
-    (session.baseWordRound ?? 0) > 0
-      ? waitingLobbyOptInUids(session).length
-      : Object.keys(session.players).length;
-  return resolveGameSessionSettings(session.settings, playerCount);
+  return resolveGameSessionSettings(session.settings, playerCountForUniqueBonus(session));
 }
