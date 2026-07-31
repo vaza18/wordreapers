@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 
 import { GENERATED_LEGAL_PAGES_DIR } from '../lib/assets/generated-paths.js';
+import { markdownImageLineToHtml } from '../lib/legal/markdown-image-line.js';
 import { markdownHeadingSlug } from '../lib/legal/markdown-links.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -16,6 +17,7 @@ const appleTouchIconFileName = 'apple-touch-icon.png';
 const storeBadgeSources = [
   { source: 'assets/store-badges/google-play-uk.svg', fileName: 'google-play-uk.svg' },
   { source: 'assets/store-badges/app-store-uk.svg', fileName: 'app-store-uk.svg' },
+  { source: 'assets/store-badges/monobank-jar-qr.jpg', fileName: 'monobank-jar-qr.jpg' },
 ] as const;
 
 const STORE_LINKS = [
@@ -36,6 +38,7 @@ const STORE_LINKS = [
 const SITE_LINKS = [
   { href: 'index.html', label: 'Головна' },
   { href: 'about.html', label: 'Про гру та правила' },
+  { href: 'contribute.html', label: 'Допомогти проєкту' },
   { href: 'ai-attestation.html', label: 'Заява про ШІ' },
   { href: 'privacy.html', label: 'Конфіденційність' },
   { href: 'terms.html', label: 'Умови' },
@@ -56,6 +59,11 @@ const pages: Array<{ slug: string; title: string; source: string }> = [
     slug: 'about',
     title: 'Про гру та правила — Wordreapers',
     source: 'docs/wordreapers_about.md',
+  },
+  {
+    slug: 'contribute',
+    title: 'Допомогти проєкту — Wordreapers',
+    source: 'docs/wordreapers_contribute.md',
   },
   {
     slug: 'ai-attestation',
@@ -86,6 +94,8 @@ const STYLES = `
   blockquote { border-left: 3px solid #2d4a3e; margin-left: 0; padding-left: 1rem; color: #444; }
   code { background: #f0eeea; padding: 0.1em 0.3em; border-radius: 3px; }
   hr { border: none; border-top: 1px solid #ddd; margin: 1.5rem 0; }
+  .content-image { text-align: center; margin: 1.25rem 0; }
+  main img { max-width: min(16rem, 100%); height: auto; }
 `;
 
 const HTML_LINK_REWRITES: Record<string, string> = {
@@ -192,7 +202,12 @@ function markdownToHtml(md: string): string {
     } else if (line.trim() === '') {
       out.push('');
     } else {
-      out.push(`<p>${inline(line)}</p>`);
+      const imageHtml = markdownImageLineToHtml(line);
+      if (imageHtml) {
+        out.push(imageHtml);
+      } else {
+        out.push(`<p>${inline(line)}</p>`);
+      }
     }
   }
   if (inTable) {
@@ -289,6 +304,7 @@ const indexBody = `
   ${renderStoreBadges()}
   <ul>
     <li><a href="about.html">Про гру та правила</a></li>
+    <li><a href="contribute.html">Допомогти проєкту</a></li>
     <li><a href="ai-attestation.html">Заява про використання ШІ та відповідальність</a></li>
     <li><a href="privacy.html">Політика конфіденційності</a></li>
     <li><a href="terms.html">Умови використання</a></li>
