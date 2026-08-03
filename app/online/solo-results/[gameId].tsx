@@ -22,7 +22,6 @@ import {
   trainingWordsRequired,
 } from '@/lib/onboarding/training-milestone';
 import {
-  buildSoloFinishedArchiveWords,
   buildSoloFinishedSession,
   saveSoloFinishedRoundArchive,
 } from '@/lib/online/solo-round-archive';
@@ -143,8 +142,7 @@ export default function OrganizerSoloResultsScreen() {
       finishedAt ?? undefined,
       roundPlayedSeconds ?? undefined,
     );
-    const soloWordsArchive = buildSoloFinishedArchiveWords(words);
-    const roundDurationSeconds = computeRoundDurationSeconds(soloSession, soloWordsArchive);
+    const roundDurationSeconds = computeRoundDurationSeconds(soloSession);
     const globalWords = buildGlobalResultWords({
       wordsByPlayer: wordsMap,
       displaysByPlayer: displaysMap,

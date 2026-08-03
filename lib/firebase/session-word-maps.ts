@@ -4,12 +4,19 @@ export type { SessionWordMaps } from './types.js';
 
 export type GameSessionWithId = GameSession & { id: string };
 
-/** Count players who submitted a normalized word. */
+/** Count players who submitted a normalized word (`true` leaves only). */
 export function globalWordCount(
   wordPlayers: SessionWordMaps['wordPlayers'] | undefined,
   normalized: string,
 ): number {
-  return Object.keys(wordPlayers?.[normalized] ?? {}).length;
+  const playersOnWord = wordPlayers?.[normalized] ?? {};
+  let count = 0;
+  for (const onWord of Object.values(playersOnWord)) {
+    if (onWord === true) {
+      count += 1;
+    }
+  }
+  return count;
 }
 
 /** Remove merged word-map fields before writing core RTDB session nodes. */

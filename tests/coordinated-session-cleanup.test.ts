@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const markPlayerOffline = vi.fn();
 const markResultsExited = vi.fn();
+const getFinishedRoundArchive = vi.fn();
 const saveFinishedRoundArchive = vi.fn();
 const markFinishedArchiveAckSent = vi.fn();
 
@@ -14,6 +15,7 @@ vi.mock('../lib/firebase/results-coordination-service.js', () => ({
 }));
 
 vi.mock('../lib/online/session/online-session-archive.js', () => ({
+  getFinishedRoundArchive: (...args: unknown[]) => getFinishedRoundArchive(...args),
   saveFinishedRoundArchive: (...args: unknown[]) => saveFinishedRoundArchive(...args),
   markFinishedArchiveAckSent: (...args: unknown[]) => markFinishedArchiveAckSent(...args),
 }));
@@ -41,25 +43,44 @@ describe('coordinated-session-cleanup', () => {
     vi.clearAllMocks();
     markPlayerOffline.mockResolvedValue(undefined);
     markResultsExited.mockResolvedValue(undefined);
+    getFinishedRoundArchive.mockResolvedValue(null);
     saveFinishedRoundArchive.mockResolvedValue(undefined);
     markFinishedArchiveAckSent.mockResolvedValue(undefined);
   });
 
   it('persists finished round archives locally', async () => {
-    const words = new Map<string, Map<string, { display: string; at: number }>>();
-    await persistLocalArchive('ABCDE', 'org', finishedSession, words);
+    const words = new Map<string, string[]>([['org', ['кіт', 'пес']]]);
+    await expect(persistLocalArchive('ABCDE', 'org', finishedSession, words)).resolves.toBe(
+      'saved',
+    );
 
     expect(saveFinishedRoundArchive).toHaveBeenCalledWith('ABCDE', finishedSession, words);
     expect(markFinishedArchiveAckSent).toHaveBeenCalledWith('ABCDE', 1);
   });
 
+  it('skips empty archive when session wordPlayers claim words', async () => {
+    await expect(
+      persistLocalArchive(
+        'ABCDE',
+        'org',
+        { ...finishedSession, wordPlayers: { кіт: { org: true }, пес: { org: true } } },
+        new Map(),
+      ),
+    ).resolves.toBe('skipped_retryable');
+
+    expect(saveFinishedRoundArchive).not.toHaveBeenCalled();
+    expect(markFinishedArchiveAckSent).not.toHaveBeenCalled();
+  });
+
   it('skips archive persistence for non-finished sessions', async () => {
-    await persistLocalArchive(
-      'ABCDE',
-      'org',
-      { ...finishedSession, status: 'playing', timerEndsAt: Date.now() + 60_000 },
-      new Map(),
-    );
+    await expect(
+      persistLocalArchive(
+        'ABCDE',
+        'org',
+        { ...finishedSession, status: 'playing', timerEndsAt: Date.now() + 60_000 },
+        new Map(),
+      ),
+    ).resolves.toBe('skipped');
 
     expect(saveFinishedRoundArchive).not.toHaveBeenCalled();
   });

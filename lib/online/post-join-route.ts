@@ -20,7 +20,7 @@ export function resolvePostJoinRoute(
   uid: string,
   gameId: string,
 ): PostJoinRoute {
-  // INVARIANT (see docs/known-issues.md — 2026-06 Passive roster member routed to play):
+  // INVARIANT (see docs/known-issues.md — 2026-06 Inactive roster member routed to play):
   // play only for live-round participants (`isLiveParticipant` includes active + briefly offline roster).
   if (session.status === 'playing') {
     if (isLiveParticipant(session, uid)) {

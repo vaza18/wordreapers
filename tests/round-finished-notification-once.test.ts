@@ -40,10 +40,13 @@ describe('round-finished-notification-once', () => {
   });
 
   it('sends once per device per round and records the key only after success', async () => {
-    expect(await notifyRoundFinishedOnce('ab12', 0, 'тест')).toBe(true);
-    expect(await notifyRoundFinishedOnce('ab12', 0, 'тест')).toBe(false);
+    expect(await notifyRoundFinishedOnce('hmqy2', 0, 'тест')).toBe(true);
+    expect(await notifyRoundFinishedOnce('hmqy2', 0, 'тест')).toBe(false);
     expect(notifyRoundFinished).toHaveBeenCalledTimes(1);
-    expect(await isRoundFinishedNotified('ab12', 0)).toBe(true);
+    expect(notifyRoundFinished).toHaveBeenCalledWith(
+      expect.objectContaining({ gameId: 'HMQY2', baseWordRound: 0 }),
+    );
+    expect(await isRoundFinishedNotified('hmqy2', 0)).toBe(true);
   });
 
   it('does not record the key when notification delivery fails', async () => {

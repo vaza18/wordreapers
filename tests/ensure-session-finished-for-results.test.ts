@@ -69,7 +69,7 @@ describe('ensureSessionFinishedForResults', () => {
     readGameSessionSnapshot.mockResolvedValue({ status: 'finished', baseWordRound: 1 });
 
     await expect(
-      ensureSessionFinishedForResults('ABCDE', undefined, { expectedBaseWordRound: 1 }),
+      ensureSessionFinishedForResults('ABCDE', { expectedBaseWordRound: 1 }),
     ).resolves.toBe('finished');
     expect(finishGameSessionIfExpired).not.toHaveBeenCalled();
   });
@@ -82,7 +82,7 @@ describe('ensureSessionFinishedForResults', () => {
     finishGameSessionIfExpired.mockResolvedValue(false);
 
     await expect(
-      ensureSessionFinishedForResults('ABCDE', undefined, {
+      ensureSessionFinishedForResults('ABCDE', {
         attempts: 3,
         delayMs: 0,
         expectedBaseWordRound: 1,
@@ -95,7 +95,7 @@ describe('ensureSessionFinishedForResults', () => {
     readGameSessionSnapshot.mockResolvedValue({ status: 'waiting', baseWordRound: 1 });
 
     await expect(
-      ensureSessionFinishedForResults('ABCDE', undefined, {
+      ensureSessionFinishedForResults('ABCDE', {
         attempts: 20,
         delayMs: 0,
         expectedBaseWordRound: 1,
@@ -108,7 +108,7 @@ describe('ensureSessionFinishedForResults', () => {
     readGameSessionSnapshot.mockResolvedValue({ status: 'playing', baseWordRound: 2 });
 
     await expect(
-      ensureSessionFinishedForResults('ABCDE', undefined, {
+      ensureSessionFinishedForResults('ABCDE', {
         attempts: 5,
         delayMs: 0,
         expectedBaseWordRound: 1,
@@ -121,7 +121,7 @@ describe('ensureSessionFinishedForResults', () => {
     readGameSessionSnapshot.mockResolvedValue({ status: 'finished', baseWordRound: 2 });
 
     await expect(
-      ensureSessionFinishedForResults('ABCDE', undefined, {
+      ensureSessionFinishedForResults('ABCDE', {
         attempts: 5,
         delayMs: 0,
         expectedBaseWordRound: 1,
@@ -135,7 +135,7 @@ describe('ensureSessionFinishedForResults', () => {
     finishGameSessionIfExpired.mockResolvedValue(false);
 
     await expect(
-      ensureSessionFinishedForResults('ABCDE', undefined, {
+      ensureSessionFinishedForResults('ABCDE', {
         attempts: 2,
         delayMs: 0,
         expectedBaseWordRound: 1,

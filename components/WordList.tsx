@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject
 import { Animated, Easing, FlatList, StyleSheet, Text, View } from 'react-native';
 
 import { useResolvedVisualEffects } from '@/hooks/useResolvedVisualEffects';
+import { compareUk } from '@/lib/i18n/uk-collator';
 import { planAcceptedWordHighlight } from '@/lib/ui/accepted-word-highlight';
 import { removeEntranceNormalized } from '@/lib/ui/word-list-entrance';
 import {
@@ -81,7 +82,7 @@ function findPrefixScrollIndex(rows: readonly WordListRow[], prefix: string): nu
     if (!row) {
       break;
     }
-    if (row.entry.normalized.localeCompare(prefix, 'uk') < 0) {
+    if (compareUk(row.entry.normalized, prefix) < 0) {
       lo = mid + 1;
     } else {
       hi = mid;

@@ -188,8 +188,8 @@ export function compareStandings(a: PlayerStandings, b: PlayerStandings): number
 }
 
 /**
- * Recompute each player's score and word count from session-wide word maps.
- * Used when the x2 bonus toggles (e.g. 3rd player joins after a solo publish).
+ * Recompute each player's score and word count from session-wide word maps (in-memory).
+ * Used by client standings; not written to RTDB during play.
  */
 export function recomputeSessionPlayerScores(
   session: {
@@ -206,11 +206,19 @@ export function recomputeSessionPlayerScores(
   }
 
   for (const [normalized, playersOnWord] of Object.entries(wordPlayers)) {
-    const globalCount = Object.keys(playersOnWord).length;
+    let globalCount = 0;
+    for (const onWord of Object.values(playersOnWord)) {
+      if (onWord === true) {
+        globalCount += 1;
+      }
+    }
+    if (globalCount === 0) {
+      continue;
+    }
     const kind: WordScoreKind = globalCount > 1 ? 'normal' : 'unique';
     const points = toScoredWordEntry(normalized, kind, uniqueBonusEnabled, globalCount).points;
     for (const [playerId, onWord] of Object.entries(playersOnWord)) {
-      if (!onWord) {
+      if (onWord !== true) {
         continue;
       }
       const player = session.players[playerId];
@@ -224,30 +232,8 @@ export function recomputeSessionPlayerScores(
 }
 
 /**
- * RTDB multipath leaf updates for score/wordCount only — never rewrite whole `players/{uid}`
- * (that races presence and fails rules when the joiner writes peers' `online`).
- */
-export function buildPlayerTotalsUpdatePatch(
-  nextPlayers: Record<string, { score?: number; wordCount?: number }>,
-  previousPlayers: Record<string, { score?: number; wordCount?: number }>,
-): Record<string, number> {
-  const patch: Record<string, number> = {};
-  for (const [uid, player] of Object.entries(nextPlayers)) {
-    const previous = previousPlayers[uid];
-    const nextScore = player.score ?? 0;
-    const nextWordCount = player.wordCount ?? 0;
-    if ((previous?.score ?? 0) !== nextScore) {
-      patch[`players/${uid}/score`] = nextScore;
-    }
-    if ((previous?.wordCount ?? 0) !== nextWordCount) {
-      patch[`players/${uid}/wordCount`] = nextWordCount;
-    }
-  }
-  return patch;
-}
-
-/**
  * Standings from session word maps (authoritative when wordPlayers is populated).
+ * Empty maps → zero totals for roster (never trust RTDB players.score after derive pivot).
  */
 export function buildStandingsFromSessionWordMaps(
   session: {
@@ -257,19 +243,23 @@ export function buildStandingsFromSessionWordMaps(
   uniqueBonusEnabled: boolean,
 ): PlayerStandings[] {
   const hasWords = Object.keys(session.wordPlayers ?? {}).length > 0;
-  if (!hasWords) {
-    return buildStandingsFromSession(session);
-  }
-
   const players = Object.fromEntries(
     Object.entries(session.players).map(([playerId, player]) => [playerId, { ...player }]),
   );
+  if (!hasWords) {
+    for (const player of Object.values(players)) {
+      player.score = 0;
+      player.wordCount = 0;
+    }
+    return buildStandingsFromSession({ players });
+  }
+
   recomputeSessionPlayerScores({ players, wordPlayers: session.wordPlayers }, uniqueBonusEnabled);
   return buildStandingsFromSession({ players });
 }
 
 /**
- * Standings from Firebase session player nodes (authoritative during online play).
+ * Standings from player score/wordCount fields (local archives / solo / legacy).
  */
 export function buildStandingsFromSession(session: {
   players: Record<string, { score?: number; wordCount?: number }>;

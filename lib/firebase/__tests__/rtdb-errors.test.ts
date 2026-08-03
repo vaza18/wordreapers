@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   isFirebaseIgnorableRtdbError,
+  isFirebaseNetworkError,
   isFirebasePermissionDenied,
   isFirebaseTransactionAbort,
 } from '../rtdb-errors.js';
@@ -40,5 +41,15 @@ describe('isFirebasePermissionDenied', () => {
     expect(isFirebasePermissionDenied(denied)).toBe(true);
     expect(isFirebasePermissionDenied(new Error('Permission denied'))).toBe(true);
     expect(isFirebasePermissionDenied(new Error('PERMISSION_DENIED'))).toBe(true);
+  });
+});
+
+describe('isFirebaseNetworkError', () => {
+  it('detects network codes and messages', () => {
+    const net = new Error('x') as Error & { code: string };
+    net.code = 'unavailable';
+    expect(isFirebaseNetworkError(net)).toBe(true);
+    expect(isFirebaseNetworkError(new Error('Network request failed'))).toBe(true);
+    expect(isFirebaseNetworkError(new Error('Permission denied'))).toBe(false);
   });
 });

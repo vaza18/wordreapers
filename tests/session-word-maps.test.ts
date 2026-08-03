@@ -10,7 +10,7 @@ import {
 } from '../lib/firebase/session-word-maps.js';
 
 describe('session-word-maps helpers', () => {
-  it('counts players who submitted a normalized word', () => {
+  it('counts only true leaves for a normalized word', () => {
     expect(
       globalWordCount(
         {
@@ -22,6 +22,14 @@ describe('session-word-maps helpers', () => {
     ).toBe(2);
     expect(globalWordCount(undefined, 'порт')).toBe(0);
     expect(globalWordCount({}, 'порт')).toBe(0);
+    expect(
+      globalWordCount(
+        {
+          порт: { org: true, ghost: false as unknown as true, peer: true },
+        },
+        'порт',
+      ),
+    ).toBe(2);
   });
 
   it('strips word map fields from a session copy', () => {

@@ -1,9 +1,30 @@
-import { buildStandingsFromSession } from '@/lib/game/scoring';
+import { buildStandingsFromSessionWordMaps } from '@/lib/game/scoring';
 import { isSoloStandings } from '@/lib/game/solo-round';
 import { didPlayerWinOnlineRound } from '@/lib/profile/player-stats';
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import { displayPlayerName } from '@/lib/online/public-lobby/display-player-name';
 import type { FinishedRoundArchive } from '@/lib/online/session/online-session-archive';
+import { wordPlayersFromWordsByPlayer } from '@/lib/online/word-players-invert';
+
+function standingsFromArchive(archive: FinishedRoundArchive) {
+  const wordsByPlayer = new Map<string, string[]>();
+  for (const [uid, words] of Object.entries(archive.playerWords ?? {})) {
+    if (Array.isArray(words)) {
+      wordsByPlayer.set(uid, words);
+    }
+  }
+  const wordPlayers =
+    Object.keys(archive.session.wordPlayers ?? {}).length > 0
+      ? archive.session.wordPlayers
+      : wordPlayersFromWordsByPlayer(wordsByPlayer);
+  const uniqueBonusEnabled = resolveGameSessionSettingsForSession(
+    archive.session,
+  ).uniqueBonusEnabled;
+  return buildStandingsFromSessionWordMaps(
+    { players: archive.session.players, wordPlayers },
+    uniqueBonusEnabled,
+  );
+}
 
 export interface RoomPlayerAggregate {
   playerId: string;
@@ -30,7 +51,7 @@ export type HistoryListEntry =
   | { kind: 'round'; archive: FinishedRoundArchive };
 
 export function isMultiplayerArchive(archive: FinishedRoundArchive): boolean {
-  return !isSoloStandings(buildStandingsFromSession(archive.session));
+  return !isSoloStandings(standingsFromArchive(archive));
 }
 
 /** Solo training with no accepted words — skip in history list (and no longer archived). */
@@ -38,8 +59,11 @@ export function isEmptySoloArchive(archive: FinishedRoundArchive): boolean {
   if (isMultiplayerArchive(archive)) {
     return false;
   }
-  const solo = archive.session.players.solo;
-  return (solo?.wordCount ?? 0) <= 0;
+  const soloWords = archive.playerWords?.solo;
+  if (Array.isArray(soloWords)) {
+    return soloWords.length <= 0;
+  }
+  return (archive.session.players.solo?.wordCount ?? 0) <= 0;
 }
 
 export type HistoryListFilter = 'all' | 'competition' | 'training';
@@ -153,7 +177,8 @@ export function computeRoomHistoryAggregate(
   >();
 
   for (const archive of sorted) {
-    const standings = buildStandingsFromSession(archive.session);
+    const standings = standingsFromArchive(archive);
+    const byId = new Map(standings.map((row) => [row.playerId, row]));
     for (const [playerId, player] of Object.entries(archive.session.players)) {
       const existing = stats.get(playerId) ?? {
         roundWins: 0,
@@ -161,8 +186,9 @@ export function computeRoomHistoryAggregate(
         totalWords: 0,
         name: null,
       };
-      existing.totalScore += player.score ?? 0;
-      existing.totalWords += player.wordCount ?? 0;
+      const derived = byId.get(playerId);
+      existing.totalScore += derived?.score ?? 0;
+      existing.totalWords += derived?.wordCount ?? 0;
       if (existing.name == null) {
         existing.name = displayPlayerName(player, viewerUid, playerId, archive.session);
       }

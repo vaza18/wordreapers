@@ -113,6 +113,50 @@ describe('resolvePlayScreenActions', () => {
     ).toBe(true);
   });
 
+  it('self-heals rematch join when scoring via wordPlayers but missing from live uids', () => {
+    const session = playingSession(
+      {
+        org: { name: 'Org', wordCount: 0, score: 0, online: false },
+        p2: { name: 'P2', wordCount: 0, score: 0, online: true },
+      },
+      {
+        liveRoundPlayerUids: ['p2'],
+        wordPlayers: { порт: { org: true } },
+      },
+    );
+    expect(
+      resolvePlayScreenActions({
+        session,
+        myUid: 'org',
+        roundEnded: false,
+        frozenBaseWordRound: null,
+        leavingIntentionally: false,
+      }).shouldRejoin,
+    ).toBe(true);
+  });
+
+  it('does not self-heal passive offline rematch member with empty maps', () => {
+    const session = playingSession(
+      {
+        org: { name: 'Org', wordCount: 0, score: 0, online: false },
+        p2: { name: 'P2', wordCount: 0, score: 0, online: true },
+      },
+      {
+        liveRoundPlayerUids: ['p2'],
+        wordPlayers: {},
+      },
+    );
+    expect(
+      resolvePlayScreenActions({
+        session,
+        myUid: 'org',
+        roundEnded: false,
+        frozenBaseWordRound: null,
+        leavingIntentionally: false,
+      }).shouldRejoin,
+    ).toBe(false);
+  });
+
   it('does not request rejoin after voluntary leave', () => {
     const session = playingSession({
       org: { name: 'Org', wordCount: 0, score: 0, online: false, hasLeft: true },

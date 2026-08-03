@@ -2,8 +2,8 @@ import { toDisplayUpper } from '../dictionary/normalize.js';
 
 /**
  * Surface form for lobby / letter keyboard / results.
- * Same split as `player_words/{uid}/{normalized}.display`: identity is `baseWord`
- * (normalized), UI reads `baseWordDisplay` when set.
+ * Identity is normalized `baseWord`; UI prefers `baseWordDisplay` when set.
+ * Submitted word labels resolve from the round lexicon (not RTDB).
  */
 export function sessionBaseWordDisplay(session: {
   baseWord: string;

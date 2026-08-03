@@ -1,32 +1,8 @@
 import i18n from '@/i18n';
 import { resolveGameSessionSettings } from '../firebase/session-settings.js';
 import type { GameSession } from '../firebase/types.js';
-import { roundStartMsFromSession } from '../online/stale-player-words.js';
 
 const MIN_WORDS_PER_MINUTE_DURATION_SECONDS = 60;
-
-/** Word entry with submission timestamp for round duration estimation. */
-export interface WordTimestampSource {
-  at: number;
-}
-
-/** Collect all word submission timestamps from a per-player word map. */
-export function collectWordTimestamps(
-  byPlayer?: ReadonlyMap<string, ReadonlyMap<string, WordTimestampSource>>,
-): number[] {
-  const times: number[] = [];
-  if (!byPlayer) {
-    return times;
-  }
-  for (const words of byPlayer.values()) {
-    for (const word of words.values()) {
-      if (typeof word.at === 'number' && word.at > 0) {
-        times.push(word.at);
-      }
-    }
-  }
-  return times;
-}
 
 /** Countdown budget in seconds (settings duration + approved add-time). */
 export function resolveRoundTimerBudgetSeconds(
@@ -68,43 +44,13 @@ export function computeRoundPlayedSecondsAtFinish(session: GameSession, now: num
 
 /**
  * Round length shown in results/history: timer/game seconds (pauses excluded).
- * Falls back for legacy sessions without `roundPlayedSeconds`.
+ * Falls back to configured duration if roundPlayedSeconds is not set.
  */
-export function computeRoundDurationSeconds(
-  session: GameSession,
-  byPlayer?: ReadonlyMap<string, ReadonlyMap<string, WordTimestampSource>>,
-  finishedAtMs?: number,
-): number {
+export function computeRoundDurationSeconds(session: GameSession): number {
   if (typeof session.roundPlayedSeconds === 'number') {
     return session.roundPlayedSeconds;
   }
-
-  const configured = resolveGameSessionSettings(session.settings).durationSeconds;
-  const wordTimes = collectWordTimestamps(byPlayer);
-
-  const endMs =
-    finishedAtMs ??
-    session.finishedAt ??
-    (wordTimes.length > 0 ? Math.max(...wordTimes) : undefined);
-
-  if (endMs == null) {
-    return configured;
-  }
-
-  const startMs = roundStartMsFromSession(session);
-  if (startMs != null) {
-    const elapsedSec = Math.max(0, Math.floor((endMs - startMs) / 1000));
-    return elapsedSec === 0 ? configured : elapsedSec;
-  }
-
-  if (wordTimes.length > 0) {
-    const elapsedSec = Math.max(0, Math.floor((endMs - Math.min(...wordTimes)) / 1000));
-    if (elapsedSec > 0) {
-      return elapsedSec;
-    }
-  }
-
-  return configured;
+  return resolveGameSessionSettings(session.settings).durationSeconds;
 }
 
 /** Human-readable round length for the results header (e.g. `10 хв`, `9:45`). */

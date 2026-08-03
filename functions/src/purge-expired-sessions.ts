@@ -69,8 +69,9 @@ export function shouldPurgeSession(session: GameSessionPurgeNode, now: number): 
 }
 
 /**
- * Delete game_sessions + session_word_maps + player_words when retention has passed.
- * Admin SDK bypasses RTDB security rules.
+ * Delete game_sessions + session_word_maps when retention has passed.
+ * Legacy `player_words` is outside the client contract — wipe once via ops
+ * (`firebase_schema.md` / `npm run firebase:purge-orphans`); not a CF ongoing path.
  */
 export async function purgeExpiredRtdbSessions(
   now = Date.now(),
@@ -108,7 +109,6 @@ export async function purgeGameSession(db: admin.database.Database, gameId: stri
   const updates: Record<string, null> = {
     [`game_sessions/${gameId}`]: null,
     [`session_word_maps/${gameId}`]: null,
-    [`player_words/${gameId}`]: null,
   };
   await db.ref().update(updates);
 }

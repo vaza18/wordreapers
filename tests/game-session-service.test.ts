@@ -30,13 +30,11 @@ vi.mock('../lib/firebase/public-lobby-service.js', () => ({
   unpublishPublicLobby: vi.fn(),
 }));
 
-vi.mock('../lib/firebase/player-words-service.js', () => ({
-  clearAllPlayerWords: vi.fn().mockResolvedValue(undefined),
-}));
-
 vi.mock('../lib/firebase/session-word-maps-service.js', () => ({
   clearSessionWordMaps: vi.fn().mockResolvedValue(undefined),
-  fetchSessionWordMaps: vi.fn().mockResolvedValue({ wordPlayers: {} }),
+  ensureSessionWordMapsEmptyForRoundStart: vi.fn().mockResolvedValue(undefined),
+  requireSessionWordMaps: vi.fn().mockResolvedValue({ wordPlayers: {} }),
+  tryFetchSessionWordMaps: vi.fn().mockResolvedValue({ ok: true, maps: { wordPlayers: {} } }),
 }));
 
 vi.mock('../lib/firebase/server-clock.js', () => ({

@@ -13,7 +13,6 @@ import {
 import { getFirebaseDatabase } from '../firebase/init.js';
 import { gameSessionPath } from '../firebase/paths.js';
 import type { GameSession } from '../firebase/types.js';
-import type { StoredPlayerWord } from '../firebase/player-words-service.js';
 
 import { abandonTrackedOrganizerWaitingRoom } from './abandon-tracked-waiting-room.js';
 import type { AllPlayerWords } from './session/clone-player-words.js';
@@ -22,6 +21,7 @@ import { setOrganizerWaitingRoom } from './organizer-waiting-room.js';
 import { cacheActiveRoundProgress } from './session/cache-active-round.js';
 import { clearLeftOnlineResume } from './session/left-online-resume.js';
 import { clearPausedOnlineResume } from './session/paused-online-resume.js';
+import { markPendingRoundArchive } from './session/pending-round-archive.js';
 
 export interface ExitOnlineFlowOptions {
   gameId: string;
@@ -29,7 +29,8 @@ export interface ExitOnlineFlowOptions {
   isOrganizer: boolean;
   sessionStatus: 'waiting' | 'playing' | 'finished' | null;
   session?: GameSession | null;
-  myWords?: Map<string, StoredPlayerWord>;
+  /** Own normalized words for active-round cache when leaving mid-play. */
+  myWords?: ReadonlySet<string> | readonly string[];
   /** Words snapshot for local archive when leaving finished results. */
   wordsForArchive?: AllPlayerWords;
   /** True when leaving the finished results screen for home. */
@@ -58,7 +59,15 @@ async function runExitCleanup(
     if (liveSession?.status === 'finished') {
       if (wordsForArchive) {
         try {
-          await persistLocalArchive(gameId, uid, liveSession, wordsForArchive);
+          const archiveResult = await persistLocalArchive(
+            gameId,
+            uid,
+            liveSession,
+            wordsForArchive,
+          );
+          if (archiveResult === 'skipped_retryable') {
+            await markPendingRoundArchive(gameId, liveSession.baseWordRound ?? 0, uid);
+          }
         } catch (error) {
           if (__DEV__) {
             console.warn('exitOnlineToHome archive', error);
@@ -105,8 +114,8 @@ export async function exitOnlineToHome(options: ExitOnlineFlowOptions): Promise<
   await clearPausedOnlineResume();
   await clearLeftOnlineResume();
 
-  if (sessionStatus === 'playing' && session && myWords) {
-    await cacheActiveRoundProgress(gameId, uid, session, myWords);
+  if (sessionStatus === 'playing' && session) {
+    await cacheActiveRoundProgress(gameId, uid, session, myWords ?? []);
   }
 
   const liveFromDb = await readLiveSession(gameId);

@@ -14,7 +14,6 @@ import {
   defaultGameSessionSettings,
   resolveGameSessionSettings,
 } from '../firebase/session-settings.js';
-import type { StoredPlayerWord } from '../firebase/player-words-service.js';
 import type {
   GameSession,
   GameSessionPlayer,
@@ -208,16 +207,7 @@ export async function publishPlayingSoloRound(input: PublishPlayingSoloInput): P
   await writeSession(normalized, session, input.organizerUid);
 
   if (input.words.length > 0) {
-    const record: Record<string, StoredPlayerWord> = {};
-    for (const word of input.words) {
-      record[word.normalized] = {
-        display: word.display,
-        at: word.at,
-      };
-    }
-    await restoreSessionWordsToRtdb(normalized, wordMaps, {
-      [input.organizerUid]: record,
-    });
+    await restoreSessionWordsToRtdb(normalized, wordMaps);
   }
 
   await markPlayerOnline(normalized, input.organizerUid);

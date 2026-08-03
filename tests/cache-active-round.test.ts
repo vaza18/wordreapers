@@ -1,11 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const getMock = vi.fn();
-const restorePlayerWordsToFirebase = vi.fn();
-const getOwnPlayerWords = vi.fn();
-const reconcileOwnPlayerWordsWithSession = vi.fn();
-const getActiveRoundCache = vi.fn();
 const removeActiveRoundCache = vi.fn();
+const getActiveRoundCache = vi.fn();
 const saveActiveRoundCache = vi.fn();
 const purgeExpiredActiveRoundCaches = vi.fn();
 
@@ -15,26 +11,6 @@ vi.mock('../lib/online/playable-lexicon-archive.js', () => ({
     words: ['порт', 'рот'],
     displays: ['ПОРТ', 'РОТ'],
   }),
-}));
-
-vi.mock('firebase/database', () => ({
-  get: (...args: unknown[]) => getMock(...args),
-  ref: (_db: unknown, path: string) => ({ path }),
-}));
-
-vi.mock('../lib/firebase/init.js', () => ({
-  getFirebaseDatabase: () => ({}),
-}));
-
-vi.mock('../lib/firebase/auth.js', () => ({
-  ensureAnonymousAuth: vi.fn().mockResolvedValue({ uid: 'org' }),
-}));
-
-vi.mock('../lib/firebase/player-words-service.js', () => ({
-  restorePlayerWordsToFirebase: (...args: unknown[]) => restorePlayerWordsToFirebase(...args),
-  reconcileOwnPlayerWordsWithSession: (...args: unknown[]) =>
-    reconcileOwnPlayerWordsWithSession(...args),
-  getOwnPlayerWords: (...args: unknown[]) => getOwnPlayerWords(...args),
 }));
 
 vi.mock('../lib/firebase/server-clock.js', () => ({
@@ -55,36 +31,39 @@ vi.mock('../lib/online/session/active-round-cache.js', async (importOriginal) =>
 
 import {
   cacheActiveRoundProgress,
+  clearExpiredActiveRoundCache,
   loadActiveRoundLexiconSnapshot,
   purgeStaleActiveRoundCaches,
-  tryRestoreActiveRoundCache,
 } from '../lib/online/session/cache-active-round.js';
 import { playingSession } from './helpers/game-session-fixtures.js';
 
 describe('cache-active-round', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    restorePlayerWordsToFirebase.mockResolvedValue(undefined);
-    reconcileOwnPlayerWordsWithSession.mockResolvedValue(false);
-    getOwnPlayerWords.mockResolvedValue(new Map());
     saveActiveRoundCache.mockResolvedValue(undefined);
     removeActiveRoundCache.mockResolvedValue(undefined);
     purgeExpiredActiveRoundCaches.mockResolvedValue(undefined);
+    getActiveRoundCache.mockResolvedValue(null);
   });
 
-  it('saves active round progress when playing with words', async () => {
+  it('saves session snapshot with wordPlayers and lexicon', async () => {
     const session = playingSession(
       { org: { name: 'Org', wordCount: 1, score: 1, online: true } },
-      { timerEndsAt: 2_000_000 },
+      {
+        timerEndsAt: 2_000_000,
+        roundStartedAt: 1_000_000,
+        wordPlayers: { порт: { org: true } },
+      },
     );
-    const words = new Map([['порт', { display: 'порт', at: 100 }]]);
 
-    await cacheActiveRoundProgress('ABCDE', 'org', session, words);
+    await cacheActiveRoundProgress('ABCDE', 'org', session);
 
     expect(saveActiveRoundCache).toHaveBeenCalledWith(
       expect.objectContaining({
         gameId: 'ABCDE',
-        words: { порт: { display: 'порт', at: 100 } },
+        sessionSnapshot: expect.objectContaining({
+          wordPlayers: { порт: { org: true } },
+        }),
         playableLexicon: {
           maxCount: 2,
           words: ['порт', 'рот'],
@@ -94,19 +73,75 @@ describe('cache-active-round', () => {
     );
   });
 
-  it('saves lexicon-only cache when the round has no words yet', async () => {
+  it('merges own words into wordPlayers when maps lag behind local submits', async () => {
     const session = playingSession(
-      { org: { name: 'Org', wordCount: 0, score: 0, online: true } },
-      { timerEndsAt: 2_000_000 },
+      { org: { name: 'Org', wordCount: 1, score: 1, online: true } },
+      {
+        timerEndsAt: 2_000_000,
+        roundStartedAt: 1_000_000,
+        wordPlayers: { порт: { org: true, a: true } },
+      },
     );
 
-    await cacheActiveRoundProgress('ABCDE', 'org', session, new Map());
+    await cacheActiveRoundProgress('ABCDE', 'org', session, new Set(['порт', 'рот']));
 
     expect(saveActiveRoundCache).toHaveBeenCalledWith(
       expect.objectContaining({
-        gameId: 'ABCDE',
-        words: {},
-        playableLexicon: expect.objectContaining({ maxCount: 2 }),
+        sessionSnapshot: expect.objectContaining({
+          wordPlayers: {
+            порт: { org: true, a: true },
+            рот: { org: true },
+          },
+        }),
+      }),
+    );
+  });
+
+  it('unions prior cached wordPlayers so a poorer exit cannot wipe the snapshot', async () => {
+    getActiveRoundCache.mockResolvedValue({
+      gameId: 'ABCDE',
+      baseWordRound: 0,
+      timerEndsAt: 2_000_000,
+      sessionSnapshot: {
+        baseWord: 'тест',
+        settings: playingSession({}).settings,
+        players: { org: { name: 'Org', wordCount: 1, score: 1, online: true } },
+        timerEndsAt: 2_000_000,
+        organizerId: 'org',
+        baseWordRound: 0,
+        wordPlayers: { порт: { org: true }, рот: { a: true } },
+      },
+    });
+    const session = playingSession(
+      { org: { name: 'Org', wordCount: 0, score: 0, online: true } },
+      { timerEndsAt: 2_000_000, roundStartedAt: 1_000_000 },
+    );
+
+    await cacheActiveRoundProgress('ABCDE', 'org', session, []);
+
+    expect(saveActiveRoundCache).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionSnapshot: expect.objectContaining({
+          wordPlayers: { порт: { org: true }, рот: { a: true } },
+        }),
+      }),
+    );
+  });
+
+  it('saves snapshot without roundStartedAt when timerEndsAt is set', async () => {
+    const session = playingSession(
+      { org: { name: 'Org', wordCount: 0, score: 0, online: true } },
+      { timerEndsAt: 2_000_000, wordPlayers: { порт: { org: true } } },
+    );
+
+    await cacheActiveRoundProgress('ABCDE', 'org', session, ['порт']);
+
+    expect(saveActiveRoundCache).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionSnapshot: expect.objectContaining({
+          timerEndsAt: 2_000_000,
+          wordPlayers: { порт: { org: true } },
+        }),
       }),
     );
   });
@@ -120,7 +155,6 @@ describe('cache-active-round', () => {
       gameId: 'ABCDE',
       baseWordRound: 0,
       timerEndsAt: 2_000_000,
-      words: {},
       playableLexicon: {
         maxCount: 2,
         words: ['порт', 'рот'],
@@ -141,32 +175,31 @@ describe('cache-active-round', () => {
     const session = playingSession({ org: { name: 'Org', wordCount: 0, score: 0 } });
     session.status = 'waiting';
 
-    await cacheActiveRoundProgress(
-      'ABCDE',
-      'org',
-      session,
-      new Map([['порт', { display: 'порт', at: 100 }]]),
-    );
+    await cacheActiveRoundProgress('ABCDE', 'org', session);
 
     expect(saveActiveRoundCache).not.toHaveBeenCalled();
   });
 
-  it('restores cached words when remote and session counts are empty', async () => {
+  it('clears cache when timer ends', async () => {
+    const session = playingSession(
+      { org: { name: 'Org', wordCount: 0, score: 0, online: true } },
+      { timerEndsAt: 1_400_000, baseWordRound: 0 },
+    );
+
+    await clearExpiredActiveRoundCache('ABCDE', session);
+
+    expect(removeActiveRoundCache).toHaveBeenCalledWith('ABCDE', 0);
+  });
+
+  it('keeps cache while the timer is still running', async () => {
     const session = playingSession(
       { org: { name: 'Org', wordCount: 0, score: 0, online: true } },
       { timerEndsAt: 2_000_000, baseWordRound: 0 },
     );
-    getActiveRoundCache.mockResolvedValue({
-      gameId: 'ABCDE',
-      baseWordRound: 0,
-      timerEndsAt: 2_000_000,
-      words: { порт: { display: 'порт', at: 100 } },
-    });
-    getMock.mockResolvedValue({ exists: () => true, val: () => session });
 
-    await tryRestoreActiveRoundCache('ABCDE', 'org', session, 0);
+    await clearExpiredActiveRoundCache('ABCDE', session);
 
-    expect(restorePlayerWordsToFirebase).toHaveBeenCalled();
+    expect(removeActiveRoundCache).not.toHaveBeenCalled();
   });
 
   it('purges stale caches via server clock', async () => {

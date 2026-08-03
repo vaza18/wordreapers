@@ -5,6 +5,7 @@ import {
   isActiveLivePlayer,
   isInLiveRound,
   isLiveParticipant,
+  playerHasScoredInRound,
 } from './presence/live-round-membership.js';
 import {
   isRematchWaitingLobby,
@@ -13,7 +14,10 @@ import {
 import { isReviewingPriorRoundOnPlayScreen } from './session/is-reviewing-prior-round-on-play.js';
 
 export type PlayScreenContext = {
-  session: Pick<GameSession, 'status' | 'baseWordRound' | 'liveRoundPlayerUids' | 'players'> & {
+  session: Pick<
+    GameSession,
+    'status' | 'baseWordRound' | 'liveRoundPlayerUids' | 'players' | 'wordPlayers'
+  > & {
     timerEndsAt?: number | null;
   };
   myUid: string;
@@ -99,8 +103,7 @@ export function resolvePlayScreenActions(ctx: PlayScreenContext): PlayScreenActi
       if ((session.baseWordRound ?? 0) > 0 && !inLive) {
         // Self-heal only when we look opted-in (online / already scoring) — not a
         // passive offline roster member still listed from a prior round.
-        shouldRejoin =
-          player.online === true || (player.wordCount ?? 0) > 0 || (player.score ?? 0) > 0;
+        shouldRejoin = player.online === true || playerHasScoredInRound(fullSession, myUid);
       } else if (inLive && player.online !== true) {
         shouldRejoin = true;
       }

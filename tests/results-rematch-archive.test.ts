@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import type { GameSession } from '../lib/firebase/types.js';
-import { isFinishedArchiveStale } from '../lib/online/session/online-session-archive.js';
+import {
+  isFinishedArchiveStale,
+  isLegacyFinishedArchiveWords,
+} from '../lib/online/session/online-session-archive.js';
 
 function finishedSession(baseWordRound: number): GameSession {
   return {
@@ -40,8 +43,23 @@ describe('results rematch archive staleness', () => {
     expect(isFinishedArchiveStale(round0Archive, round1Live)).toBe(true);
   });
 
-  it('accepts ack for the same round', () => {
+  it('accepts ack for the same round with matching words', () => {
     const round1Archive = {
+      gameId: 'ABCDE',
+      baseWordRound: 1,
+      savedAt: 2,
+      session: finishedSession(1),
+      playerWords: { a: ['а'], b: ['б'] },
+      ackSent: true as const,
+      playerWordCounts: { a: 1, b: 1 },
+      archiveVersion: 4 as const,
+    };
+
+    expect(isFinishedArchiveStale(round1Archive, finishedSession(1))).toBe(false);
+  });
+
+  it('treats empty words with non-zero counts as stale', () => {
+    const emptyWordsArchive = {
       gameId: 'ABCDE',
       baseWordRound: 1,
       savedAt: 2,
@@ -49,8 +67,28 @@ describe('results rematch archive staleness', () => {
       playerWords: {},
       ackSent: true as const,
       playerWordCounts: { a: 1, b: 1 },
+      archiveVersion: 4 as const,
     };
 
-    expect(isFinishedArchiveStale(round1Archive, finishedSession(1))).toBe(false);
+    expect(isFinishedArchiveStale(emptyWordsArchive, finishedSession(1))).toBe(true);
+  });
+
+  it('does not mark pre-v4 object-shaped words as stale (avoid empty overwrite)', () => {
+    const v3Archive = {
+      gameId: 'ABCDE',
+      baseWordRound: 1,
+      savedAt: 2,
+      session: finishedSession(1),
+      // Legacy StoredPlayerWord-shaped leaves (not string[])
+      playerWords: {
+        a: { порт: { display: 'ПОРТ', at: 1 } },
+        b: { рот: { display: 'РОТ', at: 2 } },
+      } as unknown as Record<string, string[]>,
+      ackSent: true as const,
+      playerWordCounts: { a: 1, b: 1 },
+    };
+
+    expect(isLegacyFinishedArchiveWords(v3Archive)).toBe(true);
+    expect(isFinishedArchiveStale(v3Archive, finishedSession(1))).toBe(false);
   });
 });

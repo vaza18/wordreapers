@@ -4,9 +4,10 @@ import {
   hasMultiplayerRound,
   hasOptedIntoNextRound,
   isActiveLivePlayer,
+  isLiveParticipant,
   rematchWaitingPlayerPatch,
 } from '../lib/online/presence/live-round-membership.js';
-import { finishedSession, gameSession } from './helpers/game-session-fixtures.js';
+import { finishedSession, gameSession, playingSession } from './helpers/game-session-fixtures.js';
 
 describe('isActiveLivePlayer', () => {
   it('requires playing status and online presence', () => {
@@ -84,6 +85,38 @@ describe('rematchWaitingPlayerPatch', () => {
       online: false,
       hasLeft: false,
     });
+  });
+});
+
+describe('isLiveParticipant', () => {
+  it('keeps round-0 offline player who scored via wordPlayers (not RTDB score)', () => {
+    const session = playingSession(
+      {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        guest: { name: 'Guest', wordCount: 0, score: 0, online: false },
+      },
+      {
+        baseWordRound: 0,
+        liveRoundPlayerUids: ['org', 'guest'],
+        wordPlayers: { порт: { guest: true } },
+      },
+    );
+    expect(isLiveParticipant(session, 'guest')).toBe(true);
+  });
+
+  it('drops round-0 offline player with no words in maps or RTDB totals', () => {
+    const session = playingSession(
+      {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        guest: { name: 'Guest', wordCount: 0, score: 0, online: false },
+      },
+      {
+        baseWordRound: 0,
+        liveRoundPlayerUids: ['org', 'guest'],
+        wordPlayers: {},
+      },
+    );
+    expect(isLiveParticipant(session, 'guest')).toBe(false);
   });
 });
 
@@ -173,6 +206,23 @@ describe('hasMultiplayerRound', () => {
           players: {
             org: { name: 'Org', wordCount: 1, score: 1, online: true },
             peer: { name: 'Peer', wordCount: 1, score: 1, online: false },
+          },
+        }),
+        'org',
+      ),
+    ).toBe(true);
+  });
+
+  it('treats offline rematch peer with wordPlayers (zero RTDB score) as multiplayer', () => {
+    expect(
+      hasMultiplayerRound(
+        gameSession({
+          baseWordRound: 2,
+          liveRoundPlayerUids: ['org'],
+          wordPlayers: { порт: { peer: true } },
+          players: {
+            org: { name: 'Org', wordCount: 0, score: 0, online: true },
+            peer: { name: 'Peer', wordCount: 0, score: 0, online: false },
           },
         }),
         'org',

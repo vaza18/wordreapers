@@ -30,13 +30,8 @@ import {
   buildRoundStartWritePaths,
   resolveRoundStartSettings,
 } from '../online/start-game-session-write.js';
-import {
-  resolveGameSessionSettings,
-  resolveGameSessionSettingsForSession,
-  uniqueBonusEnabledForActiveRound,
-  uniqueBonusLatchSettingsPatch,
-} from './session-settings.js';
-import { buildPlayerTotalsUpdatePatch, recomputeSessionPlayerScores } from '../game/scoring.js';
+import { resolveGameSessionSettings, uniqueBonusLatchSettingsPatch } from './session-settings.js';
+import { computeRoundPlayedSecondsAtFinish } from '../game/round-duration.js';
 import { appendLiveRoundPlayerUid } from './live-round-player-uids.js';
 import { formatLiveRosterDetails } from '../debug/format-session-roster-log.js';
 import {
@@ -45,12 +40,7 @@ import {
   rematchWaitingPlayerPatch,
 } from '../online/presence/live-round-membership.js';
 import { shouldOrganizerAbandonWaitingRoom } from '../online/should-organizer-abandon-waiting-room.js';
-import { computeRoundPlayedSecondsAtFinish } from '../game/round-duration.js';
 import { reconcileOpenSessionVotes } from './session-votes-service.js';
-import {
-  clearAllPlayerWords,
-  clearWaitingLobbyPlayerWordsAsOrganizer,
-} from './player-words-service.js';
 import { markResultsExited } from './results-coordination-service.js';
 import { getServerNow } from './server-clock.js';
 import { PUBLIC_LOBBY_MAX_PLAYERS } from '../online/public-lobby/constants.js';
@@ -71,8 +61,10 @@ import { ensureAnonymousAuth, getFirebaseUid } from './auth.js';
 import { isFirebaseIgnorableRtdbError, isFirebasePermissionDenied } from './rtdb-errors.js';
 import { withFinishedPurgeFields } from './session-purge.js';
 import { stripWordMapsFromSession } from './session-word-maps.js';
-import type { SessionWordMaps } from './session-word-maps.js';
-import { clearSessionWordMaps, fetchSessionWordMaps } from './session-word-maps-service.js';
+import {
+  clearSessionWordMaps,
+  ensureSessionWordMapsEmptyForRoundStart,
+} from './session-word-maps-service.js';
 import { getFirebaseDatabase } from './init.js';
 import { gameSessionPath, GAME_SESSIONS_PATH } from './paths.js';
 import { sessionRef } from './session-ref.js';
@@ -609,7 +601,6 @@ async function blindJoinGameSession(
 
   const committed = await commitNewPlayerJoinTransaction(gameId, uid, newPlayer, {
     isBrowseJoin: false,
-    wordMaps: await fetchSessionWordMaps(gameId),
   });
 
   if (committed === 'ROOM_NOT_FOUND') {
@@ -649,7 +640,7 @@ function buildJoinCommitPatch(
   session: GameSession,
   uid: string,
   newPlayer: GameSessionPlayer,
-  context: { isBrowseJoin: boolean; wordMaps: SessionWordMaps },
+  context: { isBrowseJoin: boolean },
 ): { patch: Record<string, unknown>; roomFull: boolean } {
   const next: GameSession = {
     ...session,
@@ -697,31 +688,10 @@ function buildJoinCommitPatch(
     const liveUids = appendLiveRoundPlayerUid(next.liveRoundPlayerUids, uid);
     const sessionWithLiveUid: GameSession = { ...next, liveRoundPlayerUids: liveUids };
     const latchSettings = uniqueBonusLatchSettingsPatch(sessionWithLiveUid);
-    const sessionAfterJoin = latchSettings
-      ? { ...sessionWithLiveUid, settings: latchSettings }
-      : sessionWithLiveUid;
     if (latchSettings) {
       patch.settings = latchSettings;
     }
     patch.liveRoundPlayerUids = liveUids;
-
-    const hasWords = Object.keys(context.wordMaps.wordPlayers ?? {}).length > 0;
-    const bonusEnabled = uniqueBonusEnabledForActiveRound(sessionAfterJoin);
-    if (hasWords && bonusEnabled) {
-      const playersForTotals = Object.fromEntries(
-        Object.entries(sessionAfterJoin.players).map(([playerId, player]) => [
-          playerId,
-          { ...player },
-        ]),
-      );
-      recomputeSessionPlayerScores(
-        { players: playersForTotals, wordPlayers: context.wordMaps.wordPlayers },
-        bonusEnabled,
-      );
-      // Leaf score/wordCount only — a full `players` rewrite fails rules (peers' `online`)
-      // and used to abort liveRoundPlayerUids + x2 latch in the same atomic update.
-      Object.assign(patch, buildPlayerTotalsUpdatePatch(playersForTotals, session.players ?? {}));
-    }
   }
 
   return { patch, roomFull: false };
@@ -731,7 +701,7 @@ async function commitNewPlayerJoinTransaction(
   gameId: string,
   uid: string,
   newPlayer: GameSessionPlayer,
-  context: { isBrowseJoin: boolean; wordMaps: SessionWordMaps },
+  context: { isBrowseJoin: boolean },
 ): Promise<JoinCommitResult> {
   const normalized = normalizeRoomCode(gameId);
   const snapshot = await get(sessionRef(normalized));
@@ -808,9 +778,6 @@ async function joinGameSessionWithSnapshot(
       await rejoinExistingPlayer(gameId, uid, profile, { reviveAfterLeave: true });
       updated = await readSessionSnapshot(gameId);
     }
-    if (updated.status === 'waiting' && updated.organizerId === uid) {
-      await clearWaitingLobbyPlayerWordsAsOrganizer(gameId, updated, uid);
-    }
     return updated;
   }
 
@@ -852,7 +819,6 @@ async function joinGameSessionWithSnapshot(
 
   const committed = await commitNewPlayerJoinTransaction(gameId, uid, newPlayer, {
     isBrowseJoin,
-    wordMaps: await fetchSessionWordMaps(gameId),
   });
 
   if (committed === 'ROOM_FULL') {
@@ -881,48 +847,6 @@ async function joinGameSessionWithSnapshot(
   }
   logLocalJoin(joined, profile.name, options);
   return joined;
-}
-
-/**
- * Rewrite session player totals from wordPlayers when they drift (e.g. solo → 3+).
- * Pass `mapsOverride` from a live listener to skip a redundant RTDB read on play.
- */
-export async function syncSessionPlayerScores(
-  gameId: string,
-  mapsOverride?: SessionWordMaps,
-): Promise<void> {
-  await ensureAnonymousAuth();
-  const normalized = normalizeRoomCode(gameId);
-  const maps = mapsOverride ?? (await fetchSessionWordMaps(normalized));
-  if (Object.keys(maps.wordPlayers ?? {}).length === 0) {
-    return;
-  }
-  const preSnapshot = await get(sessionRef(normalized));
-  if (!preSnapshot.exists()) {
-    return;
-  }
-  const session = preSnapshot.val() as GameSession;
-  if (session.status !== 'playing') {
-    return;
-  }
-  const uniqueBonusEnabled = resolveGameSessionSettingsForSession(session).uniqueBonusEnabled;
-  const players = Object.fromEntries(
-    Object.entries(session.players).map(([playerId, player]) => [playerId, { ...player }]),
-  );
-  recomputeSessionPlayerScores({ players, wordPlayers: maps.wordPlayers }, uniqueBonusEnabled);
-  const patch = buildPlayerTotalsUpdatePatch(players, session.players);
-  if (Object.keys(patch).length === 0) {
-    return;
-  }
-
-  try {
-    // Leaf updates avoid transactions on the whole `players` map (maxretry vs presence/score races).
-    await update(sessionRef(normalized), patch);
-  } catch (error) {
-    if (__DEV__) {
-      console.warn('syncSessionPlayerScores', error);
-    }
-  }
 }
 
 /** Parse an RTDB `game_sessions/{id}` payload into a client snapshot (or null). */
@@ -1138,7 +1062,7 @@ export async function updateGameSessionSetup(
   actorUid: string,
   payload: {
     baseWord?: string;
-    /** Surface form written with `baseWord` (like player_words display). */
+    /** Surface form written with `baseWord` (lobby / keyboard / results). */
     baseWordDisplay?: string;
     settings: GameSessionSettings;
   },
@@ -1280,16 +1204,8 @@ export async function startGameSession(gameId: string, actorUid: string): Promis
 
   await clearAllActiveRoundCachesForGame(normalized);
 
-  // Organizer clears all word nodes; picker best-effort (organizer rejoin also clears).
-  await clearAllPlayerWords(
-    normalized,
-    Object.keys(session.players),
-    actorUid,
-    session.organizerId,
-    { everyPlayer: true },
-  );
-
-  await clearSessionWordMaps(normalized);
+  // Fail-loud: must prove maps empty before playing (clients latch awaitingEmptySync).
+  await ensureSessionWordMapsEmptyForRoundStart(normalized);
 
   if (session.isPublic) {
     await unpublishPublicLobby(normalized, actorUid, { force: true });
@@ -1367,10 +1283,7 @@ export async function gameSessionExists(gameId: string): Promise<boolean> {
  * Uses leaf-path `update` (not a whole-session transaction) so peer `online`/`hasLeft`
  * echoes cannot fail `.validate` (LRAHP) and results presence cannot `maxretry` the write.
  */
-export async function finishGameSessionIfExpired(
-  gameId: string,
-  mapsOverride?: SessionWordMaps,
-): Promise<boolean> {
+export async function finishGameSessionIfExpired(gameId: string): Promise<boolean> {
   const normalized = normalizeRoomCode(gameId);
   await ensureAnonymousAuth();
   const preSnapshot = await get(sessionRef(normalized));
@@ -1387,8 +1300,7 @@ export async function finishGameSessionIfExpired(
   if (preSession.addTimeVote) {
     return false;
   }
-  const wordMaps = mapsOverride ?? (await fetchSessionWordMaps(normalized));
-  const patch = buildExpiredFinishLeafPatch(preSession, wordMaps);
+  const patch = buildFinishLeafPatch(preSession, getServerNowForExpire(preSession));
   try {
     await update(sessionRef(normalized), patch);
     return true;
@@ -1408,10 +1320,7 @@ export async function finishGameSessionIfExpired(
  * Force-finish round (organizer / dev).
  * Leaf-path update — same presence-safe contract as `finishGameSessionIfExpired`.
  */
-export async function finishGameSession(
-  gameId: string,
-  mapsOverride?: SessionWordMaps,
-): Promise<void> {
+export async function finishGameSession(gameId: string): Promise<void> {
   const normalized = normalizeRoomCode(gameId);
   await ensureAnonymousAuth();
   const preSnapshot = await get(sessionRef(normalized));
@@ -1422,9 +1331,7 @@ export async function finishGameSession(
   if (preSession.status !== 'playing') {
     return;
   }
-  const finishedAt = getServerNow();
-  const wordMaps = mapsOverride ?? (await fetchSessionWordMaps(normalized));
-  const patch = buildForceFinishLeafPatch(preSession, wordMaps, finishedAt);
+  const patch = buildFinishLeafPatch(preSession, getServerNow());
   try {
     await update(sessionRef(normalized), patch);
   } catch (error) {
@@ -1435,39 +1342,12 @@ export async function finishGameSession(
   await clearAllActiveRoundCachesForGame(normalized);
 }
 
-/** Leaf patch for timer-expired finish — never writes `online`/`hasLeft`. */
-function buildExpiredFinishLeafPatch(
-  session: GameSession,
-  wordMaps: SessionWordMaps,
-): Record<string, unknown> {
-  const finishAt = session.timerEndsAt as number;
-  return buildFinishLeafPatch(session, wordMaps, finishAt);
+function getServerNowForExpire(session: GameSession): number {
+  return session.timerEndsAt as number;
 }
 
-function buildForceFinishLeafPatch(
-  session: GameSession,
-  wordMaps: SessionWordMaps,
-  finishedAt: number,
-): Record<string, unknown> {
-  return buildFinishLeafPatch(session, wordMaps, finishedAt);
-}
-
-function buildFinishLeafPatch(
-  session: GameSession,
-  wordMaps: SessionWordMaps,
-  finishedAt: number,
-): Record<string, unknown> {
-  const players: GameSession['players'] = {};
-  for (const [uid, player] of Object.entries(session.players)) {
-    players[uid] = { ...player };
-  }
-  const uniqueBonusEnabled = resolveGameSessionSettingsForSession(session).uniqueBonusEnabled;
-  if (Object.keys(wordMaps.wordPlayers ?? {}).length > 0) {
-    recomputeSessionPlayerScores(
-      { players, wordPlayers: wordMaps.wordPlayers },
-      uniqueBonusEnabled,
-    );
-  }
+function buildFinishLeafPatch(session: GameSession, finishedAt: number): Record<string, unknown> {
+  // Scores stay client-derived from wordPlayers; RTDB score/wordCount are obsolete (legacy zeros until cleanup).
   const roundPlayedSeconds = computeRoundPlayedSecondsAtFinish(session, finishedAt);
   const purged = withFinishedPurgeFields(
     {
@@ -1476,7 +1356,7 @@ function buildFinishLeafPatch(
     },
     finishedAt,
   );
-  const patch: Record<string, unknown> = {
+  return {
     status: 'finished',
     timerEndsAt: null,
     addTimeVote: null,
@@ -1486,9 +1366,7 @@ function buildFinishLeafPatch(
     roundPlayedSeconds,
     finishedAt: purged.finishedAt,
     purgeAfterAt: purged.purgeAfterAt,
-    ...buildPlayerTotalsUpdatePatch(players, session.players),
   };
-  return patch;
 }
 
 /**
@@ -1522,13 +1400,6 @@ async function joinAlreadyOpenRematchWaitingLobby(
 ): Promise<void> {
   const normalized = normalizeRoomCode(gameId);
   await markResultsExited(normalized, actorUid);
-  await clearAllPlayerWords(
-    normalized,
-    Object.keys(waitingSession.players),
-    actorUid,
-    waitingSession.organizerId,
-    { everyPlayer: actorUid === waitingSession.organizerId },
-  );
   await clearSessionWordMaps(normalized);
   await clearAllActiveRoundCachesForGame(normalized);
   if (actorUid === waitingSession.organizerId) {
@@ -1714,13 +1585,6 @@ export async function rematchFinishedSessionToWaiting(
 
   await markResultsExited(normalized, actorUid);
 
-  await clearAllPlayerWords(
-    normalized,
-    Object.keys(committedWaiting.players),
-    actorUid,
-    committedWaiting.organizerId,
-    { everyPlayer: actorUid === committedWaiting.organizerId },
-  );
   await clearSessionWordMaps(normalized);
 
   await clearAllActiveRoundCachesForGame(normalized);
@@ -1784,7 +1648,6 @@ export async function abandonWaitingGameSession(
   }
   const playerIds = Object.keys(session.players);
   await Promise.all(playerIds.map((playerUid) => cancelPlayerOnDisconnect(normalized, playerUid)));
-  await clearAllPlayerWords(normalized, playerIds, organizerUid, organizerUid);
   await clearSessionWordMaps(normalized);
   try {
     await remove(sessionRef(normalized));

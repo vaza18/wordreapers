@@ -141,12 +141,10 @@ describe('purgeExpiredRtdbSessions', () => {
     expect(mockUpdate).toHaveBeenCalledWith({
       'game_sessions/game-1': null,
       'session_word_maps/game-1': null,
-      'player_words/game-1': null,
     });
     expect(mockUpdate).toHaveBeenCalledWith({
       'game_sessions/game-3': null,
       'session_word_maps/game-3': null,
-      'player_words/game-3': null,
     });
     expect(shouldPurgeSession({ status: 'playing', createdAt: Date.now() }, 1_000)).toBe(false);
   });

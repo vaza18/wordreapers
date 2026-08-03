@@ -1,5 +1,6 @@
 import { globalWordCount } from '@/lib/firebase/session-word-maps';
 import type { GameSession } from '../firebase/types.js';
+import { compareUk } from '../i18n/uk-collator.js';
 import { displayPlayerName } from '../online/public-lobby/display-player-name.js';
 
 /** Player shown in a word-overlap tooltip (same word as viewer). */
@@ -23,7 +24,7 @@ function peerFromSession(
 }
 
 function sortPeers(peers: WordOverlapPeer[]): WordOverlapPeer[] {
-  return [...peers].sort((a, b) => a.name.localeCompare(b.name, 'uk'));
+  return [...peers].sort((a, b) => compareUk(a.name, b.name));
 }
 
 /**

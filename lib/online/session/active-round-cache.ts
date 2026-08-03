@@ -1,6 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import type { StoredPlayerWord } from '../../firebase/player-words-service.js';
 import { normalizeRoomCode } from '../../firebase/room-code.js';
 import type { PlayableLexiconSnapshot } from '../../dictionary/round-playable-lexicon.js';
 import type { PlayingRoundSnapshot } from './online-session-archive.js';
@@ -11,7 +10,6 @@ export interface ActiveRoundCacheEntry {
   gameId: string;
   baseWordRound: number;
   timerEndsAt: number;
-  words: Record<string, StoredPlayerWord>;
   /** Session snapshot for rejoin while the round timer is still running. */
   sessionSnapshot?: PlayingRoundSnapshot;
   /** Cached playable lexicon — avoids rebuild after process death. */
@@ -125,24 +123,4 @@ export async function purgeExpiredActiveRoundCaches(serverNow: number): Promise<
   if (changed) {
     await writeStore(store);
   }
-}
-
-export function wordsMapFromCache(entry: ActiveRoundCacheEntry): Map<string, StoredPlayerWord> {
-  const map = new Map<string, StoredPlayerWord>();
-  for (const [normalized, row] of Object.entries(entry.words)) {
-    if (row && typeof row.display === 'string') {
-      map.set(normalized, row);
-    }
-  }
-  return map;
-}
-
-export function wordsRecordFromMap(
-  words: Map<string, StoredPlayerWord>,
-): Record<string, StoredPlayerWord> {
-  const record: Record<string, StoredPlayerWord> = {};
-  for (const [key, value] of words) {
-    record[key] = value;
-  }
-  return record;
 }

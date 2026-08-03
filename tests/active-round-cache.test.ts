@@ -13,10 +13,7 @@ import {
   getActiveRoundCache,
   purgeExpiredActiveRoundCaches,
   saveActiveRoundCache,
-  wordsMapFromCache,
-  wordsRecordFromMap,
 } from '../lib/online/session/active-round-cache.js';
-import type { StoredPlayerWord } from '../lib/firebase/player-words-service.js';
 
 const snapshot = {
   baseWord: 'тест',
@@ -46,12 +43,12 @@ describe('active-round-cache', () => {
       gameId: 'ABCDE',
       baseWordRound: 0,
       timerEndsAt: 2_000_000,
-      words: { порт: { display: 'порт', at: 100 } },
       sessionSnapshot: snapshot,
     });
 
     const entry = await getActiveRoundCache('ABCDE', 0);
-    expect(entry?.words.порт).toEqual({ display: 'порт', at: 100 });
+    expect(entry?.sessionSnapshot).toEqual(snapshot);
+    expect(entry?.timerEndsAt).toBe(2_000_000);
   });
 
   it('finds the newest non-expired parked round for a room', async () => {
@@ -59,14 +56,12 @@ describe('active-round-cache', () => {
       gameId: 'ABCDE',
       baseWordRound: 0,
       timerEndsAt: 1_500_000,
-      words: {},
       sessionSnapshot: snapshot,
     });
     await saveActiveRoundCache({
       gameId: 'ABCDE',
       baseWordRound: 1,
       timerEndsAt: 2_500_000,
-      words: {},
       sessionSnapshot: { ...snapshot, baseWordRound: 1 },
     });
 
@@ -79,14 +74,12 @@ describe('active-round-cache', () => {
       gameId: 'ABCDE',
       baseWordRound: 0,
       timerEndsAt: 2_000_000,
-      words: {},
       sessionSnapshot: snapshot,
     });
     await saveActiveRoundCache({
       gameId: 'WXYZ',
       baseWordRound: 0,
       timerEndsAt: 2_000_000,
-      words: {},
       sessionSnapshot: snapshot,
     });
 
@@ -101,30 +94,12 @@ describe('active-round-cache', () => {
       gameId: 'ABCDE',
       baseWordRound: 0,
       timerEndsAt: 1_000,
-      words: {},
       sessionSnapshot: snapshot,
     });
 
     await purgeExpiredActiveRoundCaches(2_000);
 
     await expect(getActiveRoundCache('ABCDE', 0)).resolves.toBeNull();
-  });
-
-  it('converts cache words to maps and back', () => {
-    const map = wordsMapFromCache({
-      gameId: 'ABCDE',
-      baseWordRound: 0,
-      timerEndsAt: 2_000_000,
-      words: {
-        порт: { display: 'порт', at: 100 },
-        bad: { at: 1 } as StoredPlayerWord,
-      },
-    });
-
-    expect(map.size).toBe(1);
-    expect(wordsRecordFromMap(map)).toEqual({
-      порт: { display: 'порт', at: 100 },
-    });
   });
 
   it('requires a live session snapshot and unexpired timer for restore', () => {
@@ -134,7 +109,6 @@ describe('active-round-cache', () => {
           gameId: 'ABCDE',
           baseWordRound: 0,
           timerEndsAt: 2_000_000,
-          words: {},
           sessionSnapshot: snapshot,
         },
         1_500_000,
@@ -147,7 +121,6 @@ describe('active-round-cache', () => {
           gameId: 'ABCDE',
           baseWordRound: 0,
           timerEndsAt: 1_000,
-          words: {},
           sessionSnapshot: snapshot,
         },
         2_000,

@@ -1,7 +1,8 @@
+import { compareUk } from '../i18n/uk-collator.js';
+import { devLog } from '../debug/dev-log.js';
 import type { DictionaryIndex } from './dictionary-index.js';
 import { normalizeUk, toDisplayUpper } from './normalize.js';
 import { buildLetterMultiset } from './validate-word.js';
-import { devLog } from '../debug/dev-log.js';
 
 /** Compact snapshot stored in local finished-round archives (v3). */
 export interface PlayableLexiconSnapshot {
@@ -106,9 +107,6 @@ const ASYNC_CHECK_EVERY_WORDS = 512;
 /** Default cooperative slice; higher = faster wall-clock, slightly longer UI stalls. */
 const ASYNC_YIELD_EVERY_MS_DEFAULT = 64;
 
-/** Shared collator — per-call `localeCompare('uk')` is very slow on Hermes for large sorts. */
-const UK_COLLATOR = new Intl.Collator('uk');
-
 type LexiconBuildState = {
   words: Set<string>;
   displays: Map<string, string>;
@@ -174,7 +172,7 @@ function considerWord(state: LexiconBuildState, word: string): void {
 }
 
 function finalizeBuild(state: LexiconBuildState): RoundPlayableLexicon {
-  const sortedWords = [...state.words].sort((a, b) => UK_COLLATOR.compare(a, b));
+  const sortedWords = [...state.words].sort(compareUk);
   return {
     words: state.words,
     sortedWords,

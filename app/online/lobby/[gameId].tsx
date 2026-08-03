@@ -41,7 +41,6 @@ import {
   type GameSessionSnapshot,
 } from '@/lib/firebase/game-session-service';
 import { setRoomPrivate, syncPublicRosterAliases } from '@/lib/firebase/public-lobby-service';
-import { clearWaitingLobbyPlayerWordsAsOrganizer } from '@/lib/firebase/player-words-service';
 import { ensureAnonymousAuth } from '@/lib/firebase/auth';
 import { devLogAction } from '@/lib/debug/dev-log';
 import {
@@ -131,7 +130,6 @@ export default function LobbyScreen() {
   const [rematchArchive, setRematchArchive] = useState<FinishedRoundArchive | null | undefined>(
     undefined,
   );
-  const lobbyWordsClearedForRoundRef = useRef<number | null>(null);
   const myUid = firebaseUid ?? '';
 
   useEffect(() => {
@@ -313,18 +311,6 @@ export default function LobbyScreen() {
       void syncLobbyPickerState(gameId);
     }
   }, [gameId, session]);
-
-  useEffect(() => {
-    if (!gameId || !session || session.status !== 'waiting' || !isOrganizer || !myUid) {
-      return;
-    }
-    const round = session.baseWordRound ?? 0;
-    if (lobbyWordsClearedForRoundRef.current === round) {
-      return;
-    }
-    lobbyWordsClearedForRoundRef.current = round;
-    void clearWaitingLobbyPlayerWordsAsOrganizer(gameId, session, myUid);
-  }, [gameId, isOrganizer, myUid, session]);
 
   useOrganizerAbandonWaitingOnExit(
     gameId,

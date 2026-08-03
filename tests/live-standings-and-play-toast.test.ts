@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { formatPlayToastEvent } from '../lib/online/format-play-toast.js';
-import {
-  liveScoreForPlayer,
-  sessionPlayerScoresMatchWordMaps,
-} from '../lib/online/live-standings.js';
+import { liveScoreForPlayer } from '../lib/online/live-standings.js';
 import { playingSession } from './helpers/game-session-fixtures.js';
 
 describe('live-standings', () => {
@@ -17,7 +14,6 @@ describe('live-standings', () => {
     );
 
     expect(liveScoreForPlayer(session, 'org')).toBeGreaterThan(0);
-    expect(sessionPlayerScoresMatchWordMaps(session)).toBe(false);
   });
 });
 

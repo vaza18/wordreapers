@@ -309,6 +309,11 @@ export function RoundResultsView({
                   onContentSizeChange={panelScroll.onContentSizeChange}
                   scrollEventThrottle={panelScroll.scrollEventThrottle}
                 />
+                {lexiconLoading && globalWords.length > 0 ? (
+                  <View pointerEvents="none" style={styles.lexiconLoadingOverlay}>
+                    <ActivityIndicator size="small" color={colors.accent} />
+                  </View>
+                ) : null}
                 {missingListPending ? (
                   <View pointerEvents="none" style={styles.missingListPending}>
                     <ActivityIndicator size="small" color={colors.accent} />
@@ -494,6 +499,11 @@ function createStyles(colors: ThemeColors) {
       justifyContent: 'center',
       backgroundColor: colors.notebookPaper,
       opacity: 0.72,
+    },
+    lexiconLoadingOverlay: {
+      position: 'absolute',
+      right: spacing.sm,
+      bottom: spacing.sm,
     },
     panelScroll: {
       flex: 1,

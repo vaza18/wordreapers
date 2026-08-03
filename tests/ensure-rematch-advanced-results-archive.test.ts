@@ -8,7 +8,6 @@ vi.mock('../lib/online/session/online-session-archive.js', () => ({
   saveFinishedRoundArchive: (...args: unknown[]) => saveFinishedRoundArchive(...args),
 }));
 
-import type { StoredPlayerWord } from '../lib/firebase/player-words-service.js';
 import type { GameSession } from '../lib/firebase/types.js';
 import {
   buildPartialArchiveWordsForLocalTimeUp,
@@ -16,16 +15,12 @@ import {
   resolveLocalFinishedSessionForResultsArchive,
 } from '../lib/online/ensure-rematch-advanced-results-archive.js';
 
-function word(display: string): StoredPlayerWord {
-  return { display, at: 1 };
-}
-
 describe('buildPartialArchiveWordsForLocalTimeUp', () => {
   it('keeps viewer words and empty maps for peers', () => {
-    const myWords = new Map([['слово', word('слово')]]);
+    const myWords = ['слово'];
     const words = buildPartialArchiveWordsForLocalTimeUp(['me', 'peer'], 'me', myWords);
-    expect(words.get('me')?.size).toBe(1);
-    expect(words.get('peer')?.size).toBe(0);
+    expect(words.get('me')?.length).toBe(1);
+    expect(words.get('peer')?.length).toBe(0);
   });
 });
 
@@ -42,7 +37,7 @@ describe('ensureLocalArchiveForRematchAdvancedResults', () => {
         expectedBaseWordRound: 1,
         localFinishedSession: null,
         myUid: 'me',
-        myWords: new Map(),
+        myWords: [],
       }),
     ).resolves.toBe(true);
     expect(saveFinishedRoundArchive).not.toHaveBeenCalled();
@@ -63,10 +58,33 @@ describe('ensureLocalArchiveForRematchAdvancedResults', () => {
         expectedBaseWordRound: 1,
         localFinishedSession: local,
         myUid: 'me',
-        myWords: new Map([['слово', word('слово')]]),
+        myWords: ['слово'],
       }),
     ).resolves.toBe(true);
     expect(saveFinishedRoundArchive).toHaveBeenCalledOnce();
+  });
+
+  it('does not save partial peer lists as a final rematch archive', async () => {
+    getFinishedRoundArchive.mockResolvedValue(null);
+    const local = {
+      status: 'finished',
+      baseWordRound: 1,
+      players: {
+        me: { name: 'Me', wordCount: 1, score: 1, online: false },
+        peer: { name: 'Peer', wordCount: 2, score: 2, online: false },
+      },
+    } as unknown as GameSession;
+
+    await expect(
+      ensureLocalArchiveForRematchAdvancedResults({
+        gameId: 'ABCDE',
+        expectedBaseWordRound: 1,
+        localFinishedSession: local,
+        myUid: 'me',
+        myWords: ['слово'],
+      }),
+    ).resolves.toBe(false);
+    expect(saveFinishedRoundArchive).not.toHaveBeenCalled();
   });
 
   it('returns false when rematch advanced and no local finished snapshot', async () => {
@@ -77,7 +95,7 @@ describe('ensureLocalArchiveForRematchAdvancedResults', () => {
         expectedBaseWordRound: 1,
         localFinishedSession: null,
         myUid: 'me',
-        myWords: new Map(),
+        myWords: [],
       }),
     ).resolves.toBe(false);
     expect(saveFinishedRoundArchive).not.toHaveBeenCalled();
@@ -96,7 +114,7 @@ describe('ensureLocalArchiveForRematchAdvancedResults', () => {
           players: { me: { name: 'Me', wordCount: 1, score: 1, online: false } },
         } as unknown as GameSession,
         myUid: 'me',
-        myWords: new Map([['слово', word('слово')]]),
+        myWords: ['слово'],
       }),
     ).resolves.toBe(true);
     expect(saveFinishedRoundArchive).toHaveBeenCalledOnce();

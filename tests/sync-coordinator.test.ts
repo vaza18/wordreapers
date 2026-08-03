@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getMock = vi.fn();
 const abandonWaitingGameSession = vi.fn();
-const fetchSessionPlayerWords = vi.fn();
+const tryFetchSessionWordMaps = vi.fn();
 const persistLocalArchive = vi.fn();
 const finalizeOnlineRoundForPlayer = vi.fn();
 const clearPendingRoundArchive = vi.fn();
@@ -21,8 +21,12 @@ vi.mock('../lib/firebase/game-session-service.js', () => ({
   abandonWaitingGameSession: (...args: unknown[]) => abandonWaitingGameSession(...args),
 }));
 
-vi.mock('../lib/firebase/player-words-service.js', () => ({
-  fetchSessionPlayerWords: (...args: unknown[]) => fetchSessionPlayerWords(...args),
+vi.mock('../lib/firebase/session-word-maps-service.js', () => ({
+  tryFetchSessionWordMaps: (...args: unknown[]) => tryFetchSessionWordMaps(...args),
+}));
+
+vi.mock('../lib/debug/dev-log.js', () => ({
+  devLogAction: vi.fn(),
 }));
 
 vi.mock('../lib/online/coordinated-session-cleanup.js', () => ({
@@ -41,6 +45,7 @@ vi.mock('../lib/online/session/pending-round-archive.js', () => ({
 vi.mock('../lib/online/session/online-session-archive.js', () => ({
   getFinishedRoundArchive: vi.fn(),
   isFinishedArchiveStale: vi.fn(),
+  isLegacyFinishedArchiveWords: vi.fn(() => false),
   listFinishedRoundArchives: vi.fn(),
   markFinishedArchiveAckSent: vi.fn(),
 }));
@@ -70,8 +75,8 @@ describe('sync-coordinator', () => {
     vi.mocked(getFinishedRoundArchive).mockResolvedValue(null);
     vi.mocked(isFinishedArchiveStale).mockReturnValue(true);
     vi.mocked(markFinishedArchiveAckSent).mockResolvedValue(undefined);
-    fetchSessionPlayerWords.mockResolvedValue(new Map());
-    persistLocalArchive.mockResolvedValue(undefined);
+    tryFetchSessionWordMaps.mockResolvedValue({ ok: true, maps: { wordPlayers: {} } });
+    persistLocalArchive.mockResolvedValue('saved');
     finalizeOnlineRoundForPlayer.mockResolvedValue(undefined);
     clearPendingRoundArchive.mockResolvedValue(undefined);
     abandonWaitingGameSession.mockResolvedValue(undefined);
@@ -127,11 +132,238 @@ describe('sync-coordinator', () => {
         },
       }),
     });
+    tryFetchSessionWordMaps.mockResolvedValue({
+      ok: true,
+      maps: { wordPlayers: { порт: { org: true } } },
+    });
+
+    await syncFinishedRoundsCoordinator({ uid: 'org' });
+
+    expect(persistLocalArchive).toHaveBeenCalledWith(
+      'ABCDE',
+      'org',
+      expect.objectContaining({ status: 'finished' }),
+      expect.any(Map),
+    );
+    const archivedWords = persistLocalArchive.mock.calls[0]?.[3] as Map<string, string[]>;
+    expect(archivedWords.get('org')).toEqual(['порт']);
+    expect(finalizeOnlineRoundForPlayer).toHaveBeenCalled();
+    expect(clearPendingRoundArchive).toHaveBeenCalledWith('ABCDE', 0);
+  });
+
+  it('keeps pending when maps fetch fails', async () => {
+    vi.mocked(listPendingRoundArchives).mockResolvedValue([
+      { gameId: 'ABCDE', baseWordRound: 0, uid: 'org', markedAt: 1_000 },
+    ]);
+    getMock.mockResolvedValue({
+      exists: () => true,
+      val: () => ({
+        baseWord: 'тест',
+        status: 'finished',
+        settings: DEFAULT_SESSION_SETTINGS,
+        timerEndsAt: null,
+        organizerId: 'org',
+        baseWordRound: 0,
+        players: {
+          org: { name: 'Org', wordCount: 1, score: 5, online: false },
+        },
+      }),
+    });
+    tryFetchSessionWordMaps.mockResolvedValue({ ok: false, error: new Error('network') });
+
+    await syncFinishedRoundsCoordinator({ uid: 'org' });
+
+    expect(persistLocalArchive).not.toHaveBeenCalled();
+    expect(finalizeOnlineRoundForPlayer).not.toHaveBeenCalled();
+    expect(clearPendingRoundArchive).not.toHaveBeenCalled();
+  });
+
+  it('keeps pending when empty maps disagree with wordPlayers claim', async () => {
+    vi.mocked(listPendingRoundArchives).mockResolvedValue([
+      { gameId: 'ABCDE', baseWordRound: 0, uid: 'org', markedAt: 1_000 },
+    ]);
+    getMock.mockResolvedValue({
+      exists: () => true,
+      val: () => ({
+        baseWord: 'тест',
+        status: 'finished',
+        settings: DEFAULT_SESSION_SETTINGS,
+        timerEndsAt: null,
+        organizerId: 'org',
+        baseWordRound: 0,
+        wordPlayers: { порт: { org: true } },
+        players: {
+          org: { name: 'Org', wordCount: 1, score: 5, online: false },
+        },
+      }),
+    });
+    tryFetchSessionWordMaps.mockResolvedValue({ ok: true, maps: { wordPlayers: {} } });
+
+    await syncFinishedRoundsCoordinator({ uid: 'org' });
+
+    expect(persistLocalArchive).not.toHaveBeenCalled();
+    expect(finalizeOnlineRoundForPlayer).not.toHaveBeenCalled();
+    expect(clearPendingRoundArchive).not.toHaveBeenCalled();
+  });
+
+  it('does not clear pending when legacy empty+counts and maps are empty', async () => {
+    const { isLegacyFinishedArchiveWords } =
+      await import('../lib/online/session/online-session-archive.js');
+    vi.mocked(listPendingRoundArchives).mockResolvedValue([
+      { gameId: 'ABCDE', baseWordRound: 0, uid: 'org', markedAt: 1_000 },
+    ]);
+    vi.mocked(isLegacyFinishedArchiveWords).mockReturnValue(true);
+    vi.mocked(getFinishedRoundArchive).mockResolvedValue({
+      gameId: 'ABCDE',
+      baseWordRound: 0,
+      savedAt: 1,
+      ackSent: false,
+      session: {
+        baseWord: 'тест',
+        status: 'finished',
+        settings: DEFAULT_SESSION_SETTINGS,
+        timerEndsAt: null,
+        organizerId: 'org',
+        baseWordRound: 0,
+        players: {
+          org: { name: 'Org', wordCount: 2, score: 4, online: false },
+        },
+      },
+      playerWords: { org: null } as unknown as Record<string, string[]>,
+      playerWordCounts: { org: 2 },
+    });
+    getMock.mockResolvedValue({
+      exists: () => true,
+      val: () => ({
+        baseWord: 'тест',
+        status: 'finished',
+        settings: DEFAULT_SESSION_SETTINGS,
+        timerEndsAt: null,
+        organizerId: 'org',
+        baseWordRound: 0,
+        wordPlayers: { порт: { org: true } },
+        players: {
+          org: { name: 'Org', wordCount: 2, score: 4, online: false },
+        },
+      }),
+    });
+    tryFetchSessionWordMaps.mockResolvedValue({ ok: true, maps: { wordPlayers: {} } });
+
+    await syncFinishedRoundsCoordinator({ uid: 'org' });
+
+    expect(finalizeOnlineRoundForPlayer).not.toHaveBeenCalled();
+    expect(markFinishedArchiveAckSent).not.toHaveBeenCalled();
+    expect(clearPendingRoundArchive).not.toHaveBeenCalled();
+  });
+
+  it('finalizes from live maps when legacy archive extract is empty but maps still have words', async () => {
+    const { isLegacyFinishedArchiveWords } =
+      await import('../lib/online/session/online-session-archive.js');
+    vi.mocked(listPendingRoundArchives).mockResolvedValue([
+      { gameId: 'ABCDE', baseWordRound: 0, uid: 'org', markedAt: 1_000 },
+    ]);
+    vi.mocked(isLegacyFinishedArchiveWords).mockReturnValue(true);
+    vi.mocked(getFinishedRoundArchive).mockResolvedValue({
+      gameId: 'ABCDE',
+      baseWordRound: 0,
+      savedAt: 1,
+      ackSent: false,
+      session: {
+        baseWord: 'тест',
+        status: 'finished',
+        settings: DEFAULT_SESSION_SETTINGS,
+        timerEndsAt: null,
+        organizerId: 'org',
+        baseWordRound: 0,
+        players: {
+          org: { name: 'Org', wordCount: 1, score: 2, online: false },
+        },
+      },
+      playerWords: { org: null } as unknown as Record<string, string[]>,
+      playerWordCounts: { org: 1 },
+    });
+    getMock.mockResolvedValue({
+      exists: () => true,
+      val: () => ({
+        baseWord: 'тест',
+        status: 'finished',
+        settings: DEFAULT_SESSION_SETTINGS,
+        timerEndsAt: null,
+        organizerId: 'org',
+        baseWordRound: 0,
+        players: {
+          org: { name: 'Org', wordCount: 1, score: 2, online: false },
+        },
+      }),
+    });
+    tryFetchSessionWordMaps.mockResolvedValue({
+      ok: true,
+      maps: { wordPlayers: { порт: { org: true } } },
+    });
 
     await syncFinishedRoundsCoordinator({ uid: 'org' });
 
     expect(persistLocalArchive).toHaveBeenCalled();
-    expect(finalizeOnlineRoundForPlayer).toHaveBeenCalled();
+    expect(finalizeOnlineRoundForPlayer).toHaveBeenCalledWith(
+      'ABCDE',
+      0,
+      'org',
+      expect.arrayContaining([expect.objectContaining({ playerId: 'org', wordCount: 1 })]),
+    );
+    expect(clearPendingRoundArchive).toHaveBeenCalledWith('ABCDE', 0);
+  });
+
+  it('finalizes legacy archive stats from normalized object keys', async () => {
+    const { isLegacyFinishedArchiveWords } =
+      await import('../lib/online/session/online-session-archive.js');
+    vi.mocked(listPendingRoundArchives).mockResolvedValue([
+      { gameId: 'ABCDE', baseWordRound: 0, uid: 'org', markedAt: 1_000 },
+    ]);
+    vi.mocked(isLegacyFinishedArchiveWords).mockReturnValue(true);
+    vi.mocked(getFinishedRoundArchive).mockResolvedValue({
+      gameId: 'ABCDE',
+      baseWordRound: 0,
+      savedAt: 1,
+      ackSent: true,
+      session: {
+        baseWord: 'тест',
+        status: 'finished',
+        settings: DEFAULT_SESSION_SETTINGS,
+        timerEndsAt: null,
+        organizerId: 'org',
+        baseWordRound: 0,
+        players: {
+          org: { name: 'Org', wordCount: 1, score: 2, online: false },
+        },
+      },
+      playerWords: {
+        org: { порт: { display: 'ПОРТ', at: 1 } },
+      } as unknown as Record<string, string[]>,
+      playerWordCounts: { org: 1 },
+    });
+    getMock.mockResolvedValue({
+      exists: () => true,
+      val: () => ({
+        baseWord: 'тест',
+        status: 'finished',
+        settings: DEFAULT_SESSION_SETTINGS,
+        timerEndsAt: null,
+        organizerId: 'org',
+        baseWordRound: 0,
+        players: {
+          org: { name: 'Org', wordCount: 1, score: 2, online: false },
+        },
+      }),
+    });
+
+    await syncFinishedRoundsCoordinator({ uid: 'org' });
+
+    expect(finalizeOnlineRoundForPlayer).toHaveBeenCalledWith(
+      'ABCDE',
+      0,
+      'org',
+      expect.arrayContaining([expect.objectContaining({ playerId: 'org', wordCount: 1 })]),
+    );
     expect(clearPendingRoundArchive).toHaveBeenCalledWith('ABCDE', 0);
   });
 

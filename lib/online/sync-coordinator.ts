@@ -3,14 +3,25 @@ import { get, ref } from 'firebase/database';
 import { abandonWaitingGameSession } from '../firebase/game-session-service.js';
 import { getFirebaseDatabase } from '../firebase/init.js';
 import { gameSessionPath } from '../firebase/paths.js';
-import { fetchSessionPlayerWords } from '../firebase/player-words-service.js';
+import { tryFetchSessionWordMaps } from '../firebase/session-word-maps-service.js';
 import { normalizeRoomCode } from '../firebase/room-code.js';
 import type { GameSession } from '../firebase/types.js';
-import { buildStandingsFromSession } from '../game/scoring.js';
+import { buildStandingsFromSessionWordMaps } from '../game/scoring.js';
+import { resolveGameSessionSettingsForSession } from '../firebase/session-settings.js';
+import { devLogAction } from '../debug/dev-log.js';
 
-import type { AllPlayerWords } from './session/clone-player-words.js';
+import {
+  wordPlayersFromWordsByPlayer,
+  wordsByPlayerFromWordPlayers,
+} from './word-players-invert.js';
 import { persistLocalArchive } from './coordinated-session-cleanup.js';
 import { finalizeOnlineRoundForPlayer } from './finalize-online-round.js';
+import { buildLiveStandingsFromSession } from './live-standings.js';
+import { shouldSkipEmptyArchiveWords } from './session/archive-words-gate.js';
+import {
+  shouldFinalizeStatsFromFinishedArchive,
+  wordsByPlayerFromArchivedPlayerWords,
+} from './session/archive-player-words-for-stats.js';
 import {
   clearPendingRoundArchive,
   listPendingRoundArchives,
@@ -18,6 +29,7 @@ import {
 import {
   getFinishedRoundArchive,
   isFinishedArchiveStale,
+  isLegacyFinishedArchiveWords,
   listFinishedRoundArchives,
   markFinishedArchiveAckSent,
 } from './session/online-session-archive.js';
@@ -48,27 +60,83 @@ async function readSession(gameId: string): Promise<GameSession | null> {
   return snapshot.val() as GameSession;
 }
 
+/** `done` → safe to clear pending; `retryable` → keep pending for a later sync. */
+type PersistArchiveOutcome = 'done' | 'retryable';
+
 async function persistArchiveIfNeeded(
   gameId: string,
   uid: string,
   session: GameSession,
-): Promise<void> {
+): Promise<PersistArchiveOutcome> {
   const baseWordRound = session.baseWordRound ?? 0;
   const existing = await getFinishedRoundArchive(gameId, baseWordRound);
-  const standings = buildStandingsFromSession(session);
+  const uniqueBonusEnabled = resolveGameSessionSettingsForSession(session).uniqueBonusEnabled;
 
-  if (existing && !isFinishedArchiveStale(existing, session)) {
-    if (existing.ackSent !== true) {
-      await markFinishedArchiveAckSent(gameId, baseWordRound);
+  if (
+    existing &&
+    (isLegacyFinishedArchiveWords(existing) || !isFinishedArchiveStale(existing, session))
+  ) {
+    const legacy = isLegacyFinishedArchiveWords(existing);
+    const wordsByPlayer = wordsByPlayerFromArchivedPlayerWords(existing.playerWords);
+    if (
+      shouldFinalizeStatsFromFinishedArchive({
+        isLegacy: legacy,
+        wordsByPlayer,
+        playerWordCounts: existing.playerWordCounts,
+      })
+    ) {
+      if (existing.ackSent !== true) {
+        await markFinishedArchiveAckSent(gameId, baseWordRound);
+      }
+      const standings = buildStandingsFromSessionWordMaps(
+        {
+          players: existing.session.players,
+          wordPlayers: existing.session.wordPlayers ?? wordPlayersFromWordsByPlayer(wordsByPlayer),
+        },
+        uniqueBonusEnabled,
+      );
+      await finalizeOnlineRoundForPlayer(gameId, baseWordRound, uid, standings);
+      return 'done';
     }
-    await finalizeOnlineRoundForPlayer(gameId, baseWordRound, uid, standings);
-    return;
+    // Legacy empty extract + claimed counts: do not ack/clear pending — try live maps.
+    devLogAction('persistArchiveIfNeeded legacy empty claimed; trying maps', {
+      level: 'detail',
+      room: gameId,
+    });
   }
 
-  const playerIds = Object.keys(session.players);
-  const words: AllPlayerWords = await fetchSessionPlayerWords(gameId, playerIds);
-  await persistLocalArchive(gameId, uid, session, words);
-  await finalizeOnlineRoundForPlayer(gameId, baseWordRound, uid, standings);
+  const mapsResult = await tryFetchSessionWordMaps(gameId);
+  if (!mapsResult.ok) {
+    devLogAction('persistArchiveIfNeeded maps fetch failed', {
+      level: 'detail',
+      room: gameId,
+      details:
+        mapsResult.error instanceof Error ? mapsResult.error.message : String(mapsResult.error),
+    });
+    return 'retryable';
+  }
+  const words = wordsByPlayerFromWordPlayers(mapsResult.maps.wordPlayers);
+  const claimSession =
+    Object.keys(session.wordPlayers ?? {}).length > 0
+      ? session
+      : { ...session, wordPlayers: mapsResult.maps.wordPlayers };
+  if (shouldSkipEmptyArchiveWords(claimSession, words, existing)) {
+    devLogAction('persistArchiveIfNeeded skip empty maps with claimed words', {
+      level: 'detail',
+      room: gameId,
+    });
+    return 'retryable';
+  }
+  const archiveResult = await persistLocalArchive(gameId, uid, session, words);
+  if (archiveResult === 'skipped_retryable') {
+    return 'retryable';
+  }
+  const standingsForFinalize = buildLiveStandingsFromSession({
+    ...session,
+    wordPlayers: mapsResult.maps.wordPlayers,
+  });
+  await finalizeOnlineRoundForPlayer(gameId, baseWordRound, uid, standingsForFinalize);
+  return 'done';
 }
 
 async function tryAbandonStaleWaitingRoom(
@@ -142,8 +210,8 @@ async function syncWorkItem(item: SyncWorkItem, context: SyncCoordinatorContext)
   }
 
   if (uid && session.players[uid]) {
-    await persistArchiveIfNeeded(item.gameId, uid, session);
-    if (item.fromPending) {
+    const outcome = await persistArchiveIfNeeded(item.gameId, uid, session);
+    if (item.fromPending && outcome === 'done') {
       await clearPendingRoundArchive(item.gameId, item.baseWordRound);
     }
   }

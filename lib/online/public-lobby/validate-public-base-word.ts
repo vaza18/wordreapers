@@ -1,4 +1,5 @@
 import { normalizeUk } from '../../dictionary/normalize.js';
+import { compareUk } from '../../i18n/uk-collator.js';
 
 function hasWordInSortedList(words: readonly string[], normalized: string): boolean {
   let lo = 0;
@@ -9,7 +10,7 @@ function hasWordInSortedList(words: readonly string[], normalized: string): bool
     if (value === undefined) {
       break;
     }
-    const cmp = normalized.localeCompare(value, 'uk');
+    const cmp = compareUk(normalized, value);
     if (cmp === 0) {
       return true;
     }

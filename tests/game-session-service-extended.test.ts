@@ -8,7 +8,8 @@ const runTransactionMock = vi.fn();
 const onValueMock = vi.fn();
 const onDisconnectCancel = vi.fn();
 const onDisconnectUpdate = vi.fn();
-const fetchSessionWordMaps = vi.fn();
+const tryFetchSessionWordMaps = vi.fn();
+const requireSessionWordMaps = vi.fn();
 const ensureFirebaseAppCheck = vi.fn();
 
 vi.mock('firebase/database', () => ({
@@ -34,13 +35,11 @@ vi.mock('../lib/firebase/public-lobby-service.js', () => ({
   unpublishPublicLobby: vi.fn(),
 }));
 
-vi.mock('../lib/firebase/player-words-service.js', () => ({
-  clearAllPlayerWords: vi.fn().mockResolvedValue(undefined),
-}));
-
 vi.mock('../lib/firebase/session-word-maps-service.js', () => ({
   clearSessionWordMaps: vi.fn().mockResolvedValue(undefined),
-  fetchSessionWordMaps: (...args: unknown[]) => fetchSessionWordMaps(...args),
+  ensureSessionWordMapsEmptyForRoundStart: vi.fn().mockResolvedValue(undefined),
+  tryFetchSessionWordMaps: (...args: unknown[]) => tryFetchSessionWordMaps(...args),
+  requireSessionWordMaps: (...args: unknown[]) => requireSessionWordMaps(...args),
 }));
 
 vi.mock('../lib/firebase/server-clock.js', () => ({
@@ -95,7 +94,6 @@ import {
   subscribeGameSession,
   subscribePlayerOnlinePresence,
   syncLobbyPickerState,
-  syncSessionPlayerScores,
   updateGameSessionBaseWord,
   updateGameSessionSetup,
   resetSharedGameSessionSubscriptionsForTests,
@@ -127,9 +125,9 @@ describe('game-session-service extended', () => {
     removeMock.mockResolvedValue(undefined);
     setMock.mockResolvedValue(undefined);
     ensureFirebaseAppCheck.mockResolvedValue(undefined);
-    fetchSessionWordMaps.mockResolvedValue({
-      wordPlayers: { порт: { 'org-1': true } },
-    });
+    const maps = { wordPlayers: { порт: { 'org-1': true } } };
+    tryFetchSessionWordMaps.mockResolvedValue({ ok: true, maps });
+    requireSessionWordMaps.mockResolvedValue(maps);
   });
 
   it('rejects invalid room codes on join', async () => {
@@ -420,43 +418,6 @@ describe('game-session-service extended', () => {
     });
 
     await expect(restartGameSessionForRematch('ABCDE', 'p2')).rejects.toThrow('REMATCH_FAILED');
-  });
-
-  it('syncs player scores from word maps during playing', async () => {
-    getMock.mockResolvedValue({
-      exists: () => true,
-      val: () => ({
-        baseWord: 'тест',
-        status: 'playing',
-        settings: DEFAULT_SESSION_SETTINGS,
-        timerEndsAt: 5_000_000,
-        organizerId: 'org-1',
-        players: {
-          'org-1': { name: 'Org', wordCount: 0, score: 0 },
-        },
-      }),
-    });
-    updateMock.mockResolvedValue(undefined);
-
-    await syncSessionPlayerScores('ABCDE');
-
-    expect(updateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ path: 'game_sessions/ABCDE' }),
-      expect.objectContaining({
-        'players/org-1/score': expect.any(Number),
-        'players/org-1/wordCount': expect.any(Number),
-      }),
-    );
-    expect(runTransactionMock).not.toHaveBeenCalled();
-  });
-
-  it('skips score sync when word maps are empty', async () => {
-    fetchSessionWordMaps.mockResolvedValue({ wordPlayers: {} });
-
-    await syncSessionPlayerScores('ABCDE');
-
-    expect(getMock).not.toHaveBeenCalled();
-    expect(updateMock).not.toHaveBeenCalled();
   });
 
   it('realigns lobby picker seat when chooser is offline but keeps the word', async () => {

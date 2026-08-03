@@ -1,4 +1,3 @@
-import type { StoredPlayerWord } from '../firebase/player-words-service.js';
 import type { GameSession } from '../firebase/types.js';
 
 import { buildLocalTimeUpSessionSnapshot } from './play-local-time-up.js';
@@ -9,24 +8,21 @@ import {
 } from './session/online-session-archive.js';
 
 /**
- * Build a minimal archive word map after rematch when RTDB player_words may already
- * be cleared — keep the viewer's words; peers may be empty until history rebuild.
+ * Build a minimal archive word map for a solo finished seed (viewer only).
+ * Multi-player partial peers must not be saved as a final archive — see
+ * {@link ensureLocalArchiveForRematchAdvancedResults}.
  */
 export function buildPartialArchiveWordsForLocalTimeUp(
   playerIds: string[],
   myUid: string,
-  myWords: Map<string, StoredPlayerWord>,
+  myWords: string[],
 ): AllPlayerWords {
   const words: AllPlayerWords = new Map();
   for (const playerId of playerIds) {
     if (playerId === myUid) {
-      const mine = new Map<string, StoredPlayerWord>();
-      for (const [normalized, word] of myWords) {
-        mine.set(normalized, word);
-      }
-      words.set(playerId, mine);
+      words.set(playerId, [...myWords]);
     } else {
-      words.set(playerId, new Map());
+      words.set(playerId, []);
     }
   }
   return words;
@@ -64,15 +60,18 @@ export function resolveLocalFinishedSessionForResultsArchive(options: {
 
 /**
  * Before opening results on `rematch_advanced` / finish timeout, require a local
- * finished archive for the pinned round. Prefer an existing archive; otherwise
- * seed from a local synthetic finished snapshot (never fetch RTDB words after rematch).
+ * finished archive for the pinned round. Prefer an existing archive.
+ *
+ * Solo (single roster member): may seed viewer words locally.
+ * Multi-player: never save empty peer lists as a final archive — return false
+ * so play shows retry (full maps archive must exist from the finished window).
  */
 export async function ensureLocalArchiveForRematchAdvancedResults(options: {
   gameId: string;
   expectedBaseWordRound: number;
   localFinishedSession: GameSession | null | undefined;
   myUid: string;
-  myWords: Map<string, StoredPlayerWord>;
+  myWords: string[];
 }): Promise<boolean> {
   const existing = await getFinishedRoundArchive(options.gameId, options.expectedBaseWordRound);
   if (existing) {
@@ -89,11 +88,12 @@ export async function ensureLocalArchiveForRematchAdvancedResults(options: {
     session.status === 'finished'
       ? session
       : buildLocalTimeUpSessionSnapshot(session, options.gameId);
-  const words = buildPartialArchiveWordsForLocalTimeUp(
-    Object.keys(finished.players),
-    options.myUid,
-    options.myWords,
-  );
+  const playerIds = Object.keys(finished.players);
+  const hasPeers = playerIds.some((id) => id !== options.myUid);
+  if (hasPeers) {
+    return false;
+  }
+  const words = buildPartialArchiveWordsForLocalTimeUp(playerIds, options.myUid, options.myWords);
   await saveFinishedRoundArchive(options.gameId, finished, words);
   return true;
 }

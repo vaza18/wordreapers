@@ -2,21 +2,23 @@ import { router } from 'expo-router';
 import { useEffect } from 'react';
 
 import { loadExpoNotifications } from '@/lib/native/load-expo-notifications';
-import { normalizeRoomCode } from '@/lib/firebase/room-code';
 import { parseRoundFinishedNotificationData } from '@/lib/online/round-finished-notification-data';
+import { onlineResultsRoute } from '@/lib/online/online-results-route';
 import { runOnlineSyncNow } from '@/hooks/useOnlineSyncCoordinator';
 import { useFirebaseStore } from '@/store/firebase-store';
 
-/** Navigate to results when the user taps a round-finished notification. */
-async function openResultsFromNotification(gameId: string): Promise<void> {
+/** Navigate to the pinned finished round from a round-finished notification tap. */
+export async function openResultsFromRoundFinishedNotification(data: {
+  gameId: string;
+  baseWordRound: number;
+}): Promise<void> {
   const uid = useFirebaseStore.getState().uid;
   await runOnlineSyncNow('', uid);
-  const normalized = normalizeRoomCode(gameId);
-  router.push({ pathname: '/online/results/[gameId]', params: { gameId: normalized } });
+  router.push(onlineResultsRoute(data.gameId, data.baseWordRound));
 }
 
 /**
- * Wire notification taps to the archived results screen.
+ * Wire notification taps to the archived results screen for that round.
  */
 export function useRoundFinishedNotificationRouting(enabled = true): void {
   useEffect(() => {
@@ -37,13 +39,13 @@ export function useRoundFinishedNotificationRouting(enabled = true): void {
         response?.notification.request.content.data,
       );
       if (lastData) {
-        void openResultsFromNotification(lastData.gameId);
+        void openResultsFromRoundFinishedNotification(lastData);
       }
 
       sub = Notifications.addNotificationResponseReceivedListener((incoming) => {
         const data = parseRoundFinishedNotificationData(incoming.notification.request.content.data);
         if (data) {
-          void openResultsFromNotification(data.gameId);
+          void openResultsFromRoundFinishedNotification(data);
         }
       });
     })();

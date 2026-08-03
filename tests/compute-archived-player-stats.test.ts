@@ -6,6 +6,7 @@ import type { FinishedRoundArchive } from '@/lib/online/session/online-session-a
 function archive(
   gameId: string,
   players: FinishedRoundArchive['session']['players'],
+  playerWords: Record<string, string[]>,
 ): FinishedRoundArchive {
   return {
     gameId,
@@ -25,24 +26,42 @@ function archive(
       organizerId: 'uid-a',
       players,
     },
-    playerWords: {},
+    playerWords,
   };
 }
 
 describe('computeArchivedPlayerStats', () => {
   it('splits multiplayer competition from solo training for the profile player', () => {
     const archives: FinishedRoundArchive[] = [
-      archive('WIN', {
-        'uid-a': { name: 'A', wordCount: 5, score: 10, online: true },
-        'uid-b': { name: 'B', wordCount: 2, score: 4, online: true },
-      }),
-      archive('LOSS', {
-        'uid-a': { name: 'A', wordCount: 1, score: 2, online: true },
-        'uid-b': { name: 'B', wordCount: 4, score: 8, online: true },
-      }),
-      archive('SOLO', {
-        solo: { name: 'Василь', wordCount: 8, score: 8, online: true },
-      }),
+      archive(
+        'WIN',
+        {
+          'uid-a': { name: 'A', wordCount: 0, score: 0, online: true },
+          'uid-b': { name: 'B', wordCount: 0, score: 0, online: true },
+        },
+        {
+          'uid-a': ['а', 'б', 'в', 'г', 'д'],
+          'uid-b': ['е', 'є'],
+        },
+      ),
+      archive(
+        'LOSS',
+        {
+          'uid-a': { name: 'A', wordCount: 0, score: 0, online: true },
+          'uid-b': { name: 'B', wordCount: 0, score: 0, online: true },
+        },
+        {
+          'uid-a': ['а'],
+          'uid-b': ['б', 'в', 'г', 'д'],
+        },
+      ),
+      archive(
+        'SOLO',
+        {
+          solo: { name: 'Василь', wordCount: 0, score: 0, online: true },
+        },
+        { solo: ['а', 'б', 'в', 'г', 'д', 'е', 'є', 'ж'] },
+      ),
     ];
 
     expect(computeArchivedPlayerStats(archives, 'uid-a', 'Василь')).toEqual({
@@ -53,9 +72,13 @@ describe('computeArchivedPlayerStats', () => {
 
   it('ignores solo archives that belong to another profile name', () => {
     const archives = [
-      archive('SOLO', {
-        solo: { name: 'Інший', wordCount: 3, score: 3, online: true },
-      }),
+      archive(
+        'SOLO',
+        {
+          solo: { name: 'Інший', wordCount: 0, score: 0, online: true },
+        },
+        { solo: ['а', 'б', 'в'] },
+      ),
     ];
 
     expect(computeArchivedPlayerStats(archives, 'uid-a', 'Василь')).toEqual({
@@ -66,9 +89,13 @@ describe('computeArchivedPlayerStats', () => {
 
   it('ignores solo archives with zero words', () => {
     const archives = [
-      archive('EMPTY', {
-        solo: { name: 'Василь', wordCount: 0, score: 0, online: true },
-      }),
+      archive(
+        'EMPTY',
+        {
+          solo: { name: 'Василь', wordCount: 0, score: 0, online: true },
+        },
+        { solo: [] },
+      ),
     ];
 
     expect(computeArchivedPlayerStats(archives, 'uid-a', 'Василь')).toEqual({
@@ -79,10 +106,17 @@ describe('computeArchivedPlayerStats', () => {
 
   it('ignores multiplayer archives where the viewer uid is absent', () => {
     const archives = [
-      archive('OTHER', {
-        'uid-b': { name: 'B', wordCount: 4, score: 8, online: true },
-        'uid-c': { name: 'C', wordCount: 2, score: 4, online: true },
-      }),
+      archive(
+        'OTHER',
+        {
+          'uid-b': { name: 'B', wordCount: 0, score: 0, online: true },
+          'uid-c': { name: 'C', wordCount: 0, score: 0, online: true },
+        },
+        {
+          'uid-b': ['а', 'б', 'в', 'г'],
+          'uid-c': ['д', 'е'],
+        },
+      ),
     ];
 
     expect(computeArchivedPlayerStats(archives, 'uid-a', 'Василь')).toEqual({

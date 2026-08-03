@@ -3,6 +3,32 @@ import { describe, expect, it } from 'vitest';
 import type { GameSession } from '../lib/firebase/types.js';
 import { detectPlayToastEvents, detectRankEvents } from '../lib/online/play-toast-events.js';
 
+/** Build wordPlayers from per-player word lists (supports shared words). */
+function wordPlayersForAssignments(
+  assignments: Record<string, readonly string[]>,
+): GameSession['wordPlayers'] {
+  const wordPlayers: NonNullable<GameSession['wordPlayers']> = {};
+  for (const [playerId, words] of Object.entries(assignments)) {
+    for (const word of words) {
+      wordPlayers[word] = { ...wordPlayers[word], [playerId]: true };
+    }
+  }
+  return wordPlayers;
+}
+
+/** Unique words per player — standings derive from wordPlayers, not RTDB score fields. */
+function uniqueWordPlayers(
+  counts: Record<string, number>,
+  prefix = 'w',
+): GameSession['wordPlayers'] {
+  const assignments: Record<string, string[]> = {};
+  let index = 0;
+  for (const [playerId, count] of Object.entries(counts)) {
+    assignments[playerId] = Array.from({ length: count }, () => `${prefix}${index++}`);
+  }
+  return wordPlayersForAssignments(assignments);
+}
+
 function session(
   players: GameSession['players'],
   status: GameSession['status'] = 'playing',
@@ -67,21 +93,32 @@ describe('detectPlayToastEvents', () => {
   });
 
   it('detects a player leaving with rank', () => {
-    const prev = session({
-      org: { name: 'Org', wordCount: 2, score: 3, online: true },
-      a: { name: 'Єгор', gender: 'm', wordCount: 1, score: 1, online: true },
-    });
-    const curr = session({
-      org: { name: 'Org', wordCount: 2, score: 3, online: true },
-      a: {
-        name: 'Єгор',
-        gender: 'm',
-        wordCount: 1,
-        score: 1,
-        online: false,
-        hasLeft: true,
+    const wordPlayers = uniqueWordPlayers({ org: 3, a: 1 });
+    const prev = session(
+      {
+        org: { name: 'Org', wordCount: 2, score: 3, online: true },
+        a: { name: 'Єгор', gender: 'm', wordCount: 1, score: 1, online: true },
       },
-    });
+      'playing',
+      undefined,
+      { wordPlayers },
+    );
+    const curr = session(
+      {
+        org: { name: 'Org', wordCount: 2, score: 3, online: true },
+        a: {
+          name: 'Єгор',
+          gender: 'm',
+          wordCount: 1,
+          score: 1,
+          online: false,
+          hasLeft: true,
+        },
+      },
+      'playing',
+      undefined,
+      { wordPlayers },
+    );
 
     expect(detectPlayToastEvents(prev, curr, 'org')).toEqual([
       {
@@ -187,30 +224,50 @@ describe('detectPlayToastEvents', () => {
   });
 
   it('detects overtakes when rejoined player still has stale hasLeft in RTDB', () => {
-    const prev = scoringSession({
-      me: { name: 'Я', wordCount: 2, score: 3, online: true },
-      a: {
-        name: 'Василь',
-        gender: 'm',
-        wordCount: 1,
-        score: 1,
-        online: true,
-        hasLeft: true,
-      },
-      b: { name: 'Б', wordCount: 0, score: 0, online: true },
+    const prevWordPlayers = wordPlayersForAssignments({
+      me: ['w0', 'w1'],
+      a: ['w1'],
+      b: ['w1'],
     });
-    const curr = scoringSession({
-      me: { name: 'Я', wordCount: 2, score: 3, online: true },
-      a: {
-        name: 'Василь',
-        gender: 'm',
-        wordCount: 2,
-        score: 4,
-        online: true,
-        hasLeft: true,
-      },
-      b: { name: 'Б', wordCount: 0, score: 0, online: true },
+    const currWordPlayers = wordPlayersForAssignments({
+      me: ['w0', 'w1'],
+      a: ['w1', 'w2', 'w3'],
+      b: ['w1'],
     });
+    const prev = session(
+      {
+        me: { name: 'Я', wordCount: 2, score: 3, online: true },
+        a: {
+          name: 'Василь',
+          gender: 'm',
+          wordCount: 1,
+          score: 1,
+          online: true,
+          hasLeft: true,
+        },
+        b: { name: 'Б', wordCount: 0, score: 0, online: true },
+      },
+      'playing',
+      { uniqueBonusMode: 'auto', uniqueBonusEnabled: true },
+      { wordPlayers: prevWordPlayers },
+    );
+    const curr = session(
+      {
+        me: { name: 'Я', wordCount: 2, score: 3, online: true },
+        a: {
+          name: 'Василь',
+          gender: 'm',
+          wordCount: 2,
+          score: 4,
+          online: true,
+          hasLeft: true,
+        },
+        b: { name: 'Б', wordCount: 0, score: 0, online: true },
+      },
+      'playing',
+      { uniqueBonusMode: 'auto', uniqueBonusEnabled: true },
+      { wordPlayers: currWordPlayers },
+    );
 
     expect(detectPlayToastEvents(prev, curr, 'me')).toEqual([
       {
@@ -337,6 +394,7 @@ describe('detectPlayToastEvents', () => {
 
   it('toasts alone again when a rejoined opponent leaves a second time', () => {
     const liveRound = { baseWordRound: 0, liveRoundPlayerUids: ['org', 'guest'] as string[] };
+    const wordPlayers = uniqueWordPlayers({ org: 4, guest: 2 });
     const bothPlaying = session(
       {
         org: { name: 'Org', wordCount: 2, score: 4, online: true },
@@ -351,7 +409,7 @@ describe('detectPlayToastEvents', () => {
       },
       'playing',
       undefined,
-      liveRound,
+      { ...liveRound, wordPlayers },
     );
     const guestLeftAgain = session(
       {
@@ -367,7 +425,7 @@ describe('detectPlayToastEvents', () => {
       },
       'playing',
       undefined,
-      liveRound,
+      { ...liveRound, wordPlayers },
     );
 
     expect(detectPlayToastEvents(bothPlaying, guestLeftAgain, 'org')).toEqual([
@@ -435,11 +493,16 @@ describe('detectPlayToastEvents', () => {
       bab: { name: 'Бабуся', gender: 'f', wordCount: 0, score: 0, online: true },
       c: { name: 'С', wordCount: 0, score: 0, online: true },
     });
-    const curr = scoringSession({
-      me: { name: 'Я', wordCount: 0, score: 0, online: true },
-      bab: { name: 'Бабуся', gender: 'f', wordCount: 1, score: 2, online: true },
-      c: { name: 'С', wordCount: 0, score: 0, online: true },
-    });
+    const curr = session(
+      {
+        me: { name: 'Я', wordCount: 0, score: 0, online: true },
+        bab: { name: 'Бабуся', gender: 'f', wordCount: 1, score: 2, online: true },
+        c: { name: 'С', wordCount: 0, score: 0, online: true },
+      },
+      'playing',
+      { uniqueBonusMode: 'auto', uniqueBonusEnabled: true },
+      { wordPlayers: uniqueWordPlayers({ bab: 1 }) },
+    );
 
     expect(detectPlayToastEvents(prev, curr, 'me')).toEqual([
       {
@@ -472,11 +535,16 @@ describe('detectPlayToastEvents', () => {
       egor: { name: 'Єгор', gender: 'm', wordCount: 0, score: 0, online: true },
       c: { name: 'С', wordCount: 0, score: 0, online: true },
     });
-    const curr = scoringSession({
-      me: { name: 'Я', wordCount: 1, score: 2, online: true },
-      egor: { name: 'Єгор', gender: 'm', wordCount: 0, score: 0, online: true },
-      c: { name: 'С', wordCount: 0, score: 0, online: true },
-    });
+    const curr = session(
+      {
+        me: { name: 'Я', wordCount: 1, score: 2, online: true },
+        egor: { name: 'Єгор', gender: 'm', wordCount: 0, score: 0, online: true },
+        c: { name: 'С', wordCount: 0, score: 0, online: true },
+      },
+      'playing',
+      { uniqueBonusMode: 'auto', uniqueBonusEnabled: true },
+      { wordPlayers: uniqueWordPlayers({ me: 1 }) },
+    );
 
     expect(detectPlayToastEvents(prev, curr, 'me')).toEqual([
       {
@@ -495,16 +563,32 @@ describe('detectPlayToastEvents', () => {
   });
 
   it('detects rank overtakes in both directions', () => {
-    const prev = scoringSession({
-      me: { name: 'Я', wordCount: 1, score: 1, online: true },
-      bab: { name: 'Бабуся', gender: 'f', wordCount: 0, score: 0, online: true },
-      c: { name: 'С', wordCount: 0, score: 0, online: true },
+    const prevWordPlayers = wordPlayersForAssignments({ me: ['w0'], c: ['w0'] });
+    const currWordPlayers = wordPlayersForAssignments({
+      me: ['w0'],
+      bab: ['w1'],
+      c: ['w0'],
     });
-    const curr = scoringSession({
-      me: { name: 'Я', wordCount: 1, score: 1, online: true },
-      bab: { name: 'Бабуся', gender: 'f', wordCount: 1, score: 2, online: true },
-      c: { name: 'С', wordCount: 0, score: 0, online: true },
-    });
+    const prev = session(
+      {
+        me: { name: 'Я', wordCount: 1, score: 1, online: true },
+        bab: { name: 'Бабуся', gender: 'f', wordCount: 0, score: 0, online: true },
+        c: { name: 'С', wordCount: 0, score: 0, online: true },
+      },
+      'playing',
+      { uniqueBonusMode: 'auto', uniqueBonusEnabled: true },
+      { wordPlayers: prevWordPlayers },
+    );
+    const curr = session(
+      {
+        me: { name: 'Я', wordCount: 1, score: 1, online: true },
+        bab: { name: 'Бабуся', gender: 'f', wordCount: 1, score: 2, online: true },
+        c: { name: 'С', wordCount: 0, score: 0, online: true },
+      },
+      'playing',
+      { uniqueBonusMode: 'auto', uniqueBonusEnabled: true },
+      { wordPlayers: currWordPlayers },
+    );
 
     expect(detectPlayToastEvents(prev, curr, 'me')).toEqual([
       {
@@ -515,16 +599,32 @@ describe('detectPlayToastEvents', () => {
       },
     ]);
 
-    const passedPrev = scoringSession({
-      me: { name: 'Я', wordCount: 0, score: 0, online: true },
-      dad: { name: 'Тато', gender: 'm', wordCount: 1, score: 1, online: true },
-      c: { name: 'С', wordCount: 0, score: 0, online: true },
-    });
-    const passedCurr = scoringSession({
-      me: { name: 'Я', wordCount: 1, score: 2, online: true },
-      dad: { name: 'Тато', gender: 'm', wordCount: 1, score: 1, online: true },
-      c: { name: 'С', wordCount: 0, score: 0, online: true },
-    });
+    const passedPrev = session(
+      {
+        me: { name: 'Я', wordCount: 0, score: 0, online: true },
+        dad: { name: 'Тато', gender: 'm', wordCount: 1, score: 1, online: true },
+        c: { name: 'С', wordCount: 0, score: 0, online: true },
+      },
+      'playing',
+      { uniqueBonusMode: 'auto', uniqueBonusEnabled: true },
+      { wordPlayers: wordPlayersForAssignments({ dad: ['w2'], c: ['w2'] }) },
+    );
+    const passedCurr = session(
+      {
+        me: { name: 'Я', wordCount: 1, score: 2, online: true },
+        dad: { name: 'Тато', gender: 'm', wordCount: 1, score: 1, online: true },
+        c: { name: 'С', wordCount: 0, score: 0, online: true },
+      },
+      'playing',
+      { uniqueBonusMode: 'auto', uniqueBonusEnabled: true },
+      {
+        wordPlayers: wordPlayersForAssignments({
+          me: ['w3'],
+          dad: ['w2'],
+          c: ['w2'],
+        }),
+      },
+    );
 
     expect(detectPlayToastEvents(passedPrev, passedCurr, 'me')).toEqual([
       {
@@ -543,16 +643,36 @@ describe('detectPlayToastEvents', () => {
   });
 
   it('detects yielding when opponent loses points and viewer takes the lead', () => {
-    const prev = scoringSession({
-      me: { name: 'Я', wordCount: 1, score: 2, online: true },
-      egor: { name: 'Єгор', gender: 'm', wordCount: 2, score: 3, online: true },
-      c: { name: 'С', wordCount: 0, score: 0, online: true },
+    const prevWordPlayers = wordPlayersForAssignments({
+      me: ['w0'],
+      egor: ['w1', 'w2'],
+      c: ['w2'],
     });
-    const curr = scoringSession({
-      me: { name: 'Я', wordCount: 1, score: 2, online: true },
-      egor: { name: 'Єгор', gender: 'm', wordCount: 2, score: 1, online: true },
-      c: { name: 'С', wordCount: 0, score: 0, online: true },
+    const currWordPlayers = wordPlayersForAssignments({
+      me: ['w0'],
+      egor: ['w2'],
+      c: ['w2'],
     });
+    const prev = session(
+      {
+        me: { name: 'Я', wordCount: 1, score: 2, online: true },
+        egor: { name: 'Єгор', gender: 'm', wordCount: 2, score: 3, online: true },
+        c: { name: 'С', wordCount: 0, score: 0, online: true },
+      },
+      'playing',
+      { uniqueBonusMode: 'auto', uniqueBonusEnabled: true },
+      { wordPlayers: prevWordPlayers },
+    );
+    const curr = session(
+      {
+        me: { name: 'Я', wordCount: 1, score: 2, online: true },
+        egor: { name: 'Єгор', gender: 'm', wordCount: 2, score: 1, online: true },
+        c: { name: 'С', wordCount: 0, score: 0, online: true },
+      },
+      'playing',
+      { uniqueBonusMode: 'auto', uniqueBonusEnabled: true },
+      { wordPlayers: currWordPlayers },
+    );
 
     expect(detectPlayToastEvents(prev, curr, 'me')).toEqual([
       {
@@ -565,29 +685,67 @@ describe('detectPlayToastEvents', () => {
   });
 
   it('does not toast on score ties', () => {
-    const catchUpPrev = scoringSession({
-      me: { name: 'Я', wordCount: 1, score: 5, online: true },
-      dad: { name: 'Тато', gender: 'm', wordCount: 2, score: 6, online: true },
-      c: { name: 'С', wordCount: 0, score: 0, online: true },
+    const catchUpPrevMaps = wordPlayersForAssignments({
+      me: ['w0', 'w1', 'w2'],
+      dad: ['w3', 'w4', 'w5'],
+      c: ['w2'],
     });
-    const catchUpCurr = scoringSession({
-      me: { name: 'Я', wordCount: 2, score: 6, online: true },
-      dad: { name: 'Тато', gender: 'm', wordCount: 2, score: 6, online: true },
-      c: { name: 'С', wordCount: 0, score: 0, online: true },
+    const catchUpCurrMaps = wordPlayersForAssignments({
+      me: ['w0', 'w1', 'w2'],
+      dad: ['w3', 'w4', 'w5'],
     });
+    const catchUpPrev = session(
+      {
+        me: { name: 'Я', wordCount: 1, score: 5, online: true },
+        dad: { name: 'Тато', gender: 'm', wordCount: 2, score: 6, online: true },
+        c: { name: 'С', wordCount: 0, score: 0, online: true },
+      },
+      'playing',
+      { uniqueBonusMode: 'auto', uniqueBonusEnabled: true },
+      { wordPlayers: catchUpPrevMaps },
+    );
+    const catchUpCurr = session(
+      {
+        me: { name: 'Я', wordCount: 2, score: 6, online: true },
+        dad: { name: 'Тато', gender: 'm', wordCount: 2, score: 6, online: true },
+        c: { name: 'С', wordCount: 0, score: 0, online: true },
+      },
+      'playing',
+      { uniqueBonusMode: 'auto', uniqueBonusEnabled: true },
+      { wordPlayers: catchUpCurrMaps },
+    );
 
     expect(detectPlayToastEvents(catchUpPrev, catchUpCurr, 'me')).toEqual([]);
 
-    const wordOnlyPrev = scoringSession({
-      me: { name: 'Я', wordCount: 1, score: 4, online: true },
-      bab: { name: 'Бабуся', gender: 'f', wordCount: 1, score: 4, online: true },
-      c: { name: 'С', wordCount: 0, score: 0, online: true },
+    const wordOnlyPrevMaps = wordPlayersForAssignments({
+      me: ['w0', 'w1'],
+      bab: ['w2', 'w3'],
     });
-    const wordOnlyCurr = scoringSession({
-      me: { name: 'Я', wordCount: 1, score: 4, online: true },
-      bab: { name: 'Бабуся', gender: 'f', wordCount: 2, score: 4, online: true },
-      c: { name: 'С', wordCount: 0, score: 0, online: true },
+    const wordOnlyCurrMaps = wordPlayersForAssignments({
+      me: ['w0', 'w1'],
+      bab: ['w2', 'w3', 'w4', 'w5'],
+      c: ['w2', 'w3', 'w4', 'w5'],
     });
+    const wordOnlyPrev = session(
+      {
+        me: { name: 'Я', wordCount: 1, score: 4, online: true },
+        bab: { name: 'Бабуся', gender: 'f', wordCount: 1, score: 4, online: true },
+        c: { name: 'С', wordCount: 0, score: 0, online: false },
+      },
+      'playing',
+      { uniqueBonusMode: 'auto', uniqueBonusEnabled: true },
+      { wordPlayers: wordOnlyPrevMaps },
+    );
+    const wordOnlyCurr = session(
+      {
+        me: { name: 'Я', wordCount: 1, score: 4, online: true },
+        bab: { name: 'Бабуся', gender: 'f', wordCount: 2, score: 4, online: true },
+        c: { name: 'С', wordCount: 0, score: 0, online: false },
+      },
+      'playing',
+      { uniqueBonusMode: 'auto', uniqueBonusEnabled: true },
+      { wordPlayers: wordOnlyCurrMaps },
+    );
 
     expect(detectPlayToastEvents(wordOnlyPrev, wordOnlyCurr, 'me')).toEqual([
       {
@@ -600,16 +758,38 @@ describe('detectPlayToastEvents', () => {
   });
 
   it('detects overtakes when equal score but fewer words (tie-breaker rank)', () => {
-    const prev = scoringSession({
-      p1: { name: 'iPad', gender: 'm', wordCount: 15, score: 15, online: true },
-      p2: { name: 'iPhone', gender: 'm', wordCount: 9, score: 17, online: true },
-      p3: { name: 'Vasyl', gender: 'm', wordCount: 15, score: 15, online: true },
+    const pairWords = Array.from({ length: 15 }, (_, i) => `pair${i}`);
+    const p2Unique = Array.from({ length: 8 }, (_, i) => `p2u${i}`);
+    const prevWordPlayers = wordPlayersForAssignments({
+      p1: [...pairWords, 'p2shared'],
+      p3: pairWords,
+      p2: [...p2Unique, 'p2shared'],
     });
-    const curr = scoringSession({
-      p1: { name: 'iPad', gender: 'm', wordCount: 15, score: 15, online: true },
-      p2: { name: 'iPhone', gender: 'm', wordCount: 9, score: 17, online: true },
-      p3: { name: 'Vasyl', gender: 'm', wordCount: 16, score: 17, online: true },
+    const currWordPlayers = wordPlayersForAssignments({
+      p1: [...pairWords, 'p2shared'],
+      p3: [...pairWords, 'p3extra'],
+      p2: [...p2Unique, 'p2shared'],
     });
+    const prev = session(
+      {
+        p1: { name: 'iPad', gender: 'm', wordCount: 15, score: 15, online: true },
+        p2: { name: 'iPhone', gender: 'm', wordCount: 9, score: 17, online: true },
+        p3: { name: 'Vasyl', gender: 'm', wordCount: 15, score: 15, online: true },
+      },
+      'playing',
+      { uniqueBonusMode: 'auto', uniqueBonusEnabled: true },
+      { wordPlayers: prevWordPlayers },
+    );
+    const curr = session(
+      {
+        p1: { name: 'iPad', gender: 'm', wordCount: 15, score: 15, online: true },
+        p2: { name: 'iPhone', gender: 'm', wordCount: 9, score: 17, online: true },
+        p3: { name: 'Vasyl', gender: 'm', wordCount: 16, score: 17, online: true },
+      },
+      'playing',
+      { uniqueBonusMode: 'auto', uniqueBonusEnabled: true },
+      { wordPlayers: currWordPlayers },
+    );
 
     expect(detectPlayToastEvents(prev, curr, 'p2')).toEqual([
       {
@@ -666,10 +846,15 @@ describe('detectPlayToastEvents', () => {
       me: { name: 'Я', wordCount: 0, score: 0, online: true },
       bab: { name: 'Бабуся', gender: 'f', wordCount: 0, score: 0, online: true },
     });
-    const curr = session({
-      me: { name: 'Я', wordCount: 0, score: 0, online: true },
-      bab: { name: 'Бабуся', gender: 'f', wordCount: 1, score: 1, online: true },
-    });
+    const curr = session(
+      {
+        me: { name: 'Я', wordCount: 0, score: 0, online: true },
+        bab: { name: 'Бабуся', gender: 'f', wordCount: 1, score: 1, online: true },
+      },
+      'playing',
+      undefined,
+      { wordPlayers: uniqueWordPlayers({ bab: 1 }) },
+    );
 
     expect(detectPlayToastEvents(prev, curr, 'me')).toEqual([
       {
@@ -936,18 +1121,33 @@ describe('detectPlayToastEvents', () => {
   });
 
   it('emits one net rank toast when split score updates cross and recross', () => {
-    const baseline = scoringSession({
-      me: { name: 'Я', wordCount: 3, score: 6, online: true },
-      opp: { name: 'Суперник', gender: 'm', wordCount: 3, score: 6, online: true },
-    });
-    const oppScored = scoringSession({
-      me: { name: 'Я', wordCount: 3, score: 6, online: true },
-      opp: { name: 'Суперник', gender: 'm', wordCount: 4, score: 8, online: true },
-    });
-    const meScored = scoringSession({
-      me: { name: 'Я', wordCount: 5, score: 10, online: true },
-      opp: { name: 'Суперник', gender: 'm', wordCount: 4, score: 8, online: true },
-    });
+    const baseline = session(
+      {
+        me: { name: 'Я', wordCount: 3, score: 6, online: true },
+        opp: { name: 'Суперник', gender: 'm', wordCount: 3, score: 6, online: true },
+      },
+      'playing',
+      { uniqueBonusMode: 'auto', uniqueBonusEnabled: true },
+      { wordPlayers: uniqueWordPlayers({ me: 3, opp: 3 }) },
+    );
+    const oppScored = session(
+      {
+        me: { name: 'Я', wordCount: 3, score: 6, online: true },
+        opp: { name: 'Суперник', gender: 'm', wordCount: 4, score: 8, online: true },
+      },
+      'playing',
+      { uniqueBonusMode: 'auto', uniqueBonusEnabled: true },
+      { wordPlayers: uniqueWordPlayers({ me: 3, opp: 4 }) },
+    );
+    const meScored = session(
+      {
+        me: { name: 'Я', wordCount: 5, score: 10, online: true },
+        opp: { name: 'Суперник', gender: 'm', wordCount: 4, score: 8, online: true },
+      },
+      'playing',
+      { uniqueBonusMode: 'auto', uniqueBonusEnabled: true },
+      { wordPlayers: uniqueWordPlayers({ me: 5, opp: 4 }) },
+    );
 
     expect(detectRankEvents(baseline, oppScored, 'me')).toEqual([
       {

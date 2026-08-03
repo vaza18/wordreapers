@@ -29,7 +29,8 @@ vi.mock('../lib/firebase/auth.js', () => ({
 }));
 
 vi.mock('../lib/firebase/session-word-maps-service.js', () => ({
-  fetchSessionWordMaps: vi.fn().mockResolvedValue({ wordPlayers: {} }),
+  requireSessionWordMaps: vi.fn().mockResolvedValue({ wordPlayers: {} }),
+  tryFetchSessionWordMaps: vi.fn().mockResolvedValue({ ok: true, maps: { wordPlayers: {} } }),
 }));
 
 vi.mock('../lib/firebase/public-lobby-service.js', async (importOriginal) => {
@@ -41,11 +42,6 @@ vi.mock('../lib/firebase/public-lobby-service.js', async (importOriginal) => {
     unpublishPublicLobby: vi.fn().mockResolvedValue(undefined),
   };
 });
-
-vi.mock('../lib/firebase/player-words-service.js', () => ({
-  clearWaitingLobbyPlayerWordsAsOrganizer: vi.fn().mockResolvedValue(undefined),
-  clearAllPlayerWords: vi.fn(),
-}));
 
 import { joinGameSession } from '../lib/firebase/game-session-service.js';
 

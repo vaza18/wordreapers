@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assignDisplayRanks,
-  buildPlayerTotalsUpdatePatch,
   buildStandings,
   compareStandings,
   computePlayerScore,
@@ -160,18 +159,22 @@ describe('recomputeSessionPlayerScores', () => {
     expect(session.players.p2?.score).toBe(1);
   });
 
-  it('builds leaf score/wordCount patches without a players object rewrite', () => {
-    expect(
-      buildPlayerTotalsUpdatePatch(
-        {
-          org: { score: 4, wordCount: 3 },
-          guest: { score: 1, wordCount: 1 },
-        },
-        {
-          org: { score: 1, wordCount: 3 },
-          guest: { score: 1, wordCount: 1 },
-        },
-      ),
-    ).toEqual({ 'players/org/score': 4 });
+  it('ignores non-true wordPlayers leaves when scoring', () => {
+    const session = {
+      players: {
+        org: { score: 0, wordCount: 0 },
+        p2: { score: 0, wordCount: 0 },
+      },
+      wordPlayers: {
+        порт: { org: true, p2: false as unknown as true },
+      },
+    };
+
+    recomputeSessionPlayerScores(session, true);
+
+    expect(session.players.org?.wordCount).toBe(1);
+    expect(session.players.org?.score).toBe(2);
+    expect(session.players.p2?.wordCount).toBe(0);
+    expect(session.players.p2?.score).toBe(0);
   });
 });

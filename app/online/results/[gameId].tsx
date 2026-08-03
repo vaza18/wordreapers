@@ -24,8 +24,13 @@ import {
 } from '@/lib/firebase/game-session-service';
 import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
 import { persistLocalArchive } from '@/lib/online/coordinated-session-cleanup';
-import { isSessionWordsSnapshotReady } from '@/lib/online/session/session-words-bootstrap';
-import { shouldShowOnlineResultsWordsLoading } from '@/lib/online/session/should-show-online-results-words-loading';
+import { shouldSkipEmptyArchiveWords } from '@/lib/online/session/archive-words-gate';
+import { shouldFinalizeOnlineResultsStats } from '@/lib/online/should-finalize-online-results-stats';
+import {
+  RESULTS_EMPTY_CLAIMS_ESCAPE_MS,
+  RESULTS_WORDS_BOOTSTRAP_ESCAPE_MS,
+  shouldShowOnlineResultsWordsLoading,
+} from '@/lib/online/session/should-show-online-results-words-loading';
 import {
   freezeFinishedRound,
   type FrozenFinishedRound,
@@ -35,14 +40,19 @@ import {
   getFinishedRoundArchive,
   isFinishedArchiveStale,
 } from '@/lib/online/session/online-session-archive';
-import { buildOnlineResultsView } from '@/lib/online/online-results-data';
-import { shouldFreezeLiveFinishedOnResults } from '@/lib/online/session/frozen-round-view';
+import { buildDisplaysByPlayer, buildOnlineResultsView } from '@/lib/online/online-results-data';
+import {
+  mergeLiveSessionForResults,
+  nextResultsFreezePending,
+  resolveResultsDisplayRound,
+  resolveResultsFreezeSource,
+  shouldShowResultsUnavailableAfterRematch,
+  shouldUpgradeEmptyResultsFreeze,
+  type ResultsFreezePending,
+} from '@/lib/online/session/frozen-round-view';
 import { resolveResultsPresence } from '@/lib/online/live-round-screen-actions';
 import { optIntoLiveRound } from '@/lib/online/rematch/opt-into-live-round';
 import { parseViewingBaseWordRoundParam } from '@/lib/online/parse-viewing-base-word-round-param';
-import { mergeSessionWithWordMaps } from '@/lib/firebase/session-word-maps';
-import { subscribeSessionWordMaps } from '@/lib/firebase/session-word-maps-service';
-import type { SessionWordMaps } from '@/lib/firebase/types';
 import type { RoundResultsViewData } from '@/lib/online/online-results-data';
 import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
 import { useFrozenRoundRecovery } from '@/hooks/useFrozenRoundRecovery';
@@ -76,11 +86,6 @@ export default function OnlineResultsScreen() {
   const myUid = useOnlineViewerUid();
 
   const [liveSessionCore, setLiveSessionCore] = useState<GameSessionSnapshot | null>(null);
-  const [liveWordMaps, setLiveWordMaps] = useState<SessionWordMaps | null>(null);
-  const liveSession = useMemo(
-    () => (liveSessionCore ? mergeSessionWithWordMaps(liveSessionCore, liveWordMaps) : null),
-    [liveSessionCore, liveWordMaps],
-  );
   const [frozenRound, setFrozenRound] = useState<FrozenFinishedRound | null>(null);
   const [localLoadComplete, setLocalLoadComplete] = useState(false);
   const [sessionLoaded, setSessionLoaded] = useState(false);
@@ -91,11 +96,38 @@ export default function OnlineResultsScreen() {
   const archivedRef = useRef(false);
   const archivePromiseRef = useRef<Promise<void> | null>(null);
   const freezeAttemptedRef = useRef(false);
+  const pendingFreezeRef = useRef<ResultsFreezePending | null>(null);
   const skipRematchToastRef = useRef(false);
   const skipResultsOfflineRef = useRef(false);
   const resultsOfflineMarkedKeyRef = useRef<string | null>(null);
-  const rematchToasts = useResultsRematchToast(liveSession, myUid, skipRematchToastRef);
   const viewedResultsLoggedRef = useRef(false);
+  const emptyClaimsLoadingSinceRef = useRef<number | null>(null);
+  const bootstrapLoadingSinceRef = useRef<number | null>(null);
+  const [emptyClaimsNowMs, setEmptyClaimsNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    setFrozenRound(null);
+    emptyClaimsLoadingSinceRef.current = null;
+    bootstrapLoadingSinceRef.current = null;
+    setEmptyClaimsNowMs(Date.now());
+    // Eager pending when a viewing pin is set so we never flash errorRoomNotFound
+    // before useFrozenRoundRecovery's effect runs.
+    setArchiveRecoveryPending(viewingBaseWordRound != null);
+    setRematchError(null);
+    setRematchLoading(false);
+    setLocalLoadComplete(false);
+    setSessionLoaded(false);
+    setLiveSessionCore(null);
+    statsRecordedRef.current = false;
+    archivedRef.current = false;
+    archivePromiseRef.current = null;
+    freezeAttemptedRef.current = false;
+    pendingFreezeRef.current = null;
+    skipRematchToastRef.current = false;
+    skipResultsOfflineRef.current = false;
+    resultsOfflineMarkedKeyRef.current = null;
+    viewedResultsLoggedRef.current = false;
+  }, [gameId, viewingBaseWordRound]);
 
   useEffect(() => {
     if (viewedResultsLoggedRef.current || !gameId) {
@@ -110,20 +142,39 @@ export default function OnlineResultsScreen() {
   }, [fromJoinIntoPlaying, gameId, viewingBaseWordRound]);
 
   const rosterPlayerIds = useMemo(() => {
-    if (frozenRound || !liveSession || liveSession.status !== 'finished') {
+    if (frozenRound || !liveSessionCore || liveSessionCore.status !== 'finished') {
       return [];
     }
-    return Object.keys(liveSession.players).sort();
-  }, [frozenRound, liveSession]);
+    return Object.keys(liveSessionCore.players).sort();
+  }, [frozenRound, liveSessionCore]);
 
-  const { liveWords, wordsBootstrapComplete } = useLiveRosterPlayerWords({
+  const { liveWords, liveWordMaps, wordsBootstrapComplete } = useLiveRosterPlayerWords({
     gameId,
     rosterPlayerIds,
     enabled: Boolean(gameId && !frozenRound && rosterPlayerIds.length > 0),
   });
 
-  const session = frozenRound?.session ?? liveSession;
-  const wordsSnapshot = frozenRound?.words ?? liveWords;
+  const liveSession = useMemo(
+    () => mergeLiveSessionForResults(liveSessionCore, liveWordMaps, Boolean(frozenRound)),
+    [frozenRound, liveSessionCore, liveWordMaps],
+  );
+  const rematchToasts = useResultsRematchToast(liveSession, myUid, skipRematchToastRef);
+
+  const displayRound = useMemo(
+    () =>
+      resolveResultsDisplayRound({
+        frozenRound,
+        liveSession,
+        liveWords,
+        viewingBaseWordRound,
+      }),
+    [frozenRound, liveSession, liveWords, viewingBaseWordRound],
+  );
+  const session = displayRound?.session ?? null;
+  const wordsSnapshot = useMemo(
+    () => displayRound?.words ?? new Map<string, string[]>(),
+    [displayRound],
+  );
   const { lexicon: roundLexicon, loading: lexiconLoading } = useResultsRoundLexicon(session, {
     gameId,
     baseWordRound: session?.baseWordRound,
@@ -133,7 +184,8 @@ export default function OnlineResultsScreen() {
     if (archivedRef.current) {
       return;
     }
-    if (!session || session.status !== 'finished' || !frozenRound || !myUid) {
+    // Do not require frozenRound: empty+claims escape may show results without a freeze.
+    if (!session || session.status !== 'finished' || !myUid) {
       return;
     }
     const baseWordRound = session.baseWordRound ?? 0;
@@ -144,8 +196,13 @@ export default function OnlineResultsScreen() {
     }
     if (!archivePromiseRef.current) {
       archivePromiseRef.current = persistLocalArchive(gameId, myUid, session, wordsSnapshot)
-        .then(() => {
-          archivedRef.current = true;
+        .then((result) => {
+          if (result === 'saved') {
+            archivedRef.current = true;
+            return;
+          }
+          // Soft-skip empty+claims — allow a later retry when maps arrive.
+          archivePromiseRef.current = null;
         })
         .catch((error) => {
           archivePromiseRef.current = null;
@@ -153,7 +210,7 @@ export default function OnlineResultsScreen() {
         });
     }
     await archivePromiseRef.current;
-  }, [frozenRound, gameId, myUid, session, wordsSnapshot]);
+  }, [gameId, myUid, session, wordsSnapshot]);
 
   useEffect(() => {
     setLocalLoadComplete(true);
@@ -183,10 +240,8 @@ export default function OnlineResultsScreen() {
       setLiveSessionCore(next);
       setSessionLoaded(true);
     });
-    const unsubMaps = subscribeSessionWordMaps(gameId, setLiveWordMaps);
     return () => {
       unsubSession();
-      unsubMaps();
     };
   }, [gameId]);
 
@@ -200,27 +255,45 @@ export default function OnlineResultsScreen() {
   }, [archiveRecoveryPending, frozenRound, gameId, liveSession, myUid, sessionLoaded]);
 
   useEffect(() => {
+    pendingFreezeRef.current = nextResultsFreezePending(
+      pendingFreezeRef.current,
+      liveSession,
+      liveWords,
+      wordsBootstrapComplete,
+    );
+  }, [liveSession, liveWords, wordsBootstrapComplete]);
+
+  useEffect(() => {
     if (
-      freezeAttemptedRef.current ||
-      frozenRound ||
-      archiveRecoveryPending ||
-      !liveSession ||
-      liveSession.status !== 'finished'
+      frozenRound &&
+      liveSession?.status === 'finished' &&
+      shouldUpgradeEmptyResultsFreeze({
+        frozenWords: frozenRound.words,
+        nextWords: liveWords,
+        frozenBaseWordRound: frozenRound.session.baseWordRound ?? 0,
+        liveBaseWordRound: liveSession.baseWordRound ?? 0,
+        viewingBaseWordRound,
+      })
     ) {
+      setFrozenRound(freezeFinishedRound(gameId, liveSession, liveWords));
       return;
     }
-    const liveRound = liveSession.baseWordRound ?? 0;
-    if (!shouldFreezeLiveFinishedOnResults(liveRound, viewingBaseWordRound)) {
+    if (freezeAttemptedRef.current || frozenRound || archiveRecoveryPending) {
       return;
     }
-    if (!wordsBootstrapComplete) {
-      return;
-    }
-    if (!isSessionWordsSnapshotReady(liveSession, liveWords)) {
+    const source = resolveResultsFreezeSource({
+      hasFrozenRound: false,
+      liveSession,
+      liveWords,
+      wordsBootstrapComplete,
+      viewingBaseWordRound,
+      pending: pendingFreezeRef.current,
+    });
+    if (!source) {
       return;
     }
     freezeAttemptedRef.current = true;
-    setFrozenRound(freezeFinishedRound(gameId, liveSession, liveWords));
+    setFrozenRound(freezeFinishedRound(gameId, source.session, source.words));
   }, [
     archiveRecoveryPending,
     frozenRound,
@@ -235,8 +308,50 @@ export default function OnlineResultsScreen() {
     if (!session || session.status !== 'finished') {
       return null;
     }
-    return buildOnlineResultsView(t, session, wordsSnapshot, { viewerUid: myUid });
-  }, [myUid, session, t, wordsSnapshot]);
+    return buildOnlineResultsView(t, session, wordsSnapshot, {
+      viewerUid: myUid,
+      displaysByPlayer: buildDisplaysByPlayer(wordsSnapshot, roundLexicon?.displays),
+    });
+  }, [myUid, roundLexicon?.displays, session, t, wordsSnapshot]);
+
+  const emptyClaimsLoading =
+    !frozenRound &&
+    wordsBootstrapComplete &&
+    session?.status === 'finished' &&
+    shouldSkipEmptyArchiveWords(session, wordsSnapshot);
+
+  useEffect(() => {
+    if (!emptyClaimsLoading) {
+      emptyClaimsLoadingSinceRef.current = null;
+      return undefined;
+    }
+    if (emptyClaimsLoadingSinceRef.current == null) {
+      emptyClaimsLoadingSinceRef.current = Date.now();
+    }
+    const since = emptyClaimsLoadingSinceRef.current;
+    const remaining = Math.max(0, RESULTS_EMPTY_CLAIMS_ESCAPE_MS - (Date.now() - since));
+    const id = setTimeout(() => setEmptyClaimsNowMs(Date.now()), remaining);
+    return () => clearTimeout(id);
+  }, [emptyClaimsLoading]);
+
+  const waitingBootstrap = !frozenRound && !wordsBootstrapComplete;
+  useEffect(() => {
+    if (!waitingBootstrap) {
+      bootstrapLoadingSinceRef.current = null;
+      return undefined;
+    }
+    if (bootstrapLoadingSinceRef.current == null) {
+      bootstrapLoadingSinceRef.current = Date.now();
+    }
+    const since = bootstrapLoadingSinceRef.current;
+    const remaining = Math.max(0, RESULTS_WORDS_BOOTSTRAP_ESCAPE_MS - (Date.now() - since));
+    const id = setTimeout(() => setEmptyClaimsNowMs(Date.now()), remaining);
+    return () => clearTimeout(id);
+  }, [waitingBootstrap]);
+
+  const emptyClaimsEscaped =
+    emptyClaimsLoadingSinceRef.current != null &&
+    emptyClaimsNowMs - emptyClaimsLoadingSinceRef.current >= RESULTS_EMPTY_CLAIMS_ESCAPE_MS;
 
   useEffect(() => {
     if (
@@ -244,8 +359,17 @@ export default function OnlineResultsScreen() {
       !session ||
       session.status !== 'finished' ||
       !myUid ||
-      statsRecordedRef.current ||
-      !frozenRound
+      statsRecordedRef.current
+    ) {
+      return;
+    }
+    if (
+      !shouldFinalizeOnlineResultsStats({
+        frozenRound,
+        emptyClaimsEscaped,
+        session,
+        wordsSnapshot,
+      })
     ) {
       return;
     }
@@ -268,7 +392,28 @@ export default function OnlineResultsScreen() {
         }
       }
     })();
-  }, [ensureArchived, frozenRound, gameId, myUid, session, viewData]);
+  }, [
+    emptyClaimsEscaped,
+    ensureArchived,
+    frozenRound,
+    gameId,
+    myUid,
+    session,
+    viewData,
+    wordsSnapshot,
+  ]);
+
+  // Maps may arrive after escape — retry archive once freeze lands.
+  useEffect(() => {
+    if (!frozenRound || !myUid || !session || session.status !== 'finished') {
+      return;
+    }
+    void ensureArchived().catch((error) => {
+      if (__DEV__) {
+        console.warn('ensureArchived after freeze', error);
+      }
+    });
+  }, [ensureArchived, frozenRound, myUid, session]);
 
   useEffect(() => {
     if (!gameId || !myUid || skipResultsOfflineRef.current) {
@@ -394,12 +539,48 @@ export default function OnlineResultsScreen() {
   }
 
   if (
+    viewingBaseWordRound != null &&
+    !frozenRound &&
+    !displayRound &&
+    sessionLoaded &&
+    !archiveRecoveryPending
+  ) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.error}>{t('online.errorRoomNotFound')}</Text>
+        <PrimaryButton label={t('nav.home')} onPress={() => router.replace('/')} />
+      </View>
+    );
+  }
+
+  if (
+    viewingBaseWordRound == null &&
+    shouldShowResultsUnavailableAfterRematch({
+      hasFrozenRound: Boolean(frozenRound),
+      archiveRecoveryPending,
+      sessionLoaded,
+      hasFinishedViewData: Boolean(viewData),
+      liveStatus: liveSession?.status,
+    })
+  ) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.error}>{t('online.errorOpenResultsFailed')}</Text>
+        <PrimaryButton label={t('nav.home')} onPress={() => router.replace('/')} />
+      </View>
+    );
+  }
+
+  if (
     !viewData ||
     shouldShowOnlineResultsWordsLoading({
       frozenRound,
+      wordsBootstrapComplete,
       session,
       wordsSnapshot,
-      wordsBootstrapComplete,
+      emptyClaimsLoadingSinceMs: emptyClaimsLoadingSinceRef.current,
+      bootstrapLoadingSinceMs: bootstrapLoadingSinceRef.current,
+      nowMs: emptyClaimsNowMs,
     })
   ) {
     return (
