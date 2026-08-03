@@ -21,9 +21,7 @@ const archive = {
   savedAt: 1_000,
   session,
   playerWords: {
-    org: {
-      порт: { display: 'порт', at: 100 },
-    },
+    org: ['порт'],
   },
 };
 
@@ -33,12 +31,12 @@ describe('frozen-finished-round', () => {
   });
 
   it('freezes a finished session and clones player words', () => {
-    const words = new Map([['org', new Map([['порт', { display: 'порт', at: 100 }]])]]);
+    const words = new Map([['org', ['порт']]]);
 
     const frozen = freezeFinishedRound('ABCDE', session, words);
 
     expect(frozen.session.id).toBe('ABCDE');
-    expect(frozen.words.get('org')?.get('порт')).toEqual({ display: 'порт', at: 100 });
+    expect(frozen.words.get('org')).toEqual(['порт']);
     expect(frozen.words).not.toBe(words);
   });
 
@@ -48,7 +46,21 @@ describe('frozen-finished-round', () => {
     const frozen = await loadFrozenFinishedRoundFromArchive('ABCDE', 0);
 
     expect(frozen?.savedAt).toBe(1_000);
-    expect(frozen?.words.get('org')?.get('порт')).toEqual({ display: 'порт', at: 100 });
+    expect(frozen?.words.get('org')).toEqual(['порт']);
+  });
+
+  it('treats legacy object-shaped playerWords as empty lists', async () => {
+    getFinishedRoundArchive.mockResolvedValue({
+      ...archive,
+      archiveVersion: 3,
+      playerWords: {
+        org: { порт: { display: 'ПОРТ', at: 1 } },
+      },
+    });
+
+    const frozen = await loadFrozenFinishedRoundFromArchive('ABCDE', 0);
+
+    expect(frozen?.words.get('org')).toEqual([]);
   });
 
   it('loads the latest archived round when searching backwards', async () => {

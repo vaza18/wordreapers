@@ -69,6 +69,18 @@ export async function loadLeftOnlineResume(): Promise<LeftOnlineResumePointer | 
   }
 }
 
+/** Clear the left-resume pointer only when it points at `gameId` (other rooms stay). */
+export async function clearLeftOnlineResumeForGame(gameId: string): Promise<void> {
+  const pointer = await loadLeftOnlineResume();
+  if (!pointer) {
+    return;
+  }
+  if (pointer.gameId !== normalizeRoomCode(gameId)) {
+    return;
+  }
+  await clearLeftOnlineResume();
+}
+
 /**
  * True when RTDB still has this room/player so the left screen can show rejoin or results.
  * Does not require `playing` — finished/rematch left UI is handled on the screen.

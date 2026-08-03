@@ -19,7 +19,7 @@ import {
   joinErrorMessage,
 } from '@/lib/firebase/join-error-message';
 import { joinGameSession } from '@/lib/firebase/game-session-service';
-import { resolvePostJoinRoute } from '@/lib/online/post-join-route';
+import { resolvePostJoinRouteWithMaps } from '@/lib/online/post-join-route-with-maps';
 import { isValidRoomCode, normalizeRoomCode } from '@/lib/firebase/room-code';
 import { isExpoCameraAvailable } from '@/lib/native/is-expo-camera-available';
 import { useFirebaseStore } from '@/store/firebase-store';
@@ -124,7 +124,7 @@ export default function JoinRoomScreen() {
         inviter ? { invitedByUid: inviter } : undefined,
       );
       const uid = firebase.uid ?? '';
-      const route = resolvePostJoinRoute(session, uid, normalized);
+      const route = await resolvePostJoinRouteWithMaps(session, uid, normalized);
       router.replace(route);
     } catch (err) {
       setError(joinErrorMessage(err, t));

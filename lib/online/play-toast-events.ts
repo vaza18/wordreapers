@@ -7,6 +7,7 @@ import {
   isInLiveRound,
   liveParticipantIds,
   expectedLiveRoundOpponentIds,
+  playerHasScoredInRound,
 } from './presence/live-round-membership.js';
 
 export type PlayToastEvent =
@@ -105,7 +106,7 @@ export function shouldToastRosterPlayerJoined(
     prevPlayer.online !== true &&
     prevPlayer.hasLeft !== true &&
     isInLiveRound(prev, playerId) &&
-    ((prevPlayer.wordCount ?? 0) > 0 || (prevPlayer.score ?? 0) > 0)
+    playerHasScoredInRound(prev, playerId)
   ) {
     return true;
   }

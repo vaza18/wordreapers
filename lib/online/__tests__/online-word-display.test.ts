@@ -48,19 +48,47 @@ describe('resolveOnlineWordEntry', () => {
       },
     });
     const entry = resolveOnlineWordEntry('слово', s);
+    expect(entry.kind).toBe('unique');
     expect(entry.badge).toBe('x2');
-    expect(entry.points).toBe(2);
   });
 });
 
 describe('buildOnlineWordListDisplay', () => {
-  it('builds entries from stored words and session counts', () => {
+  it('builds entries and displays from normalized keys + lexicon', () => {
     const s = session({ wordPlayers: { слово: { org: true } } });
-    const myWords = new Map([['слово', { display: 'СЛОВО', at: 1 }]]);
-    const { entries, displays } = buildOnlineWordListDisplay(myWords, s, 'org');
+    const myWords = new Set(['слово']);
+    const { entries, displays } = buildOnlineWordListDisplay(myWords, s, 'org', {
+      слово: 'СЛОВО',
+    });
     expect(entries).toHaveLength(1);
-    expect(entries[0]?.kind).toBe('unique');
+    expect(entries[0]?.normalized).toBe('слово');
     expect(displays).toEqual(['СЛОВО']);
+  });
+
+  it('falls back to uppercase normalized without lexicon', () => {
+    const s = session({
+      wordPlayers: { рот: { org: true, a: true } },
+    });
+    const myWords = ['рот'];
+    const { entries, displays } = buildOnlineWordListDisplay(myWords, s, 'org');
+    expect(entries[0]?.kind).toBe('normal');
+    expect(displays).toEqual(['РОТ']);
+  });
+
+  it('sorts normalized words alphabetically (uk)', () => {
+    const s = session({
+      wordPlayers: {
+        яблуко: { org: true },
+        абрикос: { org: true },
+        мед: { org: true },
+      },
+    });
+    const { displays } = buildOnlineWordListDisplay(
+      new Set(['яблуко', 'абрикос', 'мед']),
+      s,
+      'org',
+    );
+    expect(displays).toEqual(['АБРИКОС', 'МЕД', 'ЯБЛУКО']);
   });
 
   it('includes overlap peers for shared words', () => {
@@ -71,31 +99,24 @@ describe('buildOnlineWordListDisplay', () => {
         a: { name: 'Аня', wordCount: 1, score: 1, avatarColorIndex: 1 },
       },
     });
-    const myWords = new Map([['рот', { display: 'РОТ', at: 1 }]]);
+    const myWords = new Set(['рот']);
     const { entries } = buildOnlineWordListDisplay(myWords, s, 'org');
     expect(entries[0]?.overlapPeers).toEqual([{ playerId: 'a', name: 'Аня', avatarColorIndex: 1 }]);
   });
 
-  it('scores multiple stored words using session word overlap maps', () => {
+  it('uses apostrophe display from lexicon map', () => {
     const s = session({
-      baseWord: 'портрет',
-      status: 'finished',
-      timerEndsAt: null,
       wordPlayers: {
-        порт: { org: true },
-        ретро: { org: true, guest: true },
-      },
-      players: {
-        org: { name: 'Org', wordCount: 2, score: 10, online: false, avatarColorIndex: 0 },
+        компютер: { org: true },
       },
     });
-    const myWords = new Map([
-      ['порт', { display: 'порт', at: 100 }],
-      ['ретро', { display: 'ретро', at: 200 }],
-    ]);
-    const { entries, displays } = buildOnlineWordListDisplay(myWords, s, 'org');
-    expect(displays).toEqual(['порт', 'ретро']);
-    expect(entries[0]?.kind).toBe('unique');
-    expect(entries[1]?.kind).toBe('normal');
+    const myWords = new Set(['компютер']);
+    const { displays } = buildOnlineWordListDisplay(
+      myWords,
+      s,
+      'org',
+      new Map([['компютер', "КОМП'ЮТЕР"]]),
+    );
+    expect(displays).toEqual(["КОМП'ЮТЕР"]);
   });
 });

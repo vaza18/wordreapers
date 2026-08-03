@@ -76,9 +76,10 @@
         ".write": "auth != null && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && !newData.exists() && (root.child('game_sessions').child($gameId).child('status').val() == 'finished' || root.child('game_sessions').child($gameId).child('status').val() == 'waiting')",
         "wordPlayers": {
           "$normalized": {
+            ".write": "auth != null && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && root.child('game_sessions').child($gameId).child('status').val() == 'playing' && !data.exists() && newData.child(auth.uid).val() === true",
             "$uid": {
-              ".write": "auth != null && auth.uid == $uid && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && (root.child('game_sessions').child($gameId).child('status').val() == 'playing' || root.child('game_sessions').child($gameId).child('status').val() == 'finished')",
-              ".validate": "newData.val() === true"
+              ".write": "auth != null && auth.uid == $uid && root.child('game_sessions').child($gameId).child('players').child(auth.uid).exists() && root.child('game_sessions').child($gameId).child('status').val() == 'playing' && newData.exists()",
+              ".validate": "newData.val() === true && auth.uid === $uid"
             }
           }
         }

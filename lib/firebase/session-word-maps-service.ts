@@ -14,6 +14,7 @@ import { isFirebasePermissionDenied } from './rtdb-errors.js';
 import { sessionWordMapsPath } from './paths.js';
 import { normalizeRoomCode } from './room-code.js';
 import { EMPTY_SESSION_WORD_MAPS, type SessionWordMaps } from './session-word-maps.js';
+import { devLogAction } from '../debug/dev-log.js';
 
 function sessionWordMapsRef(gameId: string): DatabaseReference {
   return ref(getFirebaseDatabase(), sessionWordMapsPath(gameId));
@@ -29,48 +30,66 @@ function parseSessionWordMaps(raw: unknown): SessionWordMaps {
   };
 }
 
-/** One-shot read of shared word maps for a room (requires roster membership in RTDB rules). */
-export async function fetchSessionWordMaps(gameId: string): Promise<SessionWordMaps> {
+/** Discriminated one-shot read — errors are not coerced to empty maps. */
+export type SessionWordMapsFetchResult =
+  { ok: true; maps: SessionWordMaps } | { ok: false; error: unknown };
+
+export async function tryFetchSessionWordMaps(gameId: string): Promise<SessionWordMapsFetchResult> {
   const roomId = normalizeRoomCode(gameId);
   try {
     await ensureAnonymousAuth();
     const snapshot = await get(sessionWordMapsRef(roomId));
     if (!snapshot.exists()) {
-      return { ...EMPTY_SESSION_WORD_MAPS };
+      return { ok: true, maps: { ...EMPTY_SESSION_WORD_MAPS } };
     }
-    return parseSessionWordMaps(snapshot.val());
+    return { ok: true, maps: parseSessionWordMaps(snapshot.val()) };
   } catch (error) {
-    if (__DEV__) {
-      console.warn('fetchSessionWordMaps', error);
-    }
-    return { ...EMPTY_SESSION_WORD_MAPS };
+    return { ok: false, error };
   }
 }
+
+/** One-shot read that throws on network/permission failure (never coerces to empty). */
+export async function requireSessionWordMaps(gameId: string): Promise<SessionWordMaps> {
+  const result = await tryFetchSessionWordMaps(gameId);
+  if (!result.ok) {
+    throw result.error instanceof Error
+      ? result.error
+      : new Error(String(result.error) || 'session word maps fetch failed');
+  }
+  return result.maps;
+}
+
+/** Live maps event: real RTDB snapshots vs permission/network unavailability. */
+export type SessionWordMapsListenEvent =
+  | { type: 'snapshot'; maps: SessionWordMaps }
+  | { type: 'unavailable'; reason: 'permission_denied' | 'error' };
 
 /** Live word maps (overlap, uniqueness, standings recompute). */
 export function subscribeSessionWordMaps(
   gameId: string,
-  listener: (maps: SessionWordMaps | null) => void,
+  listener: (event: SessionWordMapsListenEvent) => void,
 ): Unsubscribe {
   const roomId = normalizeRoomCode(gameId);
   return onValue(
     sessionWordMapsRef(roomId),
     (snapshot) => {
       if (!snapshot.exists()) {
-        listener({ ...EMPTY_SESSION_WORD_MAPS });
+        listener({ type: 'snapshot', maps: { ...EMPTY_SESSION_WORD_MAPS } });
         return;
       }
-      listener(parseSessionWordMaps(snapshot.val()));
+      listener({ type: 'snapshot', maps: parseSessionWordMaps(snapshot.val()) });
     },
     (error) => {
       if (isFirebasePermissionDenied(error)) {
-        listener({ ...EMPTY_SESSION_WORD_MAPS });
+        listener({ type: 'unavailable', reason: 'permission_denied' });
         return;
       }
-      if (__DEV__) {
-        console.warn('subscribeSessionWordMaps', error);
-      }
-      listener(null);
+      devLogAction('subscribeSessionWordMaps failed', {
+        level: 'detail',
+        room: roomId,
+        details: error instanceof Error ? error.message : String(error),
+      });
+      listener({ type: 'unavailable', reason: 'error' });
     },
   );
 }
@@ -104,10 +123,34 @@ export async function clearSessionWordMaps(gameId: string): Promise<void> {
     if (isFirebasePermissionDenied(error)) {
       return;
     }
-    if (__DEV__) {
-      console.warn('clearSessionWordMaps', error);
+    devLogAction('clearSessionWordMaps failed', {
+      level: 'detail',
+      room: roomId,
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+/**
+ * Clear maps and verify empty before `waiting → playing`.
+ * Fail-loud so play clients never latch `awaitingEmptySync` against uncleared prior-round words.
+ */
+export async function ensureSessionWordMapsEmptyForRoundStart(gameId: string): Promise<void> {
+  const roomId = normalizeRoomCode(gameId);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await clearSessionWordMaps(roomId);
+    const result = await tryFetchSessionWordMaps(roomId);
+    if (!result.ok) {
+      // Permission/network: cannot prove empty — fail start rather than enter polluted play.
+      throw result.error instanceof Error
+        ? result.error
+        : new Error('SESSION_WORD_MAPS_CLEAR_UNVERIFIED');
+    }
+    if (Object.keys(result.maps.wordPlayers ?? {}).length === 0) {
+      return;
     }
   }
+  throw new Error('SESSION_WORD_MAPS_NOT_CLEARED');
 }
 
 export { sessionWordMapsRef };

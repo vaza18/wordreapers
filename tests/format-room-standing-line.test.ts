@@ -37,7 +37,11 @@ describe('formatRoomStandingLine', () => {
             c: { name: 'C', wordCount: 3, score: 6, online: true },
           },
         },
-        playerWords: {},
+        playerWords: {
+          a: ['r0-0', 'r0-1', 'r0-2', 'r0-3', 'r0-4'],
+          b: ['r0-5', 'r0-6', 'r0-7', 'r0-8'],
+          c: ['r0-9', 'r0-10', 'r0-11'],
+        },
       },
     ];
 

@@ -10,7 +10,6 @@ describe('canRestorePlayingRoundFromCache', () => {
       gameId: 'ABCDE',
       baseWordRound: 0,
       timerEndsAt: Date.now() + 60_000,
-      words: {},
       sessionSnapshot: {
         baseWord: 'тест',
         settings: {
@@ -34,7 +33,6 @@ describe('canRestorePlayingRoundFromCache', () => {
       gameId: 'ABCDE',
       baseWordRound: 0,
       timerEndsAt: Date.now() - 1,
-      words: {},
       sessionSnapshot: {
         baseWord: 'тест',
         settings: {
@@ -55,13 +53,33 @@ describe('canRestorePlayingRoundFromCache', () => {
 });
 
 describe('parseRoundFinishedNotificationData', () => {
-  it('parses round finished payload', () => {
+  it('parses round finished payload with baseWordRound', () => {
+    expect(
+      parseRoundFinishedNotificationData({
+        type: 'round_finished',
+        gameId: 'ABCDE',
+        baseWordRound: 2,
+      }),
+    ).toEqual({ type: 'round_finished', gameId: 'ABCDE', baseWordRound: 2 });
+  });
+
+  it('accepts stringified baseWordRound from native payloads', () => {
+    expect(
+      parseRoundFinishedNotificationData({
+        type: 'round_finished',
+        gameId: 'hmqy2',
+        baseWordRound: '3',
+      }),
+    ).toEqual({ type: 'round_finished', gameId: 'HMQY2', baseWordRound: 3 });
+  });
+
+  it('rejects payloads without baseWordRound (would open the wrong round)', () => {
     expect(
       parseRoundFinishedNotificationData({
         type: 'round_finished',
         gameId: 'ABCDE',
       }),
-    ).toEqual({ type: 'round_finished', gameId: 'ABCDE' });
+    ).toBeNull();
   });
 
   it('ignores unknown payloads', () => {

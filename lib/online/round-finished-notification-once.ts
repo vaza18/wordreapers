@@ -57,6 +57,7 @@ export async function notifyRoundFinishedOnce(
 
   const sent = await notifyRoundFinished({
     gameId: normalizeRoomCode(gameId),
+    baseWordRound,
     title: i18n.t('game.roundFinishedNotificationTitle'),
     body: i18n.t('game.roundFinishedNotificationBody', {
       word: toDisplayUpper(baseWord),

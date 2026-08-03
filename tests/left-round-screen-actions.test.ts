@@ -3,8 +3,13 @@ import { describe, expect, it } from 'vitest';
 import {
   resolveLeftRoundDisplaySession,
   resolveLeftRoundResultsBaseWordRound,
+  resolveLeftWordsSnapshot,
+  nextLeftAtAfterResumePointer,
+  nextLeftAtBaseWordRound,
   shouldAcceptLeftRoundFrozenArchive,
+  shouldFreezeLeftRoundFromPlayingSnapshot,
   shouldLoadLeftRoundFinishedArchive,
+  shouldPromoteLeftPlayingSnapshotFallback,
   shouldShowLeftRoundViewResults,
 } from '../lib/online/left-round-screen-actions.js';
 
@@ -110,6 +115,67 @@ describe('shouldLoadLeftRoundFinishedArchive', () => {
   });
 });
 
+describe('resolveLeftWordsSnapshot', () => {
+  const rich = new Map([['org', ['порт']]]);
+  const empty = new Map<string, string[]>();
+
+  it('uses live words while the left round is still playing', () => {
+    expect(
+      resolveLeftWordsSnapshot({
+        leftAtBaseWordRound: 2,
+        liveSession: { status: 'playing', baseWordRound: 2 },
+        liveWords: rich,
+        playingSnapshot: null,
+        pinnedFrozenWords: null,
+      }),
+    ).toBe(rich);
+  });
+
+  it('keeps playing-snapshot words when finished clears live roster hook', () => {
+    expect(
+      resolveLeftWordsSnapshot({
+        leftAtBaseWordRound: 2,
+        liveSession: { status: 'finished', baseWordRound: 2 },
+        liveWords: empty,
+        playingSnapshot: {
+          session: { baseWordRound: 2 },
+          words: rich,
+        },
+        pinnedFrozenWords: null,
+      }),
+    ).toBe(rich);
+  });
+
+  it('prefers pinned frozen words over live/snapshot', () => {
+    const frozen = new Map([['org', ['топ']]]);
+    expect(
+      resolveLeftWordsSnapshot({
+        leftAtBaseWordRound: 2,
+        liveSession: { status: 'finished', baseWordRound: 2 },
+        liveWords: empty,
+        playingSnapshot: {
+          session: { baseWordRound: 2 },
+          words: rich,
+        },
+        pinnedFrozenWords: frozen,
+      }),
+    ).toBe(frozen);
+  });
+
+  it('does not fall through to live words from a later rematch round', () => {
+    const laterRoundWords = new Map([['org', ['новий']]]);
+    expect(
+      resolveLeftWordsSnapshot({
+        leftAtBaseWordRound: 2,
+        liveSession: { status: 'finished', baseWordRound: 3 },
+        liveWords: laterRoundWords,
+        playingSnapshot: null,
+        pinnedFrozenWords: null,
+      }),
+    ).toEqual(empty);
+  });
+});
+
 describe('resolveLeftRoundDisplaySession', () => {
   const leftRoundSession = {
     baseWord: 'нектарність',
@@ -149,5 +215,160 @@ describe('resolveLeftRoundDisplaySession', () => {
         playingSnapshotSession: leftRoundSession,
       })?.status,
     ).toBe('finished');
+  });
+
+  it('does not fall through to a later live rematch session', () => {
+    expect(
+      resolveLeftRoundDisplaySession({
+        leftAtBaseWordRound: 2,
+        liveSession: { ...rematchSession, status: 'finished', baseWordRound: 3 },
+        pinnedFrozenSession: null,
+        playingSnapshotSession: null,
+      }),
+    ).toBeUndefined();
+  });
+});
+
+describe('shouldFreezeLeftRoundFromPlayingSnapshot', () => {
+  it('promotes the playing snapshot after rematch advances past the left round', () => {
+    expect(
+      shouldFreezeLeftRoundFromPlayingSnapshot({
+        leftAtBaseWordRound: 2,
+        liveSession: { status: 'playing', baseWordRound: 3 },
+        hasPinnedFrozen: false,
+        playingSnapshotBaseWordRound: 2,
+      }),
+    ).toBe(true);
+  });
+
+  it('skips when archive already pinned or snapshot round mismatches', () => {
+    expect(
+      shouldFreezeLeftRoundFromPlayingSnapshot({
+        leftAtBaseWordRound: 2,
+        liveSession: { status: 'waiting', baseWordRound: 3 },
+        hasPinnedFrozen: true,
+        playingSnapshotBaseWordRound: 2,
+      }),
+    ).toBe(false);
+    expect(
+      shouldFreezeLeftRoundFromPlayingSnapshot({
+        leftAtBaseWordRound: 2,
+        liveSession: { status: 'waiting', baseWordRound: 3 },
+        hasPinnedFrozen: false,
+        playingSnapshotBaseWordRound: 1,
+      }),
+    ).toBe(false);
+  });
+
+  it('does not promote an empty playing-snapshot word list', () => {
+    expect(
+      shouldFreezeLeftRoundFromPlayingSnapshot({
+        leftAtBaseWordRound: 2,
+        liveSession: { status: 'finished', baseWordRound: 2 },
+        hasPinnedFrozen: false,
+        playingSnapshotBaseWordRound: 2,
+        playingSnapshotHasWords: false,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('shouldPromoteLeftPlayingSnapshotFallback', () => {
+  it('allows fallback only when the snapshot has words', () => {
+    expect(shouldPromoteLeftPlayingSnapshotFallback(new Map())).toBe(false);
+    expect(shouldPromoteLeftPlayingSnapshotFallback(new Map([['org', []]]))).toBe(false);
+    expect(shouldPromoteLeftPlayingSnapshotFallback(new Map([['org', ['порт']]]))).toBe(true);
+  });
+});
+
+describe('nextLeftAtBaseWordRound', () => {
+  it('adopts the live playing round on a fresh leave', () => {
+    expect(
+      nextLeftAtBaseWordRound({
+        previous: null,
+        previousSource: 'none',
+        liveStatus: 'playing',
+        liveRound: 6,
+      }),
+    ).toEqual({ round: 6, source: 'live' });
+  });
+
+  it('pins resume N when cold-start has resume and live is already playing N+1', () => {
+    expect(
+      nextLeftAtBaseWordRound({
+        previous: null,
+        previousSource: 'none',
+        liveStatus: 'playing',
+        liveRound: 6,
+        resumeRound: 4,
+      }),
+    ).toEqual({ round: 4, source: 'resume' });
+  });
+
+  it('keeps a resume pin when rematch starts a newer round while parked on left', () => {
+    expect(
+      nextLeftAtBaseWordRound({
+        previous: 4,
+        previousSource: 'resume',
+        liveStatus: 'playing',
+        liveRound: 6,
+        resumeRound: 4,
+      }),
+    ).toEqual({ round: 4, source: 'resume' });
+  });
+
+  it('keeps a live pin when rematch starts a newer round while parked on left', () => {
+    expect(
+      nextLeftAtBaseWordRound({
+        previous: 4,
+        previousSource: 'live',
+        liveStatus: 'playing',
+        liveRound: 6,
+      }),
+    ).toEqual({ round: 4, source: 'live' });
+  });
+
+  it('applies resume when live is already past the left round (finished/waiting)', () => {
+    expect(
+      nextLeftAtBaseWordRound({
+        previous: null,
+        previousSource: 'none',
+        liveStatus: 'waiting',
+        liveRound: 6,
+        resumeRound: 4,
+      }),
+    ).toEqual({ round: 4, source: 'resume' });
+  });
+});
+
+describe('nextLeftAtAfterResumePointer', () => {
+  it('applies resume when pin is still empty', () => {
+    expect(
+      nextLeftAtAfterResumePointer({
+        previous: null,
+        previousSource: 'none',
+        resumeRound: 4,
+      }),
+    ).toEqual({ round: 4, source: 'resume' });
+  });
+
+  it('replaces a newer live pin when AsyncStorage resume arrives late', () => {
+    expect(
+      nextLeftAtAfterResumePointer({
+        previous: 6,
+        previousSource: 'live',
+        resumeRound: 4,
+      }),
+    ).toEqual({ round: 4, source: 'resume' });
+  });
+
+  it('keeps an existing resume pin', () => {
+    expect(
+      nextLeftAtAfterResumePointer({
+        previous: 4,
+        previousSource: 'resume',
+        resumeRound: 4,
+      }),
+    ).toEqual({ round: 4, source: 'resume' });
   });
 });

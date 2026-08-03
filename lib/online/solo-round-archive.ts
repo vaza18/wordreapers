@@ -1,4 +1,3 @@
-import type { StoredPlayerWord } from '../firebase/player-words-service.js';
 import type { GameSession } from '../firebase/types.js';
 import type { PlayerProfile } from '../profile/player-profile.js';
 import { gameSessionSettingsFromSetup } from '../firebase/session-settings.js';
@@ -53,12 +52,9 @@ export function buildSoloFinishedSession(
 }
 
 export function buildSoloFinishedArchiveWords(words: readonly OrganizerSoloWord[]): AllPlayerWords {
-  const soloWords = new Map<string, StoredPlayerWord>();
+  const soloWords: string[] = [];
   for (const word of words) {
-    soloWords.set(word.normalized, {
-      display: word.display,
-      at: word.at,
-    });
+    soloWords.push(word.normalized);
   }
   return new Map([['solo', soloWords]]);
 }

@@ -329,6 +329,12 @@ describe('players write', () => {
     );
   });
 
+  it('denies roster member score update above cap', async () => {
+    await assertFails(
+      authed('p1').database().ref('game_sessions/ABCDE/players/org/score').set(10001),
+    );
+  });
+
   it('allows stranger to join playing session roster', async () => {
     await assertSucceeds(
       authed('joiner')
@@ -607,7 +613,46 @@ describe('session_word_maps', () => {
     );
   });
 
-  it('denies wordPlayers parent object write while playing', async () => {
+  it('allows wordPlayers parent object write to claim a new word while playing', async () => {
+    await assertSucceeds(
+      authed('p1').database().ref('session_word_maps/ABCDE/wordPlayers/роман').set({ p1: true }),
+    );
+  });
+
+  it('denies wordPlayers parent wipe of peers when a second finder claims', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.database().ref('session_word_maps/ABCDE/wordPlayers/роман').set({ p1: true });
+    });
+    await assertFails(
+      authed('org').database().ref('session_word_maps/ABCDE/wordPlayers/роман').set({ org: true }),
+    );
+  });
+
+  it('allows second finder via leaf write while playing', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.database().ref('session_word_maps/ABCDE/wordPlayers/роман').set({ p1: true });
+    });
+    await assertSucceeds(
+      authed('org').database().ref('session_word_maps/ABCDE/wordPlayers/роман/org').set(true),
+    );
+  });
+
+  it('denies forging another uid under a wordPlayers parent create', async () => {
+    await assertFails(
+      authed('p1')
+        .database()
+        .ref('session_word_maps/ABCDE/wordPlayers/роман')
+        .set({ p1: true, org: true }),
+    );
+  });
+
+  it('denies wordPlayers parent rewrite when the actor already claimed the word', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .database()
+        .ref('session_word_maps/ABCDE/wordPlayers/роман')
+        .set({ p1: true, org: true });
+    });
     await assertFails(
       authed('p1').database().ref('session_word_maps/ABCDE/wordPlayers/роман').set({ p1: true }),
     );
@@ -615,6 +660,86 @@ describe('session_word_maps', () => {
 
   it('denies writes under removed wordFirst path', async () => {
     await assertFails(wordMaps('ABCDE').child('wordFirst/slovo').set('p1'));
+  });
+
+  it('denies any client x2Claim write even with word leaf', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.database().ref('session_word_maps/ABCDE/wordPlayers/роман/p1').set(true);
+    });
+    await assertFails(
+      authed('p1').database().ref('session_word_maps/ABCDE/x2Claim/роман').set('p1'),
+    );
+  });
+
+  it('denies any client x2Demoted write even with word leaf', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .database()
+        .ref('session_word_maps/ABCDE/wordPlayers/роман')
+        .set({ p1: true, org: true });
+    });
+    await assertFails(
+      authed('org').database().ref('session_word_maps/ABCDE/x2Demoted/роман').set(true),
+    );
+  });
+
+  it('denies creating wordPlayers leaf while finished', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.database().ref('game_sessions/ABCDE').update({ status: 'finished' });
+    });
+    await assertFails(
+      authed('p1').database().ref('session_word_maps/ABCDE/wordPlayers/після/p1').set(true),
+    );
+  });
+
+  it('denies deleting wordPlayers leaf while finished', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      // Keep another leaf so remove is not a cascade wipe of the maps root
+      // (root delete is allowed while finished for rematch cleanup).
+      await ctx
+        .database()
+        .ref('session_word_maps/ABCDE/wordPlayers')
+        .set({
+          старий: { p1: true },
+          інше: { org: true },
+        });
+      await ctx.database().ref('game_sessions/ABCDE').update({ status: 'finished' });
+    });
+    await assertFails(
+      authed('p1').database().ref('session_word_maps/ABCDE/wordPlayers/старий/p1').remove(),
+    );
+  });
+
+  it('denies deleting wordPlayers leaf while playing (append-only)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .database()
+        .ref('session_word_maps/ABCDE/wordPlayers')
+        .set({
+          роман: { p1: true, org: true },
+        });
+    });
+    await assertFails(
+      authed('p1').database().ref('session_word_maps/ABCDE/wordPlayers/роман/p1').remove(),
+    );
+  });
+
+  it('denies multipath restore that includes a peer uid leaf', async () => {
+    await assertFails(
+      authed('org').database().ref('session_word_maps/ABCDE').update({
+        'wordPlayers/порт/org': true,
+        'wordPlayers/порт/p1': true,
+      }),
+    );
+  });
+
+  it('allows multipath restore of only the actor uid leaves', async () => {
+    await assertSucceeds(
+      authed('org').database().ref('session_word_maps/ABCDE').update({
+        'wordPlayers/порт/org': true,
+        'wordPlayers/рот/org': true,
+      }),
+    );
   });
 });
 
@@ -844,8 +969,31 @@ describe('rematch finished → waiting', () => {
           timerEndsAt: Date.now() - 1000,
           players: {
             ...playingSession.players,
-            p2: { name: 'Two', wordCount: 1, score: 1, online: true, hasLeft: false },
+            p2: { name: 'Two', wordCount: 0, score: 0, online: true, hasLeft: false },
           },
+        });
+    });
+    await assertSucceeds(
+      authed('p1')
+        .database()
+        .ref('game_sessions/ABCDE')
+        .update({
+          status: 'finished',
+          timerEndsAt: null,
+          finishedAt: Date.now(),
+          purgeAfterAt: Date.now() + 1000,
+        }),
+    );
+  });
+
+  it('allows leaf-path finish with legacy score totals (old clients)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .database()
+        .ref('game_sessions/ABCDE')
+        .set({
+          ...playingSession,
+          timerEndsAt: Date.now() - 1000,
         });
     });
     await assertSucceeds(
@@ -859,7 +1007,6 @@ describe('rematch finished → waiting', () => {
           purgeAfterAt: Date.now() + 1000,
           'players/org/score': 3,
           'players/p1/score': 5,
-          'players/p2/score': 1,
         }),
     );
   });

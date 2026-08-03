@@ -2,7 +2,6 @@ import {
   finishGameSessionIfExpired,
   readGameSessionSnapshot,
 } from '../firebase/game-session-service.js';
-import type { SessionWordMaps } from '../firebase/session-word-maps.js';
 import { canOpenOnlineResults } from './play-timer-submit-gate.js';
 
 const DEFAULT_ATTEMPTS = 20;
@@ -72,7 +71,6 @@ export function classifyEnsureSessionSnapshot(options: {
  */
 export async function ensureSessionFinishedForResults(
   gameId: string,
-  mapsOverride?: SessionWordMaps,
   options?: {
     attempts?: number;
     delayMs?: number;
@@ -96,7 +94,7 @@ export async function ensureSessionFinishedForResults(
     if (before === 'rematch_advanced') {
       return 'rematch_advanced';
     }
-    await finishGameSessionIfExpired(gameId, mapsOverride);
+    await finishGameSessionIfExpired(gameId);
     const after = await readGameSessionSnapshot(gameId);
     const classified = classifyEnsureSessionSnapshot({
       status: after.status,

@@ -37,6 +37,26 @@ export function isFirebasePermissionDenied(error: unknown): boolean {
   );
 }
 
+/** Detect transient network / connectivity failures from Firebase or fetch. */
+export function isFirebaseNetworkError(error: unknown): boolean {
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? typeof (error as { code?: unknown }).code === 'string'
+        ? (error as { code: string }).code
+        : null
+      : null;
+  const text = typeof error === 'string' ? error : error instanceof Error ? error.message : '';
+  return (
+    code === 'auth/network-request-failed' ||
+    code === 'unavailable' ||
+    /network request failed/i.test(text) ||
+    /\bNETWORK_ERROR\b/.test(text) ||
+    /connection timed out/i.test(text) ||
+    /failed to get/i.test(text) ||
+    /offline/i.test(text)
+  );
+}
+
 /** Errors that should not surface as uncaught promise rejections. */
 export function isFirebaseIgnorableRtdbError(error: unknown): boolean {
   return isFirebasePermissionDenied(error) || isFirebaseTransactionAbort(error);

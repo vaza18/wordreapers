@@ -85,17 +85,19 @@ Format: **Decision → Alternatives → Why rejected → Date**
 
 ## ADR-012: x2 demotion via wordPlayers peers (no wordFirst)
 
-- **Decision:** Drop `session_word_maps/.../wordFirst`. When a second player finds a unique-bonus word, demote peer scores using `wordPlayers` peers and session score deltas (`−1` for former sole finder; submitter `+entry.points`).
+- **Superseded (2026-08):** Live RTDB score writes and peer demotion transactions removed. x2 / overlap scoring is **client-derived** from `wordPlayers` counts (`buildStandingsFromSessionWordMaps`, `buildLiveStandingsFromSession`). Sole finder on a word gets x2 when unique bonus is on; second+ finder on the same word scores normal (+1). No `x2Claim` / `x2Demoted` RTDB paths.
+- **Original decision (2026-07):** Drop `session_word_maps/.../wordFirst`. When a second player finds a unique-bonus word, demote peer scores using `wordPlayers` peers and session score deltas (`−1` for former sole finder; submitter `+entry.points`).
 - **Alternatives considered:** Keep write-once `wordFirst`; recompute absolute totals from full maps on every submit.
 - **Why rejected:** `wordFirst` looked like exclusive word claiming (removed product) and required an extra write-once path. Full-map recompute is heavier; partial maps already made absolute totals incorrect for multi-word scores.
-- **Date:** 2026-07 — `lib/online/apply-word-submit-to-session.ts`, `lib/firebase/player-words-service.ts`
+- **Date:** 2026-07 — `lib/online/apply-word-submit-to-session.ts`, `lib/firebase/submit-online-word.ts`; superseded 2026-08 shard-only submit
 
-## ADR-013: Parallel wordSet + increment for single-score submits
+## ADR-013: Shard-first submit + increment for single-score submits
 
-- **Decision:** After `wordPlayers` shard commit, write `player_words` in parallel with the score path. Use `ServerValue.increment` only for `plan.mode === 'single'`. Keep absolute multi-player transaction for x2 peer demotion. On partial failure, roll back shard + `player_words` and best-effort undo score.
-- **Alternatives considered:** Increment also for demotion; parent-word transaction to serialize same-word finds; sequential wordSet after score (previous).
-- **Why rejected:** Demotion + increment over-penalizes when two “second finders” race. Parent-word serialization is a larger redesign. Sequential wordSet left ~30–45ms on the listener path.
-- **Date:** 2026-07 — `lib/firebase/player-words-service.ts`, `lib/online/word-maps-shard-rollback.ts`
+- **Superseded (2026-08):** Online submit writes **only** `session_word_maps/{gameId}/wordPlayers` shards (parent create on empty word node; second+ leaf `/{uid}: true`). No session `score` / `wordCount` RTDB updates from **current** clients during play; no `x2Claim` latch or demotion score TX. Standings, badges, and word lists derive on clients from inverted maps + round lexicon. **RTDB `players/*/score` and `wordCount` are obsolete for new clients** — caps remain for outdated store clients during review coexistence (ADR-021); remove in a later release after approval + legacy deprecation (not same-day), not a permanent lock-to-0.
+- **Original decision (2026-07–08):** After `wordPlayers` shard commit, run the score path (no separate `player_words` write). First finder **parent-creates** an empty `wordPlayers/{normalized}` node; second+ use **leaf** writes (parent rewrite denied — RTDB rules cannot safely require preserving peer children). Leaf create/delete only while `playing`. Unique bonus used `x2Claim/{normalized}` plus `x2Demoted/{normalized}` after settled demotion; peer demotion used multi-player score transactions with live deltas.
+- **Alternatives considered:** Parallel `player_words` leaf with `{display,at}`; increment also for demotion; absolute peers `nextScore` writes; leaf-only shard writes without parent serialization; demote all peers when `shardPrevGlobal === 1` without a claim latch.
+- **Why rejected:** Dual `player_words` duplicated maps and doubled submit traffic. Demotion + increment over-penalizes when two “second finders” race. Absolute peers writes lose concurrent other-word increments and break delayed first-finder + demotion races. `shardPrevGlobal === 1` without a latch over-/under-demotes when 3+ leaf finders race (auto x2). Live score TX added latency, rollback complexity, and desync vs derived standings.
+- **Date:** 2026-07 — originally `lib/firebase/player-words-service.ts`; 2026-07 client drop of `player_words` → `lib/firebase/submit-online-word.ts`; 2026-08 parent-word shard + live demotion deltas + x2Claim; **superseded 2026-08** client-derived scores / shard-only submit
 
 ## ADR-014: Client-only round playable lexicon (no Firebase snapshots)
 
@@ -138,6 +140,21 @@ Format: **Decision → Alternatives → Why rejected → Date**
 - **Alternatives considered:** Cloud Function scheduled expiry; every client keeps 1 Hz get+transaction; single resolver with no failover; narrowing live listeners / `onChild*` for word-maps (deferred).
 - **Why rejected:** Functions add latency/ops cost for a small game. 1 Hz × N full-session reads dominate RTDB downloads with tiny storage. No-failover hangs if primary is backgrounded at the deadline. Listener narrowing is higher regression risk — separate plan only if Usage stays high after this.
 - **Date:** 2026-07 — `lib/online/voting/expiry-resolver-role.ts`, `hooks/useVoteExpiryResolver.ts`, `lib/online/play-expire-finish-schedule.ts`, `lib/firebase/game-session-service.ts`
+
+## ADR-020: No mid-round cache→RTDB word restore while session exists
+
+- **Decision:** Local active-round cache may still seed UI / orphan rebuild (`restorePlayingSessionFromLocalCache` when the session root is missing). While a live `playing` session exists, the client does **not** push cached `wordPlayers` / own words back into RTDB when remote maps are empty. Maps listener + AppState `tryFetchSessionWordMaps` are the heal path. Mid-play spurious empty snapshots do **not** wipe rich local maps (rules are append-only while `playing`; score-path rollback is gone). Empty wipe applies only via round-reset gate (`awaitingEmptySync` / force-sync exhaustion).
+- **Alternatives considered:** Restore `tryRestoreActiveRoundCache` (write shards when remote empty / own uid missing and timer live); reconcile score↔words from cache; mid-play authoritative empty clear (score-path rollback era).
+- **Why rejected:** Re-introduces dual SoT and can resurrect wiped/stale maps after rematch or intentional clear. Traffic goal is a single `wordPlayers` path. Mid-play empty clear caused permanent blank lists after reconnect/`unavailable`. Edge desync is accepted for this drop; revisit only with an explicit product ask.
+- **Date:** 2026-07 (updated 2026-08) — `lib/online/session/cache-active-round.ts`, `lib/online/session/play-word-maps-apply.ts`, `lib/online/session/rejoin-online-round.ts`
+
+## ADR-021: Keep legacy `player_words` rules + score caps during store review
+
+- **Decision:** While the new shard-only / derived-standings app is in Google/Apple review, keep RTDB `player_words` rules and `players/*/score`|`wordCount` caps so **outdated store clients** still work. Current clients neither read nor write `player_words` and do not write live score/wordCount. CF scheduled session purge no longer deletes `player_words` (one-shot wipe later via ops).
+- **Alternatives considered:** Remove rules/CF/`player_words` and score leaves in the same production release (strict no-legacy).
+- **Why rejected:** Cutting the path mid-review breaks testers and residual store installs on the previous binary. Coexistence is an explicit product migration window, not permanent dual SoT for new clients.
+- **Removal condition:** After the new app is approved on both stores **and** legacy clients are deprecated (agree N% on new version and/or X weeks after prod) → wipe `player_words/**` → remove rules branch → drop score/wordCount from types/seeds/rules → deploy. Documented in `firebase_schema.md`.
+- **Date:** 2026-08 — `firebase/database.rules.json`, `functions/src/purge-expired-sessions.ts`, `docs/firebase_schema.md`
 
 ---
 

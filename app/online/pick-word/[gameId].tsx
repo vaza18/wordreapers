@@ -273,6 +273,8 @@ export default function OnlinePickWordScreen() {
     try {
       await updateGameSessionSetup(gameId, myUid, {
         baseWord: normalizeUk(baseWordInput),
+        baseWordDisplay:
+          dictionary?.lookupDisplayUpper(baseWordInput) ?? toDisplayUpper(baseWordInput),
         settings: gameSessionSettingsFromSetup(
           durationMinutes,
           uniqueBonusMode,

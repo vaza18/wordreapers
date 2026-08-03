@@ -42,6 +42,7 @@ function session(
   status: GameSession['status'],
   timerEndsAt: number | null,
   roundStartedAt?: number,
+  extra: Partial<GameSession> = {},
 ): GameSession {
   return {
     baseWord: 'тест',
@@ -60,6 +61,7 @@ function session(
       org: { name: 'Org', wordCount: 0, score: 0, online: true },
     },
     baseWordRound: 0,
+    ...extra,
   };
 }
 
@@ -86,6 +88,22 @@ describe('playingRoundSnapshotFromSession', () => {
     expect(snap?.timerEndsAt).toBeGreaterThan(Date.now());
     expect(snap?.players.org?.name).toBe('Org');
     expect(snap?.organizerId).toBe('org');
+  });
+
+  it('includes wordPlayers from the live session for rejoin restore', () => {
+    const roundStartedAt = Date.now() - 60_000;
+    const snap = playingRoundSnapshotFromSession(
+      session('playing', Date.now() + 60_000, roundStartedAt, {
+        wordPlayers: { порт: { org: true } },
+      }),
+    );
+    expect(snap?.wordPlayers).toEqual({ порт: { org: true } });
+  });
+
+  it('captures a playing snapshot without roundStartedAt when timerEndsAt is set', () => {
+    const snap = playingRoundSnapshotFromSession(session('playing', Date.now() + 60_000));
+    expect(snap?.timerEndsAt).toBeGreaterThan(Date.now());
+    expect(snap?.roundStartedAt).toBeUndefined();
   });
 
   it('returns null outside playing', () => {
@@ -128,7 +146,7 @@ function seedFinishedArchives(count: number, startIndex = 0): void {
       savedAt: index * 1000,
       session: finishedSession(String(index)),
       playerWords: {},
-      archiveVersion: 3,
+      archiveVersion: 4,
       ackSent: false,
       playerWordCounts: { org: 0 },
     };

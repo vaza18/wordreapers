@@ -20,6 +20,10 @@ vi.mock('../lib/firebase/game-session-service.js', () => ({
   tryReadGameSessionSnapshot,
 }));
 
+vi.mock('../lib/firebase/session-word-maps-service.js', () => ({
+  tryFetchSessionWordMaps: vi.fn().mockResolvedValue({ ok: true, maps: { wordPlayers: {} } }),
+}));
+
 vi.mock('../lib/online/rematch/restart-rematch-online-round.js', () => ({
   restartRematchOnlineRound: vi.fn(),
 }));

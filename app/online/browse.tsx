@@ -32,10 +32,11 @@ import { fetchPublicLobbyPage } from '@/lib/firebase/public-lobby-service';
 import { browseRangeForPage } from '@/lib/online/public-lobby/browse-pagination';
 import { PUBLIC_LOBBY_PAGE_SIZE } from '@/lib/online/public-lobby/constants';
 import { navigateToNewOnlineRoom } from '@/lib/online/create-room';
-import { resolvePostJoinRoute } from '@/lib/online/post-join-route';
+import { resolvePostJoinRouteWithMaps } from '@/lib/online/post-join-route-with-maps';
 import { continueWithProfileOrRedirect } from '@/lib/online/require-profile';
 import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
 import { UK_LOCALE } from '@/lib/dictionary/locale';
+import { toDisplayUpper } from '@/lib/dictionary/normalize';
 import { playerLanguageForBrowse } from '@/lib/online/public-lobby/content-safety';
 import { useFirebaseStore } from '@/store/firebase-store';
 import { useProfileStore } from '@/store/profile-store';
@@ -71,7 +72,7 @@ const BrowseLobbyRow = memo(function BrowseLobbyRow({
       }}
       style={[styles.card, full && styles.cardDisabled]}
     >
-      <Text style={styles.cardWord}>{row.baseWord.toUpperCase()}</Text>
+      <Text style={styles.cardWord}>{toDisplayUpper(row.baseWord)}</Text>
       <Text style={styles.cardMeta}>
         {full
           ? t('online.browseRoomFull', {
@@ -226,7 +227,7 @@ export default function BrowsePublicLobbiesScreen() {
             playerLanguage: gameLanguage,
           },
         );
-        const route = resolvePostJoinRoute(session, firebaseUid, gameId);
+        const route = await resolvePostJoinRouteWithMaps(session, firebaseUid, gameId);
         router.replace(route);
       } catch (err) {
         setError(joinErrorMessage(err, t));

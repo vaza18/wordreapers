@@ -1,4 +1,5 @@
 import { normalizeUk } from '../dictionary/normalize.js';
+import { compareUk } from '../i18n/uk-collator.js';
 
 /** Prefix search over sorted `base_words.txt` keys. */
 export interface BaseWordPrefixSearchResult {
@@ -69,7 +70,7 @@ function lowerBound(words: readonly string[], target: string): number {
     if (value === undefined) {
       break;
     }
-    if (value.localeCompare(target, 'uk') < 0) {
+    if (compareUk(value, target) < 0) {
       lo = mid + 1;
     } else {
       hi = mid;

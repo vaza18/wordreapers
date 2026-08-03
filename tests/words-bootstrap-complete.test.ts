@@ -2,21 +2,24 @@ import { describe, expect, it } from 'vitest';
 import { shouldCompleteWordsBootstrapWithoutFetch } from '../lib/online/session/words-bootstrap-gate';
 
 describe('shouldCompleteWordsBootstrapWithoutFetch', () => {
-  it('completes when disabled, missing gameId, or empty roster', () => {
+  it('does not complete when disabled (avoids stale-true empty freeze)', () => {
     expect(
       shouldCompleteWordsBootstrapWithoutFetch({
         enabled: false,
         hasGameId: true,
         rosterLength: 2,
       }),
-    ).toBe(true);
+    ).toBe(false);
+  });
+
+  it('completes only for enabled empty-roster listen-only path', () => {
     expect(
       shouldCompleteWordsBootstrapWithoutFetch({
         enabled: true,
         hasGameId: false,
         rosterLength: 2,
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       shouldCompleteWordsBootstrapWithoutFetch({
         enabled: true,

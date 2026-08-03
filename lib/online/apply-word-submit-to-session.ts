@@ -1,37 +1,12 @@
 import { toScoredWordEntry, type ScoredWordEntry, type WordScoreKind } from '@/lib/game/scoring';
 import { globalWordCount } from '@/lib/firebase/session-word-maps';
-import type { GameSession, GameSessionPlayer, SessionWordMaps } from '@/lib/firebase/types';
+import type { SessionWordMaps } from '@/lib/firebase/types';
 
 export type ApplyWordSubmitError = 'NOT_PLAYING' | 'DUPLICATE';
 
 export type ApplyWordMapsResult =
   | { ok: true; maps: SessionWordMaps; entry: ScoredWordEntry; prevGlobal: number }
   | { ok: false; error: ApplyWordSubmitError };
-
-export type ApplyPlayerScoreResult =
-  | { ok: true; session: GameSession; entry: ScoredWordEntry }
-  | { ok: false; error: ApplyWordSubmitError };
-
-export type PlayerScoreUpdatePlan =
-  | {
-      mode: 'single';
-      uid: string;
-      nextScore: number;
-      nextWordCount: number;
-      /** RTDB ServerValue.increment delta (avoids lost updates under concurrent submits). */
-      deltaScore: number;
-      deltaWordCount: number;
-    }
-  | {
-      mode: 'peers';
-      uid: string;
-      nextScore: number;
-      nextWordCount: number;
-      peerScores: { uid: string; nextScore: number }[];
-    };
-
-export type PlanPlayerScoreUpdateResult =
-  { ok: true; plan: PlayerScoreUpdatePlan } | { ok: false; error: ApplyWordSubmitError };
 
 /**
  * Transaction body for `session_word_maps/{gameId}/wordPlayers/{normalized}`.
@@ -47,7 +22,7 @@ export function applyWordSubmitToWordPlayersShard(
     return { ok: false, error: 'DUPLICATE' };
   }
 
-  const prevGlobal = Object.keys(playersOnWord).length;
+  const prevGlobal = Object.values(playersOnWord).filter((onWord) => onWord === true).length;
   const globalCount = prevGlobal + 1;
   playersOnWord[uid] = true;
 
@@ -102,123 +77,5 @@ export function applyWordSubmitToWordMaps(
     prevGlobal,
     maps: { wordPlayers },
     entry,
-  };
-}
-
-/**
- * Choose single-player vs peer demotion write after maps commit.
- * Uses deltas from current session player rows (partial maps are per-word only).
- */
-export function planPlayerScoreUpdate(
-  session: GameSession,
-  maps: SessionWordMaps,
-  uid: string,
-  normalized: string,
-  entry: ScoredWordEntry,
-  uniqueBonusEnabled: boolean,
-): PlanPlayerScoreUpdateResult {
-  if (session.status !== 'playing') {
-    return { ok: false, error: 'NOT_PLAYING' };
-  }
-  const player = session.players[uid];
-  if (!player) {
-    return { ok: false, error: 'NOT_PLAYING' };
-  }
-  if (maps.wordPlayers?.[normalized]?.[uid] !== true) {
-    return { ok: false, error: 'NOT_PLAYING' };
-  }
-
-  const globalCount = globalWordCount(maps.wordPlayers, normalized);
-  const prevGlobal = Math.max(0, globalCount - 1);
-  const deltaScore = entry.points;
-  const deltaWordCount = 1;
-  const nextScore = (player.score ?? 0) + deltaScore;
-  const nextWordCount = (player.wordCount ?? 0) + deltaWordCount;
-
-  if (uniqueBonusEnabled && prevGlobal === 1) {
-    const peerScores = Object.keys(maps.wordPlayers?.[normalized] ?? {})
-      .filter((peerUid) => peerUid !== uid && session.players[peerUid])
-      .map((peerUid) => ({
-        uid: peerUid,
-        nextScore: Math.max(0, (session.players[peerUid]?.score ?? 0) - 1),
-      }));
-    if (peerScores.length > 0) {
-      return {
-        ok: true,
-        plan: {
-          mode: 'peers',
-          uid,
-          nextScore,
-          nextWordCount,
-          peerScores,
-        },
-      };
-    }
-  }
-
-  return {
-    ok: true,
-    plan: {
-      mode: 'single',
-      uid,
-      nextScore,
-      nextWordCount,
-      deltaScore,
-      deltaWordCount,
-    },
-  };
-}
-
-/** Apply a score plan to a cloned players map (for tests and full-session tx). */
-export function applyPlayerScorePlan(
-  players: Record<string, GameSessionPlayer>,
-  plan: PlayerScoreUpdatePlan,
-): Record<string, GameSessionPlayer> {
-  const next = Object.fromEntries(
-    Object.entries(players).map(([playerId, row]) => [playerId, { ...row }]),
-  );
-  if (plan.mode === 'peers') {
-    for (const peer of plan.peerScores) {
-      const peerPlayer = next[peer.uid];
-      if (peerPlayer) {
-        next[peer.uid] = { ...peerPlayer, score: peer.nextScore };
-      }
-    }
-  }
-  const submitter = next[plan.uid];
-  if (!submitter) {
-    return next;
-  }
-  next[plan.uid] = {
-    ...submitter,
-    score: plan.nextScore,
-    wordCount: plan.nextWordCount,
-  };
-  return next;
-}
-
-/**
- * Apply score deltas to session players after word maps commit.
- */
-export function applyPlayerScoreFromWordSubmit(
-  session: GameSession,
-  maps: SessionWordMaps,
-  uid: string,
-  normalized: string,
-  entry: ScoredWordEntry,
-  uniqueBonusEnabled: boolean,
-): ApplyPlayerScoreResult {
-  const planned = planPlayerScoreUpdate(session, maps, uid, normalized, entry, uniqueBonusEnabled);
-  if (!planned.ok) {
-    return planned;
-  }
-
-  return {
-    ok: true,
-    entry,
-    session: {
-      ...session,
-      players: applyPlayerScorePlan(session.players, planned.plan),
-    },
   };
 }

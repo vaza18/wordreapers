@@ -13,8 +13,11 @@ import { useOnlineViewerUid } from '@/hooks/useOnlineViewerUid';
 import { isViewerWinner } from '@/lib/game/is-viewer-winner';
 import type { GameSession } from '@/lib/firebase/types';
 import { stackHeaderWithBackAndSettings } from '@/lib/navigation/stack-header-options';
-import { loadFrozenFinishedRoundFromArchive } from '@/lib/online/session/frozen-finished-round';
-import { buildOnlineResultsView } from '@/lib/online/online-results-data';
+import {
+  loadFrozenFinishedRoundFromArchive,
+  type FrozenFinishedRound,
+} from '@/lib/online/session/frozen-finished-round';
+import { buildDisplaysByPlayer, buildOnlineResultsView } from '@/lib/online/online-results-data';
 import {
   getFinishedRoundArchive,
   parseArchiveRouteKey,
@@ -36,8 +39,8 @@ export default function ArchivedRoundResultsScreen() {
   const parsed = useMemo(() => parseArchiveRouteKey(archiveKey), [archiveKey]);
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
-  const [viewData, setViewData] = useState<ReturnType<typeof buildOnlineResultsView> | null>(null);
   const [highlightPlayerId, setHighlightPlayerId] = useState('');
+  const [frozenRound, setFrozenRound] = useState<FrozenFinishedRound | null>(null);
   const [archiveSession, setArchiveSession] = useState<GameSession | null>(null);
   const [archiveLexicon, setArchiveLexicon] = useState<PlayableLexiconSnapshot | null>(null);
   const { lexicon: roundLexicon, loading: lexiconLoading } = useResultsRoundLexicon(
@@ -62,21 +65,17 @@ export default function ArchivedRoundResultsScreen() {
       }
       if (!frozen) {
         setMissing(true);
-        setViewData(null);
+        setFrozenRound(null);
         setLoading(false);
         return;
       }
 
-      const data = buildOnlineResultsView(t, frozen.session, frozen.words, {
-        finishedAtMs: frozen.session.finishedAt ?? frozen.savedAt,
-        viewerUid: myUid || undefined,
-      });
       const playerIds = Object.keys(frozen.session.players);
       const highlight = myUid && frozen.session.players[myUid] ? myUid : (playerIds[0] ?? '');
       setHighlightPlayerId(highlight);
+      setFrozenRound(frozen);
       setArchiveSession(frozen.session);
       setArchiveLexicon(archive?.playableLexicon ?? null);
-      setViewData(data);
       setMissing(false);
       setLoading(false);
     })();
@@ -84,7 +83,17 @@ export default function ArchivedRoundResultsScreen() {
     return () => {
       cancelled = true;
     };
-  }, [myUid, parsed, t]);
+  }, [myUid, parsed]);
+
+  const viewData = useMemo(() => {
+    if (!frozenRound) {
+      return null;
+    }
+    return buildOnlineResultsView(t, frozenRound.session, frozenRound.words, {
+      viewerUid: myUid || undefined,
+      displaysByPlayer: buildDisplaysByPlayer(frozenRound.words, roundLexicon?.displays),
+    });
+  }, [frozenRound, myUid, roundLexicon?.displays, t]);
 
   const screenOptions = useMemo(() => {
     if (!viewData || !parsed) {

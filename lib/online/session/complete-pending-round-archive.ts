@@ -2,11 +2,15 @@ import { get, ref } from 'firebase/database';
 
 import { getFirebaseDatabase } from '../../firebase/init.js';
 import { gameSessionPath } from '../../firebase/paths.js';
-import { fetchSessionPlayerWords } from '../../firebase/player-words-service.js';
+import { tryFetchSessionWordMaps } from '../../firebase/session-word-maps-service.js';
 import { normalizeRoomCode } from '../../firebase/room-code.js';
 import type { GameSession } from '../../firebase/types.js';
-import { buildStandingsFromSession } from '../../game/scoring.js';
-
+import { devLogAction } from '../../debug/dev-log.js';
+import { buildLiveStandingsFromSession } from '../live-standings.js';
+import {
+  wordPlayersFromWordsByPlayer,
+  wordsByPlayerFromWordPlayers,
+} from '../word-players-invert.js';
 import type { AllPlayerWords } from './clone-player-words.js';
 import { persistLocalArchive } from '../coordinated-session-cleanup.js';
 import { finalizeOnlineRoundForPlayer } from '../finalize-online-round.js';
@@ -35,9 +39,16 @@ export async function persistFinishedRoundForPlayer(
   }
 
   const baseWordRound = session.baseWordRound ?? 0;
-  const standings = buildStandingsFromSession(session);
+  const standings = buildLiveStandingsFromSession({
+    ...session,
+    wordPlayers: wordPlayersFromWordsByPlayer(words),
+  });
 
-  await persistLocalArchive(gameId, uid, session, words);
+  const archiveResult = await persistLocalArchive(gameId, uid, session, words);
+  if (archiveResult === 'skipped_retryable') {
+    // Keep pending so sync can retry when maps are non-empty again.
+    return;
+  }
   await finalizeOnlineRoundForPlayer(gameId, baseWordRound, uid, standings);
   await clearPendingRoundArchive(gameId, baseWordRound);
 }
@@ -51,8 +62,20 @@ export async function persistFinishedRoundFromFirebase(
   if (session.status !== 'finished' || !uid) {
     return;
   }
-  const playerIds = Object.keys(session.players);
-  const words = await fetchSessionPlayerWords(gameId, playerIds);
+  const mapsResult = await tryFetchSessionWordMaps(gameId);
+  if (!mapsResult.ok) {
+    const details =
+      mapsResult.error instanceof Error ? mapsResult.error.message : String(mapsResult.error);
+    devLogAction('persistFinishedRoundFromFirebase maps fetch failed', {
+      level: 'detail',
+      room: gameId,
+      details,
+    });
+    throw mapsResult.error instanceof Error
+      ? mapsResult.error
+      : new Error(details || 'session word maps fetch failed');
+  }
+  const words = wordsByPlayerFromWordPlayers(mapsResult.maps.wordPlayers);
   await persistFinishedRoundForPlayer(gameId, uid, session, words);
 }
 

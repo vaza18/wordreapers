@@ -14,6 +14,7 @@ import {
 } from 'firebase/database';
 
 import { normalizeUk } from '../dictionary/normalize.js';
+import { sessionBaseWordDisplay } from '../online/session-base-word-display.js';
 import {
   PUBLIC_LOBBY_MAX_PLAYERS,
   PUBLIC_LOBBY_PAGE_SIZE,
@@ -265,10 +266,10 @@ export async function fetchPublicLobbyCount(language: string): Promise<number | 
 
 function buildIndexEntry(session: GameSession, now: number): PublicLobbyIndexEntry {
   const playerCount = activePublicLobbyPlayerCount(session.players);
-  const baseWordNorm = normalizeUk(session.baseWord);
+  const baseWordDisplay = sessionBaseWordDisplay(session);
   return {
-    baseWord: session.baseWord,
-    baseWordNorm,
+    baseWord: baseWordDisplay,
+    baseWordNorm: normalizeUk(session.baseWord || baseWordDisplay),
     playerCount,
     maxPlayers: session.maxPlayers ?? PUBLIC_LOBBY_MAX_PLAYERS,
     publishedAt: session.publicPublishedAt ?? now,

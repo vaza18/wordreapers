@@ -14,6 +14,7 @@ const runExitCleanupMocks = {
   leaveGameSession: vi.fn(),
   abandonTrackedOrganizerWaitingRoom: vi.fn(),
   setOrganizerWaitingRoom: vi.fn(),
+  markPendingRoundArchive: vi.fn(),
 };
 
 vi.mock('@/lib/navigation/navigate-home', () => ({
@@ -49,6 +50,11 @@ vi.mock('../lib/online/coordinated-session-cleanup.js', () => ({
     runExitCleanupMocks.markResultsExitedAndOffline(...args),
 }));
 
+vi.mock('../lib/online/session/pending-round-archive.js', () => ({
+  markPendingRoundArchive: (...args: unknown[]) =>
+    runExitCleanupMocks.markPendingRoundArchive(...args),
+}));
+
 vi.mock('../lib/online/abandon-tracked-waiting-room.js', () => ({
   abandonTrackedOrganizerWaitingRoom: (...args: unknown[]) =>
     runExitCleanupMocks.abandonTrackedOrganizerWaitingRoom(...args),
@@ -77,6 +83,7 @@ describe('exitOnlineToHome', () => {
     for (const fn of Object.values(runExitCleanupMocks)) {
       fn.mockResolvedValue(undefined);
     }
+    runExitCleanupMocks.persistLocalArchive.mockResolvedValue('saved');
     cacheActiveRoundProgress.mockResolvedValue(undefined);
     getMock.mockResolvedValue({ exists: () => false });
   });
@@ -87,7 +94,6 @@ describe('exitOnlineToHome', () => {
       status: 'playing' as const,
       timerEndsAt: Date.now() + 60_000,
     };
-    const myWords = new Map([['порт', { display: 'порт', at: 100 }]]);
 
     await exitOnlineToHome({
       gameId: 'ABCDE',
@@ -95,11 +101,29 @@ describe('exitOnlineToHome', () => {
       isOrganizer: true,
       sessionStatus: 'playing',
       session,
-      myWords,
+      myWords: ['порт'],
     });
 
-    expect(cacheActiveRoundProgress).toHaveBeenCalledWith('ABCDE', 'org', session, myWords);
+    expect(cacheActiveRoundProgress).toHaveBeenCalledWith('ABCDE', 'org', session, ['порт']);
     expect(navigateHomeClearingStack).toHaveBeenCalled();
+  });
+
+  it('defaults myWords to empty array when omitted on playing exit', async () => {
+    const session = {
+      ...finishedSession(),
+      status: 'playing' as const,
+      timerEndsAt: Date.now() + 60_000,
+    };
+
+    await exitOnlineToHome({
+      gameId: 'ABCDE',
+      uid: 'org',
+      isOrganizer: true,
+      sessionStatus: 'playing',
+      session,
+    });
+
+    expect(cacheActiveRoundProgress).toHaveBeenCalledWith('ABCDE', 'org', session, []);
   });
 
   it('awaits waiting-room cleanup before navigation', async () => {
@@ -163,7 +187,7 @@ describe('exitOnlineToHome', () => {
 
   it('archives finished results when exiting from the results screen', async () => {
     const session = finishedSession();
-    const words = new Map([['org', new Map([['порт', { display: 'порт', at: 1 }]])]]);
+    const words = new Map([['org', ['порт']]]);
     getMock.mockResolvedValue({ exists: () => true, val: () => session });
 
     await exitOnlineToHome({
@@ -177,7 +201,26 @@ describe('exitOnlineToHome', () => {
     });
 
     expect(runExitCleanupMocks.persistLocalArchive).toHaveBeenCalled();
+    expect(runExitCleanupMocks.markPendingRoundArchive).not.toHaveBeenCalled();
     expect(runExitCleanupMocks.markResultsExitedAndOffline).toHaveBeenCalled();
+  });
+
+  it('marks pending archive when exit soft-skips empty+claims words', async () => {
+    const session = finishedSession();
+    getMock.mockResolvedValue({ exists: () => true, val: () => session });
+    runExitCleanupMocks.persistLocalArchive.mockResolvedValue('skipped_retryable');
+
+    await exitOnlineToHome({
+      gameId: 'ABCDE',
+      uid: 'org',
+      isOrganizer: true,
+      sessionStatus: 'finished',
+      session,
+      wordsForArchive: new Map(),
+      exitedResults: true,
+    });
+
+    expect(runExitCleanupMocks.markPendingRoundArchive).toHaveBeenCalledWith('ABCDE', 0, 'org');
   });
 
   it('clears organizer waiting-room tracking on exit', async () => {

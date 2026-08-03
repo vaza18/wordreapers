@@ -24,6 +24,7 @@ import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { formatRoomCodeDisplay } from '@/lib/firebase/format-room-code';
+import { sessionBaseWordDisplay } from '@/lib/online/session-base-word-display';
 import { formatLobbyBaseWordMetaLine } from '@/lib/online/format-lobby-base-word-meta';
 import {
   loadBundledDictionary,
@@ -40,7 +41,6 @@ import {
   type GameSessionSnapshot,
 } from '@/lib/firebase/game-session-service';
 import { setRoomPrivate, syncPublicRosterAliases } from '@/lib/firebase/public-lobby-service';
-import { clearWaitingLobbyPlayerWordsAsOrganizer } from '@/lib/firebase/player-words-service';
 import { ensureAnonymousAuth } from '@/lib/firebase/auth';
 import { devLogAction } from '@/lib/debug/dev-log';
 import {
@@ -130,7 +130,6 @@ export default function LobbyScreen() {
   const [rematchArchive, setRematchArchive] = useState<FinishedRoundArchive | null | undefined>(
     undefined,
   );
-  const lobbyWordsClearedForRoundRef = useRef<number | null>(null);
   const myUid = firebaseUid ?? '';
 
   useEffect(() => {
@@ -312,18 +311,6 @@ export default function LobbyScreen() {
       void syncLobbyPickerState(gameId);
     }
   }, [gameId, session]);
-
-  useEffect(() => {
-    if (!gameId || !session || session.status !== 'waiting' || !isOrganizer || !myUid) {
-      return;
-    }
-    const round = session.baseWordRound ?? 0;
-    if (lobbyWordsClearedForRoundRef.current === round) {
-      return;
-    }
-    lobbyWordsClearedForRoundRef.current = round;
-    void clearWaitingLobbyPlayerWordsAsOrganizer(gameId, session, myUid);
-  }, [gameId, isOrganizer, myUid, session]);
 
   useOrganizerAbandonWaitingOnExit(
     gameId,
@@ -617,7 +604,7 @@ export default function LobbyScreen() {
           </View>
         ) : null}
         <Text style={styles.baseWordLabel}>{t('game.baseWord')}</Text>
-        <Text style={styles.baseWordTitle}>{session.baseWord.toUpperCase()}</Text>
+        <Text style={styles.baseWordTitle}>{sessionBaseWordDisplay(session)}</Text>
         {baseWordMetaLine}
       </View>
     ) : null;

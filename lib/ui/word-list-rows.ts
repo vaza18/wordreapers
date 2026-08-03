@@ -1,6 +1,7 @@
 import { toDisplayUpper } from '@/lib/dictionary/normalize';
 import type { ScoredWordEntry } from '@/lib/game/scoring';
 import type { WordOverlapPeer } from '@/lib/game/word-overlap-peers';
+import { compareUk } from '@/lib/i18n/uk-collator';
 
 /** Scored word plus optional overlap peers for the play list. */
 export type WordListRowEntry = ScoredWordEntry & {
@@ -59,10 +60,6 @@ function entryVisualEqual(a: WordListRowEntry, b: WordListRowEntry): boolean {
   );
 }
 
-function compareNormalized(a: string, b: string): number {
-  return a.localeCompare(b, 'uk');
-}
-
 /** Binary-insert one row into an already-sorted list (uk collation). */
 export function insertSortedWordListRow(
   rows: readonly WordListRow[],
@@ -73,14 +70,14 @@ export function insertSortedWordListRow(
   while (lo < hi) {
     const mid = (lo + hi) >> 1;
     const current = rows[mid];
-    if (!current || compareNormalized(current.entry.normalized, row.entry.normalized) < 0) {
+    if (!current || compareUk(current.entry.normalized, row.entry.normalized) < 0) {
       lo = mid + 1;
     } else {
       hi = mid;
     }
   }
   const existing = rows[lo];
-  if (existing && compareNormalized(existing.entry.normalized, row.entry.normalized) === 0) {
+  if (existing && compareUk(existing.entry.normalized, row.entry.normalized) === 0) {
     const next = rows.slice();
     next[lo] = row;
     return next;
@@ -103,7 +100,7 @@ function fullSortedBuild(
     }
     return makeRow(entry, display);
   });
-  rows.sort((a, b) => compareNormalized(a.entry.normalized, b.entry.normalized));
+  rows.sort((a, b) => compareUk(a.entry.normalized, b.entry.normalized));
   return rows;
 }
 

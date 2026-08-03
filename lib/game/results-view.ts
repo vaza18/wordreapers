@@ -1,4 +1,5 @@
 import { toDisplayUpper } from '../dictionary/normalize.js';
+import { compareUk } from '../i18n/uk-collator.js';
 import type { ResultsPlayerDirectory } from './results-directory.js';
 import { computeWordsPerMinute } from './round-duration.js';
 import type { PlayerStandings, ScoredWordEntry, WordScoreKind } from './scoring.js';
@@ -99,7 +100,7 @@ export function buildGlobalResultWords(params: {
         showX2,
       };
     })
-    .sort((a, b) => a.normalized.localeCompare(b.normalized, 'uk'));
+    .sort((a, b) => compareUk(a.normalized, b.normalized));
 }
 
 /**
@@ -123,6 +124,7 @@ export function buildPlayerResultSections(params: {
 
     const words = entries
       .map((entry, index) => ({
+        normalized: entry.normalized,
         display: displays[index] ?? toDisplayUpper(entry.normalized),
         badge: entry.badge,
         overlapPeers: overlapPeersFromWordMap(
@@ -133,7 +135,12 @@ export function buildPlayerResultSections(params: {
           (playerId) => params.directory.getAvatarColorIndex(playerId),
         ),
       }))
-      .sort((a, b) => a.display.localeCompare(b.display, 'uk'));
+      .sort((a, b) => compareUk(a.normalized, b.normalized))
+      .map((row) => ({
+        display: row.display,
+        badge: row.badge,
+        overlapPeers: row.overlapPeers,
+      }));
 
     const wordsPerMinute =
       params.roundDurationSeconds != null
@@ -186,6 +193,6 @@ function sortAuthors(authors: GlobalWordAuthor[]): GlobalWordAuthor[] {
     if (b.kind === 'unique' && a.kind !== 'unique') {
       return 1;
     }
-    return a.playerName.localeCompare(b.playerName, 'uk');
+    return compareUk(a.playerName, b.playerName);
   });
 }

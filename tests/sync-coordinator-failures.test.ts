@@ -20,8 +20,15 @@ vi.mock('../lib/firebase/game-session-service.js', () => ({
   abandonWaitingGameSession: (...args: unknown[]) => abandonWaitingGameSession(...args),
 }));
 
-vi.mock('../lib/firebase/player-words-service.js', () => ({
-  fetchSessionPlayerWords: vi.fn().mockResolvedValue(new Map()),
+vi.mock('../lib/firebase/session-word-maps-service.js', () => ({
+  tryFetchSessionWordMaps: vi.fn().mockResolvedValue({
+    ok: true,
+    maps: { wordPlayers: { кіт: { org: true } } },
+  }),
+}));
+
+vi.mock('../lib/debug/dev-log.js', () => ({
+  devLogAction: vi.fn(),
 }));
 
 vi.mock('../lib/online/coordinated-session-cleanup.js', () => ({
@@ -40,6 +47,7 @@ vi.mock('../lib/online/session/pending-round-archive.js', () => ({
 vi.mock('../lib/online/session/online-session-archive.js', () => ({
   getFinishedRoundArchive: vi.fn(),
   isFinishedArchiveStale: vi.fn(),
+  isLegacyFinishedArchiveWords: vi.fn(() => false),
   listFinishedRoundArchives: vi.fn(),
   markFinishedArchiveAckSent: vi.fn(),
 }));
@@ -62,7 +70,7 @@ describe('syncFinishedRoundsCoordinator failure paths', () => {
     vi.mocked(listPendingRoundArchives).mockResolvedValue([]);
     vi.mocked(listFinishedRoundArchives).mockResolvedValue([]);
     vi.mocked(getFinishedRoundArchive).mockResolvedValue(null);
-    persistLocalArchive.mockResolvedValue(undefined);
+    persistLocalArchive.mockResolvedValue('saved');
     finalizeOnlineRoundForPlayer.mockResolvedValue(undefined);
     clearPendingRoundArchive.mockResolvedValue(undefined);
     abandonWaitingGameSession.mockResolvedValue(undefined);
@@ -135,7 +143,7 @@ describe('syncFinishedRoundsCoordinator failure paths', () => {
         players: { org: { name: 'Org', wordCount: 1, score: 1 } },
       }),
     });
-    persistLocalArchive.mockResolvedValue(undefined);
+    persistLocalArchive.mockResolvedValue('saved');
 
     await syncFinishedRoundsCoordinator({ uid: 'org' });
 

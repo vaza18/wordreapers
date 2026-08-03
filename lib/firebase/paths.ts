@@ -26,14 +26,6 @@ export function gameSessionPlayerPath(gameId: string, playerId: string): string 
   return `${gameSessionPlayersPath(gameId)}/${playerId}`;
 }
 
-export function playerWordLeafPath(gameId: string, playerId: string, normalized: string): string {
-  return `${playerWordsPath(gameId, playerId)}/${normalized}`;
-}
-
-export function playerWordsPath(gameId: string, playerId: string): string {
-  return `player_words/${normalizeRoomCode(gameId)}/${playerId}`;
-}
-
 /** Public lobby index shard per game language (v2). */
 export const PUBLIC_LOBBIES_PATH = 'public_lobbies';
 

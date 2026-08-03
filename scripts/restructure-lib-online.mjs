@@ -37,7 +37,6 @@ const SUBDIRS = {
   session: [
     'rejoin-online-round.ts',
     'play-session-bootstrap.ts',
-    'session-words-bootstrap.ts',
     'online-session-archive.ts',
     'processed-online-rounds.ts',
     'archive-finished-round-from-firebase.ts',

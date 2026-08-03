@@ -10,13 +10,32 @@ import {
   filterMultiplayerArchivesForGame,
 } from '@/lib/online/room-history-aggregate';
 
+function playerWordsFromCounts(
+  counts: Record<string, number>,
+  prefix: string,
+): Record<string, string[]> {
+  const playerWords: Record<string, string[]> = {};
+  let index = 0;
+  for (const [playerId, count] of Object.entries(counts)) {
+    playerWords[playerId] = Array.from({ length: count }, () => `${prefix}${index++}`);
+  }
+  return playerWords;
+}
+
 function multiplayerArchive(
   gameId: string,
   baseWordRound: number,
   savedAt: number,
   players: FinishedRoundArchive['session']['players'],
   sessionOverrides: Partial<FinishedRoundArchive['session']> = {},
+  playerWordCounts?: Record<string, number>,
 ): FinishedRoundArchive {
+  const prefix = `r${baseWordRound}-`;
+  const counts =
+    playerWordCounts ??
+    Object.fromEntries(
+      Object.entries(players).map(([playerId, player]) => [playerId, player.wordCount ?? 0]),
+    );
   return {
     gameId,
     baseWordRound,
@@ -36,25 +55,46 @@ function multiplayerArchive(
       players,
       ...sessionOverrides,
     },
-    playerWords: {},
+    playerWords: playerWordsFromCounts(counts, prefix),
   };
 }
 
 describe('computeRoomHistoryAggregate', () => {
   it('ranks by round wins first, then total words when scores are off', () => {
     const archives = [
-      multiplayerArchive('K123', 0, 100, {
-        artem: { name: 'Артем', wordCount: 20, score: 40, online: true },
-        vasyl: { name: 'Василь', wordCount: 30, score: 30, online: true },
-      }),
-      multiplayerArchive('K123', 1, 200, {
-        artem: { name: 'Артем', wordCount: 25, score: 50, online: true },
-        vasyl: { name: 'Василь', wordCount: 25, score: 25, online: true },
-      }),
-      multiplayerArchive('K123', 2, 300, {
-        artem: { name: 'Артем', wordCount: 27, score: 54, online: true },
-        vasyl: { name: 'Василь', wordCount: 20, score: 20, online: true },
-      }),
+      multiplayerArchive(
+        'K123',
+        0,
+        100,
+        {
+          artem: { name: 'Артем', wordCount: 20, score: 40, online: true },
+          vasyl: { name: 'Василь', wordCount: 30, score: 30, online: true },
+        },
+        {},
+        { artem: 21, vasyl: 20 },
+      ),
+      multiplayerArchive(
+        'K123',
+        1,
+        200,
+        {
+          artem: { name: 'Артем', wordCount: 25, score: 50, online: true },
+          vasyl: { name: 'Василь', wordCount: 25, score: 25, online: true },
+        },
+        {},
+        { artem: 26, vasyl: 25 },
+      ),
+      multiplayerArchive(
+        'K123',
+        2,
+        300,
+        {
+          artem: { name: 'Артем', wordCount: 27, score: 54, online: true },
+          vasyl: { name: 'Василь', wordCount: 20, score: 20, online: true },
+        },
+        {},
+        { artem: 24, vasyl: 30 },
+      ),
     ];
 
     const aggregate = computeRoomHistoryAggregate('K123', archives);
@@ -62,12 +102,12 @@ describe('computeRoomHistoryAggregate', () => {
     expect(aggregate.uniquePlayerCount).toBe(2);
     expect(aggregate.standings[0]).toMatchObject({
       playerId: 'artem',
-      roundWins: 3,
-      totalWords: 72,
+      roundWins: 2,
+      totalWords: 71,
     });
     expect(aggregate.standings[1]).toMatchObject({
       playerId: 'vasyl',
-      roundWins: 0,
+      roundWins: 1,
       totalWords: 75,
     });
     expect(aggregate.showScores).toBe(false);
@@ -93,6 +133,7 @@ describe('computeRoomHistoryAggregate', () => {
           c: { name: 'C', wordCount: 8, score: 10, online: true },
         },
         { settings: threePlayerSettings },
+        { a: 10, b: 12, c: 8 },
       ),
       multiplayerArchive(
         'K123',
@@ -104,6 +145,7 @@ describe('computeRoomHistoryAggregate', () => {
           c: { name: 'C', wordCount: 6, score: 8, online: true },
         },
         { settings: threePlayerSettings },
+        { a: 8, b: 12, c: 6 },
       ),
     ];
 
@@ -111,20 +153,20 @@ describe('computeRoomHistoryAggregate', () => {
     expect(aggregate.showScores).toBe(true);
     expect(aggregate.standings[0]).toMatchObject({
       playerId: 'b',
-      roundWins: 1,
-      totalScore: 40,
+      roundWins: 2,
+      totalScore: 48,
       totalWords: 24,
     });
     expect(aggregate.standings[1]).toMatchObject({
       playerId: 'a',
-      roundWins: 1,
-      totalScore: 30,
+      roundWins: 0,
+      totalScore: 36,
       totalWords: 18,
     });
     expect(aggregate.standings[2]).toMatchObject({
       playerId: 'c',
       roundWins: 0,
-      totalScore: 18,
+      totalScore: 28,
       totalWords: 14,
     });
   });
@@ -255,14 +297,28 @@ describe('room leader helpers', () => {
 
   it('detects room leader for highlight', () => {
     const aggregate = computeRoomHistoryAggregate('K123', [
-      multiplayerArchive('K123', 0, 100, {
-        artem: { name: 'Артем', wordCount: 10, score: 20, online: true },
-        vasyl: { name: 'Василь', wordCount: 5, score: 10, online: true },
-      }),
-      multiplayerArchive('K123', 1, 200, {
-        artem: { name: 'Артем', wordCount: 10, score: 20, online: true },
-        vasyl: { name: 'Василь', wordCount: 5, score: 10, online: true },
-      }),
+      multiplayerArchive(
+        'K123',
+        0,
+        100,
+        {
+          artem: { name: 'Артем', wordCount: 10, score: 20, online: true },
+          vasyl: { name: 'Василь', wordCount: 5, score: 10, online: true },
+        },
+        {},
+        { artem: 10, vasyl: 5 },
+      ),
+      multiplayerArchive(
+        'K123',
+        1,
+        200,
+        {
+          artem: { name: 'Артем', wordCount: 10, score: 20, online: true },
+          vasyl: { name: 'Василь', wordCount: 5, score: 10, online: true },
+        },
+        {},
+        { artem: 10, vasyl: 5 },
+      ),
     ]);
     expect(didPlayerLeadRoomAggregate('artem', aggregate)).toBe(true);
     expect(didPlayerLeadRoomAggregate('vasyl', aggregate)).toBe(false);

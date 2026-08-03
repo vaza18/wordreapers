@@ -14,7 +14,7 @@ export interface FrozenFinishedRound {
 function wordsFromArchive(archive: FinishedRoundArchive): AllPlayerWords {
   const map: AllPlayerWords = new Map();
   for (const [playerId, words] of Object.entries(archive.playerWords)) {
-    map.set(playerId, new Map(Object.entries(words)));
+    map.set(playerId, Array.isArray(words) ? [...words] : []);
   }
   return map;
 }

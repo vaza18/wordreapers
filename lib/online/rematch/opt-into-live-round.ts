@@ -8,12 +8,13 @@ import { formatLiveRosterDetails } from '../../debug/format-session-roster-log.j
 import { devLogAction } from '../../debug/dev-log.js';
 import type { PlayerProfile } from '../../profile/player-profile.js';
 
-import { resolvePostJoinRoute } from '../post-join-route.js';
+import type { PostJoinRoute } from '../post-join-route.js';
+import { resolvePostJoinRouteWithMaps } from '../post-join-route-with-maps.js';
 import { seedPlaySessionBootstrap } from '../session/play-session-bootstrap.js';
 import { reconcilePlayerPresence } from '../presence/reconcile-player-presence.js';
 import { restartRematchOnlineRound } from './restart-rematch-online-round.js';
 
-export type OptIntoLiveRoundRoute = ReturnType<typeof resolvePostJoinRoute>;
+export type OptIntoLiveRoundRoute = PostJoinRoute;
 
 const REMATCH_PRESENCE_OPTS = { reviveAfterLeave: true } as const;
 
@@ -77,7 +78,7 @@ export async function optIntoLiveRound(
       kickRematchWaitingPresence(gameId, myUid, profile);
     }
 
-    const route = resolvePostJoinRoute(session, myUid, gameId);
+    const route = await resolvePostJoinRouteWithMaps(session, myUid, gameId);
     if (route.pathname === '/online/play/[gameId]') {
       seedPlaySessionBootstrap(session);
     }

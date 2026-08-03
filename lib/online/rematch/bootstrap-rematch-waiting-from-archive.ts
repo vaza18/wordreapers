@@ -110,7 +110,7 @@ async function acquireRematchWaitingSession(
 
 /**
  * Recreate a deleted session directly in `waiting` for rematch.
- * Skips restoring `player_words` — the next round starts with empty word lists.
+ * Next round starts with empty word maps (no prior-round lists restored).
  */
 export async function bootstrapRematchWaitingFromArchive(
   gameId: string,

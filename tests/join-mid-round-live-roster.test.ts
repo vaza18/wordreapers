@@ -33,10 +33,11 @@ vi.mock('../lib/firebase/rtdb-errors.js', () => ({
   isFirebaseIgnorableRtdbError: vi.fn().mockReturnValue(false),
 }));
 
-const fetchSessionWordMapsMock = vi.fn().mockResolvedValue({ wordPlayers: {} });
+const requireSessionWordMapsMock = vi.fn().mockResolvedValue({ wordPlayers: {} });
 
 vi.mock('../lib/firebase/session-word-maps-service.js', () => ({
-  fetchSessionWordMaps: (...args: unknown[]) => fetchSessionWordMapsMock(...args),
+  requireSessionWordMaps: (...args: unknown[]) => requireSessionWordMapsMock(...args),
+  tryFetchSessionWordMaps: vi.fn().mockResolvedValue({ ok: true, maps: { wordPlayers: {} } }),
 }));
 
 vi.mock('../lib/firebase/public-lobby-service.js', async (importOriginal) => {
@@ -47,11 +48,6 @@ vi.mock('../lib/firebase/public-lobby-service.js', async (importOriginal) => {
     syncPublicRosterAliases: vi.fn().mockResolvedValue(undefined),
   };
 });
-
-vi.mock('../lib/firebase/player-words-service.js', () => ({
-  clearWaitingLobbyPlayerWordsAsOrganizer: vi.fn().mockResolvedValue(undefined),
-  clearAllPlayerWords: vi.fn(),
-}));
 
 import { joinGameSession } from '../lib/firebase/game-session-service.js';
 
@@ -84,8 +80,8 @@ describe('joinGameSession mid-round live roster', () => {
     getMock.mockReset();
     updateMock.mockReset();
     updateMock.mockResolvedValue(undefined);
-    fetchSessionWordMapsMock.mockReset();
-    fetchSessionWordMapsMock.mockResolvedValue({ wordPlayers: {} });
+    requireSessionWordMapsMock.mockReset();
+    requireSessionWordMapsMock.mockResolvedValue({ wordPlayers: {} });
   });
 
   it('appends joiner to liveRoundPlayerUids when joining round 2+', async () => {
@@ -143,7 +139,7 @@ describe('joinGameSession mid-round live roster', () => {
         p2: { name: 'Two', wordCount: 1, score: 1, online: true },
       },
     };
-    fetchSessionWordMapsMock.mockResolvedValue({
+    requireSessionWordMapsMock.mockResolvedValue({
       wordPlayers: { порт: { org: true }, тор: { p2: true } },
     });
 
@@ -180,9 +176,34 @@ describe('joinGameSession mid-round live roster', () => {
     expect(sessionUpdate?.[1]).toMatchObject({
       liveRoundPlayerUids: ['org', 'p2', 'joiner'],
       settings: expect.objectContaining({ uniqueBonusEnabled: true }),
-      'players/org/score': expect.any(Number),
-      'players/p2/score': expect.any(Number),
     });
     expect(sessionUpdate?.[1]).not.toHaveProperty('players');
+  });
+
+  it('joins without requiring session word maps', async () => {
+    const playing = roundTwoPlayingSession();
+    const joined = {
+      ...playing,
+      players: {
+        ...playing.players,
+        joiner: { name: 'New', wordCount: 0, score: 0, online: true },
+      },
+      liveRoundPlayerUids: ['org', 'p2', 'joiner'],
+    };
+    requireSessionWordMapsMock.mockRejectedValue(new Error('network'));
+    getMock
+      .mockResolvedValueOnce({ exists: () => true, val: () => playing })
+      .mockResolvedValueOnce({ exists: () => true, val: () => playing })
+      .mockResolvedValueOnce({ exists: () => true, val: () => joined });
+
+    const result = await joinGameSession('ABCDE', {
+      name: 'New',
+      gender: 'm',
+      avatarColorIndex: 1,
+    });
+
+    expect(requireSessionWordMapsMock).not.toHaveBeenCalled();
+    expect(result.players.joiner).toBeDefined();
+    expect(result.liveRoundPlayerUids).toEqual(['org', 'p2', 'joiner']);
   });
 });

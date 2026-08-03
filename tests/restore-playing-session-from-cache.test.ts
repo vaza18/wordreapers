@@ -12,7 +12,6 @@ import {
 const findActiveRoundCacheForGame = vi.fn();
 const removeOrphanGameSessionShell = vi.fn();
 const writeSessionWordMapsShards = vi.fn();
-const restorePlayerWordsToFirebase = vi.fn();
 const joinGameSession = vi.fn();
 const ensureAnonymousAuth = vi.fn();
 
@@ -39,9 +38,6 @@ vi.mock('../lib/firebase/game-session-service.js', () => ({
 vi.mock('../lib/firebase/session-word-maps-service.js', () => ({
   writeSessionWordMapsShards: (...args: unknown[]) => writeSessionWordMapsShards(...args),
 }));
-vi.mock('../lib/firebase/player-words-service.js', () => ({
-  restorePlayerWordsToFirebase: (...args: unknown[]) => restorePlayerWordsToFirebase(...args),
-}));
 vi.mock('../lib/firebase/auth.js', () => ({
   ensureAnonymousAuth: () => ensureAnonymousAuth(),
 }));
@@ -57,7 +53,6 @@ function cacheEntry(overrides: Partial<ActiveRoundCacheEntry> = {}): ActiveRound
     gameId: 'ABCDE',
     baseWordRound: 0,
     timerEndsAt: 2_500_000,
-    words: { порт: { display: 'порт', at: 100 } },
     sessionSnapshot: {
       baseWord: 'тест',
       settings: DEFAULT_SESSION_SETTINGS,
@@ -82,8 +77,8 @@ describe('restorePlayingSessionFromLocalCache', () => {
     findActiveRoundCacheForGame.mockResolvedValue(cacheEntry());
     removeOrphanGameSessionShell.mockResolvedValue(true);
     writeSessionWordMapsShards.mockResolvedValue(undefined);
-    restorePlayerWordsToFirebase.mockResolvedValue(undefined);
     set.mockResolvedValue(undefined);
+    getFirebaseRtdbMocks().remove.mockResolvedValue(undefined);
   });
 
   it('throws when local cache cannot be restored', async () => {
@@ -161,12 +156,11 @@ describe('restorePlayingSessionFromLocalCache', () => {
     expect(writeSessionWordMapsShards).toHaveBeenCalledWith('ABCDE', {
       wordPlayers: { порт: { org: true } },
     });
-    expect(restorePlayerWordsToFirebase).toHaveBeenCalled();
     expect(snap.id).toBe('ABCDE');
     expect(snap.status).toBe('playing');
   });
 
-  it('writes session core and restores words on happy path when room is missing', async () => {
+  it('writes session core and restores word maps when room is missing', async () => {
     get
       .mockResolvedValueOnce(rtdbSnapshot(null, false))
       .mockResolvedValueOnce(rtdbSnapshot(null, false))
@@ -192,13 +186,67 @@ describe('restorePlayingSessionFromLocalCache', () => {
       }),
     );
     expect(writeSessionWordMapsShards).toHaveBeenCalled();
-    expect(restorePlayerWordsToFirebase).toHaveBeenCalledWith('ABCDE', 'org', expect.any(Map));
   });
 
-  it('skips word map shards and player words when cache has none', async () => {
+  it('restores only the actor wordPlayers leaves from a multiplayer cache', async () => {
     findActiveRoundCacheForGame.mockResolvedValue(
       cacheEntry({
-        words: {},
+        sessionSnapshot: {
+          baseWord: 'тест',
+          settings: DEFAULT_SESSION_SETTINGS,
+          timerEndsAt: 2_500_000,
+          organizerId: 'org',
+          baseWordRound: 0,
+          players: {
+            org: { name: 'Org', wordCount: 0, score: 0 },
+            peer: { name: 'Peer', wordCount: 0, score: 0 },
+          },
+          wordPlayers: { порт: { org: true, peer: true }, рот: { peer: true } },
+        },
+      }),
+    );
+    get
+      .mockResolvedValueOnce(rtdbSnapshot(null, false))
+      .mockResolvedValueOnce(rtdbSnapshot(null, false))
+      .mockResolvedValueOnce(
+        rtdbSnapshot({
+          status: 'playing',
+          organizerId: 'org',
+          baseWord: 'тест',
+          settings: DEFAULT_SESSION_SETTINGS,
+          timerEndsAt: 2_500_000,
+          players: {
+            org: { name: 'Org', wordCount: 0, score: 0 },
+            peer: { name: 'Peer', wordCount: 0, score: 0 },
+          },
+        }),
+      );
+
+    await restorePlayingSessionFromLocalCache('ABCDE', 'org');
+
+    expect(writeSessionWordMapsShards).toHaveBeenCalledWith('ABCDE', {
+      wordPlayers: { порт: { org: true } },
+    });
+  });
+
+  it('rolls back the restored session when maps write fails', async () => {
+    const { remove } = getFirebaseRtdbMocks();
+    writeSessionWordMapsShards.mockRejectedValueOnce(new Error('PERMISSION_DENIED'));
+    get
+      .mockResolvedValueOnce(rtdbSnapshot(null, false))
+      .mockResolvedValueOnce(rtdbSnapshot(null, false));
+
+    await expect(restorePlayingSessionFromLocalCache('ABCDE', 'org')).rejects.toThrow(
+      'PERMISSION_DENIED',
+    );
+
+    expect(set).toHaveBeenCalled();
+    expect(remove).toHaveBeenCalledWith({ path: 'sessions/ABCDE' });
+  });
+
+  it('skips word map shards when cache has none', async () => {
+    findActiveRoundCacheForGame.mockResolvedValue(
+      cacheEntry({
         sessionSnapshot: {
           baseWord: 'тест',
           settings: DEFAULT_SESSION_SETTINGS,
@@ -226,7 +274,6 @@ describe('restorePlayingSessionFromLocalCache', () => {
     await restorePlayingSessionFromLocalCache('ABCDE', 'org');
 
     expect(writeSessionWordMapsShards).not.toHaveBeenCalled();
-    expect(restorePlayerWordsToFirebase).not.toHaveBeenCalled();
   });
 });
 
@@ -239,7 +286,6 @@ describe('rejoinOnlineRound', () => {
     findActiveRoundCacheForGame.mockResolvedValue(cacheEntry());
     removeOrphanGameSessionShell.mockResolvedValue(true);
     writeSessionWordMapsShards.mockResolvedValue(undefined);
-    restorePlayerWordsToFirebase.mockResolvedValue(undefined);
     getFirebaseRtdbMocks().set.mockResolvedValue(undefined);
   });
 

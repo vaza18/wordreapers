@@ -92,52 +92,19 @@ describe('computeRoundDurationSeconds', () => {
     ).toBe(300);
   });
 
-  it('uses configured duration when no timestamps exist', () => {
+  it('uses configured duration when roundPlayedSeconds is not set', () => {
     expect(computeRoundDurationSeconds(finishedSession(600))).toBe(600);
   });
 
-  it('derives elapsed time from roundPlayedSeconds for early finish', () => {
-    const byPlayer = new Map([
-      [
-        'p1',
-        new Map([
-          ['рот', { at: 1_000 }],
-          ['тор', { at: 181_000 }],
-        ]),
-      ],
-    ]);
-    expect(
-      computeRoundDurationSeconds(finishedSession(600, { roundPlayedSeconds: 180 }), byPlayer),
-    ).toBe(180);
+  it('reflects early finish from roundPlayedSeconds', () => {
+    const session = finishedSession(600, { roundPlayedSeconds: 180 });
+    expect(computeRoundDurationSeconds(session)).toBe(180);
   });
 
-  it('shows full configured time when timer ran out despite a late first word', () => {
+  it('shows full configured time when roundPlayedSeconds equals configured duration', () => {
     const session = finishedSession(300, { roundPlayedSeconds: 300 });
-    const byPlayer = new Map([
-      ['p1', new Map([['a', { at: 1_007_000 }]])],
-      ['p2', new Map([['b', { at: 1_240_000 }]])],
-    ]);
-    expect(computeRoundDurationSeconds(session, byPlayer)).toBe(300);
+    expect(computeRoundDurationSeconds(session)).toBe(300);
     expect(formatRoundDuration(300)).toBe('5\u00A0хв');
-  });
-
-  it('falls back to word timestamps for legacy sessions without roundPlayedSeconds', () => {
-    const session: GameSession = {
-      ...finishedSession(600),
-      roundPlayedSeconds: undefined,
-      roundStartedAt: undefined,
-      finishedAt: undefined,
-    };
-    const byPlayer = new Map([
-      [
-        'p1',
-        new Map([
-          ['рот', { at: 1_000 }],
-          ['тор', { at: 181_000 }],
-        ]),
-      ],
-    ]);
-    expect(computeRoundDurationSeconds(session, byPlayer)).toBe(180);
   });
 });
 

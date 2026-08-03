@@ -2,6 +2,7 @@ import { runRtdbTransaction } from '../firebase/rtdb-transaction.js';
 
 import type { OrganizerSoloWord } from '@/store/organizer-solo-store';
 
+import { toDisplayUpper } from '../dictionary/normalize.js';
 import { devLogAction } from '../debug/dev-log.js';
 import type { PlayerProfile } from '../profile/player-profile.js';
 import { ensureAnonymousAuth } from '../firebase/auth.js';
@@ -13,7 +14,6 @@ import {
   defaultGameSessionSettings,
   resolveGameSessionSettings,
 } from '../firebase/session-settings.js';
-import type { StoredPlayerWord } from '../firebase/player-words-service.js';
 import type {
   GameSession,
   GameSessionPlayer,
@@ -31,6 +31,15 @@ import {
 import { buildPlayingSoloTimerFields } from './publish-playing-solo-fields.js';
 import { setOrganizerWaitingRoom } from './organizer-waiting-room.js';
 import { restoreSessionWordsToRtdb } from './session/restore-session-words-to-rtdb.js';
+
+function sessionBaseWordFields(
+  setup: LocalRoomSetup,
+): Pick<GameSession, 'baseWord' | 'baseWordDisplay'> {
+  return {
+    baseWord: setup.baseWord,
+    baseWordDisplay: toDisplayUpper(setup.baseWordDisplay.trim() || setup.baseWord),
+  };
+}
 
 function profileToPlayer(profile: PlayerProfile): GameSessionPlayer {
   const player: GameSessionPlayer = {
@@ -108,7 +117,7 @@ export async function publishWaitingRoom(input: PublishWaitingRoomInput): Promis
   const serverNow = getServerNow();
 
   const session: GameSession = {
-    baseWord: input.setup.baseWord,
+    ...sessionBaseWordFields(input.setup),
     status: 'waiting',
     settings,
     timerEndsAt: null,
@@ -175,7 +184,7 @@ export async function publishPlayingSoloRound(input: PublishPlayingSoloInput): P
   };
 
   const session: GameSession = {
-    baseWord: input.setup.baseWord,
+    ...sessionBaseWordFields(input.setup),
     status: 'playing',
     settings: resolveGameSessionSettings(settings),
     timerEndsAt,
@@ -198,16 +207,7 @@ export async function publishPlayingSoloRound(input: PublishPlayingSoloInput): P
   await writeSession(normalized, session, input.organizerUid);
 
   if (input.words.length > 0) {
-    const record: Record<string, StoredPlayerWord> = {};
-    for (const word of input.words) {
-      record[word.normalized] = {
-        display: word.display,
-        at: word.at,
-      };
-    }
-    await restoreSessionWordsToRtdb(normalized, wordMaps, {
-      [input.organizerUid]: record,
-    });
+    await restoreSessionWordsToRtdb(normalized, wordMaps);
   }
 
   await markPlayerOnline(normalized, input.organizerUid);

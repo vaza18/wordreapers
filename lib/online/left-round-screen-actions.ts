@@ -1,4 +1,6 @@
 import type { GameSession } from '../firebase/types.js';
+import type { AllPlayerWords } from './session/clone-player-words.js';
+import { totalPlayerWordCount } from './session/live-words-snapshot.js';
 
 export type LeftRoundViewResultsContext = {
   roundStillActive: boolean;
@@ -59,6 +61,45 @@ export function isLiveSessionForLeftRound(
   return (liveSession.baseWordRound ?? 0) === leftAtBaseWordRound;
 }
 
+export type LeftWordsSnapshotSource = {
+  leftAtBaseWordRound: number | null | undefined;
+  liveSession: Pick<GameSession, 'status' | 'baseWordRound'> | null | undefined;
+  liveWords: AllPlayerWords;
+  playingSnapshot: {
+    session: Pick<GameSession, 'baseWordRound'>;
+    words: AllPlayerWords;
+  } | null;
+  pinnedFrozenWords: AllPlayerWords | null;
+};
+
+/**
+ * Left-screen word list: while the left round is still `playing`, use live maps.
+ * After finish the roster hook clears — keep the in-memory playing snapshot until freeze.
+ */
+export function resolveLeftWordsSnapshot(ctx: LeftWordsSnapshotSource): AllPlayerWords {
+  if (ctx.pinnedFrozenWords) {
+    return ctx.pinnedFrozenWords;
+  }
+  if (
+    isLiveSessionForLeftRound(ctx.leftAtBaseWordRound, ctx.liveSession) &&
+    ctx.liveSession?.status === 'playing'
+  ) {
+    return ctx.liveWords;
+  }
+  if (
+    ctx.leftAtBaseWordRound != null &&
+    ctx.playingSnapshot &&
+    (ctx.playingSnapshot.session.baseWordRound ?? 0) === ctx.leftAtBaseWordRound
+  ) {
+    return ctx.playingSnapshot.words;
+  }
+  if (isLiveSessionForLeftRound(ctx.leftAtBaseWordRound, ctx.liveSession)) {
+    return ctx.liveWords;
+  }
+  // Never show words from a later rematch round while pinned to leftAt.
+  return new Map();
+}
+
 export function shouldPersistLeftRoundFinishedArchive(
   leftAtBaseWordRound: number | null | undefined,
   liveSession: Pick<GameSession, 'status' | 'baseWordRound'> | null | undefined,
@@ -84,6 +125,36 @@ export function shouldLoadLeftRoundFinishedArchive(
     return false;
   }
   return liveRound > leftAtBaseWordRound || liveSession.status === 'finished';
+}
+
+/** Promote in-memory playing snapshot when rematch advanced before a local archive existed. */
+export function shouldFreezeLeftRoundFromPlayingSnapshot(options: {
+  leftAtBaseWordRound: number | null | undefined;
+  liveSession: Pick<GameSession, 'status' | 'baseWordRound'> | null | undefined;
+  hasPinnedFrozen: boolean;
+  playingSnapshotBaseWordRound: number | null | undefined;
+  /** False when the parked snapshot has no words — fall through to RTDB archive. */
+  playingSnapshotHasWords?: boolean;
+}): boolean {
+  const left = options.leftAtBaseWordRound;
+  if (
+    options.hasPinnedFrozen ||
+    left == null ||
+    options.playingSnapshotBaseWordRound !== left ||
+    !options.liveSession ||
+    options.playingSnapshotHasWords === false
+  ) {
+    return false;
+  }
+  const liveRound = options.liveSession.baseWordRound ?? 0;
+  return liveRound > left || options.liveSession.status === 'finished';
+}
+
+/** Persist/archive miss fallback may freeze the parked snapshot only when it has words. */
+export function shouldPromoteLeftPlayingSnapshotFallback(
+  words: AllPlayerWords | null | undefined,
+): boolean {
+  return words != null && totalPlayerWordCount(words) > 0;
 }
 
 export type LeftRoundDisplaySource = {
@@ -115,5 +186,73 @@ export function resolveLeftRoundDisplaySession(
   ) {
     return ctx.playingSnapshotSession;
   }
+  if (left != null) {
+    // Do not fall through to a later rematch session — wait for archive/snapshot freeze.
+    return undefined;
+  }
   return ctx.liveSession ?? undefined;
+}
+
+export type LeftAtRoundSource = 'none' | 'resume' | 'live';
+
+/**
+ * Resolve which `baseWordRound` the left screen is pinned to.
+ * - Fresh leave during live `playing` with no resume → pin = live.
+ * - Cold start / remount with resume N while live is playing N+1 → pin = N (resume).
+ * - Parked on left (live or resume pin) while rematch advances → keep exit round.
+ *   Stale resume for an older leave is cleared on play via `clearLeftOnlineResumeForGame`.
+ */
+export function nextLeftAtBaseWordRound(options: {
+  previous: number | null;
+  previousSource: LeftAtRoundSource;
+  liveStatus: GameSession['status'] | undefined;
+  liveRound: number;
+  resumeRound?: number | null;
+}): { round: number | null; source: LeftAtRoundSource } {
+  const liveRound = options.liveRound;
+  if (options.liveStatus === 'playing') {
+    if (options.previous == null || options.previousSource === 'none') {
+      if (options.resumeRound != null && options.resumeRound < liveRound) {
+        return { round: options.resumeRound, source: 'resume' };
+      }
+      return { round: liveRound, source: 'live' };
+    }
+    if (
+      (options.previousSource === 'live' || options.previousSource === 'resume') &&
+      options.previous < liveRound
+    ) {
+      return { round: options.previous, source: options.previousSource };
+    }
+    return { round: options.previous, source: options.previousSource };
+  }
+
+  if (options.previous != null && options.previousSource !== 'none') {
+    return { round: options.previous, source: options.previousSource };
+  }
+  if (options.resumeRound != null) {
+    return { round: options.resumeRound, source: 'resume' };
+  }
+  if (options.liveStatus === 'finished') {
+    return { round: liveRound, source: 'live' };
+  }
+  return { round: null, source: 'none' };
+}
+
+/**
+ * Apply AsyncStorage left-resume after it loads (may race after session already
+ * pinned live N+1). Prefer resume N over a newer live pin.
+ */
+export function nextLeftAtAfterResumePointer(options: {
+  previous: number | null;
+  previousSource: LeftAtRoundSource;
+  resumeRound: number;
+}): { round: number; source: LeftAtRoundSource } {
+  const { previous, previousSource, resumeRound } = options;
+  if (previous == null || previousSource === 'none') {
+    return { round: resumeRound, source: 'resume' };
+  }
+  if (previousSource === 'live' && resumeRound < previous) {
+    return { round: resumeRound, source: 'resume' };
+  }
+  return { round: previous, source: previousSource };
 }

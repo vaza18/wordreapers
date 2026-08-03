@@ -61,11 +61,14 @@ export interface GameSessionPlayer {
  * Top-level game session document under `game_sessions/{gameId}`.
  */
 export interface GameSession {
+  /** Normalized base word (apostrophes stripped) — identity for lexicon / validation. */
   baseWord: string;
+  /** Surface form for lobby / keyboard / results (alongside normalized `baseWord`). */
+  baseWordDisplay?: string;
   status: GameSessionStatus;
   settings: GameSessionSettings;
   timerEndsAt: number | null;
-  /** Server clock ms when the playing round started (rejoin archives, stale-word cutoff). */
+  /** Server clock ms when the playing round started (rejoin archives / timer anchors). */
   roundStartedAt?: number | null;
   /** Countdown budget in seconds (settings duration + approved add-time); excludes pause wall time. */
   roundTimerBudgetSeconds?: number | null;

@@ -42,7 +42,7 @@ describe('saveSoloFinishedRoundArchive', () => {
     const archive = await getFinishedRoundArchive('solo1', 0);
     expect(archive?.session.status).toBe('finished');
     expect(archive?.session.players.solo?.name).toBe('Василь');
-    expect(archive?.playerWords.solo?.тес?.display).toBe('ТЕС');
+    expect(archive?.playerWords.solo).toEqual(['тес']);
   });
 
   it('keeps prior solo rounds when a new room code is used for the next round', async () => {

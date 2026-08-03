@@ -3,10 +3,7 @@ import { Platform } from 'react-native';
 import i18n from '@/i18n';
 import { loadExpoNotifications } from '../native/load-expo-notifications.js';
 
-import {
-  ROUND_FINISHED_NOTIFICATION_TYPE,
-  type RoundFinishedNotificationData,
-} from './round-finished-notification-data.js';
+import { ROUND_FINISHED_NOTIFICATION_TYPE } from './round-finished-notification-data.js';
 
 export { parseRoundFinishedNotificationData } from './round-finished-notification-data.js';
 export type { RoundFinishedNotificationData } from './round-finished-notification-data.js';
@@ -35,6 +32,7 @@ export async function ensureNotificationPermissions(): Promise<boolean> {
 
 export async function notifyRoundFinished(params: {
   gameId: string;
+  baseWordRound: number;
   title: string;
   body: string;
 }): Promise<boolean> {
@@ -55,7 +53,9 @@ export async function notifyRoundFinished(params: {
       data: {
         type: ROUND_FINISHED_NOTIFICATION_TYPE,
         gameId: params.gameId,
-      } satisfies RoundFinishedNotificationData,
+        // Stringify round: native notification payloads often coerce to strings.
+        baseWordRound: String(params.baseWordRound),
+      },
     },
     trigger: null,
   });

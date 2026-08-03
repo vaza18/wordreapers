@@ -1,9 +1,10 @@
 import type { GameSession, SessionVote } from '../../firebase/types.js';
-import { assertActiveLivePlayerVoteEligibility } from '../invariants.js';
-import { displayPlayerName } from '../public-lobby/display-player-name.js';
-import { isActiveLivePlayer } from '../presence/live-round-membership.js';
-import { playerGenderForDisplay } from '../public-lobby/session-identity.js';
 import { playerGenderFromSession } from '../../game/vote-status-label.js';
+import { compareUk } from '../../i18n/uk-collator.js';
+import { assertActiveLivePlayerVoteEligibility } from '../invariants.js';
+import { isActiveLivePlayer } from '../presence/live-round-membership.js';
+import { displayPlayerName } from '../public-lobby/display-player-name.js';
+import { playerGenderForDisplay } from '../public-lobby/session-identity.js';
 import { viewerNeedsSessionVote } from './viewer-needs-session-vote.js';
 
 export const EARLY_FINISH_VOTE_TIMEOUT_MS = 30_000;
@@ -92,7 +93,7 @@ export function buildEarlyFinishParticipantRows(
   const visibleIds = new Set([vote.proposedBy, ...required]);
 
   return [...visibleIds]
-    .sort((a, b) => session.players[a].name.localeCompare(session.players[b].name, 'uk'))
+    .sort((a, b) => compareUk(session.players[a].name, session.players[b].name))
     .map((playerId) => {
       const player = session.players[playerId];
       const online = player.online === true;

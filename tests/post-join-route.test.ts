@@ -1,6 +1,18 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const tryFetchSessionWordMaps = vi.fn();
+const getActiveRoundCache = vi.fn();
+
+vi.mock('../lib/firebase/session-word-maps-service.js', () => ({
+  tryFetchSessionWordMaps: (...args: unknown[]) => tryFetchSessionWordMaps(...args),
+}));
+
+vi.mock('../lib/online/session/active-round-cache.js', () => ({
+  getActiveRoundCache: (...args: unknown[]) => getActiveRoundCache(...args),
+}));
 
 import { resolvePostJoinRoute } from '../lib/online/post-join-route.js';
+import { resolvePostJoinRouteWithMaps } from '../lib/online/post-join-route-with-maps.js';
 import { sessionWithPlayers } from './helpers/game-session-fixtures.js';
 
 describe('resolvePostJoinRoute', () => {
@@ -130,6 +142,27 @@ describe('resolvePostJoinRoute', () => {
     ).toEqual({ pathname: '/online/play/[gameId]', params: { gameId: 'AB12' } });
   });
 
+  it('routes round-0 offline player to play when wordPlayers shows they scored', () => {
+    expect(
+      resolvePostJoinRoute(
+        sessionWithPlayers(
+          {
+            org: { name: 'Org', wordCount: 0, score: 0, online: true },
+            a: { name: 'A', wordCount: 0, score: 0, online: false },
+          },
+          {
+            status: 'playing',
+            baseWordRound: 0,
+            timerEndsAt: Date.now() + 60_000,
+            wordPlayers: { порт: { a: true } },
+          },
+        ),
+        'a',
+        'AB12',
+      ),
+    ).toEqual({ pathname: '/online/play/[gameId]', params: { gameId: 'AB12' } });
+  });
+
   it('routes finished rounds to results', () => {
     expect(
       resolvePostJoinRoute(sessionWithPlayers(undefined, { status: 'finished' }), 'a', 'AB12'),
@@ -208,5 +241,104 @@ describe('resolvePostJoinRoute', () => {
         'DSSN2',
       ),
     ).toEqual({ pathname: '/online/lobby/[gameId]', params: { gameId: 'DSSN2' } });
+  });
+});
+
+describe('resolvePostJoinRouteWithMaps', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getActiveRoundCache.mockResolvedValue(null);
+  });
+
+  it('fetches maps when round-0 offline scorer would otherwise go to results', async () => {
+    tryFetchSessionWordMaps.mockResolvedValue({
+      ok: true,
+      maps: { wordPlayers: { порт: { a: true } } },
+    });
+    const session = sessionWithPlayers(
+      {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        a: { name: 'A', wordCount: 0, score: 0, online: false },
+      },
+      {
+        status: 'playing',
+        baseWordRound: 0,
+        timerEndsAt: Date.now() + 60_000,
+      },
+    );
+
+    await expect(resolvePostJoinRouteWithMaps(session, 'a', 'AB12')).resolves.toEqual({
+      pathname: '/online/play/[gameId]',
+      params: { gameId: 'AB12' },
+    });
+    expect(tryFetchSessionWordMaps).toHaveBeenCalledWith('AB12');
+  });
+
+  it('skips maps fetch when already a live participant', async () => {
+    const session = sessionWithPlayers(
+      {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        a: { name: 'A', wordCount: 0, score: 0, online: true },
+      },
+      {
+        status: 'playing',
+        timerEndsAt: Date.now() + 60_000,
+      },
+    );
+
+    await expect(resolvePostJoinRouteWithMaps(session, 'a', 'AB12')).resolves.toEqual({
+      pathname: '/online/play/[gameId]',
+      params: { gameId: 'AB12' },
+    });
+    expect(tryFetchSessionWordMaps).not.toHaveBeenCalled();
+  });
+
+  it('routes inactive round-0 to results when maps fail and no local scored cache', async () => {
+    tryFetchSessionWordMaps.mockResolvedValue({ ok: false, error: new Error('network') });
+    const session = sessionWithPlayers(
+      {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        a: { name: 'A', wordCount: 0, score: 0, online: false },
+      },
+      {
+        status: 'playing',
+        baseWordRound: 0,
+        timerEndsAt: Date.now() + 60_000,
+      },
+    );
+
+    await expect(resolvePostJoinRouteWithMaps(session, 'a', 'AB12')).resolves.toEqual({
+      pathname: '/online/results/[gameId]',
+      params: { gameId: 'AB12', fromJoin: '1' },
+    });
+    expect(tryFetchSessionWordMaps).toHaveBeenCalled();
+    expect(getActiveRoundCache).toHaveBeenCalled();
+  });
+
+  it('routes round-0 offline scorer to play from local cache when maps fail', async () => {
+    const timerEndsAt = Date.now() + 60_000;
+    tryFetchSessionWordMaps.mockResolvedValue({ ok: false, error: new Error('network') });
+    getActiveRoundCache.mockResolvedValue({
+      gameId: 'AB12',
+      baseWordRound: 0,
+      timerEndsAt,
+      sessionSnapshot: { wordPlayers: { порт: { a: true } } },
+    });
+    const session = sessionWithPlayers(
+      {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        a: { name: 'A', wordCount: 0, score: 0, online: false },
+      },
+      {
+        status: 'playing',
+        baseWordRound: 0,
+        timerEndsAt,
+      },
+    );
+
+    await expect(resolvePostJoinRouteWithMaps(session, 'a', 'AB12')).resolves.toEqual({
+      pathname: '/online/play/[gameId]',
+      params: { gameId: 'AB12' },
+    });
   });
 });

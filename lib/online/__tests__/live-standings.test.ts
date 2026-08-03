@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { GameSession } from '../../firebase/types.js';
-import {
-  buildLiveStandingsFromSession,
-  sessionPlayerScoresMatchWordMaps,
-} from '../live-standings.js';
+import { buildLiveStandingsFromSession } from '../live-standings.js';
 
 function session(overrides: Partial<GameSession> = {}): GameSession {
   return {
@@ -42,7 +39,6 @@ describe('buildLiveStandingsFromSession', () => {
 
     const standings = buildLiveStandingsFromSession(s);
     expect(standings.find((row) => row.playerId === 'org')?.score).toBe(6);
-    expect(sessionPlayerScoresMatchWordMaps(s)).toBe(false);
   });
 
   it('excludes non-opt-in roster members from rematch round standings and x2', () => {

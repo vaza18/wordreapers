@@ -1,10 +1,9 @@
-import { get, set } from 'firebase/database';
+import { get, remove, set } from 'firebase/database';
 
 import { ensureAnonymousAuth } from '../../firebase/auth.js';
 import { joinGameSession, type GameSessionSnapshot } from '../../firebase/game-session-service.js';
 import { sessionRef } from '../../firebase/session-ref.js';
 import { getServerNow } from '../../firebase/server-clock.js';
-import { restorePlayerWordsToFirebase } from '../../firebase/player-words-service.js';
 import { normalizeRoomCode } from '../../firebase/room-code.js';
 import { writeSessionWordMapsShards } from '../../firebase/session-word-maps-service.js';
 import { sessionWordMapsFromSession } from '../../firebase/session-word-maps.js';
@@ -14,11 +13,11 @@ import type { PlayerProfile } from '../../profile/player-profile.js';
 import {
   canRestorePlayingRoundFromCache,
   findActiveRoundCacheForGame,
-  wordsMapFromCache,
 } from './active-round-cache.js';
 import { isOrphanGameSessionShell } from '../orphan-game-session.js';
 import type { PlayingRoundSnapshot } from './online-session-archive.js';
 import { removeOrphanGameSessionShell } from '../../firebase/game-session-service.js';
+import { wordPlayersForUidOnly } from '../word-players-invert.js';
 
 async function readSessionSnapshot(gameId: string): Promise<GameSessionSnapshot> {
   const normalized = normalizeRoomCode(gameId);
@@ -47,6 +46,7 @@ function sessionCoreFromSnapshot(snap: PlayingRoundSnapshot): GameSession {
 
 /**
  * Recreate a deleted `playing` session from this device's parked round cache.
+ * Writes only the actor's wordPlayers leaves (peers restore their own shards).
  */
 export async function restorePlayingSessionFromLocalCache(
   gameId: string,
@@ -79,16 +79,25 @@ export async function restorePlayingSessionFromLocalCache(
   }
   const afterOrphan = await get(sessionRef(normalized));
   if (!afterOrphan.exists()) {
-    await set(sessionRef(normalized), sessionCoreFromSnapshot(entry.sessionSnapshot));
-    const wordMaps = sessionWordMapsFromSession(entry.sessionSnapshot);
-    if (Object.keys(wordMaps.wordPlayers ?? {}).length > 0) {
-      await writeSessionWordMapsShards(normalized, wordMaps);
+    const core = sessionCoreFromSnapshot(entry.sessionSnapshot);
+    const ownWordPlayers = wordPlayersForUidOnly(
+      sessionWordMapsFromSession(entry.sessionSnapshot).wordPlayers,
+      uid,
+    );
+    await set(sessionRef(normalized), core);
+    try {
+      if (Object.keys(ownWordPlayers).length > 0) {
+        await writeSessionWordMapsShards(normalized, { wordPlayers: ownWordPlayers });
+      }
+    } catch (error) {
+      // Do not leave a playing room with empty maps when cache had own words.
+      try {
+        await remove(sessionRef(normalized));
+      } catch {
+        // Best-effort rollback; rethrow the maps failure.
+      }
+      throw error;
     }
-  }
-
-  const words = wordsMapFromCache(entry);
-  if (words.size > 0) {
-    await restorePlayerWordsToFirebase(normalized, uid, words);
   }
 
   return readSessionSnapshot(normalized);

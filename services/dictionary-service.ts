@@ -8,6 +8,7 @@ import {
   type BaseWord,
 } from '@/lib/dictionary/dictionary-index';
 import { BUNDLED_DICTIONARY_TEXT_MODULES } from '@/lib/dictionary/bundled-dictionary-assets';
+import { compareUk } from '@/lib/i18n/uk-collator';
 import normalizationMap from '../assets/generated/dictionaries/uk-uk/normalization.json';
 
 /** Metro-bundled text assets under `assets/generated/dictionaries/uk-uk/` (`.txt` only — not `.json`). */
@@ -196,7 +197,7 @@ export function hasWordInSortedList(words: string[], normalized: string): boolea
     if (value === undefined) {
       break;
     }
-    const cmp = normalized.localeCompare(value, 'uk');
+    const cmp = compareUk(normalized, value);
     if (cmp === 0) {
       return true;
     }

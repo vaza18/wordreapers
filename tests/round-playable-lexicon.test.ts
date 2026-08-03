@@ -12,6 +12,7 @@ import {
   buildResultsWordList,
   resolveResultsWordListLexicon,
 } from '../lib/game/results-missing-words';
+import { compareUk } from '../lib/i18n/uk-collator';
 
 const MAIN = ['порт', 'рот', 'топ', 'компютер', 'мотор'];
 const PROPER = ['київ'];
@@ -121,9 +122,7 @@ describe('buildRoundPlayableLexicon', () => {
       { main: MAIN },
       { allowProperNouns: false, allowSlang: false },
     );
-    expect([...lexicon.sortedWords]).toEqual(
-      [...lexicon.words].sort((a, b) => a.localeCompare(b, 'uk')),
-    );
+    expect([...lexicon.sortedWords]).toEqual([...lexicon.words].sort(compareUk));
     const restored = fromPlayableLexiconSnapshot(toPlayableLexiconSnapshot(lexicon));
     expect(restored.maxCount).toBe(lexicon.maxCount);
     expect(restored.words.has('порт')).toBe(true);

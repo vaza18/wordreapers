@@ -111,6 +111,24 @@ export function isActiveLivePlayer(
 }
 
 /**
+ * True when this player has at least one wordPlayers leaf (maps SoT), or
+ * legacy RTDB score/wordCount still non-zero on outdated clients.
+ */
+export function playerHasScoredInRound(
+  session: Pick<GameSession, 'players' | 'wordPlayers'>,
+  playerId: string,
+): boolean {
+  const player = session.players[playerId];
+  if (!player) {
+    return false;
+  }
+  if ((player.wordCount ?? 0) > 0 || (player.score ?? 0) > 0) {
+    return true;
+  }
+  return Object.values(session.wordPlayers ?? {}).some((onWord) => onWord[playerId] === true);
+}
+
+/**
  * Player counts as part of the current live `playing` round.
  * Online participants in `liveRoundPlayerUids`, plus brief same-round reconnects
  * (offline with scores, but only when opted into this round).
@@ -137,7 +155,7 @@ export function isLiveParticipant(session: GameSession, playerId: string): boole
     if ((session.baseWordRound ?? 0) > 0) {
       return true;
     }
-    return (player.wordCount ?? 0) > 0 || (player.score ?? 0) > 0;
+    return playerHasScoredInRound(session, playerId);
   }
   return false;
 }
@@ -155,10 +173,7 @@ export function isFinishedRoundStandingsParticipant(
   if (!player || !isInLiveRound(session, playerId)) {
     return false;
   }
-  const scoredInRound =
-    (player.wordCount ?? 0) > 0 ||
-    (player.score ?? 0) > 0 ||
-    Object.values(session.wordPlayers ?? {}).some((onWord) => onWord[playerId]);
+  const scoredInRound = playerHasScoredInRound(session, playerId);
   if (player.hasLeft === true) {
     return scoredInRound;
   }
@@ -187,7 +202,7 @@ export function liveParticipantOpponentIds(session: GameSession, myUid: string):
  * (standings chip, x2 badges, overlap avatars) — not for vote consensus.
  */
 export function hasMultiplayerRound(
-  session: Pick<GameSession, 'baseWordRound' | 'liveRoundPlayerUids' | 'players'>,
+  session: Pick<GameSession, 'baseWordRound' | 'liveRoundPlayerUids' | 'players' | 'wordPlayers'>,
   myUid: string,
 ): boolean {
   if ((session.baseWordRound ?? 0) === 0) {
@@ -211,7 +226,7 @@ export function hasMultiplayerRound(
     if (player.online === true) {
       return true;
     }
-    return (player.wordCount ?? 0) > 0 || (player.score ?? 0) > 0;
+    return playerHasScoredInRound(session, id);
   });
 }
 

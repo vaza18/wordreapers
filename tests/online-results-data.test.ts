@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import type { StoredPlayerWord } from '../lib/firebase/player-words-service.js';
 import type { GameSession } from '../lib/firebase/types.js';
-import { buildOnlineResultsView, firebaseWordsToMaps } from '../lib/online/online-results-data.js';
+import {
+  buildDisplaysByPlayer,
+  buildOnlineResultsView,
+} from '../lib/online/online-results-data.js';
 
 const t = (key: string) => key;
 
@@ -26,39 +28,47 @@ function session(): GameSession {
   };
 }
 
-function storedWord(display: string): StoredPlayerWord {
-  return {
-    display,
-    at: 10,
-  };
-}
+describe('buildDisplaysByPlayer', () => {
+  it('resolves apostrophe displays from lexicon map', () => {
+    const wordsByPlayer = new Map([['p1', ['компютер']]]);
+    const displays = buildDisplaysByPlayer(wordsByPlayer, new Map([['компютер', "КОМП'ЮТЕР"]]));
+    expect(displays.get('p1')).toEqual(["КОМП'ЮТЕР"]);
+  });
 
-describe('firebaseWordsToMaps', () => {
-  it('sorts words by submission time', () => {
-    const byPlayer = new Map([
-      [
-        'p1',
-        new Map([
-          ['тор', { ...storedWord('ТОР'), at: 20 }],
-          ['рот', { ...storedWord('РОТ'), at: 5 }],
-        ]),
-      ],
-    ]);
-
-    const { wordsByPlayer, displaysByPlayer } = firebaseWordsToMaps(byPlayer);
-    expect(wordsByPlayer.get('p1')).toEqual(['рот', 'тор']);
-    expect(displaysByPlayer.get('p1')).toEqual(['РОТ', 'ТОР']);
+  it('falls back to uppercase normalized without lexicon', () => {
+    const wordsByPlayer = new Map([['p1', ['порт']]]);
+    expect(buildDisplaysByPlayer(wordsByPlayer).get('p1')).toEqual(['ПОРТ']);
   });
 });
 
 describe('buildOnlineResultsView', () => {
+  it('keeps apostrophe when displaysByPlayer comes from lexicon', () => {
+    const wordsByPlayer = new Map([
+      ['p1', ['компютер']],
+      ['p2', []],
+    ]);
+    const displaysByPlayer = buildDisplaysByPlayer(
+      wordsByPlayer,
+      new Map([['компютер', "КОМП'ЮТЕР"]]),
+    );
+    const view = buildOnlineResultsView(t, session(), wordsByPlayer, { displaysByPlayer });
+    expect(view.globalWords.find((row) => row.normalized === 'компютер')?.display).toBe(
+      "КОМП'ЮТЕР",
+    );
+    expect(view.playerRankGroups[0]?.players[0]?.words[0]?.display).toBe("КОМП'ЮТЕР");
+  });
+
   it('builds headline and standings from firebase words', () => {
-    const byPlayer = new Map([
-      ['p1', new Map([['рот', storedWord('РОТ')]])],
-      ['p2', new Map([['тор', { ...storedWord('ТОР'), at: 20 }]])],
+    const wordsByPlayer = new Map([
+      ['p1', ['рот']],
+      ['p2', ['тор']],
+    ]);
+    const displaysByPlayer = new Map([
+      ['p1', ['РОТ']],
+      ['p2', ['ТОР']],
     ]);
 
-    const view = buildOnlineResultsView(t, session(), byPlayer);
+    const view = buildOnlineResultsView(t, session(), wordsByPlayer, { displaysByPlayer });
     expect(view.baseWordDisplay).toBe('ПОРТ');
     expect(view.roundDurationSeconds).toBe(600);
     expect(view.playerRankGroups[0]?.players[0]?.wordsPerMinute).toBe(0.1);
@@ -67,9 +77,13 @@ describe('buildOnlineResultsView', () => {
   });
 
   it('shows pseudonyms in finished public rooms', () => {
-    const byPlayer = new Map([
-      ['p1', new Map([['пер', storedWord('ПЕР')]])],
-      ['p2', new Map()],
+    const wordsByPlayer = new Map([
+      ['p1', ['пер']],
+      ['p2', []],
+    ]);
+    const displaysByPlayer = new Map([
+      ['p1', ['ПЕР']],
+      ['p2', []],
     ]);
     const view = buildOnlineResultsView(
       t,
@@ -94,17 +108,21 @@ describe('buildOnlineResultsView', () => {
           },
         },
       },
-      byPlayer,
-      { viewerUid: 'p2' },
+      wordsByPlayer,
+      { displaysByPlayer, viewerUid: 'p2' },
     );
     expect(view.playerRankGroups[0]?.players[0]?.playerName).toBe('Гравець 1');
     expect(view.globalWords[0]?.authors[0]?.playerName).toBe('Гравець 1');
   });
 
   it('builds winner headline when word maps exist on a finished session', () => {
-    const byPlayer = new Map([
-      ['p1', new Map([['рот', storedWord('РОТ')]])],
-      ['p2', new Map([['тор', { ...storedWord('ТОР'), at: 20 }]])],
+    const wordsByPlayer = new Map([
+      ['p1', ['рот']],
+      ['p2', ['тор']],
+    ]);
+    const displaysByPlayer = new Map([
+      ['p1', ['РОТ']],
+      ['p2', ['ТОР']],
     ]);
 
     const view = buildOnlineResultsView(
@@ -116,7 +134,8 @@ describe('buildOnlineResultsView', () => {
           тор: { p2: true },
         },
       },
-      byPlayer,
+      wordsByPlayer,
+      { displaysByPlayer },
     );
 
     expect(view.standings).toHaveLength(2);

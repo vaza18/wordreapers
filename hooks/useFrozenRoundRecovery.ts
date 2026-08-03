@@ -55,13 +55,21 @@ export function useFrozenRoundRecovery({
   fromJoinIntoPlaying = false,
 }: UseFrozenRoundRecoveryOptions): void {
   useEffect(() => {
-    if (!sessionLoaded || !gameId || frozenRound) {
+    if (!gameId || frozenRound) {
+      if (frozenRound) {
+        setArchiveRecoveryPending(false);
+      }
+      return undefined;
+    }
+    if (!sessionLoaded) {
       return undefined;
     }
     if (!shouldLoadViewingRoundFromArchive(viewingBaseWordRound ?? null, liveSession)) {
+      setArchiveRecoveryPending(false);
       return undefined;
     }
     if (viewingBaseWordRound == null) {
+      setArchiveRecoveryPending(false);
       return undefined;
     }
 

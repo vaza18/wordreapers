@@ -8,6 +8,351 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-08 — Legacy empty archive skip lost stats forever (sync done)
+
+- **Symptom:** Empty legacy extract + claimed counts returned sync `done` (ack + clear pending) without maps fetch → competition stats never recorded even when RTDB maps still had words.
+- **Cause:** Production hardening against zero-finalize treated «cannot score from archive» as terminal success.
+- **Fix:** Fall through to `tryFetchSessionWordMaps`; rich maps → v4 persist + finalize; empty/PD → `retryable` (keep pending). No silent `done`.
+- **Test:** `tests/sync-coordinator.test.ts`
+- **Area:** `lib/online/sync-coordinator.ts`
+
+### 2026-08 — Play stuck empty after exhaustion under playing
+
+- **Symptom:** Force-sync exhaustion + `clearSessionWordMaps` PD while `playing` left `awaitingEmptySync` forever (RTDB had words, UI empty).
+- **Cause:** Wipe only allowed waiting/finished; reject-all-rich until empty; empty may never arrive after peers submit.
+- **Fix:** `ensureSessionWordMapsEmptyForRoundStart` fail-loud before `waiting→playing`; after exhaustion under `playing`, `decidePlayMapsPlayingRichRecovery` adopts rich after timer (safe only with wipe-before-play).
+- **Test:** `tests/play-word-maps-apply.test.ts`, `tests/session-word-maps-service.test.ts`
+- **Area:** `lib/firebase/session-word-maps-service.ts`, `lib/online/session/play-word-maps-apply.ts`, `hooks/usePlaySessionSubscriptions.ts`, `lib/firebase/game-session-service.ts`
+
+### 2026-08 — Legacy archive sync finalized zero competition stats
+
+- **Symptom:** Sync `persistArchiveIfNeeded` on pre-v4 / object-shaped `playerWords` built empty invert (`Array.isArray` only) → `finalizeOnlineRoundForPlayer` wrote 0 words / wrong win-loss and marked the round processed forever.
+- **Cause:** Empty UI for legacy lists was accepted, but finalize still ran on empty standings.
+- **Fix (superseded for empty+claimed):** Extract normalized keys from legacy `{display,at}` leaves for stats when present. **Do not** treat empty extract + claimed counts as terminal success — see «Legacy empty archive skip lost stats forever» (maps fallthrough → finalize from maps or `retryable`).
+- **Test:** `tests/archive-player-words-for-stats.test.ts`, `tests/sync-coordinator.test.ts`
+- **Area:** `lib/online/session/archive-player-words-for-stats.ts`, `lib/online/sync-coordinator.ts`
+
+### 2026-08 — Results eternal spinner after rematch before maps bootstrap
+
+- **Symptom:** Unpinned results with unfinished maps bootstrap (`unavailable` / slow fetch) then peer rematch → `waiting`/`playing`, no pending/freeze/archive → `viewData` null forever after bootstrap spinner escape (`!viewData` ActivityIndicator, no error CTA).
+- **Cause:** `nextResultsFreezePending` required `wordsBootstrapComplete` so pending never latched; roster hook disabled on rematch left bootstrap false; unpinned path had no unavailable escape (unlike pinned miss).
+- **Fix:** Latch **rich** pending before bootstrap; allow freeze from rich pending/live without bootstrap; `shouldShowResultsUnavailableAfterRematch` → error CTA (`errorOpenResultsFailed`) when rematch advanced with no finished view.
+- **Test:** `tests/frozen-round-view.test.ts` (rich pre-bootstrap latch + rematch freeze; unavailable-after-rematch gate)
+- **Area:** `lib/online/session/frozen-round-view.ts`, `app/online/results/[gameId].tsx`
+
+### 2026-08 — Pending results freeze glued round-N words onto session N+1
+
+- **Symptom:** Unpinned results after rematch: rich pending for finished round N + live finished N+1 with empty `liveWords` produced freeze `{ session: N+1, words: N }`.
+- **Cause:** `nextResultsFreezePending` kept `previous.words` over empty wipe without checking `baseWordRound`, then wrote `liveSession` (N+1) so later same-round guards treated the mix as valid.
+- **Fix:** Keep rich pending over empty live only when `(previous.session.baseWordRound ?? 0) === (liveSession.baseWordRound ?? 0)`; cross-round finished uses live session+words as-is.
+- **Test:** `tests/frozen-round-view.test.ts` (`does not glue prior-round pending words…`; same-round keep-rich still green)
+- **Area:** `lib/online/session/frozen-round-view.ts`
+
+### 2026-08 — Left cold-start resume lost to live rematch N+1
+
+- **Symptom:** Cold open `/online/left/[gameId]` with `leftOnlineResume` for round N while RTDB was already `playing` N+1 pinned N+1 (wrong CTA / wrong round).
+- **Cause:** (A) `nextLeftAtBaseWordRound` adopted live when `previous` was null and ignored `resumeRound`. (B) Resume AsyncStorage load kept any existing pin (`if (prev != null) return prev`), so a session-first live N+1 blocked resume N.
+- **Fix:** Prefer `resumeRound < liveRound` when previous is empty; `nextLeftAtAfterResumePointer` replaces a newer live pin when resume arrives late.
+- **Test:** `tests/left-round-screen-actions.test.ts`
+- **Area:** `lib/online/left-round-screen-actions.ts`, `app/online/left/[gameId].tsx`
+
+### 2026-08 — Empty results freeze upgrade painted rematch N+1
+
+- **Symptom:** Results pinned/frozen for empty round N upgraded to live finished N+1 words when `shouldUpgradeEmptyResultsFreeze` saw richer `liveWords`.
+- **Cause:** Upgrade compared only emptiness, not `baseWordRound` / viewing pin.
+- **Fix:** Same-round guard (`frozenBaseWordRound === liveBaseWordRound`, and viewing pin when set).
+- **Test:** `tests/frozen-round-view.test.ts`
+- **Area:** `lib/online/session/frozen-round-view.ts`, `app/online/results/[gameId].tsx`
+
+### 2026-08 — Results finalize after empty+claims escape wrote zero stats
+
+- **Symptom:** After spinner escape with empty invert + maps still claiming words, `finalizeOnlineRoundForPlayer` recorded `wordsCollected = 0` irreversibly (`wasOnlineRoundProcessed`).
+- **Cause:** Escape path finalized from `viewData.standings` built only from empty `wordsByPlayer`; archive soft-skip did not block finalize.
+- **Fix:** `shouldFinalizeOnlineResultsStats` refuses finalize while `shouldSkipEmptyArchiveWords`; does not set `statsRecordedRef` until the gate passes so late maps can still finalize.
+- **Test:** `tests/should-finalize-online-results-stats.test.ts`
+- **Area:** `lib/online/should-finalize-online-results-stats.ts`, `app/online/results/[gameId].tsx`
+
+### 2026-08 — Results empty freeze from unavailable/escape (C1/I4)
+
+- **Symptom:** `permission_denied` / silent maps listener marked bootstrap complete → empty freeze locked «0 слів» even when words existed; late snapshots could not upgrade. Fixing that by never completing bootstrap left a dead spinner escape (loading forever).
+- **Cause:** `unavailable` and bootstrap escape treated as authoritative empty; later incomplete bootstrap never escaped the spinner.
+- **Fix:** Bootstrap completes only on successful maps `snapshot` / fetch — not on `unavailable` or failed fetch. Spinner may escape after `RESULTS_WORDS_BOOTSTRAP_ESCAPE_MS` **without** marking bootstrap complete (no empty freeze). Late maps still freeze/upgrade. Empty+claims soft-skip uses maps/archive claims (not RTDB `wordCount`).
+- **Test:** `tests/use-live-roster-player-words.test.tsx`, `tests/should-show-online-results-words-loading.test.ts`, `tests/frozen-round-view.test.ts`
+- **Area:** `hooks/useLiveRosterPlayerWords.ts`, `app/online/results/[gameId].tsx`, `lib/online/session/should-show-online-results-words-loading.ts`, `frozen-round-view.ts`
+
+### 2026-08 — Force-sync exhaustion re-imported prior-round rich maps (C2)
+
+- **Symptom:** After rematch round reset + force-sync exhaustion, delayed wipe left RTDB prior-round words; first non-empty snapshot painted them into the new round.
+- **Cause:** Exhaustion set `acceptRichWhileAwaiting` so any non-empty cleared the latch.
+- **Fix:** Exhaustion still applies empty UI and keeps `awaitingEmptySync`; reject all non-empty until authoritative empty wipe, then normal apply.
+- **Test:** `tests/play-word-maps-apply.test.ts`, `tests/use-play-session-subscriptions.test.tsx`
+- **Area:** `lib/online/session/play-word-maps-apply.ts`, `hooks/usePlaySessionSubscriptions.ts`
+
+### 2026-08 — Left resume pin jumped to rematch N+1 (I1)
+
+- **Symptom:** Cold restore / parked left with `leftOnlineResume` for round N showed rematch N+1 while peers advanced.
+- **Cause:** `nextLeftAtBaseWordRound` replaced resume pins when `liveRound !== previous` during `playing`, unlike live pins.
+- **Fix:** Keep resume pin the same as live pin when rematch advances (`previous < liveRound`). Stale older resume is cleared on play via `clearLeftOnlineResumeForGame`.
+- **Test:** `tests/left-round-screen-actions.test.ts`
+- **Area:** `lib/online/left-round-screen-actions.ts`
+
+### 2026-08 — Rematch seeded partial peers as final archive (I2)
+
+- **Symptom:** After rematch wipe, opening results saved viewer-only words with empty peer lists as the finished archive.
+- **Cause:** `ensureLocalArchiveForRematchAdvancedResults` always `saveFinishedRoundArchive` from partial seed.
+- **Fix:** Multi-player → return false (play retry / errorOpenResultsFailed). Solo may still seed. Prefer full archive from finished window.
+- **Test:** `tests/ensure-rematch-advanced-results-archive.test.ts`
+- **Area:** `lib/online/ensure-rematch-advanced-results-archive.ts`
+
+### 2026-08 — True empty finished round never archived (I3)
+
+- **Symptom:** Zero-word finished round skipped forever (`totalPlayerWordCount === 0` → retryable) even after successful empty maps fetch.
+- **Cause:** Empty write refused without distinguishing wipe+claims from genuine empty.
+- **Fix:** Persist empty archive when fetch ok and `shouldSkipEmptyArchiveWords` is false; skip/retry only on wipe claims.
+- **Test:** `tests/archive-finished-round-from-firebase.test.ts`, `tests/sync-coordinator.test.ts`
+- **Area:** `lib/online/session/archive-finished-round-from-firebase.ts`, `lib/online/sync-coordinator.ts`
+
+### 2026-08 — Mid-play empty maps cleared rich UI (dead score-path rollback)
+
+- **Symptom:** Spurious empty maps snapshot while `playing` wiped words/standings; later `unavailable` did not restore → empty list until rematch/heal.
+- **Cause:** `allowAuthoritativeEmpty` while `playing` still cleared rich local state after score-path rollback was removed; rules are append-only mid-play.
+- **Fix:** Empty wipe only via round-reset gate (`awaitingEmptySync` / force-sync exhaustion). Mid-play empty over rich → no apply.
+- **Test:** `tests/play-word-maps-apply.test.ts`, `tests/use-play-session-subscriptions.test.tsx`
+- **Area:** `lib/online/session/play-word-maps-apply.ts`, `hooks/usePlaySessionSubscriptions.ts`, ADR-020
+
+### 2026-08 — Post-join maps fail must not over-route inactive to play
+
+- **Symptom:** Maps `!ok` + “prefer play if inLiveRound” sent round-0 inactive unscored joiners to play (round-0 `isInLiveRound` is always true). Offline scorers without maps wrongly went to results on transient fetch fail.
+- **Cause:** Over-broad play preference on maps failure; later, always-results on fail after score-path removal.
+- **Fix:** Retry maps briefly; on persistent fail consult same-timer active-round cache for scored reconnect → play; cold inactive (no cache) → results via plain `resolvePostJoinRoute`.
+- **Test:** `tests/post-join-route.test.ts`
+- **Area:** `lib/online/post-join-route-with-maps.ts`
+
+### 2026-08 — Left fallback pinned empty freeze after persist miss
+
+- **Symptom:** Primary path refused empty playing snapshot, but persist/catch fallback still froze empty words.
+- **Cause:** Fallback checked snapshot presence, not word richness.
+- **Fix:** `shouldPromoteLeftPlayingSnapshotFallback` requires non-empty words; otherwise retry.
+- **Test:** `tests/left-round-screen-actions.test.ts`
+- **Area:** `app/online/left/[gameId].tsx`, `lib/online/left-round-screen-actions.ts`
+
+### 2026-08 — Join orphaned roster when maps fetch threw
+
+- **Symptom:** Join wrote `players/{uid}` then `requireSessionWordMaps` threw → UI join fail while uid stayed in roster.
+- **Cause:** Fail-loud maps fetch after roster write; `wordMaps` unused in `buildJoinCommitPatch` after score-path removal.
+- **Fix:** Drop maps fetch from join; commit patch only needs `isBrowseJoin`.
+- **Test:** `tests/join-mid-round-live-roster.test.ts` (join without requireSessionWordMaps)
+- **Area:** `lib/firebase/game-session-service.ts`
+
+### 2026-08 — Leaf submit rolled back in UI when parent get failed
+
+- **Symptom:** Shared-word leaf committed then `get(parent)` threw → `SESSION_MISSING` → play stripped optimistic word (append-only, cannot delete leaf).
+- **Cause:** Outer catch treated post-commit get failure as submit failure.
+- **Fix:** After leaf commit, parent get is best-effort; on throw still return success with self-only `playersOnWord` (optimistic **unique** until maps listener confirms peers — do not invent `assumeShared`/`normal`).
+- **Test:** `tests/submit-online-word.test.ts`
+- **Area:** `lib/firebase/submit-online-word.ts`
+
+### 2026-08 — Orphan restore wrote peer wordPlayers shards (PD → empty room)
+
+- **Symptom:** Multiplayer orphan restore from cache with peer uids in `wordPlayers` failed maps write (`permission_denied`); session `set` already committed → playing room with empty maps; later rejoin skipped restore.
+- **Cause:** `writeSessionWordMapsShards` multipath included peer leaves; rules allow only `auth.uid == $uid`.
+- **Fix:** Filter cache maps to actor uid (`wordPlayersForUidOnly`); on maps write failure remove the restored session root.
+- **Test:** `tests/restore-playing-session-from-cache.test.ts`, `tests/firebase/database.rules.test.ts` (multipath peer deny / own allow), `tests/word-players-invert.test.ts`
+- **Area:** `lib/online/session/rejoin-online-round.ts`, `lib/online/word-players-invert.ts`
+
+### 2026-08 — Pending archive finalized zero stats from RTDB score
+
+- **Symptom:** Leave → finish → `finalizeOnlineRoundForPlayer` recorded `wordsCollected = 0` / wrong win-loss (irreversible `wasOnlineRoundProcessed`).
+- **Cause:** `persistFinishedRoundForPlayer` used `buildStandingsFromSession(session)` on RTDB `players.*.score/wordCount` (~0 after shard-only submit) and ignored the `words` map.
+- **Fix:** Derive standings via `buildLiveStandingsFromSession` + `wordPlayersFromWordsByPlayer(words)` (same as sync-coordinator).
+- **Test:** `tests/complete-pending-round-archive.test.ts` (finalize args wordCount/score)
+- **Area:** `lib/online/session/complete-pending-round-archive.ts`
+
+### 2026-08 — Round-0 offline scorer dropped after score-path removal
+
+- **Symptom:** Round `baseWordRound === 0` player offline (background) vanished from live standings / multipplayer UI despite words in maps.
+- **Cause:** `isLiveParticipant` / `hasMultiplayerRound` / rejoin / join-toast heuristics still keyed off RTDB `score`/`wordCount`.
+- **Fix:** Shared `playerHasScoredInRound` (maps leaf and/or legacy totals).
+- **Test:** `tests/live-round-membership.test.ts`, `tests/live-round-screen-actions.test.ts`
+- **Area:** `lib/online/presence/live-round-membership.ts`, `live-round-screen-actions.ts`, `play-toast-events.ts`
+
+### 2026-08 — Mid-round wordPlayers leaf delete griefed peer scores
+
+- **Symptom:** Any roster member could `.remove()` their leaf while `playing`, changing global word count → peers’ derived live scores / x2.
+- **Cause:** Leaf `.validate` allowed `!newData.exists()` for submit-rollback that no longer has production callers.
+- **Fix:** Append-only leaf while `playing`; remove dead `rollbackWordMapsShard`.
+- **Test:** `tests/firebase/database.rules.test.ts` (deny delete while playing)
+- **Area:** `firebase/database.rules.json`, `lib/online/word-maps-shard-refs.ts`
+
+### 2026-08 — Live RTDB score + x2Claim removed (client-derived standings)
+
+- **Symptom:** Play debounced `syncSessionPlayerScores`; submit path wrote session score TX + `x2Claim` / demotion rollback — latency, desync vs derived standings, complex failure modes.
+- **Cause:** Dual source of truth (`players.score` vs inverted `wordPlayers`).
+- **Fix:** `submitOnlineWord` writes wordPlayers shards only; standings / x2 from `buildLiveStandingsFromSession`; drop `x2Claim` / `x2Demoted`; local archives stamp derived totals; history/stats/results never trust live RTDB score; empty-archive gate uses maps/`playerWords` not `wordCount`; finish does not require maps fetch. **RTDB score/wordCount caps stay for legacy clients**; post-release cleanup **deletes the fields** (with `player_words` wipe) — not lock-to-0.
+- **Test:** `tests/submit-online-word.test.ts`, `tests/archive-words-gate.test.ts`, `tests/compute-archived-player-stats.test.ts`, `tests/firebase/database.rules.test.ts`, `tests/should-show-online-results-words-loading.test.ts`
+- **Area:** `lib/firebase/submit-online-word.ts`, `lib/online/session/archive-words-gate.ts`, `lib/online/session/online-session-archive.ts`, `firebase/database.rules.json`, ADR-012/013 superseded
+
+### 2026-08 — Demote-then-+2 TOCTOU after x2ClaimConfirm (post-confirm +2)
+
+- **Status:** Obsolete — live score + x2Claim removed (client-derived standings; see entry above).
+- **Symptom:** Peer took claim and demoted while holder score was still 0; holder still applied `increment(+2)` after a confirm that saw claim===self → shared word scored 2.
+- **Cause:** Confirm `get(x2Claim)` then later `increment(+2)` without a pre-score re-check / post-score compensation; early tests only mocked claim loss at confirm time.
+- **Fix (historical):** Re-check claim (+ `x2Demoted`) immediately before unique +2; after +2 compensate. **Superseded by** dropping RTDB score path entirely.
+- **Test:** n/a (path removed)
+- **Area:** was `lib/firebase/submit-online-word.ts`
+
+### 2026-08 — Grief restore re-armed x2Claim after honest demotion
+
+- **Status:** Superseded — live score + x2Claim client path removed (see «Live RTDB score + x2Claim removed»). Do not restore `x2-claim-score` / score demotion.
+- **Symptom (historical):** After take+demote cleared the latch, another co-finder could `set(x2Claim=oldHolder)` and a later take demoted again (1→0).
+- **Cause / Fix (historical):** `x2Demoted` latch rules.
+- **Test / Area:** n/a (path removed)
+
+### 2026-08 — Results empty+claims escape blocked stats/archive without freeze
+
+- **Status:** Partially superseded — escape may still unstick the spinner, but finalize must **not** run while `shouldSkipEmptyArchiveWords` (see «Results finalize after empty+claims escape wrote zero stats»).
+- **Symptom (historical):** After 8s escape from empty+claims spinner, UI showed results but `frozenRound` stayed null → finalize/ensureArchived never ran.
+- **Cause:** Stats effect required `frozenRound`; freeze source refuses empty freeze when claims remain.
+- **Fix (historical):** Finalize/archive after escape without freeze — **unsafe for zero standings**; now gated by `shouldFinalizeOnlineResultsStats`.
+- **Test:** `tests/should-finalize-online-results-stats.test.ts`, `tests/should-show-online-results-words-loading.test.ts`
+- **Area:** `app/online/results/[gameId].tsx`, `lib/online/should-finalize-online-results-stats.ts`
+
+### 2026-08 — Idle roster could poison x2Claim without finding the word
+
+- **Status:** Superseded — x2Claim client path removed (canonical: «Live RTDB score + x2Claim removed»).
+- **Symptom (historical):** Any playing roster member could `set` `x2Claim/{word}=self` without a `wordPlayers` leaf.
+- **Fix (historical):** Leaf gate on claim create. Not applicable to shard-only submit.
+- **Test / Area:** n/a (path removed)
+
+### 2026-08 — Rematch latch rejected new-round words forever after missed wipe
+
+- **Status:** Superseded — accepting rich after exhaustion re-imported prior-round words (see «Force-sync exhaustion re-imported prior-round rich maps»). Current contract: exhaustion empties UI and keeps `awaitingEmptySync` until authoritative empty wipe; new-round rich applies only after wipe.
+- **Symptom (historical):** After force-sync exhaustion, play stayed empty while RTDB already had new-round `wordPlayers` (wipe skipped/late + early submits).
+- **Cause:** Exhaustion kept `awaitingEmptySync` and rejected all non-empty until authoritative empty.
+- **Fix (historical then reverted):** `acceptRichWhileAwaiting` — removed because delayed wipe + prior rich looked like “new-round”.
+- **Test:** `tests/play-word-maps-apply.test.ts`, `tests/use-play-session-subscriptions.test.tsx`
+- **Area:** `lib/online/session/play-word-maps-apply.ts`
+
+### 2026-08 — x2Claim co-finder clear without demotion (residual)
+
+- **Status:** Superseded — live score + x2Claim removed (see «Live RTDB score + x2Claim removed»). Unique/shared scoring is client-derived from `wordPlayers` only.
+- **Symptom (historical):** A co-finder could `remove()` peer `x2Claim` without demotion score.
+- **Test / Area:** n/a (path removed)
+
+### 2026-08 — x2Claim burned when take succeeds but peers score fails
+
+- **Status:** Superseded — live score + x2Claim removed (see «Live RTDB score + x2Claim removed»). Files `lib/online/x2-claim-score.ts` no longer exist.
+- **Symptom (historical):** Take cleared claim then score TX failed; latch empty.
+- **Test / Area:** n/a (path removed)
+
+### 2026-08 — Concurrent second+ x2 demotion with 3+ players (leaf shards)
+
+- **Status:** Superseded — live score + x2Claim removed; x2/overlap badges derive from maps on clients (see «Live RTDB score + x2Claim removed»).
+- **Symptom (historical):** Concurrent leaf finders raced demotion via `x2Claim` latch.
+- **Test / Area:** n/a (path removed)
+
+### 2026-08 — Concurrent same-word x2 left wrong scores (delayed +2 / absolute demotion)
+
+- **Status:** Superseded — shard-only submit + client-derived standings (see «Live RTDB score + x2Claim removed»). Parent create / leaf second+ remain for `wordPlayers` writes only.
+- **Symptom (historical):** Concurrent finds left wrong RTDB scores via delayed +2 / absolute demotion.
+- **Test / Area:** `tests/submit-online-word.test.ts` (shard path only)
+
+### 2026-08 — Submit rolled back shard after finish counted it
+
+- **Symptom:** Finished session had non-zero `wordCount`/score but the word missing from `wordPlayers` (empty results / archive skip).
+- **Cause:** Race: submit committed shard → finish read maps and wrote totals → submit failed on score path **or** `shardParentGet` (network) and deleted the shard (rules allow wordPlayers writes while finished). Gate `status !== 'finished'` also rolled back when status re-read was `null`.
+- **Fix:** Roll back a committed shard only while session status is still `playing` (fail-closed for `finished` / `waiting` / unknown). Same gate for score-path, parent-get failure, missing uid leaf, and outer catch. Re-check before delete; if re-check returns unknown/`null`, **keep** the shard. If session is already `finished` after shard commit (score path **or** parent-get / outer-catch keep), submit returns **`ok: true`** so play does not strip optimistic UI / show `errorUnknown`.
+- **Test:** `tests/submit-online-word.test.ts`, `tests/submit-shard-rollback-gate.test.ts`
+- **Area:** `lib/firebase/submit-online-word.ts`, `lib/online/submit-shard-rollback-gate.ts`
+
+### 2026-08 — Soft-skip archive cleared pending without saving
+
+- **Symptom:** Empty maps + `wordCount > 0` skipped archive write but `clearPendingRoundArchive` still ran — no retry. Sync coordinator also cleared pending after maps-fail / empty soft-skip.
+- **Cause:** `persistLocalArchive` returned void; `persistFinishedRoundForPlayer` always finalized + cleared pending. `syncWorkItem` always cleared pending after `persistArchiveIfNeeded` regardless of outcome.
+- **Fix:** `persistLocalArchive` returns `saved` | `skipped` | `skipped_retryable`; pending kept on `skipped_retryable`. Sync `persistArchiveIfNeeded` returns `done` | `retryable` and clears pending only on `done`. Exit soft-skip marks pending for later sync. Results loading escapes empty+claims after 8s so UI cannot spin forever without pending/archive.
+- **Test:** `tests/complete-pending-round-archive.test.ts`, `tests/coordinated-session-cleanup.test.ts`, `tests/should-show-online-results-words-loading.test.ts`, `tests/sync-coordinator.test.ts`, `tests/exit-online-flow.test.ts`
+- **Area:** `lib/online/coordinated-session-cleanup.ts`, `complete-pending-round-archive.ts`, `sync-coordinator.ts`, `exit-online-flow.ts`, `should-show-online-results-words-loading.ts`, `app/online/results/[gameId].tsx`
+
+### 2026-08 — Finish race may leave maps word without score totals (accepted)
+
+- **Symptom:** Rarely, a word appears in `wordPlayers` after finish while `players.*.wordCount`/`score` omit it (results/archive disagree).
+- **Cause:** Finish read maps before the late shard; submit then sees `status === 'finished'` and returns `{ ok: true }` without score write / without rollback (UX + fail-closed maps).
+- **Fix:** Accepted product tradeoff (no post-finish leaf reconcile in this path). `archivePlayerWordsDisagreeWithCounts` can surface the mismatch; prefer empty-archive soft-skip over inventing scores.
+- **Test:** `tests/submit-online-word.test.ts` (finish race with `wordCount: 0`)
+- **Area:** `lib/firebase/submit-online-word.ts`
+
+### 2026-08 — Results froze empty words before maps arrived
+
+- **Symptom:** Finished results showed non-zero scores but «0 слів»; archive recovery never ran (`frozenRound` already set).
+- **Cause:** (A) `useLiveRosterPlayerWords` set `wordsBootstrapComplete=true` while disabled; first enabled paint still had complete+empty and freeze ran before fetch/listener. (B) Fetch `!ok` also marked bootstrap complete in `finally`, locking empty freeze. (C) Even with rich `pending`, `resolveResultsFreezeSource` preferred empty `liveWords` while status stayed `finished` (`unavailable` / remount). (D) `persistLocalArchive` from results wrote empty archives despite `wordCount > 0`.
+- **Fix:** Bootstrap completes only after authoritative maps `snapshot` or successful fetch — **not** on disable, failed fetch, or `unavailable`. Spinner may escape after `RESULTS_WORDS_BOOTSTRAP_ESCAPE_MS` without marking bootstrap complete (no empty freeze). `nextResultsFreezePending` + `resolveFinishedFreezeWords` keep rich pending over empty wipe while still `finished`. Refuse empty freeze when `shouldSkipEmptyArchiveWords` (maps/archive claims — **not** RTDB `wordCount`). Results loading also spins while empty invert + claims. `persistLocalArchive` soft-skips empty maps while claims remain. Partial lists with some words still stop the spinner (ADR-020).
+- **Test:** `tests/use-live-roster-player-words.test.tsx`, `tests/words-bootstrap-complete.test.ts`, `tests/frozen-round-view.test.ts`, `tests/should-show-online-results-words-loading.test.ts`, `tests/archive-finished-round-from-firebase.test.ts`, `tests/archive-words-gate.test.ts`, `tests/coordinated-session-cleanup.test.ts`
+- **Area:** `hooks/useLiveRosterPlayerWords.ts`, `lib/online/session/words-bootstrap-gate.ts`, `frozen-round-view.ts`, `should-show-online-results-words-loading.ts`, `archive-words-gate.ts`, `archive-finished-round-from-firebase.ts`, `sync-coordinator.ts`, `coordinated-session-cleanup.ts`
+
+### 2026-08 — Results spinner hung when wordCount > inverted maps
+
+- **Symptom:** Finished results stayed on the words loading spinner forever when roster `wordCount` was higher than inverted `wordPlayers` lists (score–map desync / ADR-020).
+- **Cause:** Results gated freeze/loading on `words.length >= wordCount`, so spinner never cleared after bootstrap when score and maps disagreed.
+- **Fix:** Gate only on `wordsBootstrapComplete` (and frozen archive); maps are authoritative after bootstrap (ADR-020).
+- **Test:** `tests/should-show-online-results-words-loading.test.ts`, `tests/frozen-round-view.test.ts`
+- **Area:** `lib/online/session/should-show-online-results-words-loading.ts`, `frozen-round-view.ts`
+
+### 2026-08 — Rematch force-sync exhaustion preferred empty over prior-round rich
+
+- **Symptom:** After rematch/round reset, delayed maps wipe could leave play showing prior-round `wordPlayers` (wrong x2/overlap) once force-sync retries exhausted. Fetch-error exhaustion used to only release the latch (no empty apply), so a late rich `onValue` could repaint prior-round words. Releasing the latch on exhaustion also allowed permanent contamination when wipe never landed.
+- **Cause:** Rich exhaustion previously applied RTDB rich maps; fetch-error path unlocked without applying empty; later both paths applied empty **and** cleared `awaitingEmptySync`.
+- **Fix:** Exhaustion applies empty UI and keeps `awaitingEmptySync` until authoritative empty wipe; non-empty (prior-round or new) is rejected while awaiting. Pre-exhaustion force-sync still rejects rich. Supersedes the later `acceptRichWhileAwaiting` experiment (see C2 entry at top).
+- **Test:** `tests/play-word-maps-apply.test.ts`, `tests/use-play-session-subscriptions.test.tsx`
+- **Area:** `lib/online/session/play-word-maps-apply.ts`, `hooks/usePlaySessionSubscriptions.ts`
+
+### 2026-08 — Round-finished notification opened the latest round
+
+- **Symptom:** Tapping a «Раунд завершено» shade notification for an older base word opened results for the newest round in the same room.
+- **Cause:** Notification `data` only had `gameId` (no `baseWordRound`); results routed unpinned and fell through to live/latest finished. Switching pin on the same `gameId` also did not reset frozen state.
+- **Fix:** Include `baseWordRound` in notification data (string-safe parse); route via `onlineResultsRoute(gameId, baseWordRound)`; reset results freeze state when `viewingBaseWordRound` changes. Pre-fix notifications without the field no longer navigate (avoid wrong round) — accepted for tester devices; tap on an old push is a no-op.
+- **Test:** `tests/rejoin-online-round.test.ts`, `tests/round-finished-notification-once.test.ts`
+- **Area:** `lib/online/round-finished-notification-data.ts`, `lib/online/round-finished-notification.ts`, `hooks/useRoundFinishedNotificationRouting.ts`, `app/online/results/[gameId].tsx`
+
+### 2026-08 — Mid-round leave showed prior round + no rejoin
+
+- **Symptom:** After rematch/rejoin, player left the live round early; left screen showed an older base word / results and «Переглянути результати» without «Повернутися в раунд» while peers still played.
+- **Cause:** `leftOnlineResume` from a previous leave in the same room pinned `leftAtBaseWordRound` and the left screen never overwrote it (`prev != null` keep). Combined with the no-fallthrough frozen pin, UI stayed on the stale round so `roundStillActive` was false.
+- **Fix:** `nextLeftAtBaseWordRound` adopts live `playing` on a fresh leave with **no** resume; when `resumeRound < liveRound` (cold start) pins resume; keeps **live or resume** pins when rematch advances while parked; late AsyncStorage resume can replace a newer live pin (`nextLeftAtAfterResumePointer`); clear left-resume on active play; reset freeze/snapshot when the pin moves.
+- **Test:** `tests/left-round-screen-actions.test.ts`
+- **Area:** `lib/online/left-round-screen-actions.ts`, `app/online/left/[gameId].tsx`, `app/online/play/[gameId].tsx`
+
+### 2026-08 — Left «Переглянути результати» showed a later rematch round
+
+- **Symptom:** Player left mid-round N; peer finished N and played N+1; left player opened results and saw round N+1 words/title instead of frozen round N.
+- **Cause:** With no local archive for N (rematch raced past the finished window / maps wipe), left and results fell through to live RTDB session (`frozenRound ?? liveSession`) even when `viewingBaseWordRound` / `leftAtBaseWordRound` pinned an earlier round.
+- **Fix:** Never fall through to a mismatched live round on left (`resolveLeftRoundDisplaySession` / `resolveLeftWordsSnapshot`); promote in-memory playing snapshot to frozen when rematch advances (`shouldFreezeLeftRoundFromPlayingSnapshot`); persist that archive before navigating to results; results display via `resolveResultsDisplayRound` (live only when it matches the viewing pin).
+- **Test:** `tests/left-round-screen-actions.test.ts`, `tests/frozen-round-view.test.ts`
+- **Area:** `lib/online/left-round-screen-actions.ts`, `lib/online/session/frozen-round-view.ts`, `app/online/left/[gameId].tsx`, `app/online/results/[gameId].tsx`
+
+### 2026-07 — Results/history dropped apostrophe without lexicon displays
+
+- **Symptom:** Words like `КОМП'ЮТЕР` showed as `КОМПЮТЕР` on online results, left, and history while play kept the apostrophe.
+- **Cause:** `buildOnlineResultsView` was called without `displaysByPlayer`; UI fell back to `toDisplayUpper(normalized)`.
+- **Fix:** Build `displaysByPlayer` from round/archive lexicon via `buildDisplaysByPlayer` / `resolvePlayerWordDisplay` on results, left, and history (rebuild when lexicon loads).
+- **Test:** `tests/online-results-data.test.ts`
+- **Area:** `lib/online/online-results-data.ts`, `app/online/results/[gameId].tsx`, `app/online/left/[gameId].tsx`, `app/history/[archiveKey].tsx`
+
+### 2026-07 — Client drops player_words; lists from wordPlayers invert
+
+- **Symptom:** Dual RTDB writes (`player_words` + `session_word_maps`) inflated submit traffic; `{display,at}` leaves duplicated lexicon data.
+- **Cause:** Historical per-player list path beside the shared overlap index.
+- **Fix:** Clients read/write only `session_word_maps/.../wordPlayers`. Own/results lists invert maps by uid; displays from round/archive lexicon. Submit is shard-only (no live RTDB score / `x2Claim`). Firebase rules/CF/`player_words` data left for manual post-release cleanup (see `firebase_schema.md` checklist). Results uses one maps subscription via `useLiveRosterPlayerWords` (enabled only for finished roster; **disabled** after `frozenRound`) and ignores **empty** map clears within a room (state cleared on `gameId` change; disable keeps last words for rematch-before-freeze) so rematch wipe cannot empty pre-freeze lists. Play maps listener uses a **round-reset epoch** (`beginPlayMapsRoundReset` / `awaitingEmptySync`) plus discriminated listen/fetch: `unavailable` (permission_denied) never clears words; mid-play empty over rich does **not** clear UI (append-only rules; no score-path rollback); empty wipe only via round-reset gate / force-sync exhaustion. Force-sync uses `tryFetchSessionWordMaps` (error ≠ empty) with retries on rich-reject; prefer empty wipe, else `decidePlayMapsForceSyncExhaustion` applies **empty** (not prior-round rich) but **keeps** `awaitingEmptySync` until an authoritative empty snapshot (no accept-rich). Results bootstrap completes only on snapshot/successful fetch; spinner may escape after 8s without completing bootstrap (no empty freeze). Results loading/freeze after bootstrap does not require `wordCount` match (ADR-020 desync must not hang the spinner). Left screen resolves words via `resolveLeftWordsSnapshot` (live only while `playing`; else playing-snapshot / freeze) so finish does not blank the list when the roster hook disables. Results pins a pending freeze and applies it if rematch leaves `finished` before the freeze effect (`resolveResultsFreezeSource`); roster hook disable keeps last words; freeze/pending refs reset on `gameId` change. Roster bootstrap uses `tryFetchSessionWordMaps` (no apply empty on error). `persistFinishedRoundFromFirebase` throws on maps fetch failure so left `freezeAttemptedRef` can retry. After `setWordMaps(null)` on `baseWordRound` change, stale non-empty payloads cannot re-arm the empty-clear guard for overlap/x2. Active-round cache merges local `ownWords` into `sessionSnapshot.wordPlayers` and **unions** prior cache for the same timer so left→Home cannot wipe a richer play snapshot (no mid-round push of that cache into a live session — ADR-020; orphan restore only when session root is missing). Archive/finalize paths use `tryFetchSessionWordMaps` and **skip save** on fetch error (no empty archive with non-zero claims); `isFinishedArchiveStale` also treats empty `playerWords` vs claims as stale. Soft-skip empty archive uses maps/archive claims (**not** RTDB `wordCount`). **No migration** for pre-drop AsyncStorage entries that only had a `words` field (tester devices; same policy as v3 finished archives). Pre-v4 / object-shaped `playerWords` archives are **not** refreshed from maps (`isLegacyFinishedArchiveWords`) so a wiped RTDB cannot overwrite disk with empty v4. Duration/WPM uses stored `roundPlayedSeconds` (set at finish) with settings-duration fallback — no `at` timestamps. Local finished archives before `FINISHED_ARCHIVE_VERSION=4` show empty word lists (accepted for tester devices).
+- **Test:** `tests/submit-online-word.test.ts`, `tests/word-players-invert.test.ts`, `tests/player-word-display.test.ts`, `tests/online-results-data.test.ts`, `tests/use-live-roster-player-words.test.tsx`, `tests/live-words-snapshot.test.ts`, `tests/play-word-maps-apply.test.ts`, `tests/use-play-session-subscriptions.test.tsx`, `tests/left-round-screen-actions.test.ts`, `tests/complete-pending-round-archive.test.ts`, `tests/frozen-round-view.test.ts`, `tests/cache-active-round.test.ts`, `tests/sync-coordinator.test.ts`, `lib/online/__tests__/online-word-display.test.ts`
+- **Area:** `lib/firebase/submit-online-word.ts`, `lib/online/word-players-invert.ts`, play/results/archives/left
+
+### 2026-07 — Apostrophe missing from lobby base word and online letter keys
+
+- **Symptom:** Base words with apostrophes (e.g. `ВІЦЕПРЕМ'ЄР-МІНІСТЕРКА`) showed without `'` in the waiting lobby; online round blue letter keys omitted the apostrophe button. Training keyboard was correct; inviting others from training also dropped the apostrophe key.
+- **Cause:** Online RTDB only stored `baseWord` via `normalizeUk(...)` (apostrophes stripped). Lobby/play built title and `buildLetterKeys` from that string. Solo/training already had a separate in-memory `baseWordDisplay`.
+- **Fix:** Same contract as accepted words: keep `baseWord` normalized; persist `baseWordDisplay` for UI (lobby, keyboard, results, public index).
+- **Test:** `tests/session-base-word-display.test.ts`, `tests/publish-room.test.ts`
+- **Area:** `lib/online/session-base-word-display.ts`, `lib/online/publish-room.ts`, `lib/firebase/types.ts`, setup/pick-word/lobby/play
+
 ### 2026-07 — Lobby auto x2 stayed on after voluntary leave below 3
 
 - **Symptom:** Waiting lobby showed «бонус x2 увімк.» (and started rounds with x2) after a guest left and only 2 players remained; with `auto` and &lt;3 players the banner also showed «бонус x2 вимк.» instead of omitting the bonus segment.
@@ -215,8 +560,8 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 - **Symptom:** Player locks screen mid-round; after unlock UI looks frozen (timer stuck, no key press scale, draft empty, ghost letter floating, wordlist not updating) while taps still credit words in RTDB (peer standings ahead of local list).
 - **Cause:** iOS `inactive` pauses JS timer ticks and can stall native-driver `Animated` (letter fly / press scale). Touch + Firebase still run; fly handoff/`setTimeout` leaves glyphs hidden and a stuck ghost. Own-words listener may lag behind a successful submit.
-- **Fix:** On AppState `active`: refresh server clock immediately; clear draft flies + remount letter keyboard; reset press scales; refetch own `player_words` when remote has keys local lacks.
-- **Test:** `tests/compose-resume-heal.test.ts`
+- **Fix:** On AppState `active`: refresh server clock immediately; clear draft flies + remount letter keyboard; reset press scales; heal play maps via `tryFetchSessionWordMaps` + `decidePlayMapsListenerApply` (own words from invert; mid-play empty does not wipe rich maps).
+- **Test:** `tests/compose-resume-heal.test.ts`, `tests/use-play-session-subscriptions.test.tsx`, `tests/play-word-maps-apply.test.ts`
 - **Area:** `hooks/useServerNow.ts`, `hooks/usePressScale.ts`, `hooks/usePlaySessionSubscriptions.ts`, `components/online/OnlinePlayComposePanel.tsx`, `lib/game/compose-resume-heal.ts`
 
 ### 2026-07 — Time-up «Переглянути результати» loops error; no way home
@@ -263,7 +608,7 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 - **Symptom:** Player still on results sees winner line with word counts but «0 слів з …» empty list. Logs: `subscribeSessionPlayerWords … permission_denied` on `player_words`.
 - **Cause:** Rematch cleared / denied live `player_words` (peer reads require `status === finished`; after `waiting` subscribe fails). Results preferred live fetch when viewing round matched finished live, so UI painted empty after bootstrap with missing nodes.
-- **Fix:** Always hydrate pinned viewing round from local archive; rematch flips to `waiting` before clearing words; keep spinner until `isSessionWordsSnapshotReady` or frozen archive (`shouldShowOnlineResultsWordsLoading`).
+- **Fix:** Always hydrate pinned viewing round from local archive; rematch flips to `waiting` before clearing words; keep spinner until maps bootstrap or frozen archive (`shouldShowOnlineResultsWordsLoading`).
 - **Test:** `tests/frozen-round-view.test.ts`, `tests/should-show-online-results-words-loading.test.ts`
 - **Area:** `lib/online/session/frozen-round-view.ts`, `lib/online/session/should-show-online-results-words-loading.ts`, `app/online/results/[gameId].tsx`, `lib/firebase/game-session-service.ts`
 
@@ -375,7 +720,7 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 - **Symptom:** After round 2 ended, organizer saw a blank results spinner for ~20–30s while the peer already had results.
 - **Cause:** Local round-over (after failed `finishGameSessionIfExpired`) still allowed `navigateToResults` while RTDB status was `playing`. Results requires `status === 'finished'` + words bootstrap — spinner until finish eventually committed. Also `useLiveRosterPlayerWords` could thrash on unstable roster array identity and never mark bootstrap complete on fetch errors.
 - **Fix:** Keep retrying RTDB finish after local round-over; pin ended `baseWordRound` (+ local finished snapshot) on `forceLocalRoundOver` so rematch cannot rewrite `expectedBaseWordRound` / finish N+1; hold play round-key / skip expire ticks while time-up pending past rematch (natural `finished` pin or forced local — gated on `roundOverPendingResults` + pin, not only `localRoundOverForced`); archive before `replace` (live RTDB finished write, else seed/check local archive for `already_finished` and `rematch_advanced`); empty/disabled roster marks words bootstrap complete; add-time vote clears local time-up UI + aborts in-flight results nav / stale modal error; expire clears draft only when not deferring; `navigateToResults` catch → modal error; shared `beginExpireFinishAttempt`.
-- **Note (intentional residual):** Passive `fromJoin=1` results while live `playing` still skip prior-archive hydrate (empty until round ends). `rematch_advanced` / missing local archive shows `errorOpenResultsFailed` + retry instead of empty results. Seeded rematch archive may have empty peer word lists (viewer words only; no RTDB fetch after rematch). Before `forceLocalRoundOver` pins the round (~2s of failed finish ticks), a rematch to N+1 can still pass through the round-change effect — rare online (usually see `finished` first), more relevant offline→reconnect.
+- **Note (intentional residual):** Passive `fromJoin=1` results while live `playing` still skip prior-archive hydrate (empty until round ends). `rematch_advanced` / missing local archive shows `errorOpenResultsFailed` + retry instead of empty/partial results (multi-player partial peer seed removed). Before `forceLocalRoundOver` pins the round (~2s of failed finish ticks), a rematch to N+1 can still pass through the round-change effect — rare online (usually see `finished` first), more relevant offline→reconnect.
 - **Test:** `tests/play-round-reset-and-timer-gate.test.ts`, `tests/ensure-session-finished-for-results.test.ts`, `tests/play-local-time-up.test.ts`, `tests/ensure-rematch-advanced-results-archive.test.ts`
 - **Area:** `app/online/play/[gameId].tsx`, `lib/online/ensure-session-finished-for-results.ts`, `lib/online/ensure-rematch-advanced-results-archive.ts`, `lib/online/play-local-time-up.ts`, `lib/online/play-timer-submit-gate.ts`, `lib/online/play-expire-finish.ts`, `hooks/useLiveRosterPlayerWords.ts`
 

@@ -1,12 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import type { StoredPlayerWord } from '../../firebase/player-words-service.js';
 import type { GameSession } from '../../firebase/types.js';
 import { normalizeRoomCode } from '../../firebase/room-code.js';
+import { resolveGameSessionSettingsForSession } from '../../firebase/session-settings.js';
+import { recomputeSessionPlayerScores } from '../../game/scoring.js';
 
 import type { AllPlayerWords } from './clone-player-words.js';
 import { playableLexiconSnapshotForSession } from '../playable-lexicon-archive.js';
 import type { PlayableLexiconSnapshot } from '../../dictionary/round-playable-lexicon.js';
+import { wordPlayersFromWordsByPlayer } from '../word-players-invert.js';
+import { archiveHasPlayerWords } from './archive-words-gate.js';
 
 const FINISHED_ARCHIVES_KEY = 'wordreapers.finishedOnlineRounds';
 const MAX_FINISHED_ARCHIVES = 1000;
@@ -15,7 +18,7 @@ const MAX_STORED_LEXICON_SNAPSHOTS = 40;
 
 export { MAX_FINISHED_ARCHIVES, MAX_STORED_LEXICON_SNAPSHOTS };
 
-export const FINISHED_ARCHIVE_VERSION = 3 as const;
+export const FINISHED_ARCHIVE_VERSION = 4 as const;
 
 export type { PlayableLexiconSnapshot };
 
@@ -24,12 +27,12 @@ export interface FinishedRoundArchive {
   baseWordRound: number;
   savedAt: number;
   session: GameSession;
-  playerWords: Record<string, Record<string, StoredPlayerWord>>;
+  playerWords: Record<string, string[]>;
   /** Schema version for forward-compatible migrations. */
   archiveVersion?: typeof FINISHED_ARCHIVE_VERSION;
   /** True after this device saved the final local archive (`ackSent`). */
   ackSent?: boolean;
-  /** Snapshot of RTDB `players[*].wordCount` when archived — used for staleness checks. */
+  /** Snapshot of per-player word counts from archived word lists — used for staleness checks. */
   playerWordCounts?: Record<string, number>;
   /** Playable words for this base word — avoids rebuild in history/results. */
   playableLexicon?: PlayableLexiconSnapshot;
@@ -55,41 +58,77 @@ function finishedArchiveKey(gameId: string, baseWordRound: number): string {
   return `${normalizeRoomCode(gameId)}:${baseWordRound}`;
 }
 
-function serializeAllPlayerWords(
-  words: AllPlayerWords,
-): Record<string, Record<string, StoredPlayerWord>> {
-  const record: Record<string, Record<string, StoredPlayerWord>> = {};
+function serializeAllPlayerWords(words: AllPlayerWords): Record<string, string[]> {
+  const record: Record<string, string[]> = {};
   for (const [playerId, playerWords] of words) {
-    record[playerId] = Object.fromEntries(playerWords);
+    record[playerId] = playerWords;
   }
   return record;
 }
 
-/** Build word-count map from a live or archived session for staleness comparison. */
-export function playerWordCountsFromSession(session: GameSession): Record<string, number> {
+/** Build word-count map from archived / inverted word lists. */
+export function playerWordCountsFromWords(
+  words: AllPlayerWords | Record<string, string[]>,
+): Record<string, number> {
   const counts: Record<string, number> = {};
-  for (const [playerId, player] of Object.entries(session.players)) {
-    counts[playerId] = player.wordCount ?? 0;
+  if (words instanceof Map) {
+    for (const [playerId, playerWords] of words) {
+      counts[playerId] = playerWords.length;
+    }
+    return counts;
+  }
+  for (const [playerId, playerWords] of Object.entries(words)) {
+    counts[playerId] = Array.isArray(playerWords) ? playerWords.length : 0;
   }
   return counts;
 }
 
-function wordCountsMatch(
-  archiveCounts: Record<string, number> | undefined,
+/** Stamp local archive session players with totals derived from word lists. */
+export function sessionWithDerivedTotalsFromWords(
   session: GameSession,
-): boolean {
-  const expected = playerWordCountsFromSession(session);
-  const actual = archiveCounts ?? {};
-  const keys = new Set([...Object.keys(expected), ...Object.keys(actual)]);
-  for (const key of keys) {
-    if ((expected[key] ?? 0) !== (actual[key] ?? 0)) {
-      return false;
-    }
-  }
-  return true;
+  words: AllPlayerWords,
+): GameSession {
+  const wordPlayers = wordPlayersFromWordsByPlayer(words);
+  const players = Object.fromEntries(
+    Object.entries(session.players).map(([playerId, player]) => [playerId, { ...player }]),
+  );
+  const uniqueBonusEnabled = resolveGameSessionSettingsForSession(session).uniqueBonusEnabled;
+  recomputeSessionPlayerScores({ players, wordPlayers }, uniqueBonusEnabled);
+  return { ...session, players, wordPlayers };
 }
 
-/** True when the local archive should be refreshed from RTDB. */
+/** Empty archive lists must not disagree with stored count snapshot. */
+export function archivePlayerWordsDisagreeWithCounts(archive: FinishedRoundArchive): boolean {
+  const counts = archive.playerWordCounts ?? playerWordCountsFromWords(archive.playerWords ?? {});
+  const uids = new Set([...Object.keys(counts), ...Object.keys(archive.playerWords ?? {})]);
+  for (const uid of uids) {
+    const expected = counts[uid] ?? 0;
+    const words = archive.playerWords?.[uid];
+    const actual = Array.isArray(words) ? words.length : 0;
+    if (actual !== expected) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Pre-v4 / object-shaped `playerWords` (old `{display,at}` leaves). UI shows empty
+ * lists; do not refresh from maps — a wiped RTDB would overwrite disk with [].
+ */
+export function isLegacyFinishedArchiveWords(archive: FinishedRoundArchive): boolean {
+  if (archive.archiveVersion != null && archive.archiveVersion < FINISHED_ARCHIVE_VERSION) {
+    return true;
+  }
+  for (const words of Object.values(archive.playerWords ?? {})) {
+    if (!Array.isArray(words)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** True when the local archive should be refreshed from RTDB maps. */
 export function isFinishedArchiveStale(
   archive: FinishedRoundArchive | null,
   session: GameSession,
@@ -103,7 +142,16 @@ export function isFinishedArchiveStale(
   if ((archive.baseWordRound ?? 0) !== (session.baseWordRound ?? 0)) {
     return true;
   }
-  return !wordCountsMatch(archive.playerWordCounts, session);
+  if (isLegacyFinishedArchiveWords(archive)) {
+    return false;
+  }
+  // Live maps still have words but archive lists are empty — refresh.
+  const archiveEmpty = !archiveHasPlayerWords(archive.playerWords);
+  const mapsClaimWords = Object.keys(session.wordPlayers ?? {}).length > 0;
+  if (archiveEmpty && mapsClaimWords) {
+    return true;
+  }
+  return archivePlayerWordsDisagreeWithCounts(archive);
 }
 
 async function readFinishedStore(): Promise<FinishedArchiveStore> {
@@ -165,7 +213,7 @@ function trimFinishedArchiveStore(store: FinishedArchiveStore): FinishedArchiveS
 }
 
 export function playingRoundSnapshotFromSession(session: GameSession): PlayingRoundSnapshot | null {
-  if (session.status !== 'playing' || typeof session.roundStartedAt !== 'number') {
+  if (session.status !== 'playing' || session.timerEndsAt == null) {
     return null;
   }
   return {
@@ -174,8 +222,8 @@ export function playingRoundSnapshotFromSession(session: GameSession): PlayingRo
     players: session.players,
     wordPlayers: session.wordPlayers,
     pauseState: session.pauseState,
-    timerEndsAt: session.timerEndsAt ?? session.roundStartedAt,
-    roundStartedAt: session.roundStartedAt,
+    timerEndsAt: session.timerEndsAt,
+    roundStartedAt: session.roundStartedAt ?? undefined,
     roundTimerBudgetSeconds: session.roundTimerBudgetSeconds ?? undefined,
     organizerId: session.organizerId,
     baseWordRound: session.baseWordRound ?? 0,
@@ -195,15 +243,17 @@ export async function saveFinishedRoundArchive(
   const store = await readFinishedStore();
   const existing = store[finishedArchiveKey(gameId, baseWordRound)];
   const playableLexicon = playableLexiconSnapshotForSession(session);
+  const stampedSession = sessionWithDerivedTotalsFromWords(session, words);
+  const serializedWords = serializeAllPlayerWords(words);
   store[finishedArchiveKey(gameId, baseWordRound)] = {
     gameId: normalizeRoomCode(gameId),
     baseWordRound,
     savedAt: Date.now(),
-    session,
-    playerWords: serializeAllPlayerWords(words),
+    session: stampedSession,
+    playerWords: serializedWords,
     archiveVersion: FINISHED_ARCHIVE_VERSION,
     ackSent: existing?.ackSent === true ? true : false,
-    playerWordCounts: playerWordCountsFromSession(session),
+    playerWordCounts: playerWordCountsFromWords(words),
     ...(playableLexicon ? { playableLexicon } : {}),
   };
   await writeFinishedStore(store);

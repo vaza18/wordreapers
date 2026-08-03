@@ -10,6 +10,7 @@ import { finishedSession, playingSession } from './helpers/game-session-fixtures
 import {
   LEFT_ONLINE_RESUME_KEY,
   clearLeftOnlineResume,
+  clearLeftOnlineResumeForGame,
   loadLeftOnlineResume,
   parseLeftOnlineResume,
   saveLeftOnlineResume,
@@ -72,5 +73,17 @@ describe('left-online-resume', () => {
     await saveLeftOnlineResume({ gameId: 'ABCDE', baseWordRound: 0, uid: 'u1' });
     await clearLeftOnlineResume();
     expect(getAsyncStorageMap().has(LEFT_ONLINE_RESUME_KEY)).toBe(false);
+  });
+
+  it('clearLeftOnlineResumeForGame only clears matching room', async () => {
+    await saveLeftOnlineResume({ gameId: 'ABCDE', baseWordRound: 0, uid: 'u1' });
+    await clearLeftOnlineResumeForGame('OTHER');
+    expect(await loadLeftOnlineResume()).toEqual({
+      gameId: 'ABCDE',
+      baseWordRound: 0,
+      uid: 'u1',
+    });
+    await clearLeftOnlineResumeForGame('ABCDE');
+    expect(await loadLeftOnlineResume()).toBeNull();
   });
 });
