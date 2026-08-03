@@ -8,6 +8,113 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 <!-- Add dated notes at the top -->
 
+### 2026-08-03 — Production gate: sync maps retry + wipe-before-play + legacy RTDB
+
+- P1: legacy empty+counts → maps fallthrough (`retryable` / finalize from maps), never silent `done`.
+- P2: `ensureSessionWordMapsEmptyForRoundStart` before play; playing rich recovery after 8s post-exhaustion (no accept-rich without wipe-before-play).
+- P3 (product exception): **keep** `player_words` rules + score/wordCount caps for outdated store clients during review; CF no longer purges `player_words`; wipe/rules removal = **future** release after store approval + legacy deprecation (ADR-021 / `firebase_schema.md`).
+- I1: `applyWordSubmitToWordPlayersShard` counts `=== true` only.
+
+- CRITICAL: legacy archive finalize must not write zero stats — extract object keys or skip finalize when counts claim words (`archive-player-words-for-stats`).
+- `globalWordCount` / `recomputeSessionPlayerScores`: count only `=== true` leaves.
+- Submit: parent get fail → unique until listener (no `assumeShared` normal).
+- Play maps exhaustion: more force-sync retries + best-effort `clearSessionWordMaps` + delayed empty re-fetch (still no accept-rich).
+
+### 2026-08-03 — Results rematch-before-bootstrap + lexicon/submit UX
+
+- C1: rich pending without bootstrap; rematch with no freeze/archive → `shouldShowResultsUnavailableAfterRematch` error CTA (not eternal `!viewData` spinner).
+- I2: `RoundResultsView` shows word lists while lexicon loads (corner spinner only).
+- I3: `submitOnlineWord` returns `NETWORK` via `isFirebaseNetworkError` (not always `SESSION_MISSING`).
+- Deploy: rules+app together already in `firebase_schema.md`; `player_words` post-release cleanup checklist unchanged.
+
+### 2026-08-03 — Left resume cold-start + results freeze round guards
+
+- Left: cold-start `resumeRound < liveRound` while playing → pin resume (not live); late AsyncStorage resume replaces newer live pin via `nextLeftAtAfterResumePointer`.
+- Results: empty→rich freeze upgrade only when frozen/live(/viewing) `baseWordRound` match — no rematch N+1 bleed.
+- Results: `nextResultsFreezePending` keeps rich over empty wipe **same-round only** — never `{ session: N+1, words: N }`.
+
+### 2026-08-03 — Finalize gate + rematch wipe QA + deploy
+
+- C1: never `finalizeOnlineRoundForPlayer` while `shouldSkipEmptyArchiveWords` (`shouldFinalizeOnlineResultsStats`); escape may unstick spinner but must not lock zero stats.
+- I1 (accepted): after force-sync exhaustion, play stays empty until authoritative maps wipe — do **not** restore `acceptRichWhileAwaiting`. Manual QA: rematch wipe → empty → new words; delayed wipe must eventually empty then accept new submits.
+- I2: release deploy **rules + app together** (or rules first); do not mix old submit clients with new append-only rules / shard-only app. Post-release: wipe `player_words` + delete score fields per `firebase_schema.md`.
+- I4: multi-player rematch without local archive → `errorOpenResultsFailed` on time-up modal (retry / Home); no silent partial peer archive.
+- M1: bootstrap completes only on maps `snapshot` / successful fetch — **not** on `unavailable`.
+
+### 2026-08-02 — Review C1 spinner escape + C2 no acceptRich after exhaustion
+
+- C1: spinner escapes after `RESULTS_WORDS_BOOTSTRAP_ESCAPE_MS` without marking bootstrap complete (no empty freeze); hook still completes only on snapshot/successful fetch.
+- C2: removed `acceptRichWhileAwaiting`; exhaustion empties UI and waits for wipe empty before any rich apply.
+- I1: play standings merge own/optimistic via `sessionWithWordPlayersForExit`.
+- Mixed old/new clients: deploy rules+app together; score caps are legacy-only until post-release field delete.
+
+### 2026-08-02 — Review C1/I1–I4 results freeze + left pin + archive
+
+- C1/I4: roster words bootstrap only on snapshot/successful fetch; no unavailable/escape complete; empty freeze can upgrade; loading does not escape incomplete bootstrap into «0 слів».
+- I1: resume pin kept on rematch advance (same as live pin).
+- I2: multi-player rematch ensure returns false (no partial peer final archive); solo seed ok.
+- I3: successful empty maps + no claims → save empty archive.
+- I5: stateful dual-UID submit unit test; rules already cover parent/leaf/append-only.
+
+### 2026-08-02 — Review: mid-play empty clear + post-join maps fail + leaf assumeShared
+
+- Mid-play authoritative empty (`allowAuthoritativeEmpty` / score-path rollback) removed; empty wipe only via `awaitingEmptySync` / exhaustion.
+- `resolvePostJoinRouteWithMaps`: retry maps; on fail use same-timer active-round cache for round-0 offline scorer → play; no cache → results (not play-over-route inactive).
+- Leaf submit + parent `get` fail → success with self-only players (optimistic unique until maps listener); do not invent `assumeShared`/`normal`.
+- Promoted to known-issues + ADR-020.
+
+### 2026-08-01 — Submit finish race + archive pending + spinner escape
+
+- Submit: shards are append-only while `playing` (no leaf delete / no production shard rollback).
+- Finish race after shard: session already `finished` → return `{ ok: true }` so play keeps optimistic word. Rare maps⊃word / totals omit word desync — **accepted** (no reconcile).
+- `persistLocalArchive` → `saved` | `skipped` | `skipped_retryable`; pending not cleared on soft-skip (`persistFinishedRoundForPlayer` **and** sync-coordinator `done`/`retryable`).
+- Exit `skipped_retryable` → `markPendingRoundArchive` so sync can retry after #1 fix.
+- Results empty+claims loading escapes after `RESULTS_EMPTY_CLAIMS_ESCAPE_MS` (8s) when no freeze/pending/archive.
+- Manual QA rematch: wipe → empty list before new submits; force-sync exhaustion shows empty but keeps latch until authoritative empty (no permanent stale-rich).
+- Pre-fix round-finished pushes without `baseWordRound`: tap ignored (tester-only).
+- ADR-013 updated: parent-word shard TX + live demotion deltas (closes delayed +2 / absolute peers races). Post-release: wipe rules/CF `player_words` per `firebase_schema.md`.
+
+### 2026-08-01 — Results empty freeze (C1) + archive empty wipe
+
+- `wordsBootstrapComplete` only after maps `snapshot` / successful fetch — never on disable, fetch `!ok`, or `unavailable` (stale-true empty freeze).
+- Spinner may escape after 8s without marking bootstrap complete; freeze still waits for authoritative maps / rich pending.
+- `nextResultsFreezePending` + freeze source prefer rich pending over empty live while still `finished`.
+- Archive: `shouldSkipEmptyArchiveWords` on RTDB fetch paths **and** `persistLocalArchive` (results/exit); finalize gated by `shouldFinalizeOnlineResultsStats`.
+
+### 2026-08-01 — Review follow-up: results hang (I1) + rematch empty exhaustion (I2)
+
+- Results loading/freeze gates only on `wordsBootstrapComplete` (no wordCount match — ADR-020).
+- I2: force-sync exhaustion applies **empty** maps, keeps `awaitingEmptySync` until authoritative empty (no `acceptRichWhileAwaiting` — prior-round rich must not apply). ~3×500ms retries.
+- I3: rules/CF `player_words` stay until post-release wipe checklist in `firebase_schema.md` (not a client merge blocker).
+- I4: join uses `requireSessionWordMaps` fail-loud (no soft-empty) — product OK.
+- M5: play clears left-resume via `clearLeftOnlineResumeForGame` only for current `gameId`.
+
+### 2026-08-01 — Left results pin must not fall through to later rematch
+
+- Left/results: if `leftAt` / `viewingBaseWordRound` is set and live `baseWordRound` differs, do not display live session/words. Promote playing snapshot → frozen when rematch advanced; persist archive on «Переглянути результати».
+- Follow-up: stale `leftOnlineResume` after rematch/rejoin must not pin an older round while live `playing` — `nextLeftAtBaseWordRound` (resume vs live source) + clear resume on active play.
+- Round-finished local push must carry `baseWordRound` and open `onlineResultsRoute(gameId, round)`; results reset freeze on pin change.
+- Results: eager `archiveRecoveryPending` when viewing pin set (no `errorRoomNotFound` flash); `wordsSnapshot` never falls through to live on pin miss; submit outer-catch rolls back committed shard.
+- Play: remote submit fail replaces optimistic «Слово зараховано» via `feedbackForFailedOnlineSubmit`.
+
+### 2026-07-31 — Play maps force-sync: empty wipe preferred, exhaustion escape
+
+- After round reset, `decidePlayMapsForceSync` rejects non-empty and keeps `awaitingEmptySync`. Hook retries `tryFetchSessionWordMaps` (~500ms × up to 3). Prefer empty wipe; if still rich **or** fetch keeps failing after retries, exhaustion applies empty UI and keeps awaiting until authoritative empty (not accept-rich).
+- Results: `resolveResultsFreezeSource` + pending pin for rematch-before-freeze; roster disable keeps last words; **reset freeze/pending/archive refs on `gameId` change**. Roster bootstrap uses `tryFetchSessionWordMaps` (no apply empty on `!ok`).
+- Left: `resolveLeftWordsSnapshot`; `persistFinishedRoundFromFirebase` throws on maps fail for freeze retry.
+- ADR-020: no mid-round cache→RTDB restore while session exists.
+- Pre-v4 / object-shaped finished archives: `isLegacyFinishedArchiveWords` → not stale; archive refresh skips overwrite (empty UI without destroying disk shape).
+- Play exit/Home: `sessionWithWordPlayersForExit` + `myWords` into active-round cache; optimistic `acceptWord.display` until lexicon has the key; results **both** tabs wait on `lexiconLoading` when `globalWords.length > 0`. Join/finish paths use `requireSessionWordMaps` / `tryFetch` only (soft `fetchSessionWordMaps` removed).
+- `finishGameSessionIfExpired` is leaf-path status finish only (no maps fetch). Play expiry retries via `onUncommitted` + `finishRetryBackoffMs`.
+
+### 2026-07-31 — Accepted: no legacy active-round `words` migration
+
+- Pre-`wordPlayers` AsyncStorage active-round entries that only stored per-player `words` are not migrated on read (same tester-only policy as v3 finished archives). Mid-round upgrade may fail to rejoin orphaned word lists from that old shape; maps + current cache format are the only restore path.
+
+### 2026-07-31 — Post-release: wipe legacy `player_words`
+
+- Client no longer reads/writes `player_words`. Follow-up after store release: wipe RTDB nodes → remove rules branch → drop CF purge path → deploy (order in `firebase_schema.md`). Until then rules/CF still mention the path on purpose.
+
 ### 2026-07-30 — Presence cleanup never writes RTDB
 
 - `usePlayerOnlinePresence` unmount/`enabled` flicker used to call `voluntaryLeaveWaitingLobbyIfMember` (later offline-only). That flashed lobby peers offline and caused CM2L7 `hasLeft`. Cleanup is now unsubscribe + `consumePresenceHandoff` only. Promoted: `known-issues.md`, ADR-004, §7.
@@ -264,7 +371,17 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 - Local EAS `--output wordreapers.aab` + `buildArtifactPaths: mapping.txt` rewrote the AAB as ASCII mapping (~71MB `file: ASCII text`). Drop `buildArtifactPaths` from production when CI uses a single-file `--output`.
 - `Gemfile.lock` `BUNDLED WITH 1.17.2` made Bundler 4 install 1.17.2 → `undefined method untaint` on Ruby 3.3. Lock to Bundler 2.6.9 + `ruby/setup-ruby` in the workflow.
 
-### 2026-07-14 — Submit latency: parallel wordSet + single increment
+### 2026-08-02 — Client-derived scores / shard-only submit (ADR-012/013 superseded)
 
-- Shipped ADR-013. Profiler marks: `shardParentGet`, `sessionGet`, `sessionIncrement` / `sessionDualTx`, `wordSet` (may interleave).
-- Remaining 5+ same-word race (two first-finders both +2) is unchanged — needs parent `wordPlayers/{word}` transaction or CF later; do **not** use increment for demotion.
+- Live RTDB `players/*/score` writes and `x2Claim`/`x2Demoted` removed from **current** clients. Submit = `wordPlayers` shard only; standings via `buildLiveStandingsFromSession`. Play screen no longer calls `syncSessionPlayerScores`.
+- Rules still allow capped score/wordCount (legacy clients). Post-release: **remove** those RTDB fields with the `player_words` wipe checklist — not lock-to-0. Local archives stamp derived totals; history/stats/results derive from `playerWords`/`wordPlayers`. Empty-archive gate uses maps + existing archive richness (not live wordCount). Finish no longer requires maps fetch.
+- Review follow-up: pending-archive finalize derives standings from words; live membership/rejoin use `playerHasScoredInRound` (maps); wordPlayers leaf append-only while playing; play cache uses `sessionWithWordPlayersForExit`; results maps bootstrap escapes after 8s.
+- Orphan restore filters cache `wordPlayers` to actor uid only (peer multipath → PD); maps write failure rolls back the restored session root.
+- Join no longer calls `requireSessionWordMaps` (was unused after score-path removal; threw after roster write → orphan uid).
+- Post-join maps `!ok`: prefer play when still in live round (not silent results for round-0 offline scorers).
+- Historical x2Claim one-shot demotion path deleted (see known-issues Status: Obsolete entries).
+
+### 2026-07-14 — Submit latency (ADR-013; wordSet removed)
+
+- **Updated 2026-08:** client path is shard `wordPlayers` only (no session score / x2Claim). Leaves append-only while `playing` (no shard rollback delete).
+- Expire finish: `finishGameSessionIfExpired` leaf-path only (no maps fetch); play retries via `play-expire-finish` `onUncommitted` + `finishRetryBackoffMs`.
