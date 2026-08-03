@@ -112,7 +112,7 @@ npx expo run:android
 | `Unable to activate keep awake`   | Пакет `expo-keep-awake` у проєкті; після `npm install` — **перезібрати** dev build: `npm run android` |
 | `adb ENOENT`                      | Немає `platform-tools` або не оновлено `PATH` → крок 3–4                                              |
 | `No devices`                      | USB / емулятор → крок 4, `adb devices`                                                                |
-| JDK помилка                       | Android Studio → **Settings → Build → Gradle JDK** → Embedded JDK 17                                  |
+| JDK помилка                       | Android Studio → **Settings → Build → Gradle JDK** → Embedded JDK (Studio JBR, currently 21)          |
 | Повільна збірка                   | Нормально для першого разу; наступні — інкрементальні                                                 |
 
 ## Dev client vs Expo Go

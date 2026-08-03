@@ -135,6 +135,7 @@ Fastlane is installed from [`scripts/ci/Gemfile`](../scripts/ci/Gemfile) (`ensur
 - `ensure-fastlane.sh` stamps `scripts/ci/vendor/.ruby-version-stamp` and rebuilds when the stamp mismatches (or `fastlane --version` fails)
 - iOS: Fastlane binstubs must be on `PATH` **before** local `eas build` (EAS spawns `fastlane` during the archive)
 - Do **not** enable `setup-java` `cache: gradle` — the repo has no committed `gradle-wrapper.properties` (native Android appears only inside local EAS prebuild)
+- Android store job uses **JDK 21** (`actions/setup-java`, Temurin) — same major as local Android Studio JBR
 - `eas-cli` pinned (`eas-version: 21.0.0`)
 - iOS: `macos-26` + Xcode **26.4** via `maxim-lobanov/setup-xcode` (Expo SDK 57 `expo-modules-jsi` needs Swift **6.3** → Xcode 26.4+, only on `macos-26`; `macos-15` tops out at 26.3/Swift 6.2 and fails to compile ExpoModulesJSI; do **not** pin `'16'` — that selects Xcode 16.4)
 - Optional `clear_cache` on workflow_dispatch

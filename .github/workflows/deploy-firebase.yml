@@ -230,6 +230,21 @@ jobs:
           restore-keys: |
             vesum-${{ runner.os }}-
 
+      - uses: actions/cache@v5
+        if: steps.detect.outputs.deploy_rules == 'true'
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            firebase-emulators-${{ runner.os }}-
+
+      # firebase-tools@15 requires JDK 21+ for the Database Emulator (test:rules).
+      - uses: actions/setup-java@v5
+        if: steps.detect.outputs.deploy_rules == 'true'
+        with:
+          distribution: temurin
+          java-version: 21
+
       - name: Install root dependencies
         if: steps.detect.outputs.deploy_rules == 'true' || steps.detect.outputs.deploy_functions == 'true'
         run: npm ci

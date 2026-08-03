@@ -207,10 +207,11 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       # Do not use setup-java cache:gradle — no committed gradle-wrapper (Expo prebuild is inside EAS).
+      # JDK 21 matches local Android Studio JBR used for npm run build:android.
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: 17
+          java-version: 21
 
       - uses: android-actions/setup-android@v3
 

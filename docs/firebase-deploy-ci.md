@@ -98,16 +98,16 @@ Examples:
 
 ## Validation gates (fail closed)
 
-Shared when either target deploys: root `npm ci` (vesum cache restored first).
+Shared when either target deploys: root `npm ci` (vesum cache restored first). Rules validation also restores `~/.cache/firebase/emulators` (keyed on `package-lock.json`) so the Database Emulator JAR is not re-downloaded every run, and installs **JDK 21** (`actions/setup-java`) because `firebase-tools@15` requires it for the Database Emulator.
 
 | Deploy target | Before deploy                                                                                                                                    |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Rules         | `npm run test:rules`                                                                                                                             |
+| Rules         | JDK 21 + `npm run test:rules`                                                                                                                    |
 | Functions     | `npm ci --prefix functions`, then `npm run typecheck`, then `npm --prefix functions run build` (root `npm ci` still runs — needed for typecheck) |
 
 Deploy uses [`scripts/ci/firebase-deploy-ci.sh`](../scripts/ci/firebase-deploy-ci.sh) → `npm run firebase:deploy:rules` / `firebase:deploy:functions` (via [`scripts/firebase-deploy.sh`](../scripts/firebase-deploy.sh)).
 
-CI runners use **Node 22** (same as `.github/workflows/ci.yml`). `functions/package.json` `engines.node` is **20** (Cloud Functions runtime). Local/CI typecheck+build on Node 22 is intentional parity with the rest of the repo.
+CI runners use **Node 22** (same as `.github/workflows/ci.yml`) and **JDK 21** for RTDB rules tests. `functions/package.json` `engines.node` is **20** (Cloud Functions runtime). Local/CI typecheck+build on Node 22 is intentional parity with the rest of the repo.
 
 The workflow builds functions once as a gate; `firebase.json` `predeploy` builds again during `firebase deploy` — accepted double build.
 
