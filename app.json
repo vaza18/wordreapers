@@ -2,7 +2,7 @@
   "expo": {
     "name": "Словозбирачі",
     "slug": "wordreapers",
-    "version": "1.8.0",
+    "version": "1.8.1",
     "orientation": "portrait",
     "scheme": "wordreapers",
     "userInterfaceStyle": "automatic",
