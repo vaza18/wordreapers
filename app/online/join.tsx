@@ -214,7 +214,7 @@ export default function JoinRoomScreen() {
           <PrimaryButton
             label={t('online.findPublicGame')}
             variant="secondary"
-            disabled={joinLocked || loading}
+            disabled={joinLocked || loading || prewarming}
             onPress={() => {
               router.push('/online/browse');
             }}

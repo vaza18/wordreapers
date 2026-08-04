@@ -61,6 +61,62 @@ export function isLiveSessionForLeftRound(
   return (liveSession.baseWordRound ?? 0) === leftAtBaseWordRound;
 }
 
+/**
+ * Block left UI on maps bootstrap spinner only while listening and not fail-loud.
+ * When {@link mapsUnavailable}, show retry CTA instead of spinning forever.
+ * When {@link hasPaintedWords}, keep RoundResultsView during post-paint Retry remount.
+ */
+export function shouldBlockLeftRoundOnMapsBootstrap(options: {
+  wordsBootstrapComplete: boolean;
+  mapsUnavailable: boolean;
+  hasPinnedFrozenRound: boolean;
+  roundStillActive: boolean;
+  /** SoT words already on screen — do not flash spinner on preserve-retry. */
+  hasPaintedWords?: boolean;
+}): boolean {
+  if (options.hasPinnedFrozenRound || !options.roundStillActive) {
+    return false;
+  }
+  if (options.mapsUnavailable) {
+    return false;
+  }
+  if (options.hasPaintedWords) {
+    return false;
+  }
+  return !options.wordsBootstrapComplete;
+}
+
+/** Post-bootstrap maps fail-loud: full-screen only before a results view is painted. */
+export function shouldShowLeftMapsRetryCta(options: {
+  mapsUnavailable: boolean;
+  hasPinnedFrozenRound: boolean;
+  roundStillActive: boolean;
+  /** When true, keep RoundResultsView and show an inline banner (play parity). */
+  hasViewData: boolean;
+}): boolean {
+  return (
+    options.mapsUnavailable &&
+    !options.hasPinnedFrozenRound &&
+    options.roundStillActive &&
+    !options.hasViewData
+  );
+}
+
+/** Inline maps fail-loud over already-painted left results (not full-screen wipe). */
+export function shouldShowLeftMapsSyncBanner(options: {
+  mapsUnavailable: boolean;
+  hasPinnedFrozenRound: boolean;
+  roundStillActive: boolean;
+  hasViewData: boolean;
+}): boolean {
+  return (
+    options.mapsUnavailable &&
+    !options.hasPinnedFrozenRound &&
+    options.roundStillActive &&
+    options.hasViewData
+  );
+}
+
 export type LeftWordsSnapshotSource = {
   leftAtBaseWordRound: number | null | undefined;
   liveSession: Pick<GameSession, 'status' | 'baseWordRound'> | null | undefined;

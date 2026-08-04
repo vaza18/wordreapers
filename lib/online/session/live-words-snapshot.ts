@@ -12,20 +12,79 @@ export function totalPlayerWordCount(words: AllPlayerWords): number {
 }
 
 /**
- * Block rematch/clear empties from wiping finished-round words before freeze.
- * Room-scoped: callers clear state on `gameId` / disable.
- * Non-empty shrinks are allowed (rare rollback / correction) so UI cannot ghost words.
+ * How live maps/words snapshots may replace previous state.
+ * - `open` — allow any transition (rare; prefer grow-only for finished lists).
+ * - `empty-clear-guard` — block only rich→empty/null (default; safe for unknown callers).
+ * - `grow-only` — membership-monotonic: every previous leaf/word must remain in next
+ *   (ADR-022 rematch N× onChildRemoved / same-count swaps).
+ */
+export type LiveMapsReplaceMode = 'open' | 'empty-clear-guard' | 'grow-only';
+
+export type LiveMapsReplaceOptions = {
+  mode?: LiveMapsReplaceMode;
+};
+
+/** True when every previous (word,uid) true-leaf is still true in next. */
+export function wordPlayersContainsAllPreviousLeaves(
+  previous: SessionWordMaps['wordPlayers'] | null | undefined,
+  next: SessionWordMaps['wordPlayers'] | null | undefined,
+): boolean {
+  if (!previous) {
+    return true;
+  }
+  for (const [word, players] of Object.entries(previous)) {
+    if (!players) {
+      continue;
+    }
+    for (const [uid, onWord] of Object.entries(players)) {
+      if (onWord === true && next?.[word]?.[uid] !== true) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+/** True when every previous per-player word remains in next. */
+export function wordsSnapshotContainsAllPrevious(
+  previous: AllPlayerWords,
+  next: AllPlayerWords,
+): boolean {
+  for (const [uid, list] of previous.entries()) {
+    const nextList = next.get(uid) ?? [];
+    const nextSet = new Set(nextList);
+    for (const word of list) {
+      if (!nextSet.has(word)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+/**
+ * Block rematch/clear empties and (in grow-only) membership shrinks/swaps.
+ * Default mode is `empty-clear-guard` — callers that need ADR-022 grow-only must opt in.
+ * Play round-reset empty still applies via `decidePlayMapsListenerApply` + awaitingEmptySync.
  */
 export function shouldReplaceLiveWordsSnapshot(
   previous: AllPlayerWords,
   next: AllPlayerWords,
+  options?: LiveMapsReplaceOptions,
 ): boolean {
+  const mode = options?.mode ?? 'empty-clear-guard';
+  if (mode === 'open') {
+    return true;
+  }
   const prevCount = totalPlayerWordCount(previous);
   const nextCount = totalPlayerWordCount(next);
-  if (prevCount > 0 && nextCount === 0) {
-    return false;
+  if (mode === 'empty-clear-guard') {
+    return !(prevCount > 0 && nextCount === 0);
   }
-  return true;
+  if (prevCount === 0) {
+    return true;
+  }
+  return wordsSnapshotContainsAllPrevious(previous, next);
 }
 
 /** Stable membership signature (order-independent) for skip-equal setState. */
@@ -58,17 +117,28 @@ export function wordPlayersLeafCount(
   return total;
 }
 
-/** Block empty/null map clears while a non-empty snapshot is held; allow non-empty shrink. */
+/**
+ * Block empty/null clears and (in grow-only) membership shrinks/swaps.
+ * Default `empty-clear-guard` — pass `{ mode: 'grow-only' }` for ADR-022 finished-list freeze.
+ */
 export function shouldReplaceLiveWordMaps(
   previous: SessionWordMaps | null,
   next: SessionWordMaps | null,
+  options?: LiveMapsReplaceOptions,
 ): boolean {
+  const mode = options?.mode ?? 'empty-clear-guard';
+  if (mode === 'open') {
+    return true;
+  }
   const prevCount = wordPlayersLeafCount(previous?.wordPlayers);
   const nextCount = wordPlayersLeafCount(next?.wordPlayers);
-  if (prevCount > 0 && nextCount === 0) {
-    return false;
+  if (mode === 'empty-clear-guard') {
+    return !(prevCount > 0 && nextCount === 0);
   }
-  return true;
+  if (prevCount === 0) {
+    return true;
+  }
+  return wordPlayersContainsAllPreviousLeaves(previous?.wordPlayers, next?.wordPlayers);
 }
 
 /** Stable maps signature for skip-equal setState. */

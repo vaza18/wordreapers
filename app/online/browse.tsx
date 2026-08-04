@@ -22,7 +22,12 @@ import { useTrainingMilestone } from '@/hooks/useTrainingMilestone';
 import { useHeaderIconButtonLayout } from '@/hooks/useHeaderIconButtonLayout';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
-import { joinErrorMessage } from '@/lib/firebase/join-error-message';
+import {
+  joinErrorMessage,
+  tryFirebaseBootstrapErrorMessage,
+} from '@/lib/firebase/join-error-message';
+
+import { ensureFirebaseReady } from '@/lib/firebase/ensure-firebase-ready';
 import { joinGameSession } from '@/lib/firebase/game-session-service';
 import type {
   PublicLobbyBrowseCursor,
@@ -124,6 +129,18 @@ export default function BrowsePublicLobbiesScreen() {
         cursorsRef.current = new Map();
       }
       setError(null);
+      // Retry sticky bootstrap only after a failed attempt (matches join-room recovery).
+      const forceRetry = useFirebaseStore.getState().status === 'error';
+      // UI gate for CTA/status; fetchPublicLobbyPage still calls ensureAnonymousAuth (fail-loud).
+      const firebase = await ensureFirebaseReady({ forceRetry });
+      useFirebaseStore.getState().setConnection({
+        status: firebase.status,
+        uid: firebase.uid ?? null,
+        errorMessage: firebase.errorMessage ?? null,
+      });
+      if (firebase.status !== 'ok') {
+        throw new Error(firebase.errorMessage ?? 'Firebase not ready');
+      }
       const result = await fetchPublicLobbyPage(
         gameLanguage,
         nextSort,
@@ -139,13 +156,24 @@ export default function BrowsePublicLobbiesScreen() {
     [gameLanguage],
   );
 
+  const browseErrorMessage = useCallback(
+    (error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.trim()) {
+        return t('online.browseLoadFailed');
+      }
+      return tryFirebaseBootstrapErrorMessage(message, t) ?? t('online.browseLoadFailed');
+    },
+    [t],
+  );
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     void loadPage(1, sort, true)
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!cancelled) {
-          setError(t('online.browseLoadFailed'));
+          setError(browseErrorMessage(error));
         }
       })
       .finally(() => {
@@ -156,7 +184,7 @@ export default function BrowsePublicLobbiesScreen() {
     return () => {
       cancelled = true;
     };
-  }, [gameLanguage, loadPage, sort, t]);
+  }, [browseErrorMessage, gameLanguage, loadPage, sort]);
 
   const range = useMemo(
     () => browseRangeForPage(page, PUBLIC_LOBBY_PAGE_SIZE, total, rows.length),
@@ -167,25 +195,25 @@ export default function BrowsePublicLobbiesScreen() {
     setRefreshing(true);
     try {
       await loadPage(page, sort, true);
-    } catch {
-      setError(t('online.browseLoadFailed'));
+    } catch (error: unknown) {
+      setError(browseErrorMessage(error));
     } finally {
       setRefreshing(false);
     }
-  }, [loadPage, page, sort, t]);
+  }, [browseErrorMessage, loadPage, page, sort]);
 
   const goToPage = useCallback(
     async (targetPage: number) => {
       setLoading(true);
       try {
         await loadPage(targetPage, sort, false);
-      } catch {
-        setError(t('online.browseLoadFailed'));
+      } catch (error: unknown) {
+        setError(browseErrorMessage(error));
       } finally {
         setLoading(false);
       }
     },
-    [loadPage, sort, t],
+    [browseErrorMessage, loadPage, sort],
   );
 
   const changeSort = useCallback(
@@ -309,7 +337,7 @@ export default function BrowsePublicLobbiesScreen() {
               t={t}
             />
           ))}
-          {!loading && rows.length === 0 ? (
+          {!loading && rows.length === 0 && !error ? (
             <Text style={styles.empty}>{t('online.browseEmpty')}</Text>
           ) : null}
         </ScrollView>

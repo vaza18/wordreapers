@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
+import { OnlineMapsSyncBanner } from '@/components/online/OnlineMapsSyncBanner';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { RoundResultsView } from '@/components/RoundResultsView';
 import { spacing, type ThemeColors } from '@/constants/theme';
@@ -52,10 +53,13 @@ import {
   resolveLeftRoundResultsBaseWordRound,
   resolveLeftWordsSnapshot,
   shouldAcceptLeftRoundFrozenArchive,
+  shouldBlockLeftRoundOnMapsBootstrap,
   shouldFreezeLeftRoundFromPlayingSnapshot,
   shouldLoadLeftRoundFinishedArchive,
   shouldPersistLeftRoundFinishedArchive,
   shouldPromoteLeftPlayingSnapshotFallback,
+  shouldShowLeftMapsRetryCta,
+  shouldShowLeftMapsSyncBanner,
   shouldShowLeftRoundViewResults,
   type LeftAtRoundSource,
 } from '@/lib/online/left-round-screen-actions';
@@ -125,13 +129,14 @@ export default function OnlineLeftRoundScreen() {
     return Object.keys(session.players).sort();
   }, [leftAtBaseWordRound, pinnedFrozenRound, session]);
 
-  const { liveWords, liveWordMaps, wordsBootstrapComplete } = useLiveRosterPlayerWords({
-    gameId,
-    rosterPlayerIds,
-    enabled: Boolean(
-      gameId && !pinnedFrozenRound && rosterPlayerIds.length > 0 && session?.status === 'playing',
-    ),
-  });
+  const { liveWords, liveWordMaps, wordsBootstrapComplete, mapsUnavailable, retryMapsListen } =
+    useLiveRosterPlayerWords({
+      gameId,
+      rosterPlayerIds,
+      enabled: Boolean(
+        gameId && !pinnedFrozenRound && rosterPlayerIds.length > 0 && session?.status === 'playing',
+      ),
+    });
 
   const wordsSnapshot = useMemo(
     () =>
@@ -622,23 +627,58 @@ export default function OnlineLeftRoundScreen() {
   }
 
   if (
+    shouldShowLeftMapsRetryCta({
+      mapsUnavailable,
+      hasPinnedFrozenRound: Boolean(pinnedFrozenRound),
+      roundStillActive,
+      hasViewData: Boolean(viewData),
+    })
+  ) {
+    return (
+      <>
+        <Stack.Screen options={screenOptions} />
+        <View style={styles.center}>
+          <Text style={styles.error}>{t('online.errorMapsSyncFailed')}</Text>
+          <PrimaryButton label={t('online.retryMapsSync')} onPress={retryMapsListen} />
+          <PrimaryButton label={t('nav.home')} variant="secondary" onPress={handleHome} />
+        </View>
+      </>
+    );
+  }
+
+  if (
     !displaySession ||
     !viewData ||
-    (!wordsBootstrapComplete && !pinnedFrozenRound && roundStillActive)
+    shouldBlockLeftRoundOnMapsBootstrap({
+      wordsBootstrapComplete,
+      mapsUnavailable,
+      hasPinnedFrozenRound: Boolean(pinnedFrozenRound),
+      roundStillActive,
+      hasPaintedWords: totalPlayerWordCount(wordsSnapshot) > 0,
+    })
   ) {
     return (
       <>
         <Stack.Screen options={screenOptions} />
         <View style={styles.center}>
           <ActivityIndicator color={colors.accent} />
+          <PrimaryButton label={t('nav.home')} variant="secondary" onPress={handleHome} />
         </View>
       </>
     );
   }
 
+  const showMapsSyncBanner = shouldShowLeftMapsSyncBanner({
+    mapsUnavailable,
+    hasPinnedFrozenRound: Boolean(pinnedFrozenRound),
+    roundStillActive,
+    hasViewData: true,
+  });
+
   return (
     <>
       <Stack.Screen options={screenOptions} />
+      {showMapsSyncBanner ? <OnlineMapsSyncBanner onRetry={retryMapsListen} /> : null}
       <RoundResultsView
         baseWordDisplay={viewData.baseWordDisplay}
         showBaseWordInMeta
@@ -699,6 +739,8 @@ function createStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: colors.backgroundSecondary,
+      paddingHorizontal: spacing.md,
+      gap: spacing.md,
     },
     notice: {
       fontSize: 13,
@@ -708,7 +750,7 @@ function createStyles(colors: ThemeColors) {
       marginBottom: spacing.xs,
     },
     error: {
-      color: '#E24B4A',
+      color: colors.danger,
       fontSize: 14,
       textAlign: 'center',
     },

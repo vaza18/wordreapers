@@ -30,7 +30,7 @@ import {
   sessionHadPublicBrowseExposure,
   sessionIdentityMasked,
 } from '../online/public-lobby/session-identity.js';
-import { ensureFirebaseAppCheck } from './app-check.js';
+import { ensureAnonymousAuth } from './auth.js';
 import { resolveGameSessionSettingsForSession } from './session-settings.js';
 import { getServerNow } from './server-clock.js';
 import { getFirebaseDatabase } from './init.js';
@@ -199,8 +199,12 @@ async function resolvePublicLobbyTotal(language: string): Promise<number> {
 
 /**
  * Fetch one browse page (non-realtime).
- * Hard-fails if App Check is not ready (unlike presence / session subscribe, which soft-fail
- * and still attach listeners). Browse is a one-shot read; the UI shows browseLoadFailed.
+ * Hard-fails if App Check / anonymous Auth is not ready (unlike presence / session
+ * subscribe, which soft-fail and still attach listeners). RTDB `public_lobbies` /
+ * `public_lobby_counts` require `auth != null`; App Check alone is not enough.
+ * Dual gate is intentional: UI calls `ensureFirebaseReady` (incl. forceRetry after sticky
+ * bootstrap error); this service also `ensureAnonymousAuth` so a direct call cannot skip auth.
+ * The UI shows browseLoadFailed on failure.
  */
 export async function fetchPublicLobbyPage(
   language: string,
@@ -215,7 +219,7 @@ export async function fetchPublicLobbyPage(
   totalPages: number | null;
   cursors: Map<number, PublicLobbyBrowseCursor | null>;
 }> {
-  await ensureFirebaseAppCheck();
+  await ensureAnonymousAuth();
   const safePage = Math.max(1, page);
   let total = await resolvePublicLobbyTotal(language);
   let totalPages = total === 0 ? 0 : Math.ceil(total / pageSize);
@@ -255,7 +259,7 @@ export async function fetchPublicLobbyPage(
 
 /** Read approximate active public lobby count for language shard. */
 export async function fetchPublicLobbyCount(language: string): Promise<number | null> {
-  await ensureFirebaseAppCheck();
+  await ensureAnonymousAuth();
   const snapshot = await get(ref(getFirebaseDatabase(), publicLobbyCountPath(language)));
   if (!snapshot.exists()) {
     return 0;

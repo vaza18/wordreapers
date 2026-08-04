@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
+import { OnlineMapsSyncBanner } from '@/components/online/OnlineMapsSyncBanner';
 import { PlaySessionToastStack } from '@/components/PlaySessionToast';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { RoundResultsFooterActions } from '@/components/RoundResultsFooterActions';
@@ -28,7 +29,6 @@ import { shouldSkipEmptyArchiveWords } from '@/lib/online/session/archive-words-
 import { shouldFinalizeOnlineResultsStats } from '@/lib/online/should-finalize-online-results-stats';
 import {
   RESULTS_EMPTY_CLAIMS_ESCAPE_MS,
-  RESULTS_WORDS_BOOTSTRAP_ESCAPE_MS,
   shouldShowOnlineResultsWordsLoading,
 } from '@/lib/online/session/should-show-online-results-words-loading';
 import {
@@ -43,13 +43,22 @@ import {
 import { buildDisplaysByPlayer, buildOnlineResultsView } from '@/lib/online/online-results-data';
 import {
   mergeLiveSessionForResults,
+  computeResultsMapsRosterPlayerIds,
   nextResultsFreezePending,
   resolveResultsDisplayRound,
+  resolveResultsErrorCta,
   resolveResultsFreezeSource,
-  shouldShowResultsUnavailableAfterRematch,
+  shouldCloseResultsRematchSurvival,
+  shouldEnableResultsMapsRosterListen,
   shouldUpgradeEmptyResultsFreeze,
+  RESULTS_REMATCH_SURVIVAL_EMPTY_CLOSE_GRACE_MS,
   type ResultsFreezePending,
 } from '@/lib/online/session/frozen-round-view';
+import { totalPlayerWordCount } from '@/lib/online/session/live-words-snapshot';
+import {
+  createResultsHomePress,
+  shouldShowResultsWordsLoadingHomeEscape,
+} from '@/lib/online/session/results-home-escape';
 import { resolveResultsPresence } from '@/lib/online/live-round-screen-actions';
 import { optIntoLiveRound } from '@/lib/online/rematch/opt-into-live-round';
 import { parseViewingBaseWordRoundParam } from '@/lib/online/parse-viewing-base-word-round-param';
@@ -95,20 +104,34 @@ export default function OnlineResultsScreen() {
   const statsRecordedRef = useRef(false);
   const archivedRef = useRef(false);
   const archivePromiseRef = useRef<Promise<void> | null>(null);
+  /** freezeAttempted state drives roster gate; ref is SoT for recovery/freeze effects — write only via mark/clear. */
   const freezeAttemptedRef = useRef(false);
   const pendingFreezeRef = useRef<ResultsFreezePending | null>(null);
+  /** State (not ref-in-useMemo) so rematch-survival roster recomputes on rematch/freeze. */
+  const [lastFinishedCore, setLastFinishedCore] = useState<GameSessionSnapshot | null>(null);
+  const [freezeAttempted, setFreezeAttempted] = useState(false);
+  /** Always update ref + state together — never assign freezeAttemptedRef alone. */
+  const markFreezeAttempted = useCallback(() => {
+    freezeAttemptedRef.current = true;
+    setFreezeAttempted(true);
+  }, []);
+  const clearFreezeAttempted = useCallback(() => {
+    freezeAttemptedRef.current = false;
+    setFreezeAttempted(false);
+  }, []);
   const skipRematchToastRef = useRef(false);
   const skipResultsOfflineRef = useRef(false);
   const resultsOfflineMarkedKeyRef = useRef<string | null>(null);
   const viewedResultsLoggedRef = useRef(false);
   const emptyClaimsLoadingSinceRef = useRef<number | null>(null);
-  const bootstrapLoadingSinceRef = useRef<number | null>(null);
   const [emptyClaimsNowMs, setEmptyClaimsNowMs] = useState(() => Date.now());
+  /** Rematch-survival: when empty authoritative bootstrap first became a close candidate. */
+  const emptySurvivalBootstrapSinceRef = useRef<number | null>(null);
+  const [emptySurvivalCloseTick, setEmptySurvivalCloseTick] = useState(0);
 
   useEffect(() => {
     setFrozenRound(null);
     emptyClaimsLoadingSinceRef.current = null;
-    bootstrapLoadingSinceRef.current = null;
     setEmptyClaimsNowMs(Date.now());
     // Eager pending when a viewing pin is set so we never flash errorRoomNotFound
     // before useFrozenRoundRecovery's effect runs.
@@ -121,13 +144,16 @@ export default function OnlineResultsScreen() {
     statsRecordedRef.current = false;
     archivedRef.current = false;
     archivePromiseRef.current = null;
-    freezeAttemptedRef.current = false;
+    clearFreezeAttempted();
     pendingFreezeRef.current = null;
+    setLastFinishedCore(null);
+    emptySurvivalBootstrapSinceRef.current = null;
+    setEmptySurvivalCloseTick(0);
     skipRematchToastRef.current = false;
     skipResultsOfflineRef.current = false;
     resultsOfflineMarkedKeyRef.current = null;
     viewedResultsLoggedRef.current = false;
-  }, [gameId, viewingBaseWordRound]);
+  }, [clearFreezeAttempted, gameId, viewingBaseWordRound]);
 
   useEffect(() => {
     if (viewedResultsLoggedRef.current || !gameId) {
@@ -141,18 +167,27 @@ export default function OnlineResultsScreen() {
     });
   }, [fromJoinIntoPlaying, gameId, viewingBaseWordRound]);
 
-  const rosterPlayerIds = useMemo(() => {
-    if (frozenRound || !liveSessionCore || liveSessionCore.status !== 'finished') {
-      return [];
-    }
-    return Object.keys(liveSessionCore.players).sort();
-  }, [frozenRound, liveSessionCore]);
+  const rosterPlayerIds = useMemo(
+    () =>
+      computeResultsMapsRosterPlayerIds({
+        frozenWords: frozenRound?.words,
+        liveSessionCore,
+        lastFinishedCore,
+        freezeAttempted,
+      }),
+    [frozenRound, liveSessionCore, lastFinishedCore, freezeAttempted],
+  );
 
-  const { liveWords, liveWordMaps, wordsBootstrapComplete } = useLiveRosterPlayerWords({
-    gameId,
-    rosterPlayerIds,
-    enabled: Boolean(gameId && !frozenRound && rosterPlayerIds.length > 0),
-  });
+  const { liveWords, liveWordMaps, wordsBootstrapComplete, mapsUnavailable, retryMapsListen } =
+    useLiveRosterPlayerWords({
+      gameId,
+      rosterPlayerIds,
+      enabled: shouldEnableResultsMapsRosterListen({
+        hasGameId: Boolean(gameId),
+        rosterPlayerIdsLength: rosterPlayerIds.length,
+        frozenWords: frozenRound?.words,
+      }),
+    });
 
   const liveSession = useMemo(
     () => mergeLiveSessionForResults(liveSessionCore, liveWordMaps, Boolean(frozenRound)),
@@ -255,13 +290,81 @@ export default function OnlineResultsScreen() {
   }, [archiveRecoveryPending, frozenRound, gameId, liveSession, myUid, sessionLoaded]);
 
   useEffect(() => {
+    if (liveSessionCore?.status === 'finished') {
+      setLastFinishedCore(liveSessionCore);
+    }
+  }, [liveSessionCore]);
+
+  useEffect(() => {
+    if (frozenRound) {
+      markFreezeAttempted();
+    }
+  }, [frozenRound, markFreezeAttempted]);
+
+  useEffect(() => {
     pendingFreezeRef.current = nextResultsFreezePending(
       pendingFreezeRef.current,
       liveSession,
       liveWords,
       wordsBootstrapComplete,
+      lastFinishedCore,
     );
-  }, [liveSession, liveWords, wordsBootstrapComplete]);
+  }, [liveSession, liveWords, wordsBootstrapComplete, lastFinishedCore]);
+
+  useEffect(() => {
+    const pending = pendingFreezeRef.current;
+    const closeCandidate =
+      !freezeAttempted &&
+      !frozenRound &&
+      !mapsUnavailable &&
+      liveSession?.status === 'waiting' &&
+      wordsBootstrapComplete &&
+      pending == null &&
+      totalPlayerWordCount(liveWords) === 0;
+
+    if (!closeCandidate) {
+      emptySurvivalBootstrapSinceRef.current = null;
+      return undefined;
+    }
+
+    if (emptySurvivalBootstrapSinceRef.current == null) {
+      emptySurvivalBootstrapSinceRef.current = Date.now();
+    }
+    const elapsed = Date.now() - emptySurvivalBootstrapSinceRef.current;
+
+    if (
+      shouldCloseResultsRematchSurvival({
+        freezeAttempted,
+        hasFrozenRound: Boolean(frozenRound),
+        liveStatus: liveSession?.status,
+        wordsBootstrapComplete,
+        liveWords,
+        pending,
+        emptyBootstrapElapsedMs: elapsed,
+        mapsUnavailable,
+      })
+    ) {
+      markFreezeAttempted();
+      return undefined;
+    }
+
+    const remaining = Math.max(0, RESULTS_REMATCH_SURVIVAL_EMPTY_CLOSE_GRACE_MS - elapsed);
+    const timer = setTimeout(() => {
+      setEmptySurvivalCloseTick((n) => n + 1);
+    }, remaining);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [
+    emptySurvivalCloseTick,
+    freezeAttempted,
+    frozenRound,
+    liveSession?.status,
+    liveWords,
+    mapsUnavailable,
+    markFreezeAttempted,
+    wordsBootstrapComplete,
+  ]);
 
   useEffect(() => {
     if (
@@ -292,7 +395,7 @@ export default function OnlineResultsScreen() {
     if (!source) {
       return;
     }
-    freezeAttemptedRef.current = true;
+    markFreezeAttempted();
     setFrozenRound(freezeFinishedRound(gameId, source.session, source.words));
   }, [
     archiveRecoveryPending,
@@ -300,6 +403,7 @@ export default function OnlineResultsScreen() {
     gameId,
     liveSession,
     liveWords,
+    markFreezeAttempted,
     viewingBaseWordRound,
     wordsBootstrapComplete,
   ]);
@@ -333,21 +437,6 @@ export default function OnlineResultsScreen() {
     const id = setTimeout(() => setEmptyClaimsNowMs(Date.now()), remaining);
     return () => clearTimeout(id);
   }, [emptyClaimsLoading]);
-
-  const waitingBootstrap = !frozenRound && !wordsBootstrapComplete;
-  useEffect(() => {
-    if (!waitingBootstrap) {
-      bootstrapLoadingSinceRef.current = null;
-      return undefined;
-    }
-    if (bootstrapLoadingSinceRef.current == null) {
-      bootstrapLoadingSinceRef.current = Date.now();
-    }
-    const since = bootstrapLoadingSinceRef.current;
-    const remaining = Math.max(0, RESULTS_WORDS_BOOTSTRAP_ESCAPE_MS - (Date.now() - since));
-    const id = setTimeout(() => setEmptyClaimsNowMs(Date.now()), remaining);
-    return () => clearTimeout(id);
-  }, [waitingBootstrap]);
 
   const emptyClaimsEscaped =
     emptyClaimsLoadingSinceRef.current != null &&
@@ -481,6 +570,10 @@ export default function OnlineResultsScreen() {
     });
   }, [frozenRound, gameId, isOrganizer, myUid, session, wordsSnapshot]);
 
+  const navigateHomeOnly = useCallback(() => {
+    router.replace('/');
+  }, []);
+
   const onBack = useSyncedStackBack(handleHome);
 
   const headerRoundNumber = (session?.baseWordRound ?? viewingBaseWordRound ?? 0) + 1;
@@ -509,7 +602,14 @@ export default function OnlineResultsScreen() {
     return (
       <View style={styles.center}>
         <Text style={styles.error}>{t('online.errorRoomNotFound')}</Text>
-        <PrimaryButton label={t('nav.home')} onPress={() => router.replace('/')} />
+        <PrimaryButton
+          label={t('nav.home')}
+          onPress={createResultsHomePress({
+            path: 'room-not-found',
+            exitOnlineHome: handleHome,
+            navigateHomeOnly,
+          })}
+        />
       </View>
     );
   }
@@ -533,7 +633,14 @@ export default function OnlineResultsScreen() {
     return (
       <View style={styles.center}>
         <Text style={styles.error}>{t('online.errorRoomNotFound')}</Text>
-        <PrimaryButton label={t('nav.home')} onPress={() => router.replace('/')} />
+        <PrimaryButton
+          label={t('nav.home')}
+          onPress={createResultsHomePress({
+            path: 'room-not-found',
+            exitOnlineHome: handleHome,
+            navigateHomeOnly,
+          })}
+        />
       </View>
     );
   }
@@ -548,26 +655,67 @@ export default function OnlineResultsScreen() {
     return (
       <View style={styles.center}>
         <Text style={styles.error}>{t('online.errorRoomNotFound')}</Text>
-        <PrimaryButton label={t('nav.home')} onPress={() => router.replace('/')} />
+        <PrimaryButton
+          label={t('nav.home')}
+          onPress={createResultsHomePress({
+            path: 'room-not-found',
+            exitOnlineHome: handleHome,
+            navigateHomeOnly,
+          })}
+        />
       </View>
     );
   }
 
-  if (
-    viewingBaseWordRound == null &&
-    shouldShowResultsUnavailableAfterRematch({
-      hasFrozenRound: Boolean(frozenRound),
-      archiveRecoveryPending,
-      sessionLoaded,
-      hasFinishedViewData: Boolean(viewData),
-      liveStatus: liveSession?.status,
-    })
-  ) {
+  const resultsErrorCta = resolveResultsErrorCta({
+    viewingBaseWordRound,
+    hasFrozenRound: Boolean(frozenRound),
+    archiveRecoveryPending,
+    sessionLoaded,
+    hasFinishedViewData: Boolean(viewData),
+    liveStatus: liveSession?.status,
+    freezeAttempted,
+    lastFinishedCore,
+    mapsUnavailable,
+  });
+
+  if (resultsErrorCta === 'maps-retry') {
     return (
-      <View style={styles.center}>
-        <Text style={styles.error}>{t('online.errorOpenResultsFailed')}</Text>
-        <PrimaryButton label={t('nav.home')} onPress={() => router.replace('/')} />
-      </View>
+      <>
+        <Stack.Screen options={screenOptions} />
+        <View style={styles.center}>
+          <Text style={styles.error}>{t('online.errorMapsSyncFailed')}</Text>
+          <PrimaryButton label={t('online.retryMapsSync')} onPress={retryMapsListen} />
+          <PrimaryButton
+            label={t('nav.home')}
+            variant="secondary"
+            onPress={createResultsHomePress({
+              path: 'maps-retry',
+              exitOnlineHome: handleHome,
+              navigateHomeOnly,
+            })}
+          />
+        </View>
+      </>
+    );
+  }
+
+  if (resultsErrorCta === 'rematch-home') {
+    return (
+      <>
+        <Stack.Screen options={screenOptions} />
+        <View style={styles.center}>
+          <Text style={styles.error}>{t('online.errorOpenResultsFailed')}</Text>
+          <PrimaryButton
+            label={t('nav.home')}
+            onPress={createResultsHomePress({
+              path: 'rematch-home',
+              exitOnlineHome: handleHome,
+              navigateHomeOnly,
+            })}
+          />
+        </View>
+      </>
     );
   }
 
@@ -576,23 +724,44 @@ export default function OnlineResultsScreen() {
     shouldShowOnlineResultsWordsLoading({
       frozenRound,
       wordsBootstrapComplete,
+      mapsUnavailable,
       session,
       wordsSnapshot,
       emptyClaimsLoadingSinceMs: emptyClaimsLoadingSinceRef.current,
-      bootstrapLoadingSinceMs: bootstrapLoadingSinceRef.current,
       nowMs: emptyClaimsNowMs,
     })
   ) {
+    const showWordsLoadingHome = shouldShowResultsWordsLoadingHomeEscape({
+      hasFinishedViewData: Boolean(viewData),
+    });
     return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.accent} />
-      </View>
+      <>
+        <Stack.Screen options={screenOptions} />
+        <View style={styles.center}>
+          <ActivityIndicator color={colors.accent} />
+          {showWordsLoadingHome ? (
+            <>
+              <Text style={styles.loadingHint}>{t('online.loadingResultsWords')}</Text>
+              <PrimaryButton
+                label={t('nav.home')}
+                variant="secondary"
+                onPress={createResultsHomePress({
+                  path: 'words-loading',
+                  exitOnlineHome: handleHome,
+                  navigateHomeOnly,
+                })}
+              />
+            </>
+          ) : null}
+        </View>
+      </>
     );
   }
 
   return (
     <>
       <Stack.Screen options={screenOptions} />
+      {mapsUnavailable ? <OnlineMapsSyncBanner onRetry={retryMapsListen} /> : null}
       <RoundResultsView
         headline={viewData.headline}
         baseWordDisplay={viewData.baseWordDisplay}
@@ -618,9 +787,11 @@ export default function OnlineResultsScreen() {
               void handlePlayAgain();
             }}
             secondaryLabel={t('nav.home')}
-            onSecondaryPress={() => {
-              void handleHome();
-            }}
+            onSecondaryPress={createResultsHomePress({
+              path: 'footer',
+              exitOnlineHome: handleHome,
+              navigateHomeOnly,
+            })}
             topContent={rematchError ? <Text style={styles.error}>{rematchError}</Text> : null}
           />
         }
@@ -641,7 +812,12 @@ function createStyles(colors: ThemeColors) {
       gap: 16,
     },
     error: {
-      color: '#E24B4A',
+      color: colors.danger,
+      fontSize: 14,
+      textAlign: 'center',
+    },
+    loadingHint: {
+      color: colors.textSecondary,
       fontSize: 14,
       textAlign: 'center',
     },
