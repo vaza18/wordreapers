@@ -7,11 +7,144 @@ import {
   nextLeftAtAfterResumePointer,
   nextLeftAtBaseWordRound,
   shouldAcceptLeftRoundFrozenArchive,
+  shouldBlockLeftRoundOnMapsBootstrap,
   shouldFreezeLeftRoundFromPlayingSnapshot,
   shouldLoadLeftRoundFinishedArchive,
   shouldPromoteLeftPlayingSnapshotFallback,
+  shouldShowLeftMapsRetryCta,
+  shouldShowLeftMapsSyncBanner,
   shouldShowLeftRoundViewResults,
 } from '../lib/online/left-round-screen-actions.js';
+
+describe('shouldBlockLeftRoundOnMapsBootstrap', () => {
+  it('spins only while bootstrap incomplete and maps still available', () => {
+    expect(
+      shouldBlockLeftRoundOnMapsBootstrap({
+        wordsBootstrapComplete: false,
+        mapsUnavailable: false,
+        hasPinnedFrozenRound: false,
+        roundStillActive: true,
+      }),
+    ).toBe(true);
+  });
+
+  it('does not spin forever when mapsUnavailable (fail-loud CTA instead)', () => {
+    expect(
+      shouldBlockLeftRoundOnMapsBootstrap({
+        wordsBootstrapComplete: false,
+        mapsUnavailable: true,
+        hasPinnedFrozenRound: false,
+        roundStillActive: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('does not spin when words already painted during post-paint Retry', () => {
+    expect(
+      shouldBlockLeftRoundOnMapsBootstrap({
+        wordsBootstrapComplete: false,
+        mapsUnavailable: false,
+        hasPinnedFrozenRound: false,
+        roundStillActive: true,
+        hasPaintedWords: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('does not block once bootstrap complete or frozen', () => {
+    expect(
+      shouldBlockLeftRoundOnMapsBootstrap({
+        wordsBootstrapComplete: true,
+        mapsUnavailable: false,
+        hasPinnedFrozenRound: false,
+        roundStillActive: true,
+      }),
+    ).toBe(false);
+    expect(
+      shouldBlockLeftRoundOnMapsBootstrap({
+        wordsBootstrapComplete: false,
+        mapsUnavailable: false,
+        hasPinnedFrozenRound: true,
+        roundStillActive: true,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('shouldShowLeftMapsRetryCta', () => {
+  it('shows full-screen CTA only before view is painted', () => {
+    expect(
+      shouldShowLeftMapsRetryCta({
+        mapsUnavailable: true,
+        hasPinnedFrozenRound: false,
+        roundStillActive: true,
+        hasViewData: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('does not full-screen wipe when left view already painted (I1)', () => {
+    expect(
+      shouldShowLeftMapsRetryCta({
+        mapsUnavailable: true,
+        hasPinnedFrozenRound: false,
+        roundStillActive: true,
+        hasViewData: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('hides CTA when frozen or round not active', () => {
+    expect(
+      shouldShowLeftMapsRetryCta({
+        mapsUnavailable: true,
+        hasPinnedFrozenRound: true,
+        roundStillActive: true,
+        hasViewData: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowLeftMapsRetryCta({
+        mapsUnavailable: true,
+        hasPinnedFrozenRound: false,
+        roundStillActive: false,
+        hasViewData: false,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('shouldShowLeftMapsSyncBanner', () => {
+  it('shows banner when mapsUnavailable over painted left view', () => {
+    expect(
+      shouldShowLeftMapsSyncBanner({
+        mapsUnavailable: true,
+        hasPinnedFrozenRound: false,
+        roundStillActive: true,
+        hasViewData: true,
+      }),
+    ).toBe(true);
+  });
+
+  it('hides banner when no view / not unavailable', () => {
+    expect(
+      shouldShowLeftMapsSyncBanner({
+        mapsUnavailable: true,
+        hasPinnedFrozenRound: false,
+        roundStillActive: true,
+        hasViewData: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowLeftMapsSyncBanner({
+        mapsUnavailable: false,
+        hasPinnedFrozenRound: false,
+        roundStillActive: true,
+        hasViewData: true,
+      }),
+    ).toBe(false);
+  });
+});
 
 describe('shouldShowLeftRoundViewResults', () => {
   it('shows rejoin path only while the live round is still playing', () => {

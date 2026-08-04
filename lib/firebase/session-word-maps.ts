@@ -52,3 +52,55 @@ export function sessionWordMapsFromSession(
 export const EMPTY_SESSION_WORD_MAPS: SessionWordMaps = {
   wordPlayers: {},
 };
+
+type WordPlayersMap = NonNullable<SessionWordMaps['wordPlayers']>;
+
+/** Parse a wordPlayers/{normalized} child value into true-only uid leaves. */
+function parseTrueOnlyPlayers(rawPlayers: unknown): Record<string, true> | null {
+  if (rawPlayers == null || typeof rawPlayers !== 'object') {
+    return null;
+  }
+  const parsed: Record<string, true> = {};
+  for (const [uid, onWord] of Object.entries(rawPlayers as Record<string, unknown>)) {
+    if (onWord === true) {
+      parsed[uid] = true;
+    }
+  }
+  // Empty object / only false leaves → treat as remove (no ghost word keys).
+  if (Object.keys(parsed).length === 0) {
+    return null;
+  }
+  return parsed;
+}
+
+/**
+ * Apply onChildAdded / onChildChanged for one normalized word under wordPlayers.
+ * Non-object / null raw clears the key (same as removed).
+ */
+export function applyWordPlayersChildSnapshot(
+  wordPlayers: WordPlayersMap,
+  normalized: string,
+  rawPlayers: unknown,
+): WordPlayersMap {
+  const parsed = parseTrueOnlyPlayers(rawPlayers);
+  if (parsed == null) {
+    return removeWordPlayersChild(wordPlayers, normalized);
+  }
+  return {
+    ...wordPlayers,
+    [normalized]: parsed,
+  };
+}
+
+/** Apply onChildRemoved for one normalized word under wordPlayers. */
+export function removeWordPlayersChild(
+  wordPlayers: WordPlayersMap,
+  normalized: string,
+): WordPlayersMap {
+  if (!(normalized in wordPlayers)) {
+    return wordPlayers;
+  }
+  const next = { ...wordPlayers };
+  delete next[normalized];
+  return next;
+}

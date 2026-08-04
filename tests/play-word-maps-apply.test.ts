@@ -99,6 +99,153 @@ describe('decidePlayMapsListenerApply', () => {
     });
     expect([...own]).toEqual(['порт']);
   });
+
+  it('applies incremental partial-rich snapshots (onChild* fill)', () => {
+    const gate = createPlayMapsListenerGate();
+    const oneWord = { wordPlayers: { порт: { org: true } } };
+    const twoWords = {
+      wordPlayers: { порт: { org: true }, ретро: { guest: true } },
+    };
+
+    const first = decidePlayMapsListenerApply({
+      gate,
+      callbackEpoch: 0,
+      previous: null,
+      next: oneWord,
+      source: 'snapshot',
+    });
+    expect(first.apply).toBe(true);
+    expect(first.maps).toEqual(oneWord);
+
+    const second = decidePlayMapsListenerApply({
+      gate: first.gate,
+      callbackEpoch: first.gate.epoch,
+      previous: first.maps,
+      next: twoWords,
+      source: 'snapshot',
+    });
+    expect(second.apply).toBe(true);
+    expect(second.maps).toEqual(twoWords);
+  });
+
+  it('rejects progressive rematch wipe shrinks and keeps full rich mid-play', () => {
+    const gate = createPlayMapsListenerGate();
+    const one = { wordPlayers: { порт: { org: true } } };
+
+    const progressive = decidePlayMapsListenerApply({
+      gate,
+      callbackEpoch: 0,
+      previous: rich,
+      next: one,
+      source: 'snapshot',
+    });
+    expect(progressive.apply).toBe(false);
+    expect(progressive.maps).toEqual(rich);
+
+    const wipe = decidePlayMapsListenerApply({
+      gate: progressive.gate,
+      callbackEpoch: progressive.gate.epoch,
+      previous: progressive.maps,
+      next: empty,
+      source: 'snapshot',
+    });
+    expect(wipe.apply).toBe(false);
+    expect(wipe.maps).toEqual(rich);
+  });
+
+  it('under awaitingEmptySync rejects intermediate rich then accepts empty', () => {
+    const gate = beginPlayMapsRoundReset(createPlayMapsListenerGate());
+    const partialClear = { wordPlayers: { порт: { org: true } } };
+
+    const mid = decidePlayMapsListenerApply({
+      gate,
+      callbackEpoch: gate.epoch,
+      previous: null,
+      next: partialClear,
+      source: 'snapshot',
+    });
+    expect(mid.apply).toBe(false);
+    expect(mid.gate.awaitingEmptySync).toBe(true);
+
+    const done = decidePlayMapsListenerApply({
+      gate: mid.gate,
+      callbackEpoch: mid.gate.epoch,
+      previous: null,
+      next: empty,
+      source: 'snapshot',
+    });
+    expect(done.apply).toBe(true);
+    expect(done.maps).toEqual(empty);
+    expect(done.gate.awaitingEmptySync).toBe(false);
+  });
+
+  it('provisional empty under awaitingEmptySync does not clear wipe latch (C1)', () => {
+    const gate = beginPlayMapsRoundReset(createPlayMapsListenerGate());
+
+    const provisionalEmpty = decidePlayMapsListenerApply({
+      gate,
+      callbackEpoch: gate.epoch,
+      previous: null,
+      next: empty,
+      source: 'snapshot',
+      seed: 'provisional',
+    });
+    expect(provisionalEmpty.apply).toBe(false);
+    expect(provisionalEmpty.gate.awaitingEmptySync).toBe(true);
+
+    const staleRich = decidePlayMapsListenerApply({
+      gate: provisionalEmpty.gate,
+      callbackEpoch: provisionalEmpty.gate.epoch,
+      previous: null,
+      next: rich,
+      source: 'snapshot',
+      seed: 'authoritative',
+    });
+    expect(staleRich.apply).toBe(false);
+    expect(staleRich.gate.awaitingEmptySync).toBe(true);
+
+    const wipe = decidePlayMapsListenerApply({
+      gate: staleRich.gate,
+      callbackEpoch: staleRich.gate.epoch,
+      previous: null,
+      next: empty,
+      source: 'snapshot',
+      seed: 'authoritative',
+    });
+    expect(wipe.apply).toBe(true);
+    expect(wipe.maps).toEqual(empty);
+    expect(wipe.gate.awaitingEmptySync).toBe(false);
+  });
+
+  it('ignores provisional peak so authoritative shrink can apply (play C1 cold mount)', () => {
+    const gate = createPlayMapsListenerGate();
+    const provisionalRich = {
+      wordPlayers: { порт: { org: true }, рот: { peer: true } },
+    };
+    const authoritativeSmaller = { wordPlayers: { порт: { org: true } } };
+
+    const provisional = decidePlayMapsListenerApply({
+      gate,
+      callbackEpoch: gate.epoch,
+      previous: null,
+      next: provisionalRich,
+      source: 'snapshot',
+      seed: 'provisional',
+    });
+    expect(provisional.apply).toBe(false);
+    expect(provisional.maps).toBeNull();
+
+    const authoritative = decidePlayMapsListenerApply({
+      gate: provisional.gate,
+      callbackEpoch: provisional.gate.epoch,
+      previous: provisional.maps,
+      next: authoritativeSmaller,
+      source: 'snapshot',
+      seed: 'authoritative',
+    });
+    expect(authoritative.apply).toBe(true);
+    expect(authoritative.maps).toEqual(authoritativeSmaller);
+  });
 });
 
 describe('decidePlayMapsForceSync', () => {

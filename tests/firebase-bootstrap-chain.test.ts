@@ -219,6 +219,32 @@ describe('firebase bootstrap chain', () => {
     expect(ensureAnonymousAuth).toHaveBeenCalledTimes(2);
   });
 
+  it('retries bootstrap after sticky error when forceRetry is true', async () => {
+    onValueMock.mockImplementation((_ref, onNext) => {
+      const unsub = vi.fn();
+      setTimeout(() => onNext({ val: () => true }), 0);
+      return unsub;
+    });
+    ensureAnonymousAuth
+      .mockRejectedValueOnce(new Error('APP_CHECK_TOKEN_EMPTY'))
+      .mockResolvedValue({ uid: 'anon-1' });
+
+    const first = ensureFirebaseReady();
+    await vi.advanceTimersByTimeAsync(0);
+    const failed = await first;
+    expect(failed.status).toBe('error');
+
+    const withoutRetry = ensureFirebaseReady();
+    await withoutRetry;
+    expect(ensureAnonymousAuth).toHaveBeenCalledTimes(1);
+
+    const withRetry = ensureFirebaseReady({ forceRetry: true });
+    await vi.advanceTimersByTimeAsync(0);
+    const recovered = await withRetry;
+    expect(recovered.status).toBe('ok');
+    expect(ensureAnonymousAuth).toHaveBeenCalledTimes(2);
+  });
+
   it('skips native app check on web', async () => {
     await expect(ensureFirebaseAppCheckDirect()).resolves.toBeUndefined();
     expect(hasNativeFirebaseAppModule).not.toHaveBeenCalled();

@@ -492,4 +492,33 @@ describe('online invariants (canonical spec)', () => {
       expect(resolved.uniqueBonusEnabled).toBe(false);
     });
   });
+
+  describe('§ADR-022 session_word_maps listen / replace modes', () => {
+    it('defaults to empty-clear-guard; grow-only is explicit opt-in', async () => {
+      const { shouldReplaceLiveWordMaps } =
+        await import('../lib/online/session/live-words-snapshot.js');
+      const rich = { wordPlayers: { порт: { org: true }, рот: { org: true } } };
+      const shrink = { wordPlayers: { порт: { org: true } } };
+      expect(shouldReplaceLiveWordMaps(rich, shrink)).toBe(true);
+      expect(shouldReplaceLiveWordMaps(rich, shrink, { mode: 'grow-only' })).toBe(false);
+      expect(shouldReplaceLiveWordMaps(rich, { wordPlayers: {} })).toBe(false);
+    });
+
+    it('does not close rematch-survival while mapsUnavailable (I1 defense-in-depth)', async () => {
+      const { shouldCloseResultsRematchSurvival, RESULTS_REMATCH_SURVIVAL_EMPTY_CLOSE_GRACE_MS } =
+        await import('../lib/online/session/frozen-round-view.js');
+      expect(
+        shouldCloseResultsRematchSurvival({
+          freezeAttempted: false,
+          hasFrozenRound: false,
+          liveStatus: 'waiting',
+          wordsBootstrapComplete: true,
+          liveWords: new Map(),
+          pending: null,
+          emptyBootstrapElapsedMs: RESULTS_REMATCH_SURVIVAL_EMPTY_CLOSE_GRACE_MS,
+          mapsUnavailable: true,
+        }),
+      ).toBe(false);
+    });
+  });
 });

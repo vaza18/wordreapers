@@ -4,13 +4,19 @@ import {
   mergeLiveSessionForResults,
   nextResultsFreezePending,
   resolveResultsDisplayRound,
+  resolveResultsErrorCta,
   resolveResultsFreezeSource,
+  shouldCloseResultsRematchSurvival,
   shouldFreezeLiveFinishedOnResults,
   shouldKeepFrozenResultsOverLiveFinished,
   shouldLoadViewingRoundFromArchive,
   shouldRecoverFinishedRoundFromArchive,
+  isResultsRematchSurvivalActive,
   shouldShowResultsUnavailableAfterRematch,
   shouldUpgradeEmptyResultsFreeze,
+  shouldEnableResultsMapsRosterListen,
+  computeResultsMapsRosterPlayerIds,
+  RESULTS_REMATCH_SURVIVAL_EMPTY_CLOSE_GRACE_MS,
 } from '../lib/online/session/frozen-round-view.js';
 import { finishedSession, gameSession, sessionWithRound } from './helpers/game-session-fixtures.js';
 
@@ -75,6 +81,131 @@ describe('resolveResultsFreezeSource rematch-before-freeze', () => {
     expect(source).toBeNull();
   });
 
+  it('does not freeze from partial provisional-rich words while bootstrap incomplete (C1)', () => {
+    const source = resolveResultsFreezeSource({
+      hasFrozenRound: false,
+      liveSession: finished,
+      liveWords: new Map([['org', ['а']]]),
+      wordsBootstrapComplete: false,
+      viewingBaseWordRound: 0,
+      pending: null,
+    });
+    expect(source).toBeNull();
+  });
+
+  it('does not latch pending from provisional-rich words before authoritative bootstrap (C1)', () => {
+    expect(nextResultsFreezePending(null, finished, new Map([['org', ['а']]]), false)).toBeNull();
+  });
+
+  it('keeps prior authoritative pending while bootstrap incomplete (provisional must not shrink pin)', () => {
+    const pending = nextResultsFreezePending(null, finished, words, true);
+    const next = nextResultsFreezePending(pending, finished, new Map([['org', ['а']]]), false);
+    expect(next?.words.get('org')).toEqual(['а', 'б', 'в']);
+  });
+
+  it('freezes from prior authoritative pending after rematch without re-bootstrap', () => {
+    const pending = nextResultsFreezePending(null, finished, words, true);
+    expect(pending?.words.get('org')).toEqual(['а', 'б', 'в']);
+
+    const source = resolveResultsFreezeSource({
+      hasFrozenRound: false,
+      liveSession: { ...finished, status: 'waiting', baseWordRound: 1 },
+      liveWords: new Map(),
+      wordsBootstrapComplete: false,
+      viewingBaseWordRound: null,
+      pending,
+    });
+    expect(source?.session.status).toBe('finished');
+    expect(source?.words.get('org')).toEqual(['а', 'б', 'в']);
+  });
+
+  it('latches rematch survival pending from late authoritative after rematch (not provisional)', () => {
+    const waiting = { ...finished, status: 'waiting' as const, baseWordRound: 1 };
+    // Provisional-rich while still finished must not pin.
+    expect(nextResultsFreezePending(null, finished, words, false)).toBeNull();
+    // Rematch before bootstrap: still no pin from provisional words alone.
+    expect(nextResultsFreezePending(null, waiting, words, false, finished)).toBeNull();
+    // Late authoritative/fetch bootstrap after rematch: latch finished snapshot + words.
+    const pending = nextResultsFreezePending(null, waiting, words, true, finished);
+    expect(pending?.session.status).toBe('finished');
+    expect(pending?.words.get('org')).toEqual(['а', 'б', 'в']);
+
+    const source = resolveResultsFreezeSource({
+      hasFrozenRound: false,
+      liveSession: waiting,
+      liveWords: words,
+      wordsBootstrapComplete: true,
+      pending,
+      viewingBaseWordRound: null,
+    });
+    expect(source?.session.status).toBe('finished');
+    expect(source?.words.get('org')).toEqual(['а', 'б', 'в']);
+  });
+
+  it('does not rematch-survival latch when bootstrap follows authoritative empty wipe (C1-residual)', () => {
+    const waiting = { ...finished, status: 'waiting' as const, baseWordRound: 1 };
+    // After first authoritative {} clears provisional peak, liveWords are empty.
+    expect(nextResultsFreezePending(null, waiting, new Map(), true, finished)).toBeNull();
+    expect(
+      resolveResultsFreezeSource({
+        hasFrozenRound: false,
+        liveSession: waiting,
+        liveWords: new Map(),
+        wordsBootstrapComplete: true,
+        viewingBaseWordRound: null,
+        pending: null,
+      }),
+    ).toBeNull();
+  });
+
+  it('does not latch next-round playing words onto previous finished (C1 cross-round)', () => {
+    const waiting = { ...finished, status: 'waiting' as const, baseWordRound: 1 };
+    // Rematch wipe: authoritative empty — no latch.
+    expect(nextResultsFreezePending(null, waiting, new Map(), true, finished)).toBeNull();
+
+    const playing = { ...finished, status: 'playing' as const, baseWordRound: 1 };
+    const nextRoundWords = new Map([['org', ['новий']]]);
+    // Survival must not glue new playing words onto the old finished session.
+    expect(nextResultsFreezePending(null, playing, nextRoundWords, true, finished)).toBeNull();
+    expect(
+      resolveResultsFreezeSource({
+        hasFrozenRound: false,
+        liveSession: playing,
+        liveWords: nextRoundWords,
+        wordsBootstrapComplete: true,
+        viewingBaseWordRound: null,
+        pending: null,
+      }),
+    ).toBeNull();
+  });
+
+  it('does not rematch-survival latch when live round jumped past finished+1 (I2)', () => {
+    const farWaiting = { ...finished, status: 'waiting' as const, baseWordRound: 3 };
+    expect(nextResultsFreezePending(null, farWaiting, words, true, finished)).toBeNull();
+  });
+
+  it('keeps rich pending through progressive rematch wipe shrinks (not only empty)', () => {
+    const finished = finishedSession();
+    const words = new Map([
+      ['org', ['а', 'б', 'в']],
+      ['p2', ['г', 'д']],
+    ]);
+    const pending = nextResultsFreezePending(null, finished, words, true);
+    expect(pending?.words.get('org')).toEqual(['а', 'б', 'в']);
+
+    const afterShrink = nextResultsFreezePending(
+      pending,
+      finished,
+      new Map([['org', ['а']]]),
+      true,
+    );
+    expect(afterShrink?.words.get('org')).toEqual(['а', 'б', 'в']);
+    expect(afterShrink?.words.get('p2')).toEqual(['г', 'д']);
+
+    const afterEmpty = nextResultsFreezePending(afterShrink, finished, new Map(), true);
+    expect(afterEmpty?.words.get('org')).toEqual(['а', 'б', 'в']);
+  });
+
   it('keeps rich pending when live words empty after bootstrap', () => {
     const pending = nextResultsFreezePending(null, finished, words, true);
     const next = nextResultsFreezePending(pending, finished, new Map(), true);
@@ -89,22 +220,6 @@ describe('resolveResultsFreezeSource rematch-before-freeze', () => {
     expect(next?.session.baseWordRound).toBe(1);
     expect(next?.words.size ?? 0).toBe(0);
     expect(next?.words.get('org')).toBeUndefined();
-  });
-
-  it('latches rich pending before bootstrap so rematch can still freeze', () => {
-    const pending = nextResultsFreezePending(null, finished, words, false);
-    expect(pending?.words.get('org')).toEqual(['а', 'б', 'в']);
-
-    const source = resolveResultsFreezeSource({
-      hasFrozenRound: false,
-      liveSession: { ...finished, status: 'waiting', baseWordRound: 1 },
-      liveWords: new Map(),
-      wordsBootstrapComplete: false,
-      viewingBaseWordRound: null,
-      pending,
-    });
-    expect(source?.session.status).toBe('finished');
-    expect(source?.words.get('org')).toEqual(['а', 'б', 'в']);
   });
 
   it('does not latch empty pending before bootstrap', () => {
@@ -203,6 +318,52 @@ describe('resolveResultsFreezeSource rematch-before-freeze', () => {
   });
 });
 
+describe('shouldEnableResultsMapsRosterListen', () => {
+  it('enables before freeze and while freeze is empty (late child upgrade)', () => {
+    expect(
+      shouldEnableResultsMapsRosterListen({
+        hasGameId: true,
+        rosterPlayerIdsLength: 2,
+        frozenWords: null,
+      }),
+    ).toBe(true);
+    expect(
+      shouldEnableResultsMapsRosterListen({
+        hasGameId: true,
+        rosterPlayerIdsLength: 2,
+        frozenWords: new Map(),
+      }),
+    ).toBe(true);
+  });
+
+  it('disables after rich freeze (SoT pinned)', () => {
+    expect(
+      shouldEnableResultsMapsRosterListen({
+        hasGameId: true,
+        rosterPlayerIdsLength: 2,
+        frozenWords: new Map([['org', ['порт']]]),
+      }),
+    ).toBe(false);
+  });
+
+  it('disables without gameId or empty roster', () => {
+    expect(
+      shouldEnableResultsMapsRosterListen({
+        hasGameId: false,
+        rosterPlayerIdsLength: 2,
+        frozenWords: null,
+      }),
+    ).toBe(false);
+    expect(
+      shouldEnableResultsMapsRosterListen({
+        hasGameId: true,
+        rosterPlayerIdsLength: 0,
+        frozenWords: null,
+      }),
+    ).toBe(false);
+  });
+});
+
 describe('shouldShowResultsUnavailableAfterRematch', () => {
   it('shows error when rematch advanced with no freeze, archive, or finished view', () => {
     expect(
@@ -212,6 +373,7 @@ describe('shouldShowResultsUnavailableAfterRematch', () => {
         sessionLoaded: true,
         hasFinishedViewData: false,
         liveStatus: 'waiting',
+        rematchSurvivalActive: false,
       }),
     ).toBe(true);
     expect(
@@ -221,8 +383,22 @@ describe('shouldShowResultsUnavailableAfterRematch', () => {
         sessionLoaded: true,
         hasFinishedViewData: false,
         liveStatus: 'playing',
+        rematchSurvivalActive: false,
       }),
     ).toBe(true);
+  });
+
+  it('does not show rematch CTA while survival listen/bootstrap is still active (C2)', () => {
+    expect(
+      shouldShowResultsUnavailableAfterRematch({
+        hasFrozenRound: false,
+        archiveRecoveryPending: false,
+        sessionLoaded: true,
+        hasFinishedViewData: false,
+        liveStatus: 'waiting',
+        rematchSurvivalActive: true,
+      }),
+    ).toBe(false);
   });
 
   it('does not show error while still finished, recovering, or already frozen', () => {
@@ -260,6 +436,252 @@ describe('shouldShowResultsUnavailableAfterRematch', () => {
         sessionLoaded: true,
         hasFinishedViewData: true,
         liveStatus: 'waiting',
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('resolveResultsErrorCta', () => {
+  const finished = finishedSession();
+
+  it('prefers maps-retry over rematch-home when waiting + mapsUnavailable (C1)', () => {
+    expect(
+      resolveResultsErrorCta({
+        viewingBaseWordRound: null,
+        hasFrozenRound: false,
+        archiveRecoveryPending: false,
+        sessionLoaded: true,
+        hasFinishedViewData: false,
+        liveStatus: 'waiting',
+        freezeAttempted: false,
+        lastFinishedCore: finished,
+        mapsUnavailable: true,
+      }),
+    ).toBe('maps-retry');
+  });
+
+  it('maps-retry when mapsUnavailable before view is painted', () => {
+    expect(
+      resolveResultsErrorCta({
+        viewingBaseWordRound: null,
+        hasFrozenRound: false,
+        archiveRecoveryPending: false,
+        sessionLoaded: true,
+        hasFinishedViewData: false,
+        liveStatus: 'waiting',
+        freezeAttempted: false,
+        lastFinishedCore: finished,
+        mapsUnavailable: true,
+      }),
+    ).toBe('maps-retry');
+  });
+
+  it('does not full-screen wipe when mapsUnavailable but results already painted (I1)', () => {
+    expect(
+      resolveResultsErrorCta({
+        viewingBaseWordRound: null,
+        hasFrozenRound: false,
+        archiveRecoveryPending: false,
+        sessionLoaded: true,
+        hasFinishedViewData: true,
+        liveStatus: 'finished',
+        freezeAttempted: false,
+        lastFinishedCore: finished,
+        mapsUnavailable: true,
+      }),
+    ).toBeNull();
+  });
+
+  it('shows rematch-home when rematch advanced without maps failure', () => {
+    expect(
+      resolveResultsErrorCta({
+        viewingBaseWordRound: null,
+        hasFrozenRound: false,
+        archiveRecoveryPending: false,
+        sessionLoaded: true,
+        hasFinishedViewData: false,
+        liveStatus: 'waiting',
+        freezeAttempted: true,
+        lastFinishedCore: finished,
+        mapsUnavailable: false,
+      }),
+    ).toBe('rematch-home');
+  });
+
+  it('suppresses rematch-home while survival active and maps still loading', () => {
+    expect(
+      resolveResultsErrorCta({
+        viewingBaseWordRound: null,
+        hasFrozenRound: false,
+        archiveRecoveryPending: false,
+        sessionLoaded: true,
+        hasFinishedViewData: false,
+        liveStatus: 'waiting',
+        freezeAttempted: false,
+        lastFinishedCore: finished,
+        mapsUnavailable: false,
+      }),
+    ).toBeNull();
+  });
+});
+
+describe('isResultsRematchSurvivalActive / shouldCloseResultsRematchSurvival', () => {
+  const finished = finishedSession();
+
+  it('keeps survival active on rematch waiting until freezeAttempted or mapsUnavailable', () => {
+    expect(
+      isResultsRematchSurvivalActive({
+        freezeAttempted: false,
+        lastFinishedCore: finished,
+        liveStatus: 'waiting',
+        mapsUnavailable: false,
+      }),
+    ).toBe(true);
+    expect(
+      isResultsRematchSurvivalActive({
+        freezeAttempted: true,
+        lastFinishedCore: finished,
+        liveStatus: 'waiting',
+        mapsUnavailable: false,
+      }),
+    ).toBe(false);
+    expect(
+      isResultsRematchSurvivalActive({
+        freezeAttempted: false,
+        lastFinishedCore: finished,
+        liveStatus: 'playing',
+        mapsUnavailable: false,
+      }),
+    ).toBe(false);
+    expect(
+      isResultsRematchSurvivalActive({
+        freezeAttempted: false,
+        lastFinishedCore: finished,
+        liveStatus: 'waiting',
+        mapsUnavailable: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('closes survival after rematch empty authoritative bootstrap with no pending', () => {
+    expect(
+      shouldCloseResultsRematchSurvival({
+        freezeAttempted: false,
+        hasFrozenRound: false,
+        liveStatus: 'waiting',
+        wordsBootstrapComplete: true,
+        liveWords: new Map(),
+        pending: null,
+        emptyBootstrapElapsedMs: null,
+      }),
+    ).toBe(false);
+    expect(
+      shouldCloseResultsRematchSurvival({
+        freezeAttempted: false,
+        hasFrozenRound: false,
+        liveStatus: 'waiting',
+        wordsBootstrapComplete: true,
+        liveWords: new Map(),
+        pending: null,
+        emptyBootstrapElapsedMs: 0,
+      }),
+    ).toBe(false);
+    expect(
+      shouldCloseResultsRematchSurvival({
+        freezeAttempted: false,
+        hasFrozenRound: false,
+        liveStatus: 'waiting',
+        wordsBootstrapComplete: false,
+        liveWords: new Map(),
+        pending: null,
+        emptyBootstrapElapsedMs: RESULTS_REMATCH_SURVIVAL_EMPTY_CLOSE_GRACE_MS,
+      }),
+    ).toBe(false);
+    expect(
+      shouldCloseResultsRematchSurvival({
+        freezeAttempted: false,
+        hasFrozenRound: false,
+        liveStatus: 'waiting',
+        wordsBootstrapComplete: true,
+        liveWords: new Map([['org', ['а']]]),
+        pending: null,
+        emptyBootstrapElapsedMs: RESULTS_REMATCH_SURVIVAL_EMPTY_CLOSE_GRACE_MS,
+      }),
+    ).toBe(false);
+    expect(
+      shouldCloseResultsRematchSurvival({
+        freezeAttempted: false,
+        hasFrozenRound: false,
+        liveStatus: 'waiting',
+        wordsBootstrapComplete: true,
+        liveWords: new Map(),
+        pending: null,
+        emptyBootstrapElapsedMs: RESULTS_REMATCH_SURVIVAL_EMPTY_CLOSE_GRACE_MS,
+      }),
+    ).toBe(true);
+  });
+
+  it('empty seal → late child before grace latches pending (C2); true wipe closes after grace', () => {
+    const finished = finishedSession();
+    const waiting = { ...finished, status: 'waiting' as const, baseWordRound: 1 };
+    const rich = new Map([['org', ['порт']]]);
+
+    // Immediate empty seal must not close (late children still possible).
+    expect(
+      shouldCloseResultsRematchSurvival({
+        freezeAttempted: false,
+        hasFrozenRound: false,
+        liveStatus: 'waiting',
+        wordsBootstrapComplete: true,
+        liveWords: new Map(),
+        pending: null,
+        emptyBootstrapElapsedMs: 0,
+        emptyCloseGraceMs: 1_000,
+      }),
+    ).toBe(false);
+
+    // Late child upsert after empty seal → latch rematch-survival pending.
+    const pending = nextResultsFreezePending(null, waiting, rich, true, finished);
+    expect(pending).toEqual({ session: finished, words: rich });
+    expect(
+      shouldCloseResultsRematchSurvival({
+        freezeAttempted: false,
+        hasFrozenRound: false,
+        liveStatus: 'waiting',
+        wordsBootstrapComplete: true,
+        liveWords: rich,
+        pending,
+        emptyBootstrapElapsedMs: 50,
+        emptyCloseGraceMs: 1_000,
+      }),
+    ).toBe(false);
+
+    // Confirmed wipe: still empty + no pending after grace → close for rematch-home CTA.
+    expect(
+      shouldCloseResultsRematchSurvival({
+        freezeAttempted: false,
+        hasFrozenRound: false,
+        liveStatus: 'waiting',
+        wordsBootstrapComplete: true,
+        liveWords: new Map(),
+        pending: null,
+        emptyBootstrapElapsedMs: 1_000,
+        emptyCloseGraceMs: 1_000,
+      }),
+    ).toBe(true);
+  });
+
+  it('does not close survival while mapsUnavailable even after grace (I1)', () => {
+    expect(
+      shouldCloseResultsRematchSurvival({
+        freezeAttempted: false,
+        hasFrozenRound: false,
+        liveStatus: 'waiting',
+        wordsBootstrapComplete: true,
+        liveWords: new Map(),
+        pending: null,
+        emptyBootstrapElapsedMs: RESULTS_REMATCH_SURVIVAL_EMPTY_CLOSE_GRACE_MS,
+        mapsUnavailable: true,
       }),
     ).toBe(false);
   });
@@ -374,5 +796,173 @@ describe('mergeLiveSessionForResults', () => {
     const merged = mergeLiveSessionForResults(core, { wordPlayers: { порт: { org: true } } }, true);
     expect(merged).toBe(core);
     expect(merged?.wordPlayers).toBeUndefined();
+  });
+});
+
+describe('computeResultsMapsRosterPlayerIds', () => {
+  const finished = finishedSession();
+  const waiting = { ...finished, status: 'waiting' as const, baseWordRound: 1 };
+  const finishedIds = Object.keys(finished.players).sort();
+
+  it('returns finished roster while live is finished', () => {
+    expect(
+      computeResultsMapsRosterPlayerIds({
+        frozenWords: null,
+        liveSessionCore: finished,
+        lastFinishedCore: finished,
+        freezeAttempted: false,
+      }),
+    ).toEqual(finishedIds);
+  });
+
+  it('keeps finished roster after empty freeze (late children upgrade path)', () => {
+    const emptyFreeze = new Map<string, string[]>();
+    const roster = computeResultsMapsRosterPlayerIds({
+      frozenWords: emptyFreeze,
+      liveSessionCore: finished,
+      lastFinishedCore: finished,
+      freezeAttempted: true,
+    });
+    expect(roster).toEqual(finishedIds);
+    expect(
+      shouldEnableResultsMapsRosterListen({
+        hasGameId: true,
+        rosterPlayerIdsLength: roster.length,
+        frozenWords: emptyFreeze,
+      }),
+    ).toBe(true);
+  });
+
+  it('clears roster after rich freeze (SoT pinned)', () => {
+    const richFreeze = new Map([['org', ['порт']]]);
+    const roster = computeResultsMapsRosterPlayerIds({
+      frozenWords: richFreeze,
+      liveSessionCore: finished,
+      lastFinishedCore: finished,
+      freezeAttempted: true,
+    });
+    expect(roster).toEqual([]);
+    expect(
+      shouldEnableResultsMapsRosterListen({
+        hasGameId: true,
+        rosterPlayerIdsLength: roster.length,
+        frozenWords: richFreeze,
+      }),
+    ).toBe(false);
+  });
+
+  it('keeps last finished roster after rematch waiting until freeze attempted', () => {
+    expect(
+      computeResultsMapsRosterPlayerIds({
+        frozenWords: null,
+        liveSessionCore: waiting,
+        lastFinishedCore: finished,
+        freezeAttempted: false,
+      }),
+    ).toEqual(finishedIds);
+  });
+
+  it('stops rematch survival roster once live is playing (C1)', () => {
+    const playing = { ...finished, status: 'playing' as const, baseWordRound: 1 };
+    expect(
+      computeResultsMapsRosterPlayerIds({
+        frozenWords: null,
+        liveSessionCore: playing,
+        lastFinishedCore: finished,
+        freezeAttempted: false,
+      }),
+    ).toEqual([]);
+  });
+
+  it('stops rematch survival roster after freeze attempted or rich frozen', () => {
+    expect(
+      computeResultsMapsRosterPlayerIds({
+        frozenWords: null,
+        liveSessionCore: waiting,
+        lastFinishedCore: finished,
+        freezeAttempted: true,
+      }),
+    ).toEqual([]);
+    expect(
+      computeResultsMapsRosterPlayerIds({
+        frozenWords: new Map([['org', ['порт']]]),
+        liveSessionCore: waiting,
+        lastFinishedCore: finished,
+        freezeAttempted: false,
+      }),
+    ).toEqual([]);
+  });
+
+  it('returns empty when rematch without a preserved finished core', () => {
+    expect(
+      computeResultsMapsRosterPlayerIds({
+        frozenWords: null,
+        liveSessionCore: waiting,
+        lastFinishedCore: null,
+        freezeAttempted: false,
+      }),
+    ).toEqual([]);
+  });
+
+  it('state-driven rematch wiring: finished → waiting keeps roster until freezeAttempted', () => {
+    // Mirrors results screen: lastFinishedCore + freezeAttempted in React state (not ref-in-useMemo).
+    let lastFinishedCore: typeof finished | null = null;
+    let freezeAttempted = false;
+
+    lastFinishedCore = finished;
+    expect(
+      computeResultsMapsRosterPlayerIds({
+        frozenWords: null,
+        liveSessionCore: finished,
+        lastFinishedCore,
+        freezeAttempted,
+      }),
+    ).toEqual(finishedIds);
+
+    expect(
+      computeResultsMapsRosterPlayerIds({
+        frozenWords: null,
+        liveSessionCore: waiting,
+        lastFinishedCore,
+        freezeAttempted,
+      }),
+    ).toEqual(finishedIds);
+
+    freezeAttempted = true;
+    expect(
+      computeResultsMapsRosterPlayerIds({
+        frozenWords: null,
+        liveSessionCore: waiting,
+        lastFinishedCore,
+        freezeAttempted,
+      }),
+    ).toEqual([]);
+  });
+
+  it('empty freeze + late rich liveWords: upgrade gate still open', () => {
+    const emptyFreeze = new Map<string, string[]>();
+    const lateWords = new Map([['org', ['порт']]]);
+    expect(
+      shouldUpgradeEmptyResultsFreeze({
+        frozenWords: emptyFreeze,
+        nextWords: lateWords,
+        frozenBaseWordRound: 0,
+        liveBaseWordRound: 0,
+      }),
+    ).toBe(true);
+    const roster = computeResultsMapsRosterPlayerIds({
+      frozenWords: emptyFreeze,
+      liveSessionCore: finished,
+      lastFinishedCore: finished,
+      freezeAttempted: true,
+    });
+    expect(roster.length).toBeGreaterThan(0);
+    expect(
+      shouldEnableResultsMapsRosterListen({
+        hasGameId: true,
+        rosterPlayerIdsLength: roster.length,
+        frozenWords: emptyFreeze,
+      }),
+    ).toBe(true);
   });
 });

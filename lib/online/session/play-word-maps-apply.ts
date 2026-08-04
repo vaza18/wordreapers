@@ -15,6 +15,8 @@ export type PlayMapsListenerGate = {
 
 export type PlayMapsEventSource = 'snapshot' | 'unavailable';
 
+export type PlayMapsSnapshotSeed = 'provisional' | 'authoritative';
+
 export function createPlayMapsListenerGate(): PlayMapsListenerGate {
   return { epoch: 0, awaitingEmptySync: false };
 }
@@ -29,14 +31,15 @@ export function isEmptyPlayMaps(maps: SessionWordMaps | null): boolean {
 }
 
 /**
- * Play-screen maps listener: skip empty/null clears over a non-empty snapshot
- * (permission_denied / rematch wipe), matching results empty-clear guard.
+ * Play-screen maps listener: grow-only replace (ADR-022) so rematch N× onChildRemoved
+ * cannot nibble finished lists; empty wipe mid-play is rejected here.
+ * Round-reset empty still goes through `awaitingEmptySync` in decidePlayMapsListenerApply.
  */
 export function nextPlayWordMaps(
   previous: SessionWordMaps | null,
   next: SessionWordMaps | null,
 ): SessionWordMaps | null {
-  return shouldReplaceLiveWordMaps(previous, next) ? next : previous;
+  return shouldReplaceLiveWordMaps(previous, next, { mode: 'grow-only' }) ? next : previous;
 }
 
 export type PlayMapsApplyDecision = {
@@ -53,9 +56,12 @@ function clearAwaiting(gate: PlayMapsListenerGate): PlayMapsListenerGate {
  * Decide whether a maps listener/heal payload applies after optional round reset.
  * - Wrong epoch → drop (stale microtask from before reset).
  * - `unavailable` → never apply (permission_denied / error ≠ authoritative empty).
- * - `awaitingEmptySync` → accept empty (wipe) only; reject non-empty (incl. after
- *   force-sync exhaustion — prior-round rich must not paint the new round).
- * - Otherwise → normal empty-clear guard (never wipe rich maps mid-play).
+ * - `seed: 'provisional'` → never apply on play (ADR-022: avoid provisional peak
+ *   sticking over a smaller authoritative get∪buffer seed; wipe-gate also ignores).
+ * - `awaitingEmptySync` → accept authoritative empty (wipe) only; reject non-empty
+ *   (incl. after force-sync exhaustion — prior-round rich must not paint the new round).
+ * - Otherwise → grow-only via `nextPlayWordMaps` (reject any membership shrink;
+ *   rematch progressive wipe must not leave a single word mid-play).
  */
 export function decidePlayMapsListenerApply(options: {
   gate: PlayMapsListenerGate;
@@ -63,12 +69,18 @@ export function decidePlayMapsListenerApply(options: {
   previous: SessionWordMaps | null;
   next: SessionWordMaps | null;
   source: PlayMapsEventSource;
+  /** Defaults to authoritative when omitted (force-sync / older call sites). */
+  seed?: PlayMapsSnapshotSeed;
 }): PlayMapsApplyDecision {
   const { gate, callbackEpoch, previous, next, source } = options;
+  const seed = options.seed ?? 'authoritative';
   if (callbackEpoch !== gate.epoch) {
     return { apply: false, maps: previous, gate };
   }
   if (source === 'unavailable') {
+    return { apply: false, maps: previous, gate };
+  }
+  if (seed === 'provisional') {
     return { apply: false, maps: previous, gate };
   }
   if (gate.awaitingEmptySync) {
@@ -90,7 +102,7 @@ export function decidePlayMapsListenerApply(options: {
 
 /**
  * Fetch after round reset: apply only empty/null and clear the latch
- * (covers already-empty maps that will not re-emit `onValue`).
+ * (covers already-empty maps that will not re-emit a seed/`onChild*` empty).
  * Non-empty is treated as stale prior-round cache — leave `awaitingEmptySync`
  * for retries / empty wipe. After retries are exhausted, callers use
  * `decidePlayMapsForceSyncExhaustion` (empty UI; still wait for wipe empty).

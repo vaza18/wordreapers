@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const ensureFirebaseAppCheck = vi.fn();
+const ensureAnonymousAuth = vi.fn();
 
 vi.mock('firebase/database', async () => {
   const { firebaseDatabaseMockFactory } = await import('./helpers/mock-firebase-rtdb.js');
@@ -15,8 +15,8 @@ vi.mock('../lib/firebase/server-clock.js', () => ({
   getServerNow: () => 1_000_000,
 }));
 
-vi.mock('../lib/firebase/app-check.js', () => ({
-  ensureFirebaseAppCheck: () => ensureFirebaseAppCheck(),
+vi.mock('../lib/firebase/auth.js', () => ({
+  ensureAnonymousAuth: () => ensureAnonymousAuth(),
 }));
 
 import {
@@ -46,7 +46,7 @@ const {
 describe('setRoomPublic', () => {
   beforeEach(() => {
     resetFirebaseRtdbMocks();
-    ensureFirebaseAppCheck.mockResolvedValue(undefined);
+    ensureAnonymousAuth.mockResolvedValue({ uid: 'tester' });
     setMock.mockResolvedValue(undefined);
     updateMock.mockResolvedValue(undefined);
   });
@@ -197,14 +197,15 @@ describe('unpublishPublicLobby', () => {
 describe('fetchPublicLobbyPage', () => {
   beforeEach(() => {
     resetFirebaseRtdbMocks();
-    ensureFirebaseAppCheck.mockResolvedValue(undefined);
+    ensureAnonymousAuth.mockResolvedValue({ uid: 'tester' });
     getMock.mockReset();
   });
 
-  it('awaits App Check before reading lobby count', async () => {
+  it('awaits anonymous auth (App Check + Auth) before reading lobby count', async () => {
     const callOrder: string[] = [];
-    ensureFirebaseAppCheck.mockImplementation(async () => {
-      callOrder.push('app-check');
+    ensureAnonymousAuth.mockImplementation(async () => {
+      callOrder.push('auth');
+      return { uid: 'tester' };
     });
     getMock.mockImplementation(async (ref: { path?: string }) => {
       callOrder.push(`get:${String(ref?.path)}`);
@@ -221,8 +222,15 @@ describe('fetchPublicLobbyPage', () => {
 
     await fetchPublicLobbyPage('uk', 'newest', 1);
 
-    expect(callOrder[0]).toBe('app-check');
+    expect(callOrder[0]).toBe('auth');
     expect(callOrder.some((step) => step.startsWith('get:'))).toBe(true);
+  });
+
+  it('does not read RTDB when anonymous auth fails', async () => {
+    ensureAnonymousAuth.mockRejectedValue(new Error('APP_CHECK_TOKEN_EMPTY'));
+
+    await expect(fetchPublicLobbyPage('uk', 'newest', 1)).rejects.toThrow('APP_CHECK_TOKEN_EMPTY');
+    expect(getMock).not.toHaveBeenCalled();
   });
 
   it('returns an empty page when total count is zero', async () => {
@@ -240,7 +248,7 @@ describe('fetchPublicLobbyPage', () => {
 
     const page = await fetchPublicLobbyPage('uk', 'newest', 1);
 
-    expect(ensureFirebaseAppCheck).toHaveBeenCalled();
+    expect(ensureAnonymousAuth).toHaveBeenCalled();
     expect(page.total).toBe(0);
     expect(page.rows).toEqual([]);
   });
@@ -292,10 +300,11 @@ describe('fetchPublicLobbyPage', () => {
     expect(page.totalPages).toBe(1);
   });
 
-  it('awaits App Check before reading public lobby count directly', async () => {
+  it('awaits anonymous auth before reading public lobby count directly', async () => {
     const callOrder: string[] = [];
-    ensureFirebaseAppCheck.mockImplementation(async () => {
-      callOrder.push('app-check');
+    ensureAnonymousAuth.mockImplementation(async () => {
+      callOrder.push('auth');
+      return { uid: 'tester' };
     });
     getMock.mockImplementation(async (ref: { path?: string }) => {
       callOrder.push(`get:${String(ref?.path)}`);
@@ -304,7 +313,7 @@ describe('fetchPublicLobbyPage', () => {
 
     await expect(fetchPublicLobbyCount('uk')).resolves.toBe(0);
 
-    expect(callOrder[0]).toBe('app-check');
+    expect(callOrder[0]).toBe('auth');
     expect(callOrder[1]).toContain('public_lobby_counts');
   });
 });

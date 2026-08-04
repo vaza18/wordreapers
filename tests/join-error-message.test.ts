@@ -11,6 +11,7 @@ import {
   firebaseBootstrapErrorMessage,
   firebaseConfigErrorMessage,
   joinErrorMessage,
+  tryFirebaseBootstrapErrorMessage,
 } from '../lib/firebase/join-error-message.js';
 
 const t = ((key: string) => key) as TFunction;
@@ -70,6 +71,35 @@ describe('firebaseBootstrapErrorMessage', () => {
 
   it('maps RTDB connection timeout to network message', () => {
     expect(firebaseBootstrapErrorMessage('RTDB connection timed out', t)).toBe(
+      'online.errorFirebaseNetwork',
+    );
+  });
+
+  it('maps APP_CHECK_TOKEN_EMPTY to native init message', () => {
+    const message = firebaseBootstrapErrorMessage('APP_CHECK_TOKEN_EMPTY', t);
+    expect(message).toContain('online.errorFirebaseNativeInit');
+  });
+
+  it('returns joinFailed for unmapped bootstrap errors', () => {
+    expect(firebaseBootstrapErrorMessage('totally unknown bootstrap', t)).toBe(
+      'online.errorJoinFailed',
+    );
+  });
+});
+
+describe('tryFirebaseBootstrapErrorMessage', () => {
+  it('returns null for empty or unmapped errors (browse chooses its own fallback)', () => {
+    expect(tryFirebaseBootstrapErrorMessage('', t)).toBeNull();
+    expect(tryFirebaseBootstrapErrorMessage(null, t)).toBeNull();
+    expect(tryFirebaseBootstrapErrorMessage('   ', t)).toBeNull();
+    expect(tryFirebaseBootstrapErrorMessage('totally unknown bootstrap', t)).toBeNull();
+  });
+
+  it('returns mapped copy for known bootstrap errors', () => {
+    expect(tryFirebaseBootstrapErrorMessage('APP_CHECK_TOKEN_EMPTY', t)).toContain(
+      'online.errorFirebaseNativeInit',
+    );
+    expect(tryFirebaseBootstrapErrorMessage('RTDB connection timed out', t)).toBe(
       'online.errorFirebaseNetwork',
     );
   });

@@ -9,6 +9,7 @@ import { useLiveRoundPlayScreen } from '@/hooks/useLiveRoundPlayScreen';
 import { useRoundPlayableLexicon } from '@/hooks/useRoundPlayableLexicon';
 import type { PlayableLexiconSnapshot } from '@/lib/dictionary/round-playable-lexicon';
 import { GameMenuModal } from '@/components/GameMenuModal';
+import { OnlineMapsSyncBanner } from '@/components/online/OnlineMapsSyncBanner';
 import { OnlinePlayActiveBody } from '@/components/online/OnlinePlayActiveBody';
 import { OnlinePlayTimerHeader } from '@/components/online/OnlinePlayTimerHeader';
 import { PlayStandingsSheet } from '@/components/online/PlayStandingsSheet';
@@ -207,6 +208,7 @@ export default function OnlinePlayScreen() {
   const [myWords, setMyWords] = useState<Set<string>>(() => new Set());
   const [loading, setLoading] = useState(playInit.loading);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [mapsSyncFailed, setMapsSyncFailed] = useState(false);
   const [draft, setDraft] = useState('');
   const [draftKeyIndices, setDraftKeyIndices] = useState<number[]>([]);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -273,6 +275,7 @@ export default function OnlinePlayScreen() {
   const playRoundKeyRef = useRef<number | null>(null);
   const playMapsGateRef = useRef(createPlayMapsListenerGate());
   const [mapsResetNonce, setMapsResetNonce] = useState(0);
+  const [mapsRetryNonce, setMapsRetryNonce] = useState(0);
   const finishedArchiveRoundRef = useRef<number | null>(null);
   const wordMapsRef = useRef(wordMaps);
   wordMapsRef.current = wordMaps;
@@ -356,9 +359,11 @@ export default function OnlinePlayScreen() {
     t,
     mapsGateRef: playMapsGateRef,
     mapsResetNonce,
+    mapsRetryNonce,
     setSessionCore,
     setLoading,
     setLoadError,
+    setMapsSyncFailed,
     setWordMaps,
     setMyWords,
   });
@@ -1779,6 +1784,15 @@ export default function OnlinePlayScreen() {
   return (
     <View style={styles.root}>
       <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
+        {mapsSyncFailed ? (
+          <OnlineMapsSyncBanner
+            onRetry={() => {
+              // Keep banner until authoritative seed clears mapsSyncFailed in the hook
+              // (do not optimistic-dismiss — silent remount / hung seed).
+              setMapsRetryNonce((n) => n + 1);
+            }}
+          />
+        ) : null}
         {!isPaused ? (
           <>
             <OnlinePlayTimerHeader

@@ -14,8 +14,13 @@ export function sessionWordMapsPath(gameId: string): string {
   return `${SESSION_WORD_MAPS_PATH}/${normalizeRoomCode(gameId)}`;
 }
 
+/** Shared wordPlayers map (granular onChild* listen target). */
+export function sessionWordPlayersPath(gameId: string): string {
+  return `${sessionWordMapsPath(gameId)}/wordPlayers`;
+}
+
 export function sessionWordPlayersPerWordPath(gameId: string, normalized: string): string {
-  return `${sessionWordMapsPath(gameId)}/wordPlayers/${normalized}`;
+  return `${sessionWordPlayersPath(gameId)}/${normalized}`;
 }
 
 export function gameSessionPlayersPath(gameId: string): string {

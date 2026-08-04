@@ -2,12 +2,16 @@ import { describe, expect, it } from 'vitest';
 
 import { DEFAULT_SESSION_SETTINGS } from './helpers/game-session-fixtures.js';
 import {
+  applyWordPlayersChildSnapshot,
   EMPTY_SESSION_WORD_MAPS,
   globalWordCount,
   mergeSessionWithWordMaps,
+  removeWordPlayersChild,
   sessionWordMapsFromSession,
   stripWordMapsFromSession,
 } from '../lib/firebase/session-word-maps.js';
+import { wordsByPlayerFromWordPlayers } from '../lib/online/word-players-invert.js';
+import { wordPlayersLeafCount } from '../lib/online/session/live-words-snapshot.js';
 
 describe('session-word-maps helpers', () => {
   it('counts only true leaves for a normalized word', () => {
@@ -96,6 +100,66 @@ describe('session-word-maps helpers', () => {
   it('exposes an empty word maps constant', () => {
     expect(EMPTY_SESSION_WORD_MAPS).toEqual({
       wordPlayers: {},
+    });
+  });
+
+  describe('wordPlayers child merge', () => {
+    it('adds a word with true-only peer leaves', () => {
+      const next = applyWordPlayersChildSnapshot({}, 'порт', {
+        org: true,
+        guest: false,
+        peer: true,
+      });
+      expect(next).toEqual({ порт: { org: true, peer: true } });
+    });
+
+    it('replaces peers when a word child changes', () => {
+      const prev = { порт: { org: true } };
+      const next = applyWordPlayersChildSnapshot(prev, 'порт', {
+        org: true,
+        guest: true,
+      });
+      expect(next).toEqual({ порт: { org: true, guest: true } });
+      expect(next).not.toBe(prev);
+    });
+
+    it('removes a word key and is a no-op when missing', () => {
+      const prev = { порт: { org: true }, ретро: { guest: true } };
+      expect(removeWordPlayersChild(prev, 'порт')).toEqual({
+        ретро: { guest: true },
+      });
+      expect(removeWordPlayersChild(prev, 'немає')).toBe(prev);
+    });
+
+    it('deletes the word when raw players are null or not an object', () => {
+      const prev = { порт: { org: true } };
+      expect(applyWordPlayersChildSnapshot(prev, 'порт', null)).toEqual({});
+      expect(applyWordPlayersChildSnapshot(prev, 'порт', 'x')).toEqual({});
+    });
+
+    it('deletes the word when raw players are {} or only non-true leaves', () => {
+      const prev = { порт: { org: true }, ретро: { guest: true } };
+      expect(applyWordPlayersChildSnapshot(prev, 'порт', {})).toEqual({
+        ретро: { guest: true },
+      });
+      expect(applyWordPlayersChildSnapshot(prev, 'ретро', { ghost: false })).toEqual({
+        порт: { org: true },
+      });
+    });
+
+    it('keeps invert lists and leaf counts aligned after two-word merge', () => {
+      let wordPlayers = applyWordPlayersChildSnapshot({}, 'порт', { org: true });
+      wordPlayers = applyWordPlayersChildSnapshot(wordPlayers, 'ретро', {
+        org: true,
+        guest: true,
+      });
+      expect(wordPlayersLeafCount(wordPlayers)).toBe(3);
+      expect(wordsByPlayerFromWordPlayers(wordPlayers).get('org')?.sort()).toEqual([
+        'порт',
+        'ретро',
+      ]);
+      expect(wordsByPlayerFromWordPlayers(wordPlayers).get('guest')).toEqual(['ретро']);
+      expect(globalWordCount(wordPlayers, 'ретро')).toBe(2);
     });
   });
 });

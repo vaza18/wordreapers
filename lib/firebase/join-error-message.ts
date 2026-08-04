@@ -44,6 +44,22 @@ export function firebaseBootstrapErrorMessage(
   if (!message) {
     return t('online.errorFirebaseNetwork');
   }
+  return tryFirebaseBootstrapErrorMessage(errorMessage, t) ?? t('online.errorJoinFailed');
+}
+
+/**
+ * Same mapping as `firebaseBootstrapErrorMessage`, but `null` when unmapped
+ * or when there is no message (callers choose browse-specific vs join-generic
+ * fallback — no t() sentinel compare).
+ */
+export function tryFirebaseBootstrapErrorMessage(
+  errorMessage: string | null | undefined,
+  t: TFunction,
+): string | null {
+  const message = errorMessage?.trim() ?? '';
+  if (!message) {
+    return null;
+  }
   if (isFirebaseConfigError(message)) {
     return firebaseConfigErrorMessage(t, message);
   }
@@ -56,10 +72,12 @@ export function firebaseBootstrapErrorMessage(
   if (isNetworkError(message, null) || /connection timed out/i.test(message)) {
     return t('online.errorFirebaseNetwork');
   }
-  if (/No Firebase App|FirebaseApp\.configure|initializeAppCheck|App Check/i.test(message)) {
+  if (
+    /No Firebase App|FirebaseApp\.configure|initializeAppCheck|App Check|APP_CHECK_/i.test(message)
+  ) {
     return withAlphaFirebaseDiagnostics(t('online.errorFirebaseNativeInit'), message);
   }
-  return t('online.errorJoinFailed');
+  return null;
 }
 
 function firebaseErrorCode(error: unknown): string | null {

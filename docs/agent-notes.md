@@ -8,6 +8,57 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 <!-- Add dated notes at the top -->
 
+### 2026-08-04 — Review triage: fix hung auth only; do not reopen SLA / provisional
+
+- **Do fix:** hung `ensureAnonymousAuth` in `subscribeSessionWordMaps` → `WORD_MAPS_AUTH_TIMEOUT_MS` (15s) → `unavailable` without attach; late auth no attach; cancel during wait still silent; still auth-before-attach (P0).
+- **Do fix (play Retry):** keep `mapsSyncFailed` banner until authoritative seed — do not optimistic-dismiss on Retry/`mapsRetryNonce` (roster hung-cap parity).
+- **Do not “fix” I2 / I3 SLA:** Play ~72s fail-loud before banner is **product signed-off** (`known-issues` soft-timeout + ADR-022). No parallel get / eager supersede / budget shorten.
+- **Do not “fix” I3 with provisional latch:** rematch-before-seed empty survival is the cost of ignoring provisional for freeze (C1). Escape = archive / mapsUnavailable / Home — not provisional pin.
+- **I4:** commit split is process only if product asks. Unstage unrelated dictionary whitelist from ADR-022 stage.
+
+### 2026-08-03 — ADR-022 review: empty-listen vs late fetch + play remount
+
+- **C1:** Empty authoritative listen must **not** permanently stale-out a delayed non-empty bootstrap fetch (parent `session_word_maps/{id}` vs child `wordPlayers` skew during rematch wipe). Open-apply rich fetch over empty `lastAppliedMaps`; do **not** complete empty bootstrap while `fetchSettled===false` — hung-cap sets `mapsUnavailable` CTA only (listen/fetch stay alive).
+- **P0:** `subscribeSessionWordMaps` awaits `ensureAnonymousAuth` **before** onChild*/seed get (cancel during auth wait → no `unavailable`). Hung auth → timeout → `unavailable` (Retry path). Roster cold open must not PD-abandon solely because auth/App Check is not ready yet.
+- **I1:** Play remounts maps on `unavailable` even after authoritative seed. Roster/left post-bootstrap: remount once with SoT preserved → then `mapsUnavailable` + `wordsBootstrapComplete=false` so left/results CTA gates fire (not silent death).
+- **I2:** Seed get is **single-flight** (no parallel hung gets after soft-timeout). Soft-timeout does **not** burn `seedAttempt` (only `startSeedGet`). Per-get soft-tick cap (= `seedGetMaxAttempts`) abandons forever-hung early gets (I1-R1). Play seed budget 3 + fail-loud after MAX_RESUBSCRIBES=2 then **stop** auto-remount until Retry. Play fail-loud is a **banner**.
+- **I3:** `tryFetchSessionWordMaps` reads the same `wordPlayers` node as live seed get.
+- **I4 / C1 hung-cap Retry:** Do **not** remount (late rich). Do **not** dismiss CTA into naked survival spinner — keep `mapsUnavailable` + kick parallel rich-only `tryFetch`; primary fetch may still seal.
+- **I5:** Play Retry epoch reset via `useLayoutEffect` (before maps subscribe effect).
+- Manual Retry after post-bootstrap fail-loud preserves SoT via `remountPreserveRef` (no empty flash).
+- Left: `shouldShowLeftMapsRetryCta` full-screen only when `!hasViewData`; painted left uses `shouldShowLeftMapsSyncBanner`.
+- Results: `resolveResultsErrorCta` maps-retry only when `!hasFinishedViewData`; painted results keep RoundResultsView + banner. Loading gate must not spin when `mapsUnavailable` **or** painted words remain (post-paint Retry).
+- Soft-timeout ticks = hang detector; `seedGetMaxAttempts` dual budget — hung get#1 keeps **get count 1** until abandon (accepted SLA; no parallel get).
+- Shared `OnlineMapsSyncBanner` + `online.retryMapsSync` for play/results/left post-paint fail-loud.
+- Mockups: `docs/wordreapers_screens.html` is gitignored — local **5** play OnlineMapsSyncBanner (над дошкою; banner до authoritative; Retry → mapsRetryNonce; не optimistic-dismiss), 7б pre-paint CTA, 7г rematch-survival+Home, 7в post-paint banner; PR exception for docs-sync.
+
+### 2026-08-03 — Android browse load failed (auth race)
+
+- Prod Android browseLoadFailed; iOS sims OK. Force-kill + cold start fixed it. App Check RTDB metrics at failure time: **outdated client** spike (not Invalid) → reads without App Check token on a warm half-init. Cause: browse gated only on App Check attach; needs full `ensureFirebaseReady` / `ensureAnonymousAuth` (`auth != null` on index).
+- **Also:** after sticky bootstrap `error`, browse must `ensureFirebaseReady({ forceRetry: true })` (same as join) or refresh never recovers without process kill. Dual UI+service auth gate is intentional fail-loud. Map `APP_CHECK_TOKEN_EMPTY` via `APP_CHECK_` in `firebaseBootstrapErrorMessage`.
+
+### 2026-08-03 — ADR-022 maps listen: listeners-first + get reconcile
+
+- Do **not** `get` then attach `onChild*` on `wordPlayers` — wipe between resolve and attach sticks rich under ADR-020 empty-block.
+- Safe pattern: attach children → buffer (coalesce by word key) → provisional (16ms) → `get` reconcile → deltas; soft-timeout is a **hang detector** (re-arm / abandon — **not** eager supersede); hard-fail retries with backoff; forever-hung get#1 → abandon after N soft ticks with get count 1; PD/cancel emit; never seal authoritative from children alone.
+- **Soft-timeout:** do **not** bump `activeGetId` at timeout — lazy supersede only when the next `startSeedGet` runs (after hard-fail settle). Soft ticks do **not** queue a new get. After `seedGetMaxAttempts` soft ticks on the **same** in-flight get → `abandonSeedRetries`.
+- **Provisional policy:** **play and results roster both ignore provisional** (spinner until authoritative/fetch or mapsUnavailable CTA; no 8s escape over provisional). Open SoT on first authoritative/non-empty fetch → later grow-only. Wipe-gate / freeze never from provisional. Rematch-before-freeze: keep maps sub via state (`lastFinishedCore`/`freezeAttempted`) + latch from late authoritative + finished snapshot.
+- Replace modes: default `empty-clear-guard`; play/freeze grow-only after seed; **results roster: open SoT on first authoritative/non-empty fetch, then grow-only** (not «always grow-only from first non-empty»).
+- After seed `unavailable`: teardown children (no zombie ignore); results roster uses `ROSTER_WORD_MAPS_SEED_GET_MAX_ATTEMPTS` (3) then one resubscribe with max 1 attempt → `mapsUnavailable` + **Retry** CTA (`retryMapsListen`); play remounts maps subscribe on every `unavailable` (including post-seed), fail-loud after `PLAY_MAPS_UNAVAILABLE_MAX_RESUBSCRIBES` (2) with seed attempts `PLAY_WORD_MAPS_SEED_GET_MAX_ATTEMPTS` (3), then **stop** auto-remount until manual Retry (not unbounded).
+- Results CTA order: `resolveResultsErrorCta` → `maps-retry` before `rematch-home` (rematch+unavailable must keep retry).
+- Results empty authoritative: do not complete bootstrap until fetch settles; hung-cap → `mapsUnavailable` (not empty bootstrap / survival close); late non-empty fetch open-applies over empty listen (wipe race).
+- Play maps unavailable: remount until fail-loud max, then **stop** until Retry; separate `mapsSyncFailed` banner (not shared `loadError`); clear on **authoritative** only (Retry remount keeps banner; `gameId` change clears); session listen stays separate; Retry epoch reset in `useLayoutEffect`.
+- `subscribeSessionWordMaps`: auth-first; **single-flight** seed get; cancel during auth wait does not emit unavailable.
+- `tryFetchSessionWordMaps` / listen seed both use `wordPlayers` path.
+- Results words-loading (finished **or** rematch-survival): always Home via `createResultsHomePress('words-loading')` + Stack.Screen (no bare spinner trap; no provisional time-escape).
+- Rematch-survival: maps sub + latch **waiting only** (not next `playing`); close after empty authoritative bootstrap **only after** `RESULTS_REMATCH_SURVIVAL_EMPTY_CLOSE_GRACE_MS` (2.5s) of continuous empty+no-pending **and** `mapsUnavailable` is false (late child latch / fail-loud); rematch-home CTA suppressed while `isResultsRematchSurvivalActive`.
+- Roster unavailable remount: preserve SoT only if **rich** or bootstrap already complete — never preserve incomplete empty (restarts tryFetch; C1 wipe-race).
+- Play session effect: `ensureAnonymousAuth` reject → `loadError` + `loading=false` (never bare `.then` without catch after maps/session split).
+- Empty `{}` / false-only word children → remove key (no ghost keys for `ensureSessionWordMapsEmptyForRoundStart`).
+- Playing leaf rules stay append-only (`newData.exists()` on uid leaves) — grow-only matches no mid-play client delete.
+- Play maps effect calls `subscribeSessionWordMaps` directly (auth inside subscribe; no outer `ensureAnonymousAuth().then` without catch).
+- Mockups: `docs/wordreapers_screens.html` is gitignored — local 7б pre-paint CTA, 7г rematch-survival+Home, 7в post-paint banner; play screen 5 has maps banner; PR exception for docs-sync.
+
 ### 2026-08-03 — Production gate: sync maps retry + wipe-before-play + legacy RTDB
 
 - P1: legacy empty+counts → maps fallthrough (`retryable` / finalize from maps), never silent `done`.
@@ -22,7 +73,7 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 ### 2026-08-03 — Results rematch-before-bootstrap + lexicon/submit UX
 
-- C1: rich pending without bootstrap; rematch with no freeze/archive → `shouldShowResultsUnavailableAfterRematch` error CTA (not eternal `!viewData` spinner).
+- C1: pending latch after authoritative bootstrap (or rematch-survival from late authoritative + finished snapshot); keep maps sub after rematch until freeze; rematch with no freeze/archive → `shouldShowResultsUnavailableAfterRematch` error CTA. Provisional-rich must not pin/freeze.
 - I2: `RoundResultsView` shows word lists while lexicon loads (corner spinner only).
 - I3: `submitOnlineWord` returns `NETWORK` via `isFirebaseNetworkError` (not always `SESSION_MISSING`).
 - Deploy: rules+app together already in `firebase_schema.md`; `player_words` post-release cleanup checklist unchanged.
@@ -43,7 +94,7 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 ### 2026-08-02 — Review C1 spinner escape + C2 no acceptRich after exhaustion
 
-- C1: spinner escapes after `RESULTS_WORDS_BOOTSTRAP_ESCAPE_MS` without marking bootstrap complete (no empty freeze); hook still completes only on snapshot/successful fetch.
+- C1: **do not** time-escape bootstrap after historical 8s (removed export — that painted provisional as final). Spinner until authoritative bootstrap or mapsUnavailable CTA; hook completes only on snapshot/successful fetch. Empty-claims uses `RESULTS_EMPTY_CLAIMS_ESCAPE_MS` separately.
 - C2: removed `acceptRichWhileAwaiting`; exhaustion empties UI and waits for wipe empty before any rich apply.
 - I1: play standings merge own/optimistic via `sessionWithWordPlayersForExit`.
 - Mixed old/new clients: deploy rules+app together; score caps are legacy-only until post-release field delete.
@@ -77,8 +128,8 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 ### 2026-08-01 — Results empty freeze (C1) + archive empty wipe
 
 - `wordsBootstrapComplete` only after maps `snapshot` / successful fetch — never on disable, fetch `!ok`, or `unavailable` (stale-true empty freeze).
-- Spinner may escape after 8s without marking bootstrap complete; freeze still waits for authoritative maps / rich pending.
-- `nextResultsFreezePending` + freeze source prefer rich pending over empty live while still `finished`.
+- Bootstrap does **not** time-escape after 8s (historical escape constant removed from exports). Exit via authoritative complete or `mapsUnavailable` / `resolveResultsErrorCta`; freeze still waits for authoritative maps.
+- `nextResultsFreezePending` + freeze source prefer rich pending over empty live while still `finished`; no latch/freeze from provisional.
 - Archive: `shouldSkipEmptyArchiveWords` on RTDB fetch paths **and** `persistLocalArchive` (results/exit); finalize gated by `shouldFinalizeOnlineResultsStats`.
 
 ### 2026-08-01 — Review follow-up: results hang (I1) + rematch empty exhaustion (I2)
@@ -375,7 +426,7 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 - Live RTDB `players/*/score` writes and `x2Claim`/`x2Demoted` removed from **current** clients. Submit = `wordPlayers` shard only; standings via `buildLiveStandingsFromSession`. Play screen no longer calls `syncSessionPlayerScores`.
 - Rules still allow capped score/wordCount (legacy clients). Post-release: **remove** those RTDB fields with the `player_words` wipe checklist — not lock-to-0. Local archives stamp derived totals; history/stats/results derive from `playerWords`/`wordPlayers`. Empty-archive gate uses maps + existing archive richness (not live wordCount). Finish no longer requires maps fetch.
-- Review follow-up: pending-archive finalize derives standings from words; live membership/rejoin use `playerHasScoredInRound` (maps); wordPlayers leaf append-only while playing; play cache uses `sessionWithWordPlayersForExit`; results maps bootstrap escapes after 8s.
+- Review follow-up: pending-archive finalize derives standings from words; live membership/rejoin use `playerHasScoredInRound` (maps); wordPlayers leaf append-only while playing; play cache uses `sessionWithWordPlayersForExit`; results maps bootstrap does **not** time-escape after 8s (authoritative / mapsUnavailable CTA only).
 - Orphan restore filters cache `wordPlayers` to actor uid only (peer multipath → PD); maps write failure rolls back the restored session root.
 - Join no longer calls `requireSessionWordMaps` (was unused after score-path removal; threw after roster write → orphan uid).
 - Post-join maps `!ok`: prefer play when still in live round (not silent results for round-0 offline scorers).
