@@ -8,6 +8,319 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-08 — Play Retry dismissed maps banner before authoritative seed
+
+- **Symptom (review / prevented):** Play `OnlineMapsSyncBanner` Retry set `mapsSyncFailed=false` (UI + layout on `mapsRetryNonce`) → board with no sync indicator while remount/seed hung (up to soft-tick abandon). Roster hung-cap deliberately keeps CTA.
+- **Fix:** Keep `mapsSyncFailed` until authoritative snapshot clears it; Retry only bumps `mapsRetryNonce` (epoch reset). `gameId` change still clears fail-loud for a new room.
+- **Test:** `use-play-session-subscriptions.test.tsx` (Retry keeps fail-loud; authoritative clears; fresh-epoch remount after Retry)
+- **Area:** `usePlaySessionSubscriptions.ts`, `app/online/play/[gameId].tsx`
+
+### 2026-08 — Hung ensureAnonymousAuth before maps attach never reached CTA (I1)
+
+- **Symptom (review / prevented):** `subscribeSessionWordMaps` awaited `ensureAnonymousAuth` with no timeout → hung Auth/App Check left results/left on words-loading (Home ok) without `mapsUnavailable` / Retry.
+- **Cause:** Auth-first was required to stop cold-open PD abandon (P0); cancel-during-auth intentionally silent; hang never resolved/rejected.
+- **Fix:** `WORD_MAPS_AUTH_TIMEOUT_MS` (15s) → emit `unavailable` without attach; late auth after timeout must not attach. Still no children/get before auth (P0). Cancel during wait still emits nothing.
+- **Test:** `session-word-maps-service.test.ts` (hung auth → unavailable; late resolve no attach)
+- **Area:** `session-word-maps-service.ts`
+
+### 2026-08 — Results words-loading spinner had no Home (finished + rematch-survival)
+
+- **Symptom (review / prevented):** (1) After removing bootstrap time-escape, finished results showed bare ActivityIndicator until mapsUnavailable (~30s) with Home only on rematch-survival; early return often omitted Stack.Screen. (2) Fast rematch before freeze kept `isResultsRematchSurvivalActive` → `resolveResultsErrorCta` null → naked spinner until hung-cap/empty-close.
+- **Fix:** Single contract: `shouldShowResultsWordsLoadingHomeEscape` + `createResultsHomePress('words-loading')` + Stack.Screen whenever words-loading has no viewData (finished **or** rematch-survival). Left bootstrap spinner gets Home parity. No provisional-as-final escape. Dead `shouldShowResultsRematchSurvivalHomeEscape` / path `rematch-survival` removed (no-legacy).
+- **Test:** `tests/results-home-escape.test.ts` (words-loading path + escape helper)
+- **Area:** `results/[gameId].tsx`, `left/[gameId].tsx`, `results-home-escape.ts`
+
+### 2026-08 — Rematch-survival close ignored mapsUnavailable (latent I1)
+
+- **Symptom (review / prevented):** `shouldCloseResultsRematchSurvival` could close after grace while `mapsUnavailable` if a future change left `wordsBootstrapComplete=true` (CTA gates already use mapsUnavailable; bootstrap flip was only incidental defense).
+- **Fix:** Close requires `mapsUnavailable !== true`; results closeCandidate skips while unavailable. Roster comment updated (keep bootstrap flip until latch paths no longer depend on it).
+- **Test:** `frozen-round-view.test.ts`; `online-invariants.test.ts` (§ADR-022)
+- **Area:** `frozen-round-view.ts`, `app/online/results/[gameId].tsx`, `useLiveRosterPlayerWords.ts`
+
+### 2026-08 — Results maps-retry / survival Home skipped leave (NLD7S family)
+
+- **Symptom (review / prevented):** Home on results `maps-retry`, `rematch-home`, or rematch-survival spinner used `router.replace('/')` → no `leaveGameSession` while live rematch `waiting` → peer stuck / joiner resurrect risk (same class as NLD7S Home from results).
+- **Cause:** New fail-loud / survival CTAs wired navigate-only; footer/left already used `handleHome` → `exitOnlineToHome`.
+- **Fix:** `createResultsHomePress` — membership paths call `handleHome`; room-not-found stays navigate-only.
+- **Test:** `tests/results-home-escape.test.ts`
+- **Area:** `app/online/results/[gameId].tsx`, `lib/online/session/results-home-escape.ts`
+
+### 2026-08 — Empty+unavailable remount preserved empty SoT and cancelled rich fetch (C1)
+
+- **Symptom (review / prevented):** Empty authoritative listen + in-flight tryFetch → unavailable → auto-remount with preserve empty → skip fetch + `wordsBootstrapComplete=true` → rematch-survival close / «0 слів»; cancelled late rich ignored.
+- **Fix:** `shouldPreserveRosterMapsOnUnavailableRemount` — preserve only rich SoT or post-bootstrap complete; incomplete empty remounts fresh and restarts fetch. Rematch-survival empty-close grace raised to 2.5s (same race family).
+- **Test:** `use-live-roster-player-words.test.tsx` (empty auth + unavailable…); `roster-maps-unavailable-remount.test.ts`
+- **Area:** `useLiveRosterPlayerWords.ts`, `roster-maps-unavailable-remount.ts`, `frozen-round-view.ts`
+
+### 2026-08 — Play session auth reject left eternal loading (C1)
+
+- **Symptom (review / prevented):** After maps/session split, session `ensureAnonymousAuth().then` without reject handler → no `subscribeGameSession`, loading stuck; maps banner never shown (UI exits on loading first).
+- **Fix:** Auth reject → `setLoading(false)` + `setLoadError(joinErrorMessage)`.
+- **Test:** `use-play-session-subscriptions.test.tsx` (session auth reject…)
+- **Area:** `usePlaySessionSubscriptions.ts`
+
+### 2026-08 — Rematch-survival closed before late child latch (C2)
+
+- **Symptom (review / prevented):** Empty authoritative bootstrap immediately `markFreezeAttempted` → roster `[]` / listen tear-down before late `onChildAdded` could latch pending → lost pin / rematch-home too early.
+- **Fix:** `shouldCloseResultsRematchSurvival` requires empty close grace (`RESULTS_REMATCH_SURVIVAL_EMPTY_CLOSE_GRACE_MS`); results schedules re-check after remaining grace.
+- **Test:** `frozen-round-view.test.ts` (empty seal → late child latches; wipe after grace)
+- **Area:** `frozen-round-view.ts`, `app/online/results/[gameId].tsx`
+
+### 2026-08 — Last seed get abandoned after 1 soft tick (false mapsUnavailable)
+
+- **Symptom (review / prevented):** get#1/#2 hard-fail → get#3 seals at 9–20s, but soft-tick at 8s abandoned because `seedAttempt >= max` → late seal dropped → false `mapsUnavailable`.
+- **Fix:** Soft-timeout abandons only on soft-tick cap; real-get budget stays in `scheduleSeedRetry`. `abandonSeedRetries` clears `seedGetInFlight`.
+- **Test:** `session-word-maps-service.test.ts` (`last real get soft-tick must not abandon…`)
+- **Area:** `session-word-maps-service.ts`
+
+### 2026-08 — Empty freeze disabled maps listen before late children (results)
+
+- **Symptom (review / prevented):** Empty get∪empty fetch → bootstrap → empty `frozenRound` → roster cleared (`hasFrozenRound: true` → `[]`) and/or `enabled: !frozenRound` tore down maps listen; late `onChildAdded` never upgraded «0 слів».
+- **Fix:** `computeResultsMapsRosterPlayerIds` clears roster only on **rich** freeze (`frozenWords`); empty freeze keeps finished roster. `shouldEnableResultsMapsRosterListen` keeps listen while freeze words are empty; rich freeze disables.
+- **Test:** `frozen-round-view.test.ts` (empty freeze → roster + enabled; rich freeze → neither; upgrade gate compose)
+- **Area:** `frozen-round-view.ts`, `app/online/results/[gameId].tsx`
+
+### 2026-08 — Post-paint maps Retry flashed full-screen spinner (results/left)
+
+- **Symptom (review / prevented):** Banner Retry set `mapsUnavailable=false` while `wordsBootstrapComplete` was already false → loading gate spun over painted standings until remount restored bootstrap.
+- **Fix:** Preserve-retry keeps/restores `wordsBootstrapComplete=true` immediately; loading/block gates also skip spinner when painted words remain.
+- **Test:** roster I1 Retry assert bootstrap true; `should-show-online-results-words-loading` + left block painted-words cases
+- **Area:** `useLiveRosterPlayerWords.ts`, loading/block gates, results/left
+
+### 2026-08 — Soft-timeout hang detector = product-accepted SLA (not extra gets)
+
+- **Product signed-off (2026-08 reviews):** Play worst-case hung seed before banner ≈ `(MAX_RESUBSCRIBES+1)×seedGetMaxAttempts×8s` (~72s with defaults 2×3×8). **Do not** shorten epochs/ticks or add parallel get / eager supersede to “fix” SLA — late-seal > shorter CTA. Old `onValue` could also hang without CTA; this is fail-loud after budget, not a new silent hang.
+- **Accept:** `seedGetMaxAttempts` = dual budget (max real gets **and** soft ticks per hung get). Forever-hung get#1 abandons after N×8s with **get call count === 1** (not N gets). Play may remount up to `MAX_RESUBSCRIBES` before banner. Eager supersede / parallel get on soft-timeout is **forbidden** (late-seal regression).
+- **Test:** `session-word-maps-service.test.ts` (`forever-hung get#1: get call count stays 1…`)
+- **Area:** `session-word-maps-service.ts`, ADR-022, play subscriptions constants
+
+### 2026-08 — Results/left mapsUnavailable wiped painted standings (I1)
+
+- **Symptom (review / prevented → real on results):** Post-bootstrap `mapsUnavailable` → full-screen maps-retry even when `viewData` already painted; after CTA gate fixed to null+banner, `shouldShowOnlineResultsWordsLoading` still spun forever (`wordsBootstrapComplete=false` masked banner).
+- **Fix:** Full-screen only when `!hasFinishedViewData` / `!hasViewData`; painted screens use inline banner. Loading gate returns false when `mapsUnavailable` (left `shouldBlockLeftRoundOnMapsBootstrap` parity).
+- **Test:** `frozen-round-view.test.ts`; `left-round-screen-actions.test.ts`; `should-show-online-results-words-loading.test.ts` (mapsUnavailable → no spin)
+- **Area:** results/left, `frozen-round-view.ts`, `left-round-screen-actions.ts`, `should-show-online-results-words-loading.ts`
+
+### 2026-08 — Hung-cap Retry spam piled parallel tryFetch (I4)
+
+- **Symptom (review / prevented):** Each hung-cap Retry kicked a new `tryFetch` with no in-flight gate.
+- **Fix:** Single-flight `kickInFlight` on kick path.
+- **Test:** `use-live-roster-player-words.test.tsx` (5× Retry → +1 fetch)
+- **Area:** `useLiveRosterPlayerWords.ts`
+
+### 2026-08 — Hung-cap Retry dismissed CTA into naked rematch-survival spinner (C1)
+
+- **Symptom (review / prevented):** After empty listen + hung bootstrap fetch, Retry set `mapsUnavailable=false` without remount/re-arm → rematch waiting survival spinner with no Home/Retry.
+- **Cause:** I4 correctly forbade remount (late rich), but dismiss-only left `resolveResultsErrorCta` null while `isResultsRematchSurvivalActive`.
+- **Fix:** Hung-cap Retry keeps CTA; kicks parallel `tryFetch` (rich-only) without remount; primary in-flight fetch still seals.
+- **Test:** `use-live-roster-player-words.test.tsx` (I4/C1 keep CTA + late rich; never-settle keeps CTA)
+- **Area:** `useLiveRosterPlayerWords.ts`, results/left via `mapsUnavailable`
+
+### 2026-08 — Soft-timeout burned seedAttempt without new get (I1)
+
+- **Symptom (review / prevented):** Soft-timeout `seedAttempt += 1` with single-flight → one hung get could exhaust max before a 2nd/3rd real get after reject.
+- **Fix:** Soft-timeout is a **hang detector only** (re-arm soft timer / abandon after soft-tick cap). It does **not** queue a new get, does **not** burn `seedAttempt`, and must **not** start a parallel get. `startSeedGet` alone increments `seedAttempt`; lazy supersede only when the next real get starts after hard-fail settle. Soft-timeout abandons **only** on soft-tick cap (never because `seedAttempt === max` after 1 tick) so the last real get still gets N ticks for late-seal.
+- **Follow-up (I1-R1):** Forever-hung early get never emitted `unavailable` (soft no longer burned budget). Per-get `softTimeoutTicks` cap (= `seedGetMaxAttempts`) → `abandonSeedRetries`; late settle ignored via `activeGetId`.
+- **Test:** `session-word-maps-service.test.ts` (soft then reject → get 2; forever-hung → unavailable)
+- **Area:** `session-word-maps-service.ts`
+
+### 2026-08 — Post-bootstrap mapsUnavailable CTA blocked by wordsBootstrapComplete
+
+- **Symptom (review / prevented):** After I1 remount+preserve, 2nd unavailable set `mapsUnavailable` but left/results CTA required `!wordsBootstrapComplete` → silent stale lists.
+- **Fix:** Fail-loud flips bootstrap incomplete; pre-paint full-screen CTA / post-paint banner; manual Retry preserves SoT.
+- **Test:** roster I1 + Retry preserve; `resolveResultsErrorCta` pre-paint; left banner helpers
+- **Area:** `useLiveRosterPlayerWords.ts`, `frozen-round-view.ts`, left/results screens
+
+### 2026-08 — Roster post-bootstrap silent maps death; parallel seed gets; hung-cap Retry drop
+
+- **Symptom (review / prevented):** Left/results ignored `unavailable` after bootstrap; soft-timeout started parallel Firebase gets; hung-cap Retry remount cancelled late rich fetch; fetch used parent path vs listen child path.
+- **Fix:** Post-bootstrap remount once with SoT preserve → CTA; single-flight seed get; hung-cap Retry keeps CTA + kick fetch (no remount); `tryFetch` on `wordPlayers`; play Retry reset in `useLayoutEffect`.
+- **Test:** `use-live-roster-player-words.test.tsx` (I1/I4/C1), `session-word-maps-service.test.ts` (single-flight + wordPlayers fetch)
+- **Area:** roster hook, session-word-maps-service, play subscriptions
+
+### 2026-08 — Cold maps subscribe PD-abandon before auth (results/left)
+
+- **Symptom (review / prevented):** Roster called `subscribeSessionWordMaps` without waiting for auth → seed get `permission_denied` → permanent abandon → flaky `mapsUnavailable` on cold open / stale App Check.
+- **Cause:** Play gated on `ensureAnonymousAuth`; subscribe itself attached children+seed immediately; `tryFetch` had auth but listen did not.
+- **Fix:** `subscribeSessionWordMaps` awaits `ensureAnonymousAuth` before attach/seed; cancel during auth wait emits nothing.
+- **Test:** `tests/session-word-maps-service.test.ts` (P0 cold open / cancel during auth)
+- **Area:** `session-word-maps-service.ts`, results/left via roster hook
+
+### 2026-08 — Play exhausted remount looped every 5s on permanent PD
+
+- **Symptom (review / prevented):** After fail-loud banner, play kept remounting maps every 5s while mounted → battery/bandwidth on dead room / PD.
+- **Cause:** Unbounded exhausted remount cadence after `MAX_RESUBSCRIBES`.
+- **Fix:** Stop auto-remount after fail-loud; Retry nonce resets epoch; skip remount when status ∉ {playing,waiting}.
+- **Test:** `tests/use-play-session-subscriptions.test.tsx` (stop after exhaust; Retry remounts)
+- **Area:** `usePlaySessionSubscriptions.ts`
+
+### 2026-08 — Left spun forever on mapsUnavailable; play full-screen maps fail-loud; hung-cap closed survival
+
+- **Symptom (review / prevented):** Left ignored `mapsUnavailable` → eternal spinner; play replaced the whole board on `mapsSyncFailed`; hung-cap still `markBootstrapComplete` empty → survival close cancelled late rich fetch.
+- **Cause:** Left not wired to new hook CTA; play treated maps fail like session loadError; hung-cap reused empty-bootstrap escape.
+- **Fix:** Left maps-retry + Home; play banner over board; hung-cap → `mapsUnavailable` only (listen/fetch stay).
+- **Test:** `left-round-screen-actions.test.ts`, `use-live-roster-player-words.test.tsx` (hung-cap + late rich)
+- **Area:** `left/[gameId].tsx`, `play/[gameId].tsx`, `useLiveRosterPlayerWords.ts`, mockups
+
+### 2026-08 — Play Retry remounted with stale exhausted epoch
+
+- **Symptom (review / prevented):** After fail-loud, Retry briefly subscribed with `mapsListenEpoch >= MAX` → first `unavailable` instantly re-armed `mapsSyncFailed` (broken/flickering Retry).
+- **Cause:** Epoch reset lived in a separate `useEffect` from maps remount; maps effect also depended on `mapsRetryNonce` and ran with the old epoch first.
+- **Fix:** Reset epoch + bump `mapsRemountNonce` in `useLayoutEffect` when Retry/gameId changes (before maps subscribe effect); maps effect depends on remount nonce, not retry nonce alone. Do **not** reset during render (Strict Mode double-bump).
+- **Test:** `tests/use-play-session-subscriptions.test.tsx` (Retry fresh epoch)
+- **Area:** `usePlaySessionSubscriptions.ts`
+
+### 2026-08 — Play maps unavailable off playing/waiting went silent (I1)
+
+- **Symptom (review / prevented):** `unavailable` with `mapsListenEpoch < MAX` while `liveStatus` was `finished` (etc.) skipped remount and never set `mapsSyncFailed` → dead listen, no banner.
+- **Fix:** When status forbids remount, set `mapsSyncFailed` immediately in the retry timer.
+- **Test:** `tests/use-play-session-subscriptions.test.tsx` (finished + unavailable → fail-loud)
+- **Area:** `usePlaySessionSubscriptions.ts`
+
+### 2026-08 — Short empty-listen grace closed survival before late rich fetch
+
+- **Symptom (review / prevented):** Empty authoritative + `ROSTER_EMPTY_LISTEN_FETCH_GRACE_MS` (1.5s) completed bootstrap → `freezeAttempted` → disabled roster cancelled in-flight rich fetch.
+- **Cause:** Short grace treated hung-cap as “fetch missed” while `fetchSettled===false`.
+- **Fix:** Complete empty bootstrap only when fetch settles; hung-cap sets `mapsUnavailable` without bootstrap-complete / survival close.
+- **Test:** `tests/use-live-roster-player-words.test.tsx` (late rich past former short grace; hung-cap + late rich)
+- **Area:** `useLiveRosterPlayerWords.ts`, rematch-survival
+
+### 2026-08 — Empty listen discarded late rich bootstrap fetch (C1 wipe race)
+
+- **Symptom (review / prevented):** Rematch wipe seed listen `{}` set `heardAuthoritative` + bootstrap complete; delayed non-empty `tryFetchSessionWordMaps` (parent path) was ignored → empty survival close → false rematch-home / lost finished lists.
+- **Cause:** Any authoritative snapshot (including empty) permanently stale-out the bootstrap fetch.
+- **Fix:** Open-apply non-empty fetch over empty `lastAppliedMaps`; delay empty bootstrap-complete until fetch settles (or absolute hung-cap).
+- **Test:** `tests/use-live-roster-player-words.test.tsx` (C1 wipe race)
+- **Area:** `useLiveRosterPlayerWords.ts`, rematch-survival results
+
+### 2026-08 — Play maps listen died after post-seed unavailable (I1)
+
+- **Symptom (review / prevented):** After authoritative seed, mid-round `unavailable` kept last maps but did not remount → no live deltas until leave.
+- **Cause:** Remount gated on `!heardMapsAuthoritative`.
+- **Fix:** Remount on every `unavailable`; shorter fail-loud budget (`MAX_RESUBSCRIBES=2`, seed attempts 3); PD uses shared `abandonSeedRetries`.
+- **Test:** `tests/use-play-session-subscriptions.test.tsx` (I1 post-seed remount), `tests/session-word-maps-service.test.ts` (PD)
+- **Area:** `usePlaySessionSubscriptions.ts`, `session-word-maps-service.ts`
+
+### 2026-08 — Rematch waiting + mapsUnavailable hid retry CTA (C1)
+
+- **Symptom (review / prevented):** Rematch-before-freeze with seed `unavailable` showed rematch Home-only CTA; maps `retryMapsListen` block was below and unreachable.
+- **Cause:** `isResultsRematchSurvivalActive(mapsUnavailable:true)` → false → rematch CTA won render order over maps-retry CTA.
+- **Fix:** `resolveResultsErrorCta` prioritizes `maps-retry` over `rematch-home`; results screen uses that single gate.
+- **Test:** `tests/frozen-round-view.test.ts` (`resolveResultsErrorCta`)
+- **Area:** `frozen-round-view.ts`, `app/online/results/[gameId].tsx`
+
+### 2026-08 — Play maps listen died silently after max remounts
+
+- **Symptom (review / prevented):** After `PLAY_MAPS_UNAVAILABLE_MAX_RESUBSCRIBES`, play stopped remounting maps → empty standings until leave/remount. Follow-up: fail-loud via shared `loadError` vanished on every session snapshot (`nextPlaySessionLoadError` → null).
+- **Cause:** Hard cap with no fail-loud; then maps error stored in `loadError` which session callbacks clear whenever session exists.
+- **Fix:** Unbounded slow remount after max; separate `mapsSyncFailed` state (not `loadError`); clear only on authoritative seed (Retry remount keeps banner until then; `gameId` change clears for a new room).
+- **Test:** `tests/use-play-session-subscriptions.test.tsx` (session snapshot keeps fail-loud; Retry keeps banner; authoritative clears; retry remounts)
+- **Area:** `usePlaySessionSubscriptions.ts`, play screen
+
+### 2026-08 — Bootstrap escape painted provisional results as final (ADR-022)
+
+- **Symptom (review / prevented):** After `RESULTS_WORDS_BOOTSTRAP_ESCAPE_MS` (8s), results left the spinner and showed `RoundResultsView` from provisional/in-flight maps while seed get still retried.
+- **Cause:** Time-escape treated incomplete bootstrap like ready UI; roster applied provisional to `liveWords`.
+- **Fix:** No time-escape while `!wordsBootstrapComplete` (exit via authoritative bootstrap or `mapsUnavailable` CTA); results roster ignores provisional like play.
+- **Test:** `tests/should-show-online-results-words-loading.test.ts`, `tests/use-live-roster-player-words.test.tsx`
+- **Area:** `should-show-online-results-words-loading.ts`, `useLiveRosterPlayerWords.ts`, results screen
+
+### 2026-08 — Soft-timeout dropped slow seed get; play listen stayed dead after abandon (ADR-022)
+
+- **Symptom (review / prevented):** Soft-timeout immediately bumped `activeGetId` so a get that returned after 8s never sealed; after max attempts play ignored `unavailable` with children abandoned → no live deltas until remount.
+- **Cause:** Eager supersede on soft-timeout; play had no listen-epoch resubscribe (roster did).
+- **Fix:** Lazy supersede (bump `activeGetId` only when next `startSeedGet` runs); teardown children on abandon/PD; play remounts maps subscribe up to `PLAY_MAPS_UNAVAILABLE_MAX_RESUBSCRIBES`; results `retryMapsListen` CTA after `mapsUnavailable`.
+- **Test:** `tests/session-word-maps-service.test.ts` (C1 slow get), `tests/use-play-session-subscriptions.test.tsx` (C2 resubscribe), `tests/use-live-roster-player-words.test.tsx` (manual retry)
+- **Area:** `session-word-maps-service.ts`, `usePlaySessionSubscriptions.ts`, `useLiveRosterPlayerWords.ts`, results CTA
+
+### 2026-08 — Rematch-survival latched next-round playing words onto old finished (C1)
+
+- **Symptom (review / prevented):** Peer rematch before freeze → wipe empty → no latch → maps sub stayed into next `playing` → new words latched onto `lastFinishedCore` → cross-round freeze/archive corruption.
+- **Cause:** `computeResultsMapsRosterPlayerIds` / rematch latch allowed `playing`; `nextResultsFreezePending` rematch branch had no status/round guard; rematch CTA could flash before survival bootstrap finished.
+- **Fix:** Survival roster + latch only in rematch `waiting` (not `playing`); refuse latch when live round &gt; finished+1; close survival (`freezeAttempted`) after waiting + authoritative empty + no pending; CTA suppressed while `isResultsRematchSurvivalActive`.
+- **Test:** `tests/frozen-round-view.test.ts` (C1 cross-round, C2 CTA gate, survival close)
+- **Area:** `frozen-round-view.ts`, `app/online/results/[gameId].tsx`, ADR-022 rematch-survival
+
+### 2026-08 — Seed unavailable left results spinner without CTA (ADR-022)
+
+- **Symptom (review / prevented):** After max seed attempts / PD, roster ignored `unavailable` → bootstrap never completed → spinner escape / empty freeze path without fail-loud.
+- **Cause:** Hook treated unavailable as «keep waiting» with no retry/CTA after abandon.
+- **Fix:** One delayed resubscribe; then `mapsUnavailable` → results error CTA (`errorOpenResultsFailed`). Still never complete bootstrap on unavailable.
+- **Test:** `tests/use-live-roster-player-words.test.tsx`
+- **Area:** `useLiveRosterPlayerWords.ts`, `app/online/results/[gameId].tsx`
+
+### 2026-08 — Play provisional peak stuck over smaller authoritative seed (ADR-022)
+
+- **Symptom (review / prevented):** Cold play mount: provisional `{A,B}` then authoritative get∪buffer `{A}` → grow-only kept phantom B.
+- **Cause:** Play applied provisional via grow-only; unlike roster, no ignore-provisional / open-first SoT.
+- **Fix:** Play ignores all `seed: 'provisional'` (Variant A); first authoritative applies from null/previous without provisional peak.
+- **Test:** `tests/play-word-maps-apply.test.ts`, `tests/use-play-session-subscriptions.test.tsx`
+- **Area:** `play-word-maps-apply.ts`, ADR-022 play consumer
+
+### 2026-08 — Provisional peak stuck after authoritative empty (C1-residual)
+
+- **Symptom (review / prevented):** Provisional partial + rematch wipe authoritative `{}` → grow-only kept provisional peak → rematch-survival latched partial freeze.
+- **Cause:** Roster always grow-only; first authoritative empty could not clear provisional UI peak.
+- **Fix:** First authoritative listen / non-empty fetch applies as `open` SoT; later deltas stay grow-only. Rematch-survival with empty liveWords does not latch.
+- **Test:** `tests/use-live-roster-player-words.test.tsx`, `tests/frozen-round-view.test.ts`
+- **Area:** `useLiveRosterPlayerWords.ts`, ADR-022 rematch-survival
+
+### 2026-08 — Rematch before maps bootstrap lost results pin (ADR-022)
+
+- **Symptom (review / prevented):** Strict pending-only-after-bootstrap + rematch disabling maps subscribe → no pin → `shouldShowResultsUnavailableAfterRematch` even when late authoritative/fetch would have full lists. Provisional-rich must still not freeze.
+- **Cause:** Rematch flipped status before `nextResultsFreezePending` could latch; hook disabled on non-finished roster.
+- **Fix:** Keep maps subscribe alive after rematch **`waiting` only** until freeze attempted (or closed after empty bootstrap); latch rematch-survival pending from authoritative/fetch bootstrap + preserved finished session snapshot (never provisional-only; never during next `playing`). Suppress rematch-unavailable CTA while survival active. Archive recovery remains primary for pinned routes.
+- **Test:** `tests/frozen-round-view.test.ts` (late authoritative after rematch latch)
+- **Area:** `frozen-round-view.ts`, `app/online/results/[gameId].tsx`, ADR-022
+
+### 2026-08 — Unbounded seed buffer/retry (ADR-022)
+
+- **Symptom (review / prevented):** Hung/failing seed get while children fire → O(events) buffer growth and eternal get retries.
+- **Cause:** Array buffer of every child op; no max attempt stop.
+- **Fix:** Coalesce buffer by word key (O(words)); stop after `WORD_MAPS_SEED_GET_MAX_ATTEMPTS` with one `unavailable` (PD/cancel still immediate).
+- **Test:** `tests/session-word-maps-service.test.ts` (coalesce + max attempts)
+- **Area:** `session-word-maps-service.ts`, ADR-022
+
+### 2026-08 — Provisional empty cleared play wipe-gate (ADR-022)
+
+- **Symptom (review / prevented):** Round reset `awaitingEmptySync` + provisional `{}` from buffered removes cleared the latch; later authoritative rich applied; grow-only stuck prior-round words on the new round.
+- **Cause:** Play `decidePlayMapsListenerApply` treated every snapshot empty as wipe; ignored `seed: 'provisional'`.
+- **Fix:** Provisional never clears `awaitingEmptySync` (ignored while awaiting); only authoritative empty wipe clears. PD+buffer no longer seals authoritative; retryable hard-fail does not emit `unavailable`.
+- **Test:** `tests/play-word-maps-apply.test.ts`, `tests/use-play-session-subscriptions.test.tsx`, `tests/session-word-maps-service.test.ts`
+- **Area:** ADR-022, `play-word-maps-apply.ts`, `usePlaySessionSubscriptions.ts`, `session-word-maps-service.ts`
+
+### 2026-08 — Provisional maps snapshot ≠ freeze bootstrap (ADR-022)
+
+- **Symptom (review / prevented):** Provisional 16ms buffer (or soft-timeout first child) emitted as plain `snapshot` → roster `wordsBootstrapComplete=true` → results froze/finalized partial standings; later richer seed could not upgrade non-empty freeze.
+- **Cause:** Consumers treated every maps snapshot as authoritative seed; soft-timeout path could `finishSeed` from first child alone.
+- **Fix:** `SessionWordMapsListenEvent` snapshots carry `seed: 'provisional' | 'authoritative'`; roster marks bootstrap only on authoritative (or non-empty fetch); children stay provisional until successful get (no PD+buffer seal); freeze/pending latch require bootstrap (provisional-rich must not pin); grow-only is membership-monotonic.
+- **Test:** `tests/session-word-maps-service.test.ts`, `tests/use-live-roster-player-words.test.tsx`, `tests/frozen-round-view.test.ts`, `tests/live-words-snapshot.test.ts`
+- **Area:** ADR-022, `session-word-maps-service.ts`, `useLiveRosterPlayerWords.ts`, results freeze
+
+### 2026-08 — Grow-only / empty-room seed (ADR-022 current contract)
+
+- **Symptom (review / prevented):** (1) Soft-timeout + hard fail left empty rooms unseeded or hung. (2) Open/48ms arm window allowed rematch wipe to `{}` or sticky last word on results/left. (3) Soft-timeout spam `unavailable`.
+- **Cause:** Hard MAX stop / invent-empty avoidance without continuous retry; time-based grow-only arm; timeout treated like hard fail telemetry.
+- **Fix (current):** Listeners-first + get∪buffer (coalesce by word key); soft-timeout = **hang detector** (re-arm / abandon after soft-tick cap — **no** queue, **no** parallel get / eager supersede); retryable hard-fail schedules next `startSeedGet` with backoff after settle; `unavailable` after max real gets **or** soft-tick cap on a hung get (PD/cancel emit immediately); **play and results roster ignore provisional**; first authoritative/non-empty fetch **open SoT** → later membership grow-only; no bootstrap time-escape over provisional; default replace API remains `empty-clear-guard`. See ADR-022 / top «Soft-timeout hang detector» entry — older «supersede on soft-timeout» wording is obsolete.
+- **Test:** `tests/session-word-maps-service.test.ts`, `tests/use-live-roster-player-words.test.tsx`, `tests/frozen-round-view.test.ts`, `tests/live-words-snapshot.test.ts`, `tests/online-invariants.test.ts`
+- **Area:** ADR-022, `session-word-maps-service.ts`, `useLiveRosterPlayerWords.ts`, `live-words-snapshot.ts`
+
+### 2026-08 — Incremental onChildRemoved rematch wipe ate finished word lists
+
+- **Symptom:** After ADR-022, rematch `clearSessionWordMaps` delivered N× `onChildRemoved` while results/left still subscribed → empty-clear guard allowed non-empty shrink → UI could keep only the last word instead of the full finished round.
+- **Cause:** `shouldReplaceLiveWordMaps` / `shouldReplaceLiveWordsSnapshot` blocked only empty wipe, not leaf-count decreases; root `onValue` had been one atomic rich→empty.
+- **Fix:** Grow-only replace (membership-monotonic: every previous leaf/word must remain) outside `awaitingEmptySync`; play round-reset empty still via gate.
+- **Test:** `tests/live-words-snapshot.test.ts`, `tests/play-word-maps-apply.test.ts`, `tests/use-live-roster-player-words.test.tsx` (progressive shrink→empty keeps rich)
+- **Area:** `lib/online/session/live-words-snapshot.ts`, ADR-022 consumers
+
+### 2026-08 — Maps listen get-then-attach lost rematch wipe (stale rich)
+
+- **Symptom (review / prevented):** After ADR-022 narrowing, `get(wordPlayers)` then `attachChildListeners` left a window where `clearSessionWordMaps` / root remove produced no `onChildRemoved` for seed keys → local `wordPlayers` stuck rich. Combined with ADR-020 mid-play empty block → durable stale words / wrong standings until remount.
+- **Cause:** Classic RTDB race: seed completed before child listeners; deletes during the gap are not replayed.
+- **Fix:** Attach `onChild*` first; buffer ops until seed; reconcile `get` baseline + buffer; cancel tears down once; seed failure keeps children alive without inventing empty.
+- **Test:** `tests/session-word-maps-service.test.ts` (wipe-before-seed reconcile; cancel teardown; post-fail child add)
+- **Area:** `lib/firebase/session-word-maps-service.ts`, ADR-022
+
 ### 2026-08 — Legacy empty archive skip lost stats forever (sync done)
 
 - **Symptom:** Empty legacy extract + claimed counts returned sync `done` (ack + clear pending) without maps fetch → competition stats never recorded even when RTDB maps still had words.
@@ -35,9 +348,9 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 ### 2026-08 — Results eternal spinner after rematch before maps bootstrap
 
 - **Symptom:** Unpinned results with unfinished maps bootstrap (`unavailable` / slow fetch) then peer rematch → `waiting`/`playing`, no pending/freeze/archive → `viewData` null forever after bootstrap spinner escape (`!viewData` ActivityIndicator, no error CTA).
-- **Cause:** `nextResultsFreezePending` required `wordsBootstrapComplete` so pending never latched; roster hook disabled on rematch left bootstrap false; unpinned path had no unavailable escape (unlike pinned miss).
-- **Fix:** Latch **rich** pending before bootstrap; allow freeze from rich pending/live without bootstrap; `shouldShowResultsUnavailableAfterRematch` → error CTA (`errorOpenResultsFailed`) when rematch advanced with no finished view.
-- **Test:** `tests/frozen-round-view.test.ts` (rich pre-bootstrap latch + rematch freeze; unavailable-after-rematch gate)
+- **Cause:** Roster hook disabled on rematch left bootstrap false; unpinned path had no unavailable escape (unlike pinned miss). Earlier “rich pending without bootstrap” latch conflicted with provisional partial freeze (C1).
+- **Fix:** Latch pending only after authoritative `wordsBootstrapComplete` (or rematch-survival latch from late authoritative + finished snapshot in rematch **`waiting` only**); rematch freezes from that pin via the waiting pending branch. Live finished freeze also requires bootstrap (provisional-rich must not lock). Keep maps subscribe after rematch waiting until freeze attempted (or empty-bootstrap close). Without pin/archive → `shouldShowResultsUnavailableAfterRematch` error CTA (suppressed while survival active).
+- **Test:** `tests/frozen-round-view.test.ts` (authoritative pending + rematch freeze; provisional no latch/freeze; unavailable-after-rematch gate)
 - **Area:** `lib/online/session/frozen-round-view.ts`, `app/online/results/[gameId].tsx`
 
 ### 2026-08 — Pending results freeze glued round-N words onto session N+1
@@ -76,7 +389,7 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 - **Symptom:** `permission_denied` / silent maps listener marked bootstrap complete → empty freeze locked «0 слів» even when words existed; late snapshots could not upgrade. Fixing that by never completing bootstrap left a dead spinner escape (loading forever).
 - **Cause:** `unavailable` and bootstrap escape treated as authoritative empty; later incomplete bootstrap never escaped the spinner.
-- **Fix:** Bootstrap completes only on successful maps `snapshot` / fetch — not on `unavailable` or failed fetch. Spinner may escape after `RESULTS_WORDS_BOOTSTRAP_ESCAPE_MS` **without** marking bootstrap complete (no empty freeze). Late maps still freeze/upgrade. Empty+claims soft-skip uses maps/archive claims (not RTDB `wordCount`).
+- **Fix:** Bootstrap completes only on successful maps `snapshot` / fetch — not on `unavailable` or failed fetch. **Current:** do **not** time-escape bootstrap after `RESULTS_WORDS_BOOTSTRAP_ESCAPE_MS` (that painted provisional as final); exit via authoritative or mapsUnavailable CTA. Late maps still freeze/upgrade. Empty+claims soft-skip uses maps/archive claims (not RTDB `wordCount`) and may use `RESULTS_EMPTY_CLAIMS_ESCAPE_MS`.
 - **Test:** `tests/use-live-roster-player-words.test.tsx`, `tests/should-show-online-results-words-loading.test.ts`, `tests/frozen-round-view.test.ts`
 - **Area:** `hooks/useLiveRosterPlayerWords.ts`, `app/online/results/[gameId].tsx`, `lib/online/session/should-show-online-results-words-loading.ts`, `frozen-round-view.ts`
 
@@ -285,7 +598,7 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 - **Symptom:** Finished results showed non-zero scores but «0 слів»; archive recovery never ran (`frozenRound` already set).
 - **Cause:** (A) `useLiveRosterPlayerWords` set `wordsBootstrapComplete=true` while disabled; first enabled paint still had complete+empty and freeze ran before fetch/listener. (B) Fetch `!ok` also marked bootstrap complete in `finally`, locking empty freeze. (C) Even with rich `pending`, `resolveResultsFreezeSource` preferred empty `liveWords` while status stayed `finished` (`unavailable` / remount). (D) `persistLocalArchive` from results wrote empty archives despite `wordCount > 0`.
-- **Fix:** Bootstrap completes only after authoritative maps `snapshot` or successful fetch — **not** on disable, failed fetch, or `unavailable`. Spinner may escape after `RESULTS_WORDS_BOOTSTRAP_ESCAPE_MS` without marking bootstrap complete (no empty freeze). `nextResultsFreezePending` + `resolveFinishedFreezeWords` keep rich pending over empty wipe while still `finished`. Refuse empty freeze when `shouldSkipEmptyArchiveWords` (maps/archive claims — **not** RTDB `wordCount`). Results loading also spins while empty invert + claims. `persistLocalArchive` soft-skips empty maps while claims remain. Partial lists with some words still stop the spinner (ADR-020).
+- **Fix:** Bootstrap completes only after authoritative maps `snapshot` or successful fetch — **not** on disable, failed fetch, or `unavailable`. **Current:** no bootstrap time-escape after `RESULTS_WORDS_BOOTSTRAP_ESCAPE_MS` (fail-loud CTA instead). `nextResultsFreezePending` + `resolveFinishedFreezeWords` keep rich pending over empty wipe while still `finished`. Refuse empty freeze when `shouldSkipEmptyArchiveWords` (maps/archive claims — **not** RTDB `wordCount`). Results loading also spins while empty invert + claims. `persistLocalArchive` soft-skips empty maps while claims remain. Partial lists with some words still stop the spinner (ADR-020).
 - **Test:** `tests/use-live-roster-player-words.test.tsx`, `tests/words-bootstrap-complete.test.ts`, `tests/frozen-round-view.test.ts`, `tests/should-show-online-results-words-loading.test.ts`, `tests/archive-finished-round-from-firebase.test.ts`, `tests/archive-words-gate.test.ts`, `tests/coordinated-session-cleanup.test.ts`
 - **Area:** `hooks/useLiveRosterPlayerWords.ts`, `lib/online/session/words-bootstrap-gate.ts`, `frozen-round-view.ts`, `should-show-online-results-words-loading.ts`, `archive-words-gate.ts`, `archive-finished-round-from-firebase.ts`, `sync-coordinator.ts`, `coordinated-session-cleanup.ts`
 
@@ -339,6 +652,7 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 ### 2026-07 — Client drops player_words; lists from wordPlayers invert
 
+- **Note (2026-08):** The historical phrase «spinner may escape after 8s» in the Fix below is **superseded** — results bootstrap must not time-escape (ADR-022); exit via authoritative complete or `mapsUnavailable` CTA. See top-of-file ADR-022 entries.
 - **Symptom:** Dual RTDB writes (`player_words` + `session_word_maps`) inflated submit traffic; `{display,at}` leaves duplicated lexicon data.
 - **Cause:** Historical per-player list path beside the shared overlap index.
 - **Fix:** Clients read/write only `session_word_maps/.../wordPlayers`. Own/results lists invert maps by uid; displays from round/archive lexicon. Submit is shard-only (no live RTDB score / `x2Claim`). Firebase rules/CF/`player_words` data left for manual post-release cleanup (see `firebase_schema.md` checklist). Results uses one maps subscription via `useLiveRosterPlayerWords` (enabled only for finished roster; **disabled** after `frozenRound`) and ignores **empty** map clears within a room (state cleared on `gameId` change; disable keeps last words for rematch-before-freeze) so rematch wipe cannot empty pre-freeze lists. Play maps listener uses a **round-reset epoch** (`beginPlayMapsRoundReset` / `awaitingEmptySync`) plus discriminated listen/fetch: `unavailable` (permission_denied) never clears words; mid-play empty over rich does **not** clear UI (append-only rules; no score-path rollback); empty wipe only via round-reset gate / force-sync exhaustion. Force-sync uses `tryFetchSessionWordMaps` (error ≠ empty) with retries on rich-reject; prefer empty wipe, else `decidePlayMapsForceSyncExhaustion` applies **empty** (not prior-round rich) but **keeps** `awaitingEmptySync` until an authoritative empty snapshot (no accept-rich). Results bootstrap completes only on snapshot/successful fetch; spinner may escape after 8s without completing bootstrap (no empty freeze). Results loading/freeze after bootstrap does not require `wordCount` match (ADR-020 desync must not hang the spinner). Left screen resolves words via `resolveLeftWordsSnapshot` (live only while `playing`; else playing-snapshot / freeze) so finish does not blank the list when the roster hook disables. Results pins a pending freeze and applies it if rematch leaves `finished` before the freeze effect (`resolveResultsFreezeSource`); roster hook disable keeps last words; freeze/pending refs reset on `gameId` change. Roster bootstrap uses `tryFetchSessionWordMaps` (no apply empty on error). `persistFinishedRoundFromFirebase` throws on maps fetch failure so left `freezeAttemptedRef` can retry. After `setWordMaps(null)` on `baseWordRound` change, stale non-empty payloads cannot re-arm the empty-clear guard for overlap/x2. Active-round cache merges local `ownWords` into `sessionSnapshot.wordPlayers` and **unions** prior cache for the same timer so left→Home cannot wipe a richer play snapshot (no mid-round push of that cache into a live session — ADR-020; orphan restore only when session root is missing). Archive/finalize paths use `tryFetchSessionWordMaps` and **skip save** on fetch error (no empty archive with non-zero claims); `isFinishedArchiveStale` also treats empty `playerWords` vs claims as stale. Soft-skip empty archive uses maps/archive claims (**not** RTDB `wordCount`). **No migration** for pre-drop AsyncStorage entries that only had a `words` field (tester devices; same policy as v3 finished archives). Pre-v4 / object-shaped `playerWords` archives are **not** refreshed from maps (`isLegacyFinishedArchiveWords`) so a wiped RTDB cannot overwrite disk with empty v4. Duration/WPM uses stored `roundPlayedSeconds` (set at finish) with settings-duration fallback — no `at` timestamps. Local finished archives before `FINISHED_ARCHIVE_VERSION=4` show empty word lists (accepted for tester devices).
@@ -1116,6 +1430,15 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 - **Fix:** Template takes `{{wordForm}}`; lobby passes `ukWordForm(count)`. Keep `playableWordsMax` as fixed genitive «до N слів» (not nominative rules).
 - **Test:** `tests/uk-plural.test.ts` (`lexicon count copy`)
 - **Area:** `i18n/locales/uk.json`, `app/online/lobby/[gameId].tsx`
+
+### 2026-08 — Android public browse «Не вдалося завантажити список»
+
+- **Symptom:** Production Android (1.8.1) public rooms screen shows empty list + red «Не вдалося завантажити список»; iOS simulators can create a public room and see it in browse. After force-kill + cold start on the same Android device the list loaded again.
+- **Cause:** Browse fired RTDB `get` before a full Firebase bootstrap. App Check Console (Monitoring) showed an **Unverified: outdated client** spike in the same minute as the failure (requests without an App Check token — not Invalid). `fetchPublicLobbyPage` only awaited App Check attach, not anonymous Auth / shared `ensureFirebaseReady()`; rules still need `auth != null`, and a warm process could leave the JS SDK issuing RTDB reads before token+auth were ready. Empty + error UI both rendered because empty state ignored `error`.
+- **Fix:** Gate browse reads with `ensureAnonymousAuth()`; browse screen awaits `ensureFirebaseReady({ forceRetry })` when store status is `error` (sticky bootstrap recovery, same as join); map `APP_CHECK_*` via `firebaseBootstrapErrorMessage`; hide empty copy when `error` is set; disable find-public on join while prewarming. Dual gate UI ready + service auth is intentional fail-loud.
+- **Test:** `tests/public-lobby-service.test.ts` (auth before get; no RTDB when auth fails); `tests/firebase-bootstrap-chain.test.ts` (sticky error + `forceRetry`); `tests/join-error-message.test.ts` (`APP_CHECK_TOKEN_EMPTY`). Manual: warm Android → browse fail correlates with outdated-client spike; retry/refresh after error must not require process kill.
+- **Area:** `lib/firebase/public-lobby-service.ts`, `app/online/browse.tsx`, `app/online/join.tsx`
+- **Note:** 0% Invalid here — different from 2026-07 Upload-vs-App-signing SHA. If Invalid returns, recheck Play App signing SHA-256.
 
 ### 2026-07 — «Нова гра» crashed with useInsertionEffect prevent-remove
 
