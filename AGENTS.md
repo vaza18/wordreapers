@@ -4,7 +4,7 @@ Ukrainian word game for families: build words from the letters of a base word; t
 
 Almost all code is written and maintained by AI agents. This file is the single entry point for how to work in this repo safely.
 
-**No legacy code:** when replacing a contract, delete the old path — do not keep silent fallbacks or dual APIs unless the user explicitly asks. See [`.cursor/rules/no-legacy-code.mdc`](.cursor/rules/no-legacy-code.mdc).
+**No legacy / dead code:** when replacing a contract, delete the old path — do not keep silent fallbacks, dual APIs, stubs, or unused exports unless the user explicitly asks. See [`.cursor/rules/no-legacy-code.mdc`](.cursor/rules/no-legacy-code.mdc) and [`.cursor/rules/no-dead-code.mdc`](.cursor/rules/no-dead-code.mdc).
 
 ## Where to find the truth
 
@@ -90,13 +90,14 @@ One logical change per commit (feature / refactor / docs separately). Future age
 
 ## Cursor rules (always or auto-attached)
 
-| Rule                               | When                                                  |
-| ---------------------------------- | ----------------------------------------------------- |
-| `docs-sync.mdc`                    | Always — keep docs/mockups/legal in sync              |
-| `ci-check-before-done.mdc`         | Always — run `npm run ci:check` before done           |
-| `commit-hygiene.mdc`               | Always — atomic commits                               |
-| `no-legacy-code.mdc`               | Always — no compatibility shims unless user asks      |
-| `online-multiplayer-domain.mdc`    | Editing `app/online/`, `lib/online/`, related hooks   |
-| `dictionary-validation-domain.mdc` | Editing `lib/dictionary/`, `scripts/dictionary/`      |
-| `firebase-backend-domain.mdc`      | Editing `firebase/`, `functions/src/`                 |
-| `risky-zone-preflight.mdc`         | Always — state Expected/Invariants before risky edits |
+| Rule                               | When                                                               |
+| ---------------------------------- | ------------------------------------------------------------------ |
+| `docs-sync.mdc`                    | Always — keep docs/mockups/legal in sync                           |
+| `ci-check-before-done.mdc`         | Always — run `npm run ci:check` before done                        |
+| `commit-hygiene.mdc`               | Always — atomic commits                                            |
+| `no-legacy-code.mdc`               | Always — no compatibility shims unless user asks                   |
+| `no-dead-code.mdc`                 | Always — no stubs, unused exports, redundant gates in touched code |
+| `online-multiplayer-domain.mdc`    | Editing `app/online/`, `lib/online/`, related hooks                |
+| `dictionary-validation-domain.mdc` | Editing `lib/dictionary/`, `scripts/dictionary/`                   |
+| `firebase-backend-domain.mdc`      | Editing `firebase/`, `functions/src/`                              |
+| `risky-zone-preflight.mdc`         | Always — state Expected/Invariants before risky edits              |

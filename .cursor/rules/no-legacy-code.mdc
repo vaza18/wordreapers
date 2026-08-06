@@ -19,6 +19,11 @@ When you change how something works (API, env var, data shape, screen flow, conf
 ## Do not add
 
 - Deprecated aliases (`FOO` still accepted because `FOO_NEW` exists)
+- Thin wrappers that only forward to the new function under the old name
+  (`function a(args) { return b(args); }` left “for compatibility”)
+- Barrel / pass-through re-exports after a move
+  (`export { A } from './new-file'` when callers should import from `new-file`
+  directly — unless the barrel **is** the deliberate public API surface)
 - `// legacy` / `// for backwards compatibility` branches without an explicit user request
 - Dual reads/writes “until everyone upgrades” unless the user asked for a migration window
 - Hardcoded leftovers that duplicate env/config “as a safety net”
@@ -30,3 +35,6 @@ Only keep transitional/legacy support when the **user explicitly asks** to prese
 ## Why
 
 Legacy fallbacks hide misconfiguration (e.g. wrong Firebase app id → App Check Invalid), inflate the surface area agents must reason about, and make `git blame` lie about what is actually required. Wordreapers is agent-maintained: **one current contract** beats polite compatibility.
+
+Related: stubs, unused exports, and redundant checks in touched code —
+[`.cursor/rules/no-dead-code.mdc`](no-dead-code.mdc).

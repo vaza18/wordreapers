@@ -1,0 +1,37 @@
+---
+description: Do not leave dead stubs, unused exports, or redundant gates in code you touch
+alwaysApply: true
+---
+
+# No dead code in touched changes
+
+When you add or edit code, **do not leave** dead stubs, unused symbols, or
+duplicate gates in the paths you change. Clean them in the **same** change (same
+bar as no-legacy: one clear contract, no leftovers “just in case”).
+
+## Delete or finish — do not park
+
+| Smell | Example | Action |
+| ----- | ------- | ------ |
+| Stub / no-op predicate | `function c() { return true; }` (or always-false) still used as a gate | Replace with real logic, or delete and simplify call sites |
+| Thin rename wrapper | `function a(args) { return b(args); }` | Delete `a`; callers use `b` (see `no-legacy-code`) |
+| Pass-through re-export after move | `export { A } from './new-file'` only to keep old import path | Point imports at the real module; drop the barrel unless it **is** the public API |
+| Redundant double-check | `test(x)` already calls `test2()`, then caller checks `test2()` again | One source of truth for the gate |
+| Unused export / orphan helper | Exported or file-local helper never referenced after the refactor | Remove it (or wire it — do not leave orphans) |
+| Commented-out old implementation | Old body left beside the new one | Delete the dead block |
+
+## Scope
+
+- Applies to **files you touched** this task — do not drive-by-delete unrelated
+  debt elsewhere.
+- Tests may keep deliberate stubs/fakes; name them clearly (`createFake…`,
+  `stubTransport`). Do not ship production `return true` gates “temporarily”.
+- Exception only if the **user explicitly** asks to keep a shim/stub; note that
+  in the summary and prefer a removal follow-up.
+
+## Before handoff
+
+Quick pass on your diff: any new function/export unused? any always-true/false
+helper? any check duplicated up the call stack? Fix before `ci:check` / review.
+
+Reviewer hygiene (same patterns): `.cursor/agents/wordreapers-staged-reviewer.md`.

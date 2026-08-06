@@ -24,6 +24,8 @@ Register **App Check** providers (Console → App Check → Apps): Android **Pla
 
 After changing native Firebase plugins or config files, rebuild the dev client (`npm run android` / `npm run ios`) — a Metro reload is not enough.
 
+Nearby archive sync (ADR-023) also needs a native rebuild after installing `react-native-udp` / `react-native-tcp-socket` / `munim-bluetooth` / `react-native-nitro-modules`, or changing Local Network / Bluetooth usage strings / the `munim-bluetooth` Expo plugin in `app.config.js`.
+
 Install the **development client** once (`npm run android` or `npm run ios`), then use `npm start` for daily JS work — not Expo Go.
 
 ### Dev multiplayer action logs
