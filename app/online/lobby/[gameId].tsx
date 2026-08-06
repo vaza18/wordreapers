@@ -23,6 +23,7 @@ import { CenterDialogModal } from '@/components/CenterDialogModal';
 import { radii, spacing, type ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
+import { useNearbyArchiveLobbySync } from '@/hooks/useNearbyArchiveSync';
 import { formatRoomCodeDisplay } from '@/lib/firebase/format-room-code';
 import { sessionBaseWordDisplay } from '@/lib/online/session-base-word-display';
 import { formatLobbyBaseWordMetaLine } from '@/lib/online/format-lobby-base-word-meta';
@@ -303,6 +304,14 @@ export default function LobbyScreen() {
     // (that remounts presence without handoff and false-marks offline; see WAGTJ).
     lobbyPresenceOfflinePolicy(),
   );
+
+  useNearbyArchiveLobbySync({
+    gameId,
+    selfUid: myUid,
+    session,
+    enabled: Boolean(gameId && myUid && session?.status === 'waiting'),
+  });
+
   const isOrganizer = session?.organizerId === myUid;
 
   useEffect(() => {

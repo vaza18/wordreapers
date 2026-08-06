@@ -259,6 +259,19 @@ export default function BrowsePublicLobbiesScreen() {
             playerLanguage: gameLanguage,
           },
         );
+        const baseWordRound = session.baseWordRound ?? 0;
+        if (baseWordRound > 0) {
+          void import('@/lib/online/nearby/nearby-archive-sync').then(
+            ({ maybeSyncNearbyArchives }) =>
+              maybeSyncNearbyArchives({
+                gameId,
+                selfUid: firebaseUid,
+                baseWordRound,
+                session,
+                allowBleProbe: true,
+              }),
+          );
+        }
         const route = await resolvePostJoinRouteWithMaps(session, firebaseUid, gameId);
         router.replace(route);
       } catch (err) {
