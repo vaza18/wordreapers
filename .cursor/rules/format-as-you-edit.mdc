@@ -1,6 +1,6 @@
 ---
 description: Before ci:check, run Prettier and scoped ESLint on files changed this session — not after every edit
-alwaysApply: false
+alwaysApply: true
 ---
 # Format / lint before the CI gate
 
