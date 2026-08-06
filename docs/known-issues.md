@@ -8,6 +8,168 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-08 — Nearby isComplete/gaps uncapped vs Want MAX (I1)
+
+- **Symptom (review):** Want capped at `MAX_ROUNDS_PER_ROOM` but `expectedPriorRounds` / `haveRoundsCompleteForN` expected full `0..N-1` → for N>12 trusted HaveAck of `0..11` never stopped lobby advertise.
+- **Fix:** Cap nearby priors (gaps + isComplete) via `MAX_ROUNDS_PER_ROOM` (same as Want); product rematch stop remains TODO.
+- **Test:** `tests/max-rounds-per-room.test.ts` (N>MAX advertise-stop).
+- **Area:** `missing-round-archives.ts`, `want-rounds.ts`
+
+### 2026-08 — Hybrid fetchMissing bypassed blePhaseAllowed (I2)
+
+- **Symptom (review):** `startHost` used `blePhaseAllowed`; `fetchMissing` only checked `ble.isAvailable` + budget + callback → denied + `bleTimeoutMs>0` could still enter BLE if SoT drifted.
+- **Fix:** `fetchMissing` BLE phase requires `blePhaseAllowed(ble, liveOk)` (same as host).
+- **Test:** `tests/nearby-hybrid-ble-deny-fetch.test.ts`.
+- **Area:** `hybrid-transport.ts`
+
+### 2026-08 — LAN-only OS fail permanently denied BLE (C1)
+
+- **Symptom (review):** `requestNearbyOsPermissions({ includeBle: false })` LAN fail → `ensure` set global `denied` + BLE `'0'` even though BLE was never evaluated (playQr path).
+- **Fix:** On `!granted`, persist only evaluated axes; global `denied` only when BLE was evaluated and both LAN+BLE failed.
+- **Test:** `tests/nearby-permission-lan-ble-split.test.ts` (LAN-only fail).
+- **Area:** `permission.ts`
+
+### 2026-08 — BLE after LAN trusted completion with no byte gaps (I1)
+
+- **Symptom (review):** Hybrid used full Want remaining after LAN, so completion-only LAN success could still open BLE scan.
+- **Fix:** `byteGapRounds` + `seekCompletionAck`; BLE only for remaining gaps or completion when `!trustedWireCompleted`.
+- **Test:** `tests/nearby-hybrid-full-want.test.ts`.
+- **Area:** `hybrid-transport.ts`, `nearby-archive-sync.ts`, `nearby-archive-transport.ts`
+
+### 2026-08 — allowBleProbe reopened BLE after explicit BT deny (I1)
+
+- **Symptom (review):** After Android BT deny (`bleAllowed: false` / storage `'0'`), join/lobby `allowBleProbe: true` still set `bleTimeoutMs` and hybrid/host entered munim BLE — same `false` meant iOS unconfirmed and explicit deny.
+- **Cause:** Boolean BLE cache collapsed unknown vs denied; `blePhaseAllowed` / sync probe treated any non-allowed as probe-eligible.
+- **Fix:** Tri-state `unknown|allowed|denied`; probe only when unknown; iOS pending / LAN-only OS omit `bleAllowed` (do not write denied); missing BLE key stays unknown (not `'0'`).
+- **Test:** `tests/nearby-permission-lan-ble-split.test.ts`, `tests/nearby-archive-coordinator.test.ts` (deny → bleTimeout 0 + lobby no probe).
+- **Area:** `permission.ts`, `hybrid-transport.ts`, `nearby-archive-sync.ts`, `request-os-permissions.ts`
+
+### 2026-08 — Coalesced play(false) still requested Android BT OS (C1)
+
+- **Symptom (review):** join∩play coalesce kept `allowOsPermissionPrompt` via OR but sync-ensure called bare `requestNearbyOsPermissions()` (`includeBle` default true) → Android BT runtime dialog mid-play even with `allowBleProbe: false`.
+- **Fix:** `requestNearbyOsPermissions({ includeBle: allowBleProbe === true && bleProbeLiveAllowed })` in sync-ensure.
+- **Test:** `tests/nearby-archive-coordinator.test.ts` (coalesce `includeBle: false`).
+- **Area:** `nearby-archive-sync.ts`, `request-os-permissions.ts`
+
+### 2026-08 — In-flight join BLE probe survived play(false) (C1)
+
+- **Symptom (review):** Join/browse `void maybeSync(allowBleProbe: true)` then navigate to play; coalesce AND only updated the **queue**, so an already-running `runNearbyArchiveSyncOnce` kept `bleTimeoutMs > 0` and hybrid could enter BLE mid-play (OS BT risk).
+- **Cause:** Live probe preference was not suppressed until the next drain input; hybrid did not re-check before BLE phase.
+- **Fix:** Module `bleProbeLiveAllowed` cleared immediately on `allowBleProbe !== true`; `isBlePhaseStillAllowed` on fetch input; hybrid skips BLE when gate false; reset gate when drain idle.
+- **Test:** `tests/nearby-archive-coordinator.test.ts` (in-flight join→play gate).
+- **Area:** `nearby-archive-sync.ts`, `hybrid-transport.ts`, `nearby-archive-transport.ts`
+
+### 2026-08 — playQr ensure requested full BLE OS mid-round (I1)
+
+- **Symptom (review):** `reconcileNearbyArchiveHost` always called full `requestNearbyOsPermissions` (munim/BT) even for `mode: 'playQr'` when status was `unknown`.
+- **Fix:** `requestNearbyOsPermissions({ includeBle: false })` for playQr; ensure accepts only object results; `bleAllowed` only when explicit `true`.
+- **Test:** `tests/nearby-sync-then-host-cycle.test.ts` (playQr LAN-only), `tests/nearby-archive-permission.test.ts` (object contract).
+- **Area:** `request-os-permissions.ts`, `permission.ts`, `nearby-archive-sync.ts`
+
+### 2026-08 — iOS optimistic bleAllowed caused mid-round BT prompt (C1)
+
+- **Symptom (review):** iOS `requestNearbyOsPermissions` set `bleAllowed: true` with `pendingOsConfirmation` before any GATT use → play hydrate / QR host entered BLE and could show OS Bluetooth mid-round. Residual: `bleTimeoutMs` tied to `allowOsPermissionPrompt` + coalesce OR let join∩play open BLE; `fetchMissing` confirmed BLE after failed `startScan`.
+- **Fix:** iOS `bleAllowed: false` until confirm; separate `allowBleProbe` (AND on coalesce); `bleTimeoutMs` only if confirmed \|\| probe; playQr no probe; confirm only after successful `startScan` / host advertise.
+- **Test:** `tests/nearby-permission-lan-ble-split.test.ts`, `tests/nearby-archive-coordinator.test.ts` (coalesce bleBudget 0), `tests/nearby-ble-hybrid.test.ts` (failed startScan).
+- **Area:** `request-os-permissions.ts`, `permission.ts`, `hybrid-transport.ts`, `nearby-archive-sync.ts`, `ble-transport.ts`, `hooks/useNearbyArchiveSync.ts`
+
+### 2026-08 — Nearby host applyToken + BLE migrate opt-in (clean-final C1/I1)
+
+- **Symptom (review):** (1) Stale `startHost` after QR/roster flap could overwrite live transport handlers when a newer cycle already claimed host; inactive rollback could also `close()` Gen2’s shared LAN server / clear BLE listeners. (2) Pre-split `granted` without BLE key migrated to `bleAllowed=true` → play hydrate could enter BLE and risk OS BT prompt.
+- **Fix:** `applyToken` on host handlers; LAN closes only `server === myServer` / `udp === myUdp`; BLE `hostSetupEpoch` so stale setup cannot tear down Gen2; coalesce `allowOsPermissionPrompt` OR; missing BLE key stays `unknown` (not denied).
+- **Test:** `tests/nearby-sync-then-host-cycle.test.ts` (clobber + Gen2 server ownership), `tests/nearby-permission-lan-ble-split.test.ts`, `tests/nearby-archive-coordinator.test.ts` (I2 coalesce).
+- **Area:** `nearby-archive-sync.ts`, `*-transport.ts`, `permission.ts`
+
+### 2026-08 — Play cold-start skipped BLE + hybrid BLE partial-Want
+
+- **Symptom (review):** (1) Play sync (`allowOsPermissionPrompt: false`) never hydrated LAN/BLE capability caches → BLE off after process restart. (2) Hybrid BLE phase Wanted only `remaining` rounds → HaveAck ∩ served incomplete → lobby advertise linger.
+- **Fix:** `hydrateNearbyCapabilitiesFromStorage()` on play path; BLE phase always Wants full `input.wantRounds`; playQr advertise only via `forceAdvertise`.
+- **Test:** `tests/nearby-permission-lan-ble-split.test.ts` (C1 hydrate), `tests/nearby-hybrid-full-want.test.ts` (C2).
+- **Area:** `permission.ts`, `nearby-archive-sync.ts`, `hybrid-transport.ts`
+
+### 2026-08 — Nearby hook cleanup left host advertising during sync (C1)
+
+- **Symptom (review):** Play QR close / roster flap only set `cancelled`; host kept advertising through LAN+BLE sync budget; BLE scan+advertise dual-role; stale reconcile could re-raise host after stop.
+- **Cause:** Effect cleanup did not call `stopNearbyArchiveHost`; sync-then-host only on cold start; `isCurrent` checked only before `reconcileNearbyArchiveHost`, not inside its awaits.
+- **Fix:** `runNearbySyncThenHostCycle` with generation/owner — stop → sync → host; cleanup bumps gen + immediate stopHost; `reconcileNearbyArchiveHost({ isCurrent })` re-checks after awaits / before `startHost`; superseded after `startHost` tears down only when `hostRunningFor === null` (no newer owner).
+- **Test:** `tests/nearby-sync-then-host-cycle.test.ts`
+- **Area:** `hooks/useNearbyArchiveSync.ts`, `lib/online/nearby/nearby-archive-sync.ts`, `plugins/with-nearby-wifi-never-for-location.cjs`
+
+### 2026-08 — Join→lobby sync-then-host race (queued maybeSync resolved early)
+
+- **Symptom (review):** Lobby `await maybeSync` returned immediately when join sync was in-flight → `reconcileNearbyArchiveHost` started advertise while client still scanned UDP/BLE.
+- **Cause:** Queued `maybeSync` callers did not await drain idle; play QR host was a separate effect.
+- **Fix:** Personal waiters resolve only after drain idle; play sync+QR host in one sequenced effect; BLE soft reconcile (no teardown on presence flap); queue Want while serve busy; persist/gate `lanAllowed`.
+- **Test:** `tests/nearby-archive-coordinator.test.ts` (C1 sync-then-host); `tests/nearby-ble-hybrid.test.ts` (queued Want).
+- **Area:** `lib/online/nearby/nearby-archive-sync.ts`, `hooks/useNearbyArchiveSync.ts`, `ble-transport.ts`, `permission.ts`, `hybrid-transport.ts`
+
+### 2026-08 — Nearby completion cooldown armed on empty discovery (I3/R1)
+
+- **Symptom (review):** Locally complete + empty `fetchMissing` armed 45s cooldown → presence flap skipped rediscovery → trusted HaveAck delayed, lobby advertise lingered. Later: UDP-only Hello/`peerHaveRounds` also armed cooldown without TCP/BLE archivesEnd. Then: partial wire `archives.length > 0` without End still armed cooldown.
+- **Cause:** `completionHandshakeSent/At` set after UDP announce whenever history was complete; then `peerHaveRounds.size > 0` / `archives.length > 0` treated contact/bytes as completion.
+- **Fix:** Arm cooldown only when `result.trustedWireCompleted` (TCP/BLE `archivesEnd` → non-empty HaveAck). Empty, UDP-only, or partial archives without End do not cooldown.
+- **Test:** `tests/nearby-archive-coordinator.test.ts` (empty + UDP-only + partial wire vs `trustedWireCompleted`).
+- **Area:** `lib/online/nearby/nearby-archive-sync.ts`
+
+### 2026-08 — Nearby cross-key sync parallel + BLE deferred Hello missed
+
+- **Symptom (review):** (1) Rematch bump during in-flight sync started a second `fetchMissing` on the shared transport. (2) Central-2 subscribe during central-1 serve dropped Hello forever → BLE multi-peer hang.
+- **Cause:** Single-flight keyed only by sync key; Hello skip without pending queue.
+- **Fix:** Global single-flight + latest-input queue; pendingHello flush after serve release; BLE capability migration when storage key missing; tighter peer archive shape; presence-flap cooldown after completion handshake.
+- **Test:** `tests/nearby-archive-coordinator.test.ts` (C1), `tests/nearby-ble-hybrid.test.ts` (C2), `tests/nearby-permission-lan-ble-split.test.ts` (I1), `tests/nearby-archive-review-fixes.test.ts` (I2).
+- **Area:** `lib/online/nearby/nearby-archive-sync.ts`, `ble-transport.ts`, `permission.ts`, `strip-archive.ts`
+
+### 2026-08 — Nearby BT deny blocked LAN + BLE TX crosstalk (hybrid restore)
+
+- **Symptom (review):** (1) Android `requestMultiple` on LAN∪BLE + munim BT false → global nearby `denied` forever, blocking LAN on shared Wi‑Fi. (2) Shared GATT TX notify + overlapping Want async serves interleaved chunks across centrals.
+- **Cause:** All-or-nothing permission union after hybrid restore; no TX mutex / single-flight on peripheral.
+- **Fix:** Split LAN vs BLE capability evaluation; `granted` if either path OK; hybrid skips BLE when `bleAllowed=false`; BLE TX queue + single-flight Want; client ignores TX until own Want; lobby sync-then-host; os-pending promote only after import or matched local completion.
+- **Test:** `tests/nearby-permission-lan-ble-split.test.ts`, `tests/nearby-ble-hybrid.test.ts` (B2 concurrent Want).
+- **Area:** `lib/online/nearby/permission.ts`, `request-os-permissions.ts`, `android-nearby-permissions.ts`, `hybrid-transport.ts`, `ble-transport.ts`, `hooks/useNearbyArchiveSync.ts`
+
+### 2026-08 — Nearby LAN→BLE GATT hybrid restored (munim-bluetooth)
+
+- **Symptom / product:** Off-LAN peers (bus/cellular) could not gap-fill; prior BLE path was advertise-only or removed.
+- **Fix:** Hybrid LAN then BLE GATT via `munim-bluetooth` + nitro; chunked framing; Store BT + Local Network; HaveAck `ble` trusted like TCP; host advertises both transports.
+- **Test:** `tests/nearby-ble-gatt-framing.test.ts`, `tests/nearby-ble-hybrid.test.ts`; manual: same Wi‑Fi LAN + no shared LAN BLE.
+- **Area:** `lib/online/nearby/ble-*.ts`, `hybrid-transport.ts`, `app.config.js`
+
+### 2026-08 — Nearby UDP scan bind(0) missed hosts + BLE runtime on LAN-only Store
+
+- **Symptom (review):** (1) Client `fetchMissing` bound UDP `bind(0)` while host announced to `NEARBY_UDP_PORT` → discovery empty on real devices (memory-transport tests green). (2) Hybrid still called BLE `startHost` without `NSBluetooth*` → iOS native abort risk; BLE transferred no archive bytes.
+- **Fix:** Scan/host discovery bind = announce destination port + `reusePort`; host UDP bind fail closes advertise; hybrid LAN-only (deleted `ble-transport`, dropped `react-native-ble-advertiser` / `expo-network`); stop host when hook `enabled=false`; Android manifest without location/BT.
+- **Test:** `tests/nearby-udp-discovery.test.ts`; manual smoke: 2 devices same Wi‑Fi, N>0, late join with gaps.
+- **Area:** `lib/online/nearby/lan-transport.ts`, `hybrid-transport.ts`, `udp-discovery.ts`, `hooks/useNearbyArchiveSync.ts`, `app.config.js`
+
+### 2026-08 — Nearby join→play syncInFlight swallow + multi-archive TCP line limit
+
+- **Symptom (review):** (1) `maybeSyncNearbyArchives` same-key single-flight ignored play/lobby after join/browse fire-and-forget → one empty sync, no retry when peers appear. (2) Host wrote all Want archives in one TCP JSON line while `MAX_TCP_LINE_CHARS` ≈ one archive (~408k) → multi-round payloads could destroy the socket (worst-case / large archives; typical small games often fit).
+- **Fix:** Queue latest same-key input and rerun after in-flight finishes; one archive per TCP line + `archivesEnd`; enforce `MAX_PEER_ARCHIVE_JSON_CHARS` on validate/serve; Android+iOS Store declarations LAN-only (no Bluetooth); remove dormant post-import finalize loop.
+- **Test:** `tests/nearby-archive-coordinator.test.ts`, `tests/nearby-archive-tcp-framing.test.ts`
+- **Area:** `lib/online/nearby/**`, `app.config.js`
+
+### 2026-08 — Nearby partial-Want never stopped lobby advertise
+
+- **Symptom (review):** Joiner with round 0 already Wanted only gaps `[1]` → HaveAck/`∩ served` = `[1]` → `isComplete(N=2)` false → lobby advertise forever; multi-host only the serving host saw TCP ack. BLE-only `isAvailable` + all-or-nothing BT permissions also blocked/misled production path.
+- **Fix:** Want full capped `0..min(N,MAX)-1` (`expectedPriorRounds`); contact all discovered hosts; hybrid `isAvailable` = LAN only; LAN-only Android permissions; play sync without new OS prompt; no peer stats backfill in v1.
+- **Test:** `tests/nearby-archive-advertise-stop.test.ts`, `tests/nearby-archive-wire-path.test.ts`
+- **Area:** `lib/online/nearby/**`, `hooks/useNearbyArchiveSync.ts`
+
+### 2026-08 — Nearby wire-path partial HaveAck / fetch race / Android 12 NEARBY_WIFI
+
+- **Symptom (review / prevented):** (1) Client HaveAck echoed `wantRounds` → host marked peer complete after partial/invalid serve → early `stopNearbyArchiveHost`. (2) `fetchMissing` probe resolved while TCP IIFE still mutating → lost/unstable imports. (3) Android API 31–32 requested `NEARBY_WIFI_DEVICES` → permanent `denied`. (4) Host trusted claimed HaveAck beyond rounds served on that socket.
+- **Fix:** `clientHaveAckRoundsFromReceived` / `hostTrustedHaveAckRounds` (∩ served); `createFetchMissingSettler` barrier; `androidNearbyLanPermissionList` gates API 33+; live `getHaveRounds`; UDP listener uses `hostHandlers`; memory ack = received only; fetch `bleTimeoutMs: 0`; `markNearbyArchiveSyncGrantedAfterSuccess` after import write **or** completion handshake that received archives already present locally. ADR-023 threat: hostile LAN roster-uid spoof residual.
+- **Test:** `tests/nearby-archive-wire-path.test.ts`, `tests/nearby-archive-review-fixes.test.ts`
+- **Area:** `lib/online/nearby/**`
+
+### 2026-08 — Nearby peer import finalized empty+claimed stats / foreign archives / UDP HaveAck DoS
+
+- **Symptom (review / prevented):** (1) Post-import `finalizeOnlineRoundForPlayer` without empty/claimed gate → zero competition stats + `wasOnlineRoundProcessed` forever (parity with legacy archive sync). (2) Any shape-valid TCP archive written regardless of `gameId` / requested gaps → foreign rooms pollute finished store. (3) Spoofed UDP HaveAck with roster uid → `isComplete` → `stopNearbyArchiveHost` for all hosts → late joiners miss gap-fill.
+- **Cause:** Nearby path skipped sync-coordinator finalize gate; import had no expected-game filter; HaveAck trusted UDP broadcast.
+- **Fix:** No peer-archive stats finalize in v1 (`applyPostImportEffects` only bumps history revision); `importPeerFinishedRoundArchive({ expectedGameId, allowedRounds })` + shared `importFinishedRoundArchiveIfAbsent`; PeerHaveRoundsMap trust (`tcp` trusted only after authorized Want on that socket / `udp` untrusted). `shouldTrustTcpHaveAck`.
+- **Test:** `tests/nearby-archive-review-fixes.test.ts`, `tests/nearby-archive-permission.test.ts`
+- **Area:** `lib/online/nearby/**`, `lib/online/session/online-session-archive.ts`
+
 ### 2026-08 — Play Retry dismissed maps banner before authoritative seed
 
 - **Symptom (review / prevented):** Play `OnlineMapsSyncBanner` Retry set `mapsSyncFailed=false` (UI + layout on `mapsRetryNonce`) → board with no sync indicator while remount/seed hung (up to soft-tick abandon). Roster hung-cap deliberately keeps CTA.

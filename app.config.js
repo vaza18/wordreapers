@@ -1,9 +1,19 @@
 const isProductionBuild =
   process.env.EAS_BUILD_PROFILE === 'production' || process.env.APP_VARIANT === 'production';
 
+const nearbyIosInfoPlist = {
+  // LAN + BLE nearby sync (ADR-023): Local Network for UDP/TCP; Bluetooth for GATT fallback.
+  NSLocalNetworkUsageDescription:
+    'Потрібен доступ до локальної мережі, щоб підтягнути пропущені раунди історії кімнати від гравців поруч.',
+  NSBluetoothAlwaysUsageDescription:
+    'Bluetooth використовується, щоб знайти гравців поруч і синхронізувати історію раундів кімнати, коли немає спільної Wi‑Fi.',
+  NSBluetoothPeripheralUsageDescription:
+    'Bluetooth використовується, щоб поділитися історією раундів кімнати з гравцями поруч без спільної Wi‑Fi.',
+};
+
 const devIosInfoPlist = {
   NSLocalNetworkUsageDescription:
-    'Потрібен доступ до локальної мережі, щоб завантажувати код гри з компʼютера під час розробки.',
+    'Потрібен доступ до локальної мережі для Metro під час розробки та для синхронізації історії раундів з гравцями поруч.',
   NSBonjourServices: ['_metro._tcp'],
 };
 
@@ -11,10 +21,8 @@ const devIosInfoPlist = {
 module.exports = ({ config }) => {
   const baseIosInfoPlist = { ...(config.ios?.infoPlist ?? {}) };
 
-  if (isProductionBuild) {
-    delete baseIosInfoPlist.NSLocalNetworkUsageDescription;
-    delete baseIosInfoPlist.NSBonjourServices;
-  } else {
+  Object.assign(baseIosInfoPlist, nearbyIosInfoPlist);
+  if (!isProductionBuild) {
     Object.assign(baseIosInfoPlist, devIosInfoPlist);
   }
 
@@ -31,6 +39,7 @@ module.exports = ({ config }) => {
     './plugins/with-firebase-extra.cjs',
     './plugins/without-ios-push-entitlement.cjs',
     './plugins/with-ios-modular-headers.cjs',
+    './plugins/with-nearby-wifi-never-for-location.cjs',
     // Must be listed *before* RNFB plugins: Expo dangerous mods run last-registered first,
     // so this plugin's strip/replace of App Check Swift init runs after RNFB writes it.
     './plugins/with-ios-firebase-native-init.cjs',
@@ -52,6 +61,19 @@ module.exports = ({ config }) => {
               },
             }
           : {}),
+      },
+    ],
+    [
+      'munim-bluetooth',
+      {
+        // Foreground nearby sync only — no Multipeer Bonjour service types.
+        multipeerServiceTypes: false,
+        bluetoothBackground: false,
+        androidBluetoothPermissions: ['scan', 'connect', 'advertise'],
+        bluetoothAlwaysUsageDescription:
+          'Bluetooth використовується, щоб знайти гравців поруч і синхронізувати історію раундів кімнати, коли немає спільної Wi‑Fi.',
+        bluetoothPeripheralUsageDescription:
+          'Bluetooth використовується, щоб поділитися історією раундів кімнати з гравцями поруч без спільної Wi‑Fi.',
       },
     ],
   ];
@@ -83,6 +105,24 @@ module.exports = ({ config }) => {
       ...config.android,
       userInterfaceStyle: 'automatic',
       googleServicesFile: process.env.GOOGLE_SERVICES_JSON ?? config.android?.googleServicesFile,
+      permissions: [
+        ...new Set([
+          ...((config.android && config.android.permissions) || []),
+          'android.permission.ACCESS_NETWORK_STATE',
+          'android.permission.CHANGE_WIFI_MULTICAST_STATE',
+          // LAN + BLE nearby archive sync (ADR-023).
+          // Flag neverForLocation applied via plugins/with-nearby-wifi-never-for-location.cjs
+          'android.permission.NEARBY_WIFI_DEVICES',
+          'android.permission.BLUETOOTH',
+          'android.permission.BLUETOOTH_ADMIN',
+          'android.permission.BLUETOOTH_SCAN',
+          'android.permission.BLUETOOTH_ADVERTISE',
+          'android.permission.BLUETOOTH_CONNECT',
+          // Legacy BLE discovery (API < 31) — must match androidNearbyBlePermissionList.
+          'android.permission.ACCESS_FINE_LOCATION',
+          'android.permission.ACCESS_COARSE_LOCATION',
+        ]),
+      ],
     },
     plugins,
   };

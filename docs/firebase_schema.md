@@ -113,6 +113,8 @@ sequenceDiagram
   - **Release deploy:** ship **rules + app together** (or rules first) via `release-stores.yml` (`backend` before android/ios). Do not mix old/new clients on emulator or manual EAS without the backend gate. Staggered Play rollout: min client / do not mix old submit clients with append-only rules.
   - **`players/*/score` and `wordCount` caps (`≤10000` / `≤5000`):** migration window for outdated store clients during the same review coexistence — **not** a same-day delete. Drop types/seeds/rules leaves in a **later** release under the same removal condition as `player_words` (after approval + legacy deprecation). **Do not** “lock to 0”.
 
+- **Finished-round history:** not stored in RTDB after rematch wipe. Devices keep local AsyncStorage archives; optional nearby P2P gap-fill (ADR-023) does not write past rounds to Firebase.
+
 ## Security (RTDB rules + App Check)
 
 - Rules: [`firebase/database.rules.json`](../firebase/database.rules.json) — roster-scoped writes; temporary `players/*/score` and `wordCount` caps (`≤10000` / `≤5000`) and `player_words` branch for outdated store clients during review coexistence (ADR-021); status transitions, waiting-only peek for strangers. **`waiting → playing`:** actor must match `newData.parent().baseWordPickerUid` (same atomic update) or stored `baseWordPickerUid`, or rotation fallback via `baseWordPickerOrder[baseWordRound]`. **Rematch** (`finished` → `waiting`): client claims via status-only transaction, then leaf-path follow-up `update` (legacy score zeros / round / actor presence while fields exist); peer `online`/`hasLeft` only writable during `finished → waiting` in the same write — not while already `waiting` (AH2TN / R62F9).
