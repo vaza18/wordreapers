@@ -89,7 +89,7 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 ### 2026-08-05 — MAX_ROUNDS_PER_ROOM = 12 (nearby Want cap; rematch UX deferred)
 
 - SoT: `constants/max-rounds-per-room.ts`. Nearby Want/gaps/`haveRoundsCompleteForN` / lobby advertise-stop use `0..min(N,12)-1`.
-- Product rematch stop / «Нова гра» / room winners CTA — TODO in ADR-023 (MAX_ROUNDS_PER_ROOM).
+- Product rematch stop / room winners CTA — shipped separately as ADR-024 (see the 2026-08-06 note above).
 
 ### 2026-08-05 — Nearby advertise-stop + hybrid availability (ADR-023)
 

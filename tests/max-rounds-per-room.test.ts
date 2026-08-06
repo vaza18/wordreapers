@@ -6,7 +6,13 @@ import {
   canRematchAfterRound,
   isFinalRoomRound,
 } from '@/constants/max-rounds-per-room';
-import { expectedPriorRounds } from '@/lib/online/nearby/missing-round-archives';
+import {
+  expectedPriorRounds,
+  haveRoundsCompleteForN,
+  missingRoundArchives,
+} from '@/lib/online/nearby/missing-round-archives';
+import { PeerHaveRoundsMap } from '@/lib/online/nearby/peer-have-rounds';
+import { shouldAdvertiseForLobbyRoster } from '@/lib/online/nearby/should-advertise-lobby';
 import { sanitizeWantRounds } from '@/lib/online/nearby/want-rounds';
 
 describe('MAX_ROUNDS_PER_ROOM', () => {
@@ -56,12 +62,6 @@ describe('MAX_ROUNDS_PER_ROOM', () => {
     });
 
     it('N>MAX: capped HaveAck stops lobby advertise (I1)', async () => {
-      const { haveRoundsCompleteForN, missingRoundArchives } =
-        await import('@/lib/online/nearby/missing-round-archives');
-      const { PeerHaveRoundsMap } = await import('@/lib/online/nearby/peer-have-rounds');
-      const { shouldAdvertiseForLobbyRoster } =
-        await import('@/lib/online/nearby/should-advertise-lobby');
-
       const n = MAX_ROUNDS_PER_ROOM + 3;
       const capped = Array.from({ length: MAX_ROUNDS_PER_ROOM }, (_, i) => i);
       expect(expectedPriorRounds(n)).toEqual(capped);

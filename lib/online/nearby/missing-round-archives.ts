@@ -47,7 +47,7 @@ export function normalizeHaveRounds(haveRounds: readonly number[]): number[] {
 
 /**
  * Whether `haveRounds` covers all nearby-capped priors `0..min(N,MAX)-1`.
- * Product rematch stop past MAX remains a separate TODO (ADR-023).
+ * Product rematch stop past MAX is enforced separately (ADR-024).
  */
 export function haveRoundsCompleteForN(
   baseWordRound: number,
