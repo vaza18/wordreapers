@@ -15,7 +15,7 @@ interface RoundResultsFooterActionsProps {
 }
 
 /**
- * Results footer — primary ~60% + secondary ~40%; optional tertiary full width.
+ * Results footer actions in one row — primary ~60% + secondary ~40% width (3:2).
  */
 export function RoundResultsFooterActions({
   primaryLabel,

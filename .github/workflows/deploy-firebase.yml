@@ -218,9 +218,9 @@ jobs:
           cache: npm
 
       # package-lock.json is built with npm 11; Node 22 images ship npm 10 and `npm ci` fails.
-      - name: Use npm 11
+      - name: Use npm 12
         if: steps.detect.outputs.deploy_rules == 'true' || steps.detect.outputs.deploy_functions == 'true'
-        run: npm install -g npm@11.6.2
+        run: npm install -g npm@12.0.2
 
       - uses: actions/cache@v5
         if: steps.detect.outputs.deploy_rules == 'true' || steps.detect.outputs.deploy_functions == 'true'
