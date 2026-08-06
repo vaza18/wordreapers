@@ -163,6 +163,13 @@ Format: **Decision → Alternatives → Why rejected → Date**
 - **Why rejected:** Root `onValue` re-downloads the whole `wordPlayers` tree on each word submit after maps became sole SoT. Get-then-attach races rematch wipe into sticky rich UI (worse under ADR-020 empty-block). Sync empty and PD→empty regress blank play/results. Provisional-as-authoritative locks partial standings or clears wipe-gate early under grow-only. Ref-count deferred.
 - **Date:** 2026-08 — `lib/firebase/session-word-maps-service.ts`, `lib/firebase/session-word-maps.ts`, `lib/firebase/paths.ts`
 
+## ADR-024: Online room round cap (`MAX_ROUNDS_PER_ROOM`)
+
+- **Decision:** A single online room allows at most `MAX_ROUNDS_PER_ROOM` rounds (constant `12` in `constants/max-rounds-per-room.ts`; indices `0 .. MAX-1`). After the final finished round, rematch (`finished → waiting` / `baseWordRound` bump) is denied in the client and RTDB rules. Results UX: primary «Лідери» opens `/history/room/[gameId]`; secondary «Головна» exits home (same row as «Грати ще» | «Головна»). No «Нова гра» on the final round — every participant creating a room confused who is organizer. Rules embed numeric bounds; a unit parity test fails if they drift from the TS constant (no second product constant in app code).
+- **Alternatives considered:** Soft/UI-only stop; Cloud Function gate; rules codegen from the constant.
+- **Why rejected:** Soft stop allows old clients to reopen rooms; CF adds latency for a simple ceiling; parity test is enough without a rules build step.
+- **Date:** 2026-08 — `constants/max-rounds-per-room.ts`, rematch paths, `app/online/results/[gameId].tsx`, `firebase/database.rules.json`
+
 ---
 
 When adding a new ADR: keep it short; link the implementing file; do not duplicate `online-multiplayer-rules.md` tables.

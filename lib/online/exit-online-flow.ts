@@ -70,7 +70,7 @@ async function runExitCleanup(
           }
         } catch (error) {
           if (__DEV__) {
-            console.warn('exitOnlineToHome archive', error);
+            console.warn('exitOnlineSession archive', error);
           }
         }
       }
@@ -79,7 +79,7 @@ async function runExitCleanup(
           await markResultsExitedAndOffline(gameId, uid, liveSession);
         } catch (error) {
           if (__DEV__) {
-            console.warn('exitOnlineToHome results exit', error);
+            console.warn('exitOnlineSession results exit', error);
           }
         }
       } else if (liveSession.players[uid]) {
@@ -103,12 +103,10 @@ async function runExitCleanup(
 }
 
 /**
- * Leave online flow. Waiting-room cleanup completes before navigation so abandon is reliable.
- *
- * Results may still show a frozen `finished` archive while RTDB is already rematch
- * `waiting` — Home must leave that waiting room (`hasLeft`) so peers can continue alone.
+ * Leave the current online room (archive / presence / waiting cleanup) without navigating.
+ * Use before opening a new room so `dismissTo('/')` cannot race a follow-up setup route.
  */
-export async function exitOnlineToHome(options: ExitOnlineFlowOptions): Promise<void> {
+export async function exitOnlineSession(options: ExitOnlineFlowOptions): Promise<void> {
   const { gameId, uid, sessionStatus, session, myWords, exitedResults } = options;
 
   await clearPausedOnlineResume();
@@ -135,13 +133,13 @@ export async function exitOnlineToHome(options: ExitOnlineFlowOptions): Promise<
         await runExitCleanup(options, liveFromDb);
       } catch (error) {
         if (__DEV__) {
-          console.warn('exitOnlineToHome cleanup', error);
+          console.warn('exitOnlineSession cleanup', error);
         }
       }
     } else {
       void runExitCleanup(options, liveFromDb).catch((error) => {
         if (__DEV__) {
-          console.warn('exitOnlineToHome cleanup', error);
+          console.warn('exitOnlineSession cleanup', error);
         }
       });
     }
@@ -150,6 +148,15 @@ export async function exitOnlineToHome(options: ExitOnlineFlowOptions): Promise<
       endVoluntaryLeave(gameId, uid);
     }
   }
+}
 
+/**
+ * Leave online flow. Waiting-room cleanup completes before navigation so abandon is reliable.
+ *
+ * Results may still show a frozen `finished` archive while RTDB is already rematch
+ * `waiting` — Home must leave that waiting room (`hasLeft`) so peers can continue alone.
+ */
+export async function exitOnlineToHome(options: ExitOnlineFlowOptions): Promise<void> {
+  await exitOnlineSession(options);
   navigateHomeClearingStack();
 }

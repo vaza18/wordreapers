@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { MAX_ROUNDS_PER_ROOM } from '../constants/max-rounds-per-room.js';
 import type { GameSession } from '../lib/firebase/types.js';
 import { resolveGameSessionSettings } from '../lib/firebase/session-settings.js';
 import { buildRematchWaitingSession } from '../lib/online/rematch/build-rematch-waiting-session.js';
@@ -18,7 +19,7 @@ describe('bootstrap rematch waiting session shape', () => {
       },
       timerEndsAt: 1_700_000_000_000,
       organizerId: 'org',
-      baseWordRound: 2,
+      baseWordRound: 0,
       players: {
         org: { name: 'Org', wordCount: 5, score: 12, online: true },
         guest: { name: 'Guest', wordCount: 3, score: 8, online: true },
@@ -31,7 +32,7 @@ describe('bootstrap rematch waiting session shape', () => {
     const waiting = buildRematchWaitingSession(finished, 'org');
     expect(waiting.status).toBe('waiting');
     expect(waiting.baseWord).toBe('');
-    expect(waiting.baseWordRound).toBe(3);
+    expect(waiting.baseWordRound).toBe(1);
     expect(waiting.players.org?.score).toBe(0);
     expect(waiting.players.org?.online).toBe(true);
     expect(waiting.players.org?.hasLeft).toBe(false);
@@ -42,6 +43,28 @@ describe('bootstrap rematch waiting session shape', () => {
     expect(waiting.purgeAfterAt).toBeUndefined();
     expect(waiting.resultsExitedBy).toEqual({ org: true });
     expect(typeof waiting.createdAt).toBe('number');
+  });
+
+  it('rejects bootstrap session build after the final room round', () => {
+    const finished: GameSession = {
+      baseWord: 'альт',
+      status: 'finished',
+      settings: {
+        durationSeconds: 300,
+        uniqueBonusEnabled: true,
+        language: 'uk',
+        allowProperNouns: false,
+        allowSlang: false,
+      },
+      timerEndsAt: null,
+      organizerId: 'org',
+      baseWordRound: MAX_ROUNDS_PER_ROOM - 1,
+      players: {
+        org: { name: 'Org', wordCount: 5, score: 12, online: true },
+      },
+    };
+
+    expect(() => buildRematchWaitingSession(finished, 'org')).toThrow('REMATCH_FAILED');
   });
 
   it('keeps peers with resultsExitedBy online when another actor bootstraps', () => {

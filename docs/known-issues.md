@@ -8,6 +8,38 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 <!-- Add new entries at the top -->
 
+### 2026-08 — Rematch heal REMATCH_FAILED during FINISH_WORD_SUBMIT_GRACE
+
+- **Symptom (review C1):** After time-up, «Грати ще» / LRAHP `join_live` could throw `REMATCH_FAILED` while RTDB was still `playing` for up to 5s (`FINISH_WORD_SUBMIT_GRACE_MS`).
+- **Cause:** `isPlayingRoundExpired` uses `now >= timerEndsAt`, but `finishGameSessionIfExpired` no-ops until `timerEndsAt + grace`. One finish attempt then fail.
+- **Fix:** `join_live` polls via `ensureSessionFinishedForResults`, then rematch; fail only on ensure `timeout` / non-finished outcome.
+- **Test:** `tests/restart-rematch-online-round-flow.test.ts` (grace wait + ensure timeout)
+- **Area:** `lib/online/rematch/restart-rematch-online-round.ts`
+
+### 2026-08 — View results failed during finish grace (local pin → rematch_advanced)
+
+- **Symptom:** After round 1 time-up (e.g. room `6G6VF`), all clients showed «Не вдалося відкрити результати» on «Переглянути результати». Metro had mid-round `wordPlayers` parent `permission_denied` (second finder) but no results open log.
+- **Cause:** `FINISH_WORD_SUBMIT_GRACE_MS` keeps RTDB `playing` for 5s after UI time-up. `navigateToResults` with `localRoundOverForced` treated any non-finished snapshot as `rematch_advanced`, skipped Firebase archive, and multiplayer `ensureLocalArchiveForRematchAdvancedResults` correctly refused a partial peer archive → error CTA.
+- **Fix:** Classify the local-pin snapshot with `classifyEnsureSessionSnapshot`; on `continue` (same-round still playing) await `ensureSessionFinishedForResults` instead of jumping to `rematch_advanced`.
+- **Test:** `tests/ensure-session-finished-for-results.test.ts` (playing expected round → `continue`)
+- **Area:** `app/online/play/[gameId].tsx`, `lib/online/ensure-session-finished-for-results.ts`
+
+### 2026-08 — waitForRtdbConnected crashed with undefined is not a function
+
+- **Symptom:** Intermittent redbox `TypeError: undefined is not a function` at `connection.ts` `unsub()` during bootstrap (often after Wi-Fi AP switch). Join then showed «Немає з’єднання з базою даних…».
+- **Cause:** Firebase `onValue('.info/connected')` can fire **synchronously** when already connected. The callback called `unsub()` before `const unsub = onValue(...)` finished assigning (TDZ / undefined on Hermes).
+- **Fix:** Assign unsubscribe to `let`, settle via `unsub?.()`, and if already settled after `onValue` returns, call `unsub()` once more to detach.
+- **Test:** `tests/firebase-bootstrap-chain.test.ts` (sync connected + sync error races)
+- **Area:** `lib/firebase/connection.ts`
+
+### 2026-08 — Late-round words missing for peers + wordPlayers permission_denied
+
+- **Symptom:** Multiplayer results disagreed (submitter had words peers lacked, e.g. СІ / СІНО). Peer word sync felt 10s+ slow. Metro: `transaction at /session_word_maps/…/wordPlayers/… failed: permission_denied` after opening results.
+- **Cause:** `submitOnlineWord` used `runTransaction` (default `applyLocally: true`). Local echo made the submitter’s maps/`submitWord` profile look done in ~50ms while the server TX retried for many seconds; `playing → finished` then denied the leaf. Optimistic UI + local archive froze those words for the submitter only. Second-finder path always paid a failing parent TX before the leaf.
+- **Fix:** Parent/leaf **`set`** (no TX). Expire finish waits `FINISH_WORD_SUBMIT_GRACE_MS` after `timerEndsAt`. Rules allow append for 15s after `finishedAt`. Navigate-to-results drains `syncInFlight` before archive. Profile «listener» only after optimistic clears (maps ack).
+- **Test:** `tests/submit-online-word.test.ts`, `tests/game-session-service.test.ts` (finish grace), `tests/firebase/database.rules.test.ts` (post-finish append), `tests/wait-until-idle-or-timeout.test.ts`
+- **Area:** `lib/firebase/submit-online-word.ts`, `finishGameSessionIfExpired`, `firebase/database.rules.json`, `app/online/play/[gameId].tsx`
+
 ### 2026-08 — Play Retry dismissed maps banner before authoritative seed
 
 - **Symptom (review / prevented):** Play `OnlineMapsSyncBanner` Retry set `mapsSyncFailed=false` (UI + layout on `mapsRetryNonce`) → board with no sync indicator while remount/seed hung (up to soft-tick abandon). Roster hung-cap deliberately keeps CTA.
@@ -1273,7 +1305,7 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 
 ### 2026-07 — Organizer stuck in rematch lobby when picker starts round 2
 
-- **Symptom:** After round 1, organizer waits in rematch lobby while another opted-in player picks the base word and starts round 2. Organizer stays on the waiting lobby (`Очікуємо, поки … почне гру`); picker may enter play alone. Firebase logs `update at / failed: permission_denied` and later `session_word_maps/... permission_denied` on word submit.
+- **Symptom:** After round 1, organizer waits in rematch lobby while another opted-in player picks the base word and starts round 2. Organizer stays on the waiting lobby (`Очікуємо, коли … почне гру`); picker may enter play alone. Firebase logs `update at / failed: permission_denied` and later `session_word_maps/... permission_denied` on word submit.
 - **Cause:** (1) RTDB `status` rules authorized `waiting → playing` using **stored** `root…/baseWordPickerUid`, ignoring `newData.parent().baseWordPickerUid` from the same atomic start write — after picker rotation the stored uid still pointed at the organizer while the client synced the real picker in the same update. (2) Round-start player patch wrote other players' `hasLeft`. (3) Lobby presence unmount marked the organizer offline before play navigation. (4) **`settings` rules blocked `uniqueBonusEnabled: true → false`** at round start when rematch waiting kept x2 for full roster (3) but only 2 players opted in — the client sends recalculated settings in the same atomic update, so the whole `update at /` failed.
 - **Fix:** Rules: allow `waiting → playing` when `auth.uid == newData.parent().baseWordPickerUid`; allow `settings.uniqueBonusEnabled` to change on `waiting → playing` when other settings fields are unchanged. Client: sync picker uid in start multi-path; restrict peer player patches; keep lobby presence through `playing`; re-read RTDB after auto-join. **Deploy rules:** `npm run firebase:deploy:rules`.
 - **Test:** `tests/firebase/database.rules.test.ts`, `tests/players-patch-for-round-start.test.ts`, `tests/live-round-screen-actions.test.ts`, `tests/should-lobby-auto-join-live-round.test.ts`
@@ -1439,6 +1471,15 @@ Format: **Date — Symptom → Root cause → Fix → Test**
 - **Test:** `tests/public-lobby-service.test.ts` (auth before get; no RTDB when auth fails); `tests/firebase-bootstrap-chain.test.ts` (sticky error + `forceRetry`); `tests/join-error-message.test.ts` (`APP_CHECK_TOKEN_EMPTY`). Manual: warm Android → browse fail correlates with outdated-client spike; retry/refresh after error must not require process kill.
 - **Area:** `lib/firebase/public-lobby-service.ts`, `app/online/browse.tsx`, `app/online/join.tsx`
 - **Note:** 0% Invalid here — different from 2026-07 Upload-vs-App-signing SHA. If Invalid returns, recheck Play App signing SHA-256.
+
+### 2026-08 — «Нова гра» after room cap flashed setup then dumped to home
+
+- **Symptom:** After the final room round (e.g. testing with `MAX_ROUNDS_PER_ROOM=3`), tapping the results CTA briefly showed setup / word pick, then navigated to home without user consent.
+- **Cause:** Cap «Нова гра» awaited `exitOnlineToHome` (which calls `dismissTo('/')`) then `navigateToNewOnlineRoom` (`router.push` setup). The home dismiss raced the setup push and won, leaving the user on home.
+- **Fix (historical):** `exitOnlineSession` (cleanup without navigate) + `navigateToNewOnlineRoom(..., { replace: true })`.
+- **Status:** Obsolete — final-round «Нова гра» removed (ADR-024 «Лідери» | «Головна»); `replace` option dropped from `navigateToNewOnlineRoom` (no callers). Nav race lesson: do not chain `exitOnlineToHome` then push.
+- **Test:** `tests/exit-online-flow.test.ts` (`exitOnlineSession`); `tests/create-room.test.ts`
+- **Area:** `lib/online/exit-online-flow.ts`, `lib/online/create-room.ts`
 
 ### 2026-07 — «Нова гра» crashed with useInsertionEffect prevent-remove
 

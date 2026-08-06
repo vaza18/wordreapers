@@ -1,5 +1,6 @@
 import { get, set } from 'firebase/database';
 
+import { canRematchAfterRound } from '../../../constants/max-rounds-per-room.js';
 import {
   clearSessionRootForRecreate,
   rematchFinishedSessionToWaiting,
@@ -117,6 +118,9 @@ export async function bootstrapRematchWaitingFromArchive(
   actorUid: string,
   baseWordRound: number,
 ): Promise<GameSession> {
+  if (!canRematchAfterRound(baseWordRound)) {
+    throw new Error('REMATCH_FAILED');
+  }
   const archive = await getFinishedRoundArchive(gameId, baseWordRound);
   if (!archive) {
     throw new Error('NO_FINISHED_ARCHIVE');

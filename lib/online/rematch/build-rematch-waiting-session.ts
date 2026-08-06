@@ -1,5 +1,6 @@
 import { resolveGameSessionSettings } from '../../firebase/session-settings.js';
 import type { GameSession, GameSessionPlayer } from '../../firebase/types.js';
+import { canRematchAfterRound } from '../../../constants/max-rounds-per-room.js';
 import { currentBaseWordPickerUid } from '../base-word-picker.js';
 import { assertRematchBootstrapSessionShape } from '../invariants.js';
 import { rematchWaitingPlayerPatch } from '../presence/live-round-membership.js';
@@ -11,6 +12,9 @@ import { buildRematchOptInLatch } from './rematch-waiting-lobby.js';
  * Keeps a `resultsExitedBy` opt-in latch so brief offline does not drop the rematcher.
  */
 export function buildRematchWaitingSession(source: GameSession, actorUid: string): GameSession {
+  if (!canRematchAfterRound(source.baseWordRound ?? 0)) {
+    throw new Error('REMATCH_FAILED');
+  }
   const players: Record<string, GameSessionPlayer> = {};
   for (const [uid, player] of Object.entries(source.players)) {
     players[uid] = {

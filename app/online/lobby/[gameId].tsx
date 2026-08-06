@@ -69,6 +69,7 @@ import {
   type FinishedRoundArchive,
 } from '@/lib/online/session/online-session-archive';
 import { restartRematchOnlineRound } from '@/lib/online/rematch/restart-rematch-online-round';
+import { canRematchAfterRound } from '@/constants/max-rounds-per-room';
 import { useProfileStore } from '@/store/profile-store';
 import {
   comparePlayersByJoinOrder,
@@ -384,13 +385,17 @@ export default function LobbyScreen() {
   }, [gameId, isOrganizer, myUid, serverNow, session, t]);
 
   const handleRematch = async () => {
-    if (!myUid || !session) {
+    if (!myUid || !session || rematchLoading) {
+      return;
+    }
+    const round = session.baseWordRound ?? 0;
+    if (!canRematchAfterRound(round)) {
       return;
     }
     setRematchLoading(true);
     setError(null);
     try {
-      await restartRematchOnlineRound(gameId, myUid, session.baseWordRound ?? 0);
+      await restartRematchOnlineRound(gameId, myUid, round);
     } catch (err) {
       const message = err instanceof Error ? err.message : '';
       if (message !== 'REMATCH_FAILED') {
@@ -402,7 +407,10 @@ export default function LobbyScreen() {
   };
 
   const handleRetryRematch = async () => {
-    if (!myUid || !rematchArchive) {
+    if (!myUid || !rematchArchive || rematchLoading) {
+      return;
+    }
+    if (!canRematchAfterRound(rematchArchive.baseWordRound)) {
       return;
     }
     setRematchLoading(true);
@@ -516,7 +524,16 @@ export default function LobbyScreen() {
       );
     }
 
-    const canRetryRematch = Boolean(myUid && rematchArchive?.session.players[myUid]);
+    const canRetryRematch = Boolean(
+      myUid &&
+      rematchArchive?.session.players[myUid] &&
+      canRematchAfterRound(rematchArchive.baseWordRound),
+    );
+    const showRoomLeadersAfterCap = Boolean(
+      myUid &&
+      rematchArchive?.session.players[myUid] &&
+      !canRematchAfterRound(rematchArchive.baseWordRound),
+    );
 
     return (
       <>
@@ -536,9 +553,17 @@ export default function LobbyScreen() {
               }}
             />
           ) : null}
+          {showRoomLeadersAfterCap ? (
+            <PrimaryButton
+              label={t('online.roomLeaders')}
+              onPress={() => {
+                router.push({ pathname: '/history/room/[gameId]', params: { gameId } });
+              }}
+            />
+          ) : null}
           <PrimaryButton
             label={t('nav.home')}
-            variant={canRetryRematch ? 'secondary' : 'primary'}
+            variant={canRetryRematch || showRoomLeadersAfterCap ? 'secondary' : 'primary'}
             onPress={handleLeaveToHome}
           />
         </Screen>
@@ -793,16 +818,27 @@ export default function LobbyScreen() {
           <View style={styles.footer}>
             {isFinished ? (
               <>
-                <PrimaryButton
-                  label={t('game.newGameSamePlayers')}
-                  disabled={rematchLoading}
-                  onPress={() => {
-                    void handleRematch();
-                  }}
-                />
-                {!isOrganizer ? (
-                  <Text style={styles.waitingHint}>{t('online.waitingForRematch')}</Text>
-                ) : null}
+                {canRematchAfterRound(session?.baseWordRound ?? 0) ? (
+                  <>
+                    <PrimaryButton
+                      label={t('game.newGameSamePlayers')}
+                      disabled={rematchLoading}
+                      onPress={() => {
+                        void handleRematch();
+                      }}
+                    />
+                    {!isOrganizer ? (
+                      <Text style={styles.waitingHint}>{t('online.waitingForRematch')}</Text>
+                    ) : null}
+                  </>
+                ) : (
+                  <PrimaryButton
+                    label={t('online.roomLeaders')}
+                    onPress={() => {
+                      router.push({ pathname: '/history/room/[gameId]', params: { gameId } });
+                    }}
+                  />
+                )}
               </>
             ) : null}
 

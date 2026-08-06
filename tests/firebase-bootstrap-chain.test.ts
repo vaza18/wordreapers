@@ -80,6 +80,29 @@ describe('firebase bootstrap chain', () => {
     await expect(pending).resolves.toBeUndefined();
   });
 
+  it('survives synchronous onValue when already connected (network reconnect race)', async () => {
+    const unsub = vi.fn();
+    onValueMock.mockImplementation((_ref, onNext) => {
+      // Firebase may fire immediately when `.info/connected` is already true.
+      onNext({ val: () => true });
+      return unsub;
+    });
+
+    await expect(waitForRtdbConnected(100)).resolves.toBeUndefined();
+    expect(unsub).toHaveBeenCalledTimes(1);
+  });
+
+  it('survives synchronous onValue error before unsubscribe is assigned', async () => {
+    const unsub = vi.fn();
+    onValueMock.mockImplementation((_ref, _onNext, onError) => {
+      onError?.(new Error('RTDB_SYNC_FAIL'));
+      return unsub;
+    });
+
+    await expect(waitForRtdbConnected(100)).rejects.toThrow('RTDB_SYNC_FAIL');
+    expect(unsub).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects when RTDB connection times out', async () => {
     onValueMock.mockImplementation(() => vi.fn());
 

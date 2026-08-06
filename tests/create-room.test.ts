@@ -8,7 +8,9 @@ const abandonTrackedOrganizerWaitingRoom = vi.fn();
 const setConnection = vi.fn();
 
 vi.mock('expo-router', () => ({
-  router: { push: (...args: unknown[]) => routerPush(...args) },
+  router: {
+    push: (...args: unknown[]) => routerPush(...args),
+  },
 }));
 
 vi.mock('../lib/firebase/room-code.js', () => ({

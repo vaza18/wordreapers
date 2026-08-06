@@ -15,7 +15,7 @@ interface RoundResultsFooterActionsProps {
 }
 
 /**
- * «Грати ще» + «Головна» in one row — primary ~60% width (3:2).
+ * Results footer — primary ~60% + secondary ~40%; optional tertiary full width.
  */
 export function RoundResultsFooterActions({
   primaryLabel,
