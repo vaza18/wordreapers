@@ -8,6 +8,26 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 <!-- Add dated notes at the top -->
 
+### 2026-08-06 — Rematch heal must poll finish during grace (review C1)
+
+- `join_live` + `FINISH_WORD_SUBMIT_GRACE`: UI expired ≠ finish allowed. Use `ensureSessionFinishedForResults` before rematch; do not fail on first false finish.
+
+### 2026-08-06 — Results CTA vs FINISH_WORD_SUBMIT_GRACE
+
+- Local time-up pin + grace left RTDB `playing`; play short-circuit mislabeled as rematch_advanced → multiplayer errorOpenResultsFailed. Fixed via classifyEnsureSessionSnapshot continue → ensure finish.
+
+### 2026-08-06 — waitForRtdbConnected sync onValue race
+
+- Root cause of intermittent bootstrap crash after network switch: `.info/connected` fires sync before `unsub` assign. Fixed in `connection.ts`; see known-issues.
+
+### 2026-08-06 — Final-round results: Лідери | Головна (no Нова гра)
+
+- Cap results no longer offer «Нова гра» (every player creating a room confused organizer). Same footer row as rematch: primary «Лідери» → `/history/room/[gameId]`, secondary «Головна». Lobby finished/orphan at cap aligned. ADR-024 / §8 / §11 updated.
+
+### 2026-08-06 — Late word sync / wordPlayers PD
+
+- Root cause confirmed from Metro: leaf TX `permission_denied` 7–21s after local submit profile finished; peers missing СІ/СІНО. Fix: `set` shards + finish/rules grace (see `known-issues`). Rules post-finish append window is the literal `15000` in `database.rules.json` (not a TS constant).
+
 ### 2026-08-04 — Review triage: fix hung auth only; do not reopen SLA / provisional
 
 - **Do fix:** hung `ensureAnonymousAuth` in `subscribeSessionWordMaps` → `WORD_MAPS_AUTH_TIMEOUT_MS` (15s) → `unavailable` without attach; late auth no attach; cancel during wait still silent; still auth-before-attach (P0).

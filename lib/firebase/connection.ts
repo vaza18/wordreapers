@@ -24,37 +24,47 @@ export function waitForRtdbConnected(timeoutMs = RTDB_CONNECT_TIMEOUT_MS): Promi
     const db = getFirebaseDatabase();
     const connectedRef = ref(db, '.info/connected');
     let settled = false;
+    // Holder so sync onValue callbacks can call unsubscribe after assignment.
+    const unsubRef: { current?: () => void } = {};
 
-    const timer = setTimeout(() => {
+    const settle = (complete: () => void) => {
       if (settled) {
         return;
       }
       settled = true;
-      unsub();
-      reject(new Error('RTDB connection timed out'));
+      clearTimeout(timer);
+      unsubRef.current?.();
+      complete();
+    };
+
+    const timer = setTimeout(() => {
+      settle(() => {
+        reject(new Error('RTDB connection timed out'));
+      });
     }, timeoutMs);
 
-    const unsub = onValue(
+    unsubRef.current = onValue(
       connectedRef,
       (snapshot) => {
-        if (snapshot.val() !== true || settled) {
+        if (snapshot.val() !== true) {
           return;
         }
-        settled = true;
-        clearTimeout(timer);
-        unsub();
-        resolve();
+        settle(() => {
+          resolve();
+        });
       },
       (error) => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        clearTimeout(timer);
-        unsub();
-        reject(error);
+        settle(() => {
+          reject(error);
+        });
       },
     );
+
+    // `onValue` may fire synchronously when already connected (e.g. after Wi-Fi
+    // switch). In that case settle ran before unsubscribe was assigned — detach now.
+    if (settled) {
+      unsubRef.current();
+    }
   });
 }
 

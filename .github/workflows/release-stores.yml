@@ -188,8 +188,8 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Use npm 11
-        run: npm install -g npm@11.6.2
+      - name: Use npm 12
+        run: npm install -g npm@12.0.2
 
       - name: Apply version from tag
         env:
@@ -311,8 +311,8 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Use npm 11
-        run: npm install -g npm@11.6.2
+      - name: Use npm 12
+        run: npm install -g npm@12.0.2
 
       - name: Apply version from tag
         env:
@@ -399,8 +399,8 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Use npm 11
-        run: npm install -g npm@11.6.2
+      - name: Use npm 12
+        run: npm install -g npm@12.0.2
 
       - name: Sync version via PR + auto-merge
         run: |

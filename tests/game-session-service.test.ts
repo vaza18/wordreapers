@@ -317,6 +317,15 @@ describe('game-session-service', () => {
     expect(followUp).not.toHaveProperty('players/p2/online');
   });
 
+  it('rejects rematch reopen when finished on the final room round', async () => {
+    const { MAX_ROUNDS_PER_ROOM } = await import('../constants/max-rounds-per-room.js');
+    const session = { ...finishedSession(), baseWordRound: MAX_ROUNDS_PER_ROOM - 1 };
+    getMock.mockResolvedValue({ exists: () => true, val: () => session });
+
+    await expect(rematchFinishedSessionToWaiting('ABCDE', 'org')).rejects.toThrow('REMATCH_FAILED');
+    expect(runTransactionMock).not.toHaveBeenCalled();
+  });
+
   it('joins an already-open rematch waiting lobby without rewriting players (AH2TN)', async () => {
     const { markResultsExited } = await import('../lib/firebase/results-coordination-service.js');
     const openWaiting = {
@@ -470,6 +479,24 @@ describe('game-session-service', () => {
 
     await expect(finishGameSessionIfExpired('ABCDE')).resolves.toBe(false);
     expect(session.status).toBe('playing');
+  });
+
+  it('does not finish until word-submit grace after timerEndsAt', async () => {
+    // getServerNow mock is 2_000_000; timer just elapsed but within FINISH_WORD_SUBMIT_GRACE_MS.
+    const session = {
+      baseWord: 'тест',
+      status: 'playing' as const,
+      settings: DEFAULT_SESSION_SETTINGS,
+      timerEndsAt: 1_998_000,
+      organizerId: 'org-1',
+      players: {
+        'org-1': { name: 'Org', wordCount: 0, score: 0, online: true },
+      },
+    };
+    getMock.mockResolvedValue({ exists: () => true, val: () => session });
+
+    await expect(finishGameSessionIfExpired('ABCDE')).resolves.toBe(false);
+    expect(updateMock).not.toHaveBeenCalled();
   });
 
   it('does not finish an expired session while an add-time vote is active', async () => {

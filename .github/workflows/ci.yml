@@ -182,10 +182,10 @@ jobs:
           node-version: 22
           cache: npm
 
-      # package-lock.json is built with npm 11; Node 22 images ship npm 10 and `npm ci` fails.
-      - name: Use npm 11
+      # package-lock.json is built with npm 12; Node 22 images ship npm 10 and `npm ci` fails.
+      - name: Use npm 12
         if: steps.decide.outputs.npm_ci == 'true'
-        run: npm install -g npm@11.6.2
+        run: npm install -g npm@12.0.2
 
       - uses: actions/cache@v5
         if: steps.decide.outputs.run_dict == 'true'
@@ -255,9 +255,9 @@ jobs:
           node-version: 22
           cache: npm
 
-      # package-lock.json is built with npm 11; Node 22 images ship npm 10 and `npm ci` fails.
-      - name: Use npm 11
-        run: npm install -g npm@11.6.2
+      # package-lock.json is built with npm 12; Node 22 images ship npm 10 and `npm ci` fails.
+      - name: Use npm 12
+        run: npm install -g npm@12.0.2
 
       - uses: actions/cache@v5
         with:

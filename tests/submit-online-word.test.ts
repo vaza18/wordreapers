@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getMock = vi.fn();
-const runTransactionMock = vi.fn();
+const setMock = vi.fn();
 
 vi.mock('firebase/database', () => ({
   get: (...args: unknown[]) => getMock(...args),
-  runTransaction: (...args: unknown[]) => runTransactionMock(...args),
+  set: (...args: unknown[]) => setMock(...args),
   ref: (_db: unknown, path: string) => ({ path }),
 }));
 
@@ -36,21 +36,19 @@ function isWordPlayersLeafPath(path: string): boolean {
   return /session_word_maps\/[^/]+\/wordPlayers\/[^/]+\/[^/]+$/.test(path);
 }
 
+function permissionDenied(): Error {
+  const error = new Error('PERMISSION_DENIED');
+  (error as Error & { code: string }).code = 'PERMISSION_DENIED';
+  return error;
+}
+
 describe('submitOnlineWord', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('persists a unique word via parent shard tx only (no session score / x2Claim)', async () => {
-    runTransactionMock.mockImplementation(
-      async (ref: { path: string }, updater: (v: unknown) => unknown) => {
-        if (isWordPlayersParentPath(ref.path)) {
-          const next = updater(null);
-          return { committed: true, snapshot: { val: () => next } };
-        }
-        return { committed: false, snapshot: { val: () => null } };
-      },
-    );
+  it('persists a unique word via parent set only (no session score / x2Claim / transaction)', async () => {
+    setMock.mockResolvedValue(undefined);
 
     const result = await submitOnlineWord('ABCDE', 'org-1', 'порт', true);
 
@@ -58,32 +56,27 @@ describe('submitOnlineWord', () => {
       ok: true,
       entry: expect.objectContaining({ normalized: 'порт', kind: 'unique', points: 2 }),
     });
-    expect(runTransactionMock).toHaveBeenCalledTimes(1);
-    expect(runTransactionMock).toHaveBeenCalledWith(
+    expect(setMock).toHaveBeenCalledTimes(1);
+    expect(setMock).toHaveBeenCalledWith(
       expect.objectContaining({
         path: 'session_word_maps/ABCDE/wordPlayers/порт',
       }),
-      expect.any(Function),
+      { 'org-1': true },
     );
     expect(getMock).not.toHaveBeenCalled();
   });
 
-  it('persists a shared word via leaf shard and returns normal entry', async () => {
-    runTransactionMock.mockImplementation(
-      async (ref: { path: string }, updater: (v: unknown) => unknown) => {
-        if (isWordPlayersParentPath(ref.path)) {
-          // Peer already created the word node.
-          const next = updater({ peer: true });
-          expect(next).toBeUndefined();
-          return { committed: false, snapshot: { val: () => ({ peer: true }) } };
-        }
-        if (isWordPlayersLeafPath(ref.path)) {
-          const next = updater(null);
-          return { committed: true, snapshot: { val: () => next } };
-        }
-        return { committed: false, snapshot: { val: () => null } };
-      },
-    );
+  it('persists a shared word via leaf set after parent denied', async () => {
+    setMock.mockImplementation(async (ref: { path: string }, value: unknown) => {
+      if (isWordPlayersParentPath(ref.path)) {
+        throw permissionDenied();
+      }
+      if (isWordPlayersLeafPath(ref.path)) {
+        expect(value).toBe(true);
+        return;
+      }
+      throw new Error(`unexpected set ${ref.path}`);
+    });
     getMock.mockResolvedValue({
       exists: () => true,
       val: () => ({ peer: true, 'org-1': true }),
@@ -95,42 +88,23 @@ describe('submitOnlineWord', () => {
       ok: true,
       entry: expect.objectContaining({ normalized: 'порт', kind: 'normal', points: 1 }),
     });
+    expect(setMock).toHaveBeenCalledTimes(2);
     expect(getMock).toHaveBeenCalled();
   });
 
-  it('returns DUPLICATE when leaf already owned', async () => {
-    runTransactionMock.mockImplementation(
-      async (ref: { path: string }, updater: (v: unknown) => unknown) => {
-        if (isWordPlayersParentPath(ref.path)) {
-          updater({ peer: true });
-          return { committed: false, snapshot: { val: () => ({ peer: true }) } };
-        }
-        if (isWordPlayersLeafPath(ref.path)) {
-          updater(true);
-          return { committed: false, snapshot: { val: () => true } };
-        }
-        return { committed: false, snapshot: { val: () => null } };
-      },
-    );
+  it('returns NOT_PLAYING when parent and leaf sets are denied', async () => {
+    setMock.mockRejectedValue(permissionDenied());
 
     const result = await submitOnlineWord('ABCDE', 'org-1', 'порт', true);
-    expect(result).toEqual({ ok: false, error: 'DUPLICATE' });
+    expect(result).toEqual({ ok: false, error: 'NOT_PLAYING' });
   });
 
   it('treats leaf commit as success when parent get throws (unique until maps confirm)', async () => {
-    runTransactionMock.mockImplementation(
-      async (ref: { path: string }, updater: (v: unknown) => unknown) => {
-        if (isWordPlayersParentPath(ref.path)) {
-          updater({ peer: true });
-          return { committed: false, snapshot: { val: () => ({ peer: true }) } };
-        }
-        if (isWordPlayersLeafPath(ref.path)) {
-          const next = updater(null);
-          return { committed: true, snapshot: { val: () => next } };
-        }
-        return { committed: false, snapshot: { val: () => null } };
-      },
-    );
+    setMock.mockImplementation(async (ref: { path: string }) => {
+      if (isWordPlayersParentPath(ref.path)) {
+        throw permissionDenied();
+      }
+    });
     getMock.mockRejectedValue(new Error('network'));
 
     const result = await submitOnlineWord('ABCDE', 'org-1', 'порт', true);
@@ -141,45 +115,36 @@ describe('submitOnlineWord', () => {
     });
   });
 
-  it('two uids claim the same word via stateful parent then leaf without wiping peer', async () => {
+  it('two uids claim the same word via parent then leaf set without wiping peer', async () => {
     const store: Record<string, unknown> = {};
 
-    runTransactionMock.mockImplementation(
-      async (ref: { path: string }, updater: (v: unknown) => unknown) => {
-        const path = ref.path;
-        if (isWordPlayersParentPath(path)) {
-          const current = store[path] ?? null;
-          const next = updater(current);
-          if (next === undefined) {
-            return { committed: false, snapshot: { val: () => store[path] ?? current } };
-          }
-          store[path] = next;
-          return { committed: true, snapshot: { val: () => next } };
+    setMock.mockImplementation(async (ref: { path: string }, value: unknown) => {
+      const path = ref.path;
+      if (isWordPlayersParentPath(path)) {
+        if (store[path] != null) {
+          throw permissionDenied();
         }
-        if (isWordPlayersLeafPath(path)) {
-          const current = store[path] ?? null;
-          const next = updater(current);
-          if (next === undefined) {
-            return { committed: false, snapshot: { val: () => store[path] ?? current } };
-          }
-          store[path] = next;
-          const parentPath = path.replace(/\/[^/]+$/, '');
-          const parent = { ...((store[parentPath] as Record<string, boolean>) ?? {}) };
-          const uid = path.split('/').pop()!;
-          parent[uid] = true;
-          store[parentPath] = parent;
-          return { committed: true, snapshot: { val: () => next } };
-        }
-        return { committed: false, snapshot: { val: () => null } };
-      },
-    );
+        store[path] = value;
+        return;
+      }
+      if (isWordPlayersLeafPath(path)) {
+        store[path] = value;
+        const parentPath = path.replace(/\/[^/]+$/, '');
+        const parent = { ...((store[parentPath] as Record<string, boolean>) ?? {}) };
+        const uid = path.split('/').pop()!;
+        parent[uid] = true;
+        store[parentPath] = parent;
+        return;
+      }
+      throw new Error(`unexpected set ${path}`);
+    });
     getMock.mockImplementation(async (ref: { path: string }) => ({
       val: () => store[ref.path] ?? null,
     }));
 
     const first = await submitOnlineWord('ABCDE', 'org-1', 'порт', true);
     const second = await submitOnlineWord('ABCDE', 'peer-2', 'порт', true);
-    const dup = await submitOnlineWord('ABCDE', 'org-1', 'порт', true);
+    const again = await submitOnlineWord('ABCDE', 'org-1', 'порт', true);
 
     expect(first).toEqual({
       ok: true,
@@ -189,7 +154,11 @@ describe('submitOnlineWord', () => {
       ok: true,
       entry: expect.objectContaining({ kind: 'normal', points: 1 }),
     });
-    expect(dup).toEqual({ ok: false, error: 'DUPLICATE' });
+    // Idempotent leaf set — already claimed locally still reports ok (play dedupes first).
+    expect(again).toEqual({
+      ok: true,
+      entry: expect.objectContaining({ kind: 'normal', points: 1 }),
+    });
     expect(store['session_word_maps/ABCDE/wordPlayers/порт']).toEqual({
       'org-1': true,
       'peer-2': true,

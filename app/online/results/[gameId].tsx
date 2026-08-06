@@ -61,6 +61,7 @@ import {
 } from '@/lib/online/session/results-home-escape';
 import { resolveResultsPresence } from '@/lib/online/live-round-screen-actions';
 import { optIntoLiveRound } from '@/lib/online/rematch/opt-into-live-round';
+import { resultsRematchFooterMode } from '@/lib/online/results-rematch-footer-mode';
 import { parseViewingBaseWordRoundParam } from '@/lib/online/parse-viewing-base-word-round-param';
 import type { RoundResultsViewData } from '@/lib/online/online-results-data';
 import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
@@ -570,6 +571,21 @@ export default function OnlineResultsScreen() {
     });
   }, [frozenRound, gameId, isOrganizer, myUid, session, wordsSnapshot]);
 
+  const finishedRoundIndex = session?.baseWordRound ?? frozenRound?.session.baseWordRound ?? 0;
+  const footerMode = resultsRematchFooterMode({
+    displayBaseWordRound: finishedRoundIndex,
+    liveStatus: liveSessionCore?.status ?? lastFinishedCore?.status ?? liveSession?.status ?? null,
+    liveBaseWordRound:
+      liveSessionCore?.baseWordRound ??
+      lastFinishedCore?.baseWordRound ??
+      liveSession?.baseWordRound ??
+      null,
+  });
+
+  const handleRoomLeaders = useCallback(() => {
+    router.push({ pathname: '/history/room/[gameId]', params: { gameId } });
+  }, [gameId]);
+
   const navigateHomeOnly = useCallback(() => {
     router.replace('/');
   }, []);
@@ -781,9 +797,17 @@ export default function OnlineResultsScreen() {
         winnerOverride={!viewData.isSolo && isViewerWinner(viewData.playerRankGroups, myUid)}
         footer={
           <RoundResultsFooterActions
-            primaryLabel={t('game.newGameSamePlayers')}
-            primaryDisabled={rematchLoading}
+            primaryLabel={
+              footerMode === 'room_complete'
+                ? t('online.roomLeaders')
+                : t('game.newGameSamePlayers')
+            }
+            primaryDisabled={footerMode === 'room_complete' ? false : rematchLoading}
             onPrimaryPress={() => {
+              if (footerMode === 'room_complete') {
+                handleRoomLeaders();
+                return;
+              }
               void handlePlayAgain();
             }}
             secondaryLabel={t('nav.home')}

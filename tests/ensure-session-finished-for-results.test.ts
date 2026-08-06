@@ -58,6 +58,18 @@ describe('classifyEnsureSessionSnapshot', () => {
       }),
     ).toBe('finished');
   });
+
+  it('continues when still playing the expected round (finish grace / late finish)', () => {
+    // Must NOT be rematch_advanced — local time-up + FINISH_WORD_SUBMIT_GRACE
+    // leaves RTDB playing while UI already shows results CTA.
+    expect(
+      classifyEnsureSessionSnapshot({
+        status: 'playing',
+        baseWordRound: 0,
+        expectedBaseWordRound: 0,
+      }),
+    ).toBe('continue');
+  });
 });
 
 describe('ensureSessionFinishedForResults', () => {
