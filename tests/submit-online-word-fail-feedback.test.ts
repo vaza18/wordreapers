@@ -5,13 +5,6 @@ import { feedbackForFailedOnlineSubmit } from '../lib/online/submit-online-word-
 describe('feedbackForFailedOnlineSubmit', () => {
   const t = (key: string) => key;
 
-  it('maps DUPLICATE to already-submitted copy', () => {
-    expect(feedbackForFailedOnlineSubmit(t, 'DUPLICATE')).toEqual({
-      message: 'game.errorAlreadySubmitted',
-      variant: 'default',
-    });
-  });
-
   it('clears success tone for NOT_PLAYING and SESSION_MISSING', () => {
     expect(feedbackForFailedOnlineSubmit(t, 'NOT_PLAYING')).toEqual({
       message: 'game.errorUnknown',

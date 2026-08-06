@@ -89,6 +89,8 @@ import {
 } from '@/lib/online/voting/clear-local-session-vote';
 import { submitOnlineWord } from '@/lib/firebase/submit-online-word';
 import { feedbackForFailedOnlineSubmit } from '@/lib/online/submit-online-word-fail-feedback';
+import { waitUntilIdleOrTimeout } from '@/lib/online/wait-until-idle-or-timeout';
+import { FINISH_WORD_SUBMIT_GRACE_MS } from '@/constants/finish-word-submit-grace';
 import { archiveFinishedRoundFromFirebase } from '@/lib/online/session/archive-finished-round-from-firebase';
 import {
   cancelAddTimeVote,
@@ -122,7 +124,10 @@ import {
   beginPlayMapsRoundReset,
   createPlayMapsListenerGate,
 } from '@/lib/online/session/play-word-maps-apply';
-import { ensureSessionFinishedForResults } from '@/lib/online/ensure-session-finished-for-results';
+import {
+  classifyEnsureSessionSnapshot,
+  ensureSessionFinishedForResults,
+} from '@/lib/online/ensure-session-finished-for-results';
 import type { OpenResultsEnsureOutcome } from '@/lib/online/ensure-session-finished-for-results';
 import {
   ensureLocalArchiveForRematchAdvancedResults,
@@ -591,6 +596,12 @@ export default function OnlinePlayScreen() {
     const navEpoch = resultsNavEpochRef.current;
     setViewResultsBusy(true);
     setViewResultsError(null);
+    // Let in-flight word shard writes settle before archive / replace so results
+    // do not freeze words that never reached RTDB (late-timer race).
+    await waitUntilIdleOrTimeout(() => syncInFlightRef.current === 0, FINISH_WORD_SUBMIT_GRACE_MS);
+    if (navEpoch !== resultsNavEpochRef.current) {
+      return;
+    }
     const expectedBaseWordRound = resolveExpectedResultsBaseWordRound({
       pinnedLocalTimeUpRound: localTimeUpBaseWordRoundRef.current,
       roundEndSnapshotRound: roundEndSessionSnapshot?.baseWordRound,
@@ -605,20 +616,34 @@ export default function OnlinePlayScreen() {
         !canOpenOnlineResults(session.status) ||
         (session.baseWordRound ?? 0) > expectedBaseWordRound
       ) {
-        // Already have a local finished pin — one snapshot classify, skip ~10s finish spam.
+        // Local pin: one snapshot — finished → open; rematch → archive path;
+        // still playing same round (FINISH_WORD_SUBMIT_GRACE) → wait for finish
+        // (do not mislabel as rematch_advanced or multiplayer has no archive).
         if (localRoundOverForcedRef.current || roundEndSessionSnapshot?.status === 'finished') {
           try {
             const live = await readGameSessionSnapshot(gameId);
             if (navEpoch !== resultsNavEpochRef.current) {
               return;
             }
-            if (
-              canOpenOnlineResults(live.status) &&
-              (live.baseWordRound ?? 0) === expectedBaseWordRound
-            ) {
+            const classified = classifyEnsureSessionSnapshot({
+              status: live.status,
+              baseWordRound: live.baseWordRound,
+              expectedBaseWordRound,
+            });
+            if (classified === 'finished') {
               ensureOutcome = 'finished';
-            } else {
+            } else if (classified === 'rematch_advanced') {
               ensureOutcome = 'rematch_advanced';
+            } else {
+              ensureOutcome = await ensureSessionFinishedForResults(gameId, {
+                expectedBaseWordRound,
+              });
+              if (navEpoch !== resultsNavEpochRef.current) {
+                return;
+              }
+              if (ensureOutcome === 'timeout') {
+                ensureOutcome = 'rematch_advanced';
+              }
             }
           } catch {
             ensureOutcome = 'rematch_advanced';
@@ -1290,13 +1315,13 @@ export default function OnlinePlayScreen() {
     });
 
     const pendingWord = pendingListenerWordRef.current;
-    if (pendingWord && myWords.has(pendingWord)) {
+    if (pendingWord && myWords.has(pendingWord) && !optimisticWords.has(pendingWord)) {
       activeSubmitProfileRef.current?.mark('listener');
       activeSubmitProfileRef.current?.finish();
       activeSubmitProfileRef.current = null;
       pendingListenerWordRef.current = null;
     }
-  }, [lexiconDisplays, myWords]);
+  }, [lexiconDisplays, myWords, optimisticWords]);
 
   const finishBackgroundSync = useCallback(() => {
     syncInFlightRef.current = Math.max(0, syncInFlightRef.current - 1);
@@ -1425,10 +1450,10 @@ export default function OnlinePlayScreen() {
         lastValidatedDraft.current = '';
         if (myWordsRef.current.has(result.normalized)) {
           profile?.mark('listener');
-          profile?.finish();
-          activeSubmitProfileRef.current = null;
-          pendingListenerWordRef.current = null;
         }
+        profile?.finish();
+        activeSubmitProfileRef.current = null;
+        pendingListenerWordRef.current = null;
       });
     },
     [

@@ -1,4 +1,4 @@
-import { get } from 'firebase/database';
+import { get, set } from 'firebase/database';
 
 import { toScoredWordEntry, type ScoredWordEntry, type WordScoreKind } from '../game/scoring.js';
 import type { SubmitWordProfile } from '../online/submit-word-profile.js';
@@ -9,10 +9,9 @@ import {
 
 import { ensureAnonymousAuth } from './auth.js';
 import { isFirebaseNetworkError, isFirebasePermissionDenied } from './rtdb-errors.js';
-import { runRtdbTransaction } from './rtdb-transaction.js';
 import { normalizeRoomCode } from './room-code.js';
 
-export type SubmitWordError = 'NOT_PLAYING' | 'DUPLICATE' | 'SESSION_MISSING' | 'NETWORK';
+export type SubmitWordError = 'NOT_PLAYING' | 'SESSION_MISSING' | 'NETWORK';
 
 export type SubmitOnlineWordOptions = {
   profile?: SubmitWordProfile | null;
@@ -32,12 +31,15 @@ function playersOnWordFromVal(val: unknown): Record<string, boolean> {
 }
 
 type WordShardCommit =
-  | { ok: true; playersOnWord: Record<string, boolean> }
-  | { ok: false; error: 'DUPLICATE' | 'NOT_PLAYING' };
+  { ok: true; playersOnWord: Record<string, boolean> } | { ok: false; error: 'NOT_PLAYING' };
 
 /**
- * First finder: parent TX on empty word node (rules: `!data.exists()`).
- * Second+: leaf TX (parent rewrite would allow peer wipe; rules forbid it).
+ * First finder: parent `set` on empty word node (rules: `!data.exists()`).
+ * Second+ / parent race: leaf `set(true)` (parent rewrite denied so peers cannot be wiped).
+ *
+ * Prefer `set` over `runTransaction`: transactions + default `applyLocally` caused
+ * multi-second retry storms and Metro `permission_denied` after `playing → finished`
+ * while optimistic UI already showed the word to the submitter only.
  */
 async function commitWordPlayersShard(
   roomId: string,
@@ -45,48 +47,20 @@ async function commitWordPlayersShard(
   uid: string,
 ): Promise<WordShardCommit> {
   const parentRef = wordPlayersPerWordRef(roomId, normalized);
+  const leafRef = wordPlayersShardPlayerRef(roomId, normalized, uid);
 
   try {
-    const parentTx = await runRtdbTransaction(parentRef, (current) => {
-      const existing = playersOnWordFromVal(current);
-      if (existing[uid] === true) {
-        return undefined;
-      }
-      // Rules only allow parent write when the word node is empty.
-      if (Object.keys(existing).length > 0) {
-        return undefined;
-      }
-      return { [uid]: true };
-    });
-    if (parentTx.committed) {
-      const playersOnWord = playersOnWordFromVal(parentTx.snapshot?.val());
-      const withSelf = playersOnWord[uid] ? playersOnWord : { ...playersOnWord, [uid]: true };
-      return { ok: true, playersOnWord: withSelf };
-    }
-    const afterParent = playersOnWordFromVal(parentTx.snapshot?.val());
-    if (afterParent[uid] === true) {
-      return { ok: false, error: 'DUPLICATE' };
-    }
+    await set(parentRef, { [uid]: true });
+    return { ok: true, playersOnWord: { [uid]: true } };
   } catch (error) {
     if (!isFirebasePermissionDenied(error)) {
       throw error;
     }
-    // Parent denied (node already claimed by a peer) — fall through to leaf.
+    // Parent denied (node already claimed, or not playing) — fall through to leaf.
   }
 
   try {
-    const leafTx = await runRtdbTransaction(
-      wordPlayersShardPlayerRef(roomId, normalized, uid),
-      (current) => {
-        if (current === true) {
-          return undefined;
-        }
-        return true;
-      },
-    );
-    if (!leafTx.committed) {
-      return { ok: false, error: 'DUPLICATE' };
-    }
+    await set(leafRef, true);
   } catch (error) {
     if (isFirebasePermissionDenied(error)) {
       return { ok: false, error: 'NOT_PLAYING' };
@@ -127,7 +101,7 @@ export async function submitOnlineWord(
     const roomId = normalizeRoomCode(gameId);
 
     const shardResult = await commitWordPlayersShard(roomId, normalized, uid);
-    profile?.mark('wordPlayersShardTx');
+    profile?.mark('wordPlayersShardWrite');
     if (!shardResult.ok) {
       return { ok: false, error: shardResult.error };
     }

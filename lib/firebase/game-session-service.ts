@@ -11,6 +11,8 @@ import {
 } from 'firebase/database';
 import { AppState } from 'react-native';
 
+import { FINISH_WORD_SUBMIT_GRACE_MS } from '../../constants/finish-word-submit-grace.js';
+import { canRematchAfterRound } from '../../constants/max-rounds-per-room.js';
 import { runRtdbTransaction } from './rtdb-transaction.js';
 import { shouldMarkPresenceOnline } from '../online/presence/app-presence-state.js';
 import { presenceWriteQueue } from '../online/presence/presence-write-queue.js';
@@ -1294,7 +1296,7 @@ export async function finishGameSessionIfExpired(gameId: string): Promise<boolea
   if (preSession.status !== 'playing' || preSession.timerEndsAt === null) {
     return false;
   }
-  if (getServerNow() < preSession.timerEndsAt) {
+  if (getServerNow() < preSession.timerEndsAt + FINISH_WORD_SUBMIT_GRACE_MS) {
     return false;
   }
   if (preSession.addTimeVote) {
@@ -1501,6 +1503,10 @@ export async function rematchFinishedSessionToWaiting(
     return;
   }
   if (preSession.status !== 'finished') {
+    throw new Error('REMATCH_FAILED');
+  }
+
+  if (!canRematchAfterRound(preSession.baseWordRound ?? 0)) {
     throw new Error('REMATCH_FAILED');
   }
 

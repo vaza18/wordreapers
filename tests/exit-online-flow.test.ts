@@ -74,7 +74,7 @@ vi.mock('../lib/firebase/init.js', () => ({
   getFirebaseDatabase: () => ({}),
 }));
 
-import { exitOnlineToHome } from '../lib/online/exit-online-flow.js';
+import { exitOnlineSession, exitOnlineToHome } from '../lib/online/exit-online-flow.js';
 import { DEFAULT_SESSION_SETTINGS, finishedSession } from './helpers/game-session-fixtures.js';
 
 describe('exitOnlineToHome', () => {
@@ -246,5 +246,35 @@ describe('exitOnlineToHome', () => {
 
     expect(runExitCleanupMocks.abandonTrackedOrganizerWaitingRoom).toHaveBeenCalledWith('org-1');
     expect(runExitCleanupMocks.setOrganizerWaitingRoom).toHaveBeenCalledWith(null);
+  });
+});
+
+describe('exitOnlineSession', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    for (const fn of Object.values(runExitCleanupMocks)) {
+      fn.mockResolvedValue(undefined);
+    }
+    runExitCleanupMocks.persistLocalArchive.mockResolvedValue('saved');
+    getMock.mockResolvedValue({ exists: () => false });
+  });
+
+  it('runs finished-results cleanup without navigating home', async () => {
+    const session = finishedSession();
+    getMock.mockResolvedValue({ exists: () => true, val: () => session });
+
+    await exitOnlineSession({
+      gameId: 'ABCDE',
+      uid: 'org',
+      isOrganizer: true,
+      sessionStatus: 'finished',
+      session,
+      wordsForArchive: new Map([['org', ['порт']]]),
+      exitedResults: true,
+    });
+
+    expect(runExitCleanupMocks.persistLocalArchive).toHaveBeenCalled();
+    expect(runExitCleanupMocks.markResultsExitedAndOffline).toHaveBeenCalled();
+    expect(navigateHomeClearingStack).not.toHaveBeenCalled();
   });
 });

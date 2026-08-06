@@ -7,6 +7,7 @@ import {
 import { readFileSync } from 'node:fs';
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 
+import { MAX_ROUNDS_PER_ROOM } from '../../constants/max-rounds-per-room.js';
 import { buildRoundStartWritePaths } from '../../lib/online/start-game-session-write.js';
 import type { GameSession } from '../../lib/firebase/types.js';
 
@@ -683,12 +684,51 @@ describe('session_word_maps', () => {
     );
   });
 
-  it('denies creating wordPlayers leaf while finished', async () => {
+  it('denies creating wordPlayers leaf while finished after append grace', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await ctx.database().ref('game_sessions/ABCDE').update({ status: 'finished' });
+      await ctx
+        .database()
+        .ref('game_sessions/ABCDE')
+        .update({
+          status: 'finished',
+          finishedAt: Date.now() - 60_000,
+          purgeAfterAt: Date.now() + 3_600_000,
+        });
     });
     await assertFails(
       authed('p1').database().ref('session_word_maps/ABCDE/wordPlayers/після/p1').set(true),
+    );
+  });
+
+  it('allows creating wordPlayers leaf shortly after finished (late-submit grace)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .database()
+        .ref('game_sessions/ABCDE')
+        .update({
+          status: 'finished',
+          finishedAt: Date.now() - 1_000,
+          purgeAfterAt: Date.now() + 3_600_000,
+        });
+    });
+    await assertSucceeds(
+      authed('p1').database().ref('session_word_maps/ABCDE/wordPlayers/пізно/p1').set(true),
+    );
+  });
+
+  it('allows wordPlayers parent create shortly after finished (late-submit grace)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .database()
+        .ref('game_sessions/ABCDE')
+        .update({
+          status: 'finished',
+          finishedAt: Date.now() - 500,
+          purgeAfterAt: Date.now() + 3_600_000,
+        });
+    });
+    await assertSucceeds(
+      authed('p1').database().ref('session_word_maps/ABCDE/wordPlayers/запізно').set({ p1: true }),
     );
   });
 
@@ -917,6 +957,91 @@ describe('rematch finished → waiting', () => {
     // Peer presence must not be rewritten once waiting is open.
     await assertFails(
       authed('p1').database().ref('game_sessions/ABCDE/players/org/online').set(false),
+    );
+  });
+
+  it('denies finished→waiting rematch after the final room round', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .database()
+        .ref('game_sessions/ABCDE')
+        .set({
+          ...finishedSession,
+          baseWordRound: MAX_ROUNDS_PER_ROOM - 1,
+        });
+    });
+    await assertFails(authed('p1').database().ref('game_sessions/ABCDE/status').set('waiting'));
+    await assertFails(
+      authed('p1').database().ref('game_sessions/ABCDE').update({
+        status: 'waiting',
+        baseWordRound: MAX_ROUNDS_PER_ROOM,
+        baseWord: '',
+        'players/p1/score': 0,
+        'players/p1/wordCount': 0,
+        'players/p1/online': true,
+        'players/p1/hasLeft': false,
+      }),
+    );
+  });
+
+  it('allows rematch from finished round MAX-2 into waiting at MAX-1', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .database()
+        .ref('game_sessions/ABCDE')
+        .set({
+          ...finishedSession,
+          baseWordRound: MAX_ROUNDS_PER_ROOM - 2,
+        });
+    });
+    await assertSucceeds(authed('p1').database().ref('game_sessions/ABCDE/status').set('waiting'));
+    await assertSucceeds(
+      authed('p1')
+        .database()
+        .ref('game_sessions/ABCDE')
+        .update({
+          settings: { ...finishedSession.settings, uniqueBonusEnabled: true },
+          timerEndsAt: null,
+          roundStartedAt: null,
+          roundTimerBudgetSeconds: null,
+          roundPlayedSeconds: null,
+          baseWord: '',
+          baseWordRound: MAX_ROUNDS_PER_ROOM - 1,
+          baseWordPickerUid: 'p1',
+          earlyFinishVote: null,
+          pauseVote: null,
+          pauseState: null,
+          resumeVote: null,
+          purgeAfterAt: null,
+          finishedAt: null,
+          isPublic: false,
+          publicPublishedAt: null,
+          'players/org/score': 0,
+          'players/org/wordCount': 0,
+          'players/p1/score': 0,
+          'players/p1/wordCount': 0,
+          'players/p1/online': true,
+          'players/p1/hasLeft': false,
+          'players/p2/score': 0,
+          'players/p2/wordCount': 0,
+        }),
+    );
+  });
+
+  it('denies writing baseWordRound at or above the room cap', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx
+        .database()
+        .ref('game_sessions/ABCDE')
+        .set({
+          ...finishedSession,
+          status: 'waiting',
+          baseWord: '',
+          baseWordRound: MAX_ROUNDS_PER_ROOM - 1,
+        });
+    });
+    await assertFails(
+      authed('p1').database().ref('game_sessions/ABCDE/baseWordRound').set(MAX_ROUNDS_PER_ROOM),
     );
   });
 

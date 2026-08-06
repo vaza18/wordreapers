@@ -6,9 +6,6 @@ export function feedbackForFailedOnlineSubmit(
   t: (key: string) => string,
   error: SubmitWordError,
 ): { message: string; variant: PlayWordFeedbackVariant } {
-  if (error === 'DUPLICATE') {
-    return { message: t('game.errorAlreadySubmitted'), variant: 'default' };
-  }
   if (error === 'NETWORK') {
     return { message: t('online.errorFirebaseNetwork'), variant: 'default' };
   }
