@@ -28,6 +28,74 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 - Root cause confirmed from Metro: leaf TX `permission_denied` 7–21s after local submit profile finished; peers missing СІ/СІНО. Fix: `set` shards + finish/rules grace (see `known-issues`). Rules post-finish append window is the literal `15000` in `database.rules.json` (not a TS constant).
 
+### 2026-08-05 — iOS bleAllowed only after real BLE use
+
+- iOS ensure: BLE left `unknown` + `os-pending`; confirm via `setNearbyBleCapabilityAllowed(true)` after successful BLE host advertise / startScan (not failed scan).
+- Sync: `allowBleProbe` independent of `allowOsPermissionPrompt`; coalesce ANDs probe and a live `bleProbeLiveAllowed` / `isBlePhaseStillAllowed` re-check before the hybrid BLE phase; OS ensure uses `includeBle: allowBleProbe && bleProbeLiveAllowed` (LAN-only when play suppresses); `bleTimeoutMs` only if confirmed \|\| live probe.
+- playQr reconcile: `requestNearbyOsPermissions({ includeBle: false })` — no munim/BT mid-round; ensure object-only contract.
+- Completion cooldown arms only after `trustedWireCompleted` (TCP/BLE archivesEnd → non-empty HaveAck), not UDP Hello or partial archives without End.
+- Play effect restart key omits online roster fingerprint (presence flap).
+
+### 2026-08-05 — Nearby host applyToken + BLE migrate opt-in
+
+- `applyToken` on startHost handlers; transports commit only while active (no stale clobber).
+- Missing BLE capability key stays `unknown` (probe-eligible; play still skips until `allowed`); LAN still migrates from granted.
+- maybeSync coalesce ORs `allowOsPermissionPrompt` so play(false) cannot drop join(true).
+
+### 2026-08-05 — Nearby join→lobby await drain (C1/C2 hooks)
+
+- maybeSync waiters resolve only after drain idle (sync-then-host); play QR host sequenced after sync.
+- BLE: soft startHost (no listener teardown on reconcile); queue Want while serve busy; persist lanAllowed gate.
+
+### 2026-08-05 — Nearby review C1/C2 (global sync flight + deferred BLE Hello)
+
+- Global single-flight for maybeSync (cross-key rematch-safe); deferred Hello after serve release.
+- BLE capability missing key → `unknown` (probe-eligible); peer archive requires session round/baseWord match.
+
+### 2026-08-05 — LAN→BLE review fixes (B1/B2)
+
+- B1: LAN vs BLE permission gates split; BT deny must not set global nearby denied.
+- B2: BLE TX serial queue + single-flight Want; client ignores shared notify until own Want.
+- Lobby sync-then-host; location in Android manifest for API<31 BLE.
+
+### 2026-08-05 — LAN→BLE GATT hybrid (munim-bluetooth)
+
+- Hybrid: LAN first, BLE GATT fallback (`munim-bluetooth` + nitro). Host starts both.
+- Chunked ATT framing in `ble-gatt-framing.ts`; HaveAck `ble` trusted like TCP.
+- **Native rebuild required** after pull. Manual smoke: Wi‑Fi LAN + cellular/isolation BLE.
+
+### 2026-08-05 — UDP discovery bind (still required)
+
+- **Bug:** client scan `bind(0)` ≠ host announce port → silent no discovery on device.
+- **Fix:** `udp-discovery.ts` — announce destination === listen port; `reusePort: true`.
+- Manual smoke: 2 phones, same Wi‑Fi/hotspot, mid-round join with gaps (LAN path).
+
+### 2026-08-05 — Nearby review C1/C2 (in-flight queue + TCP per-archive frames)
+
+- Same-key `maybeSync` queues latest input and reruns (join→play race).
+- LAN: one archive / TCP line + `archivesEnd`; `MAX_TCP_LINE_CHARS` stays ~1× archive (not N×).
+- Play without QR = no advertise (documented v1 limit).
+
+### 2026-08-05 — MAX_ROUNDS_PER_ROOM = 12 (nearby Want cap; rematch UX deferred)
+
+- SoT: `constants/max-rounds-per-room.ts`. Nearby Want/gaps/`haveRoundsCompleteForN` / lobby advertise-stop use `0..min(N,12)-1`.
+- Product rematch stop / «Нова гра» / room winners CTA — TODO in ADR-023 (MAX_ROUNDS_PER_ROOM).
+
+### 2026-08-05 — Nearby advertise-stop + hybrid availability (ADR-023)
+
+- Want capped priors `0..min(N,12)-1`; contact all discovered hosts for HaveAck; hybrid `isAvailable` = LAN ∨ BLE; play sync without new OS prompt; peer stats backfill off in v1.
+
+### 2026-08-05 — Nearby archive sync review fixes (ADR-023)
+
+- Critical: finalize gate; import `gameId`+wantRounds; HaveAck trusted after Want + ∩ served (TCP/BLE); UDP untrusted; fetchMissing settler barrier; Android NEARBY_WIFI_DEVICES only API 33+.
+- iOS `os-pending` → granted only after successful import; live `getHaveRounds`; UDP uses live `hostHandlers`; `setHaveRounds` trust required; residual hostile roster-uid spoof documented in ADR-023.
+
+### 2026-08-04 — Nearby archive sync (ADR-023)
+
+- Shipped local P2P gap-fill: `lib/online/nearby/**`, hooks on join/lobby/play QR. LAN UDP+TCP + BLE GATT hybrid (see top note).
+- **Rebuild required** after pull: udp/tcp-socket + munim-bluetooth/nitro + Local Network / Bluetooth strings + Expo plugin.
+- Manual smoke: same Wi‑Fi (LAN) and no shared LAN (BLE); TCP/BLE HaveAck stops lobby advertise (UDP alone must not).
+
 ### 2026-08-04 — Review triage: fix hung auth only; do not reopen SLA / provisional
 
 - **Do fix:** hung `ensureAnonymousAuth` in `subscribeSessionWordMaps` → `WORD_MAPS_AUTH_TIMEOUT_MS` (15s) → `unavailable` without attach; late auth no attach; cancel during wait still silent; still auth-before-attach (P0).

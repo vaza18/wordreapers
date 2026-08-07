@@ -282,6 +282,42 @@ export async function getFinishedRoundArchive(
   return store[finishedArchiveKey(gameId, baseWordRound)] ?? null;
 }
 
+/**
+ * Persist a peer/nearby archive if absent (no lexicon, ackSent false).
+ * Shares the same AsyncStorage RMW path as {@link saveFinishedRoundArchive}.
+ * @returns true when a new archive was written
+ */
+export async function importFinishedRoundArchiveIfAbsent(
+  archive: FinishedRoundArchive,
+): Promise<boolean> {
+  const gameId = normalizeRoomCode(archive.gameId);
+  const baseWordRound = archive.baseWordRound;
+  if (!gameId || !Number.isFinite(baseWordRound) || baseWordRound < 0) {
+    return false;
+  }
+  if (archive.session?.status !== 'finished') {
+    return false;
+  }
+  const key = finishedArchiveKey(gameId, baseWordRound);
+  const store = await readFinishedStore();
+  if (store[key]) {
+    return false;
+  }
+  const playerWords = archive.playerWords ?? {};
+  store[key] = {
+    ...archive,
+    gameId,
+    baseWordRound: Math.floor(baseWordRound),
+    archiveVersion: FINISHED_ARCHIVE_VERSION,
+    ackSent: false,
+    playerWordCounts: archive.playerWordCounts ?? playerWordCountsFromWords(playerWords),
+    playerWords,
+  };
+  delete store[key].playableLexicon;
+  await writeFinishedStore(store);
+  return true;
+}
+
 /** URL-safe key for expo-router (`{roomCode}--{baseWordRound}`). */
 export function archiveRouteKey(gameId: string, baseWordRound: number): string {
   return `${normalizeRoomCode(gameId)}--${baseWordRound}`;

@@ -11,6 +11,7 @@ import { spacing, type ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useOnlineViewerUid } from '@/hooks/useOnlineViewerUid';
+import { useNearbyArchivesStore } from '@/store/nearby-archives-store';
 import { normalizeRoomCode } from '@/lib/firebase/room-code';
 import { stackHeaderWithBackAndSettings } from '@/lib/navigation/stack-header-options';
 import {
@@ -35,6 +36,7 @@ export default function RoomHistoryScreen() {
   const { gameId: rawGameId } = useLocalSearchParams<{ gameId: string }>();
   const gameId = normalizeRoomCode(rawGameId ?? '');
   const myUid = useOnlineViewerUid();
+  const nearbyArchivesRevision = useNearbyArchivesStore((state) => state.revision);
   const [loading, setLoading] = useState(true);
   const [roundArchives, setRoundArchives] = useState<ReturnType<
     typeof filterMultiplayerArchivesForGame
@@ -54,7 +56,7 @@ export default function RoomHistoryScreen() {
 
   useEffect(() => {
     void loadArchives();
-  }, [loadArchives]);
+  }, [loadArchives, nearbyArchivesRevision]);
 
   const roomAggregate = useMemo(() => {
     if (!roundArchives || roundArchives.length === 0) {

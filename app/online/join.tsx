@@ -124,6 +124,19 @@ export default function JoinRoomScreen() {
         inviter ? { invitedByUid: inviter } : undefined,
       );
       const uid = firebase.uid ?? '';
+      const baseWordRound = session.baseWordRound ?? 0;
+      if (baseWordRound > 0) {
+        void import('@/lib/online/nearby/nearby-archive-sync').then(({ maybeSyncNearbyArchives }) =>
+          maybeSyncNearbyArchives({
+            gameId: normalized,
+            selfUid: uid,
+            baseWordRound,
+            session,
+            invitedByUid: inviter,
+            allowBleProbe: true,
+          }),
+        );
+      }
       const route = await resolvePostJoinRouteWithMaps(session, uid, normalized);
       router.replace(route);
     } catch (err) {
