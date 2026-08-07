@@ -24,7 +24,11 @@ Dictionary fetch/build runs on `npm install` / `npm ci` when artifacts are missi
 
 ## Workflow
 
+- **Before** `ci:check` / handoff / commit: run Prettier (and scoped ESLint if
+  needed) **once** on files changed this session — see
+  `.cursor/rules/format-as-you-edit.mdc`. Do not format after every micro-edit.
 - After substantive code edits, run `npm run ci:check` before handing off.
-- If Prettier fails: `npx prettier --write <files>` or `npm run format`, then re-run `ci:check`.
-- If ESLint fails: fix issues or `npm run lint:fix` where safe, then re-run.
+- If Prettier still fails: `npx prettier --write <touched-files>`, then re-run
+  `ci:check`.
+- If ESLint fails: fix issues or scoped `npx eslint --fix <paths>`, then re-run.
 - Do not skip hooks or commit with known lint/format/type/test failures.

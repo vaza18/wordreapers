@@ -78,7 +78,7 @@
     "prettier": "^3.8.3",
     "react-native-web": "^0.21.2",
     "react-test-renderer": "^19.2.3",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.3",
     "tsx": "^4.19.4",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.60.1",
@@ -126,7 +126,7 @@
     "uuid": "11.1.1",
     "postcss": "8.5.24",
     "markdown-it": "14.2.0",
-    "js-yaml": "4.3.0"
+    "js-yaml": "4.3.1"
   },
   "packageManager": "npm@12.0.2",
   "version": "1.8.2"

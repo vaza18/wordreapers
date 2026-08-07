@@ -1,0 +1,55 @@
+---
+description: Before ci:check, run Prettier and scoped ESLint on files changed this session — not after every edit
+alwaysApply: true
+---
+
+# Format / lint before the CI gate
+
+Most `ci:check` failures here are **Prettier** (`format:check`) or easy **ESLint**
+nits. Fix them on **touched paths** once, immediately **before**
+`npm run ci:check` — not after every single edit (that wastes time re-running
+the same files).
+
+## When to run
+
+1. Edit freely during the task (still aim for project style — see Prettier table).
+2. When about to run `ci:check`, hand off, or commit: collect paths you changed
+   this session (or `git diff --name-only` / staged names for that work).
+3. Run Prettier (+ scoped ESLint if needed) on **those paths once**.
+4. Then `npm run ci:check`.
+
+Do **not** re-run Prettier/ESLint after every `Write`/`StrReplace` on the same
+file. Mid-task format is optional only if you are done with that file for good
+and will not touch it again before the gate.
+
+## Project Prettier (`.prettierrc.json`)
+
+| Option | Value |
+| ------ | ----- |
+| `singleQuote` | `true` |
+| `trailingComma` | `"all"` |
+| `printWidth` | `100` |
+| `semi` | `true` |
+
+Prefer single quotes, trailing commas where valid, semicolons, wrap near 100 cols.
+Prettier on disk remains the source of truth.
+
+## Commands (scoped to touched files)
+
+```bash
+npx prettier --write <path1> <path2> ...
+npx eslint --fix <path1> <path2> ...   # only if ESLint-relevant; not a logic substitute
+```
+
+Avoid `npm run format` / `npm run lint:fix` on the **whole** tree unless the
+user asked or many unrelated files are dirty.
+
+## Relation to `ci:check`
+
+```text
+edits… → prettier --write (touched) → eslint --fix (touched, if needed) → npm run ci:check
+```
+
+- Do not burn review-fix rounds on format-only failures — format touched files
+  first, then one `ci:check`.
+- See also `ci-check-before-done`.
