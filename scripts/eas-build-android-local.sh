@@ -10,4 +10,7 @@ if [[ ! -f "$ROOT/assets/generated/dictionaries/uk-uk/dictionary.txt" ]]; then
   npm run dict:all --prefix "$ROOT"
 fi
 
+# Java 25 requires --enable-native-access=ALL-UNNAMED for JNI/CMake
+export JAVA_TOOL_OPTIONS="--enable-native-access=ALL-UNNAMED"
+
 exec eas build --platform android --profile production --local --clear-cache "$@"

@@ -5,7 +5,7 @@ const GRADLE_JVMARGS = 'org.gradle.jvmargs';
 
 /** Enough Metaspace for AGP 8.12 + R8 minify on local EAS builds (default 512m OOMs). */
 const GRADLE_JVMARGS_VALUE =
-  '-Xmx4g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8';
+  '-Xmx4g -XX:MaxMetaspaceSize=1g --enable-native-access=ALL-UNNAMED -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8';
 
 /**
  * @param {import('@expo/config-plugins').GradlePropertiesConfig['modResults']} props

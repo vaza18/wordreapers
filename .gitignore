@@ -43,6 +43,9 @@ docs/superpowers/
 !.cursor/rules/
 !.cursor/rules/**
 
+# Android Studio project files
+.idea/*
+
 dist/
 *.log
 .DS_Store

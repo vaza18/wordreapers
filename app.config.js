@@ -28,6 +28,7 @@ module.exports = ({ config }) => {
         return plugin;
       }),
     './plugins/with-automatic-ui-style.cjs',
+    './plugins/with-agp-version-patch.cjs',
     './plugins/with-firebase-extra.cjs',
     './plugins/without-ios-push-entitlement.cjs',
     './plugins/with-ios-modular-headers.cjs',
@@ -44,14 +45,16 @@ module.exports = ({ config }) => {
           deploymentTarget: '16.4',
           forceStaticLinking: ['RNFBApp', 'RNFBAppCheck'],
         },
-        ...(isProductionBuild
-          ? {
-              android: {
+        android: {
+          // Java 25 requires --enable-native-access=ALL-UNNAMED for JNI/CMake
+          gradleJvmArgs: '-Xmx4g -XX:MaxMetaspaceSize=1g --enable-native-access=ALL-UNNAMED',
+          ...(isProductionBuild
+            ? {
                 enableMinifyInReleaseBuilds: true,
                 enableShrinkResourcesInReleaseBuilds: true,
-              },
-            }
-          : {}),
+              }
+            : {}),
+        },
       },
     ],
   ];
