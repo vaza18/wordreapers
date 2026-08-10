@@ -19,18 +19,21 @@ describe('wordsNeeded', () => {
     expect(wordsNeeded('strong', 308)).toBe(62);
     expect(wordsNeeded('top', 308)).toBe(93);
     expect(wordsNeeded('champion', 308)).toBe(154);
+    expect(wordsNeeded('championAbs', 308)).toBe(308);
 
     // 5000: abs caps dominate
     expect(wordsNeeded('goodPace', 5000)).toBe(25);
     expect(wordsNeeded('strong', 5000)).toBe(100);
     expect(wordsNeeded('top', 5000)).toBe(200);
     expect(wordsNeeded('champion', 5000)).toBe(300);
+    expect(wordsNeeded('championAbs', 5000)).toBe(5000);
 
     // 80: ratio dominates (small lexicon)
     expect(wordsNeeded('goodPace', 80)).toBe(4);
     expect(wordsNeeded('strong', 80)).toBe(16);
     expect(wordsNeeded('top', 80)).toBe(24);
     expect(wordsNeeded('champion', 80)).toBe(40);
+    expect(wordsNeeded('championAbs', 80)).toBe(80);
   });
 
   it('falls back safely for invalid lexicon', () => {
@@ -58,6 +61,8 @@ describe('resolveRoundSuccessLevel', () => {
     expect(resolveRoundSuccessLevel(200, 5000)).toBe('top');
     expect(resolveRoundSuccessLevel(299, 5000)).toBe('top');
     expect(resolveRoundSuccessLevel(300, 5000)).toBe('champion');
+    expect(resolveRoundSuccessLevel(4999, 5000)).toBe('champion');
+    expect(resolveRoundSuccessLevel(5000, 5000)).toBe('championAbs');
   });
 
   it('uses ratio thresholds on medium lexicon (308)', () => {
@@ -69,6 +74,8 @@ describe('resolveRoundSuccessLevel', () => {
     expect(resolveRoundSuccessLevel(93, 308)).toBe('top');
     expect(resolveRoundSuccessLevel(153, 308)).toBe('top');
     expect(resolveRoundSuccessLevel(154, 308)).toBe('champion');
+    expect(resolveRoundSuccessLevel(307, 308)).toBe('champion');
+    expect(resolveRoundSuccessLevel(308, 308)).toBe('championAbs');
   });
 
   it('ratio dominates on small lexicon (80)', () => {
@@ -78,6 +85,8 @@ describe('resolveRoundSuccessLevel', () => {
     expect(resolveRoundSuccessLevel(16, 80)).toBe('strong');
     expect(resolveRoundSuccessLevel(24, 80)).toBe('top');
     expect(resolveRoundSuccessLevel(40, 80)).toBe('champion');
+    expect(resolveRoundSuccessLevel(79, 80)).toBe('champion');
+    expect(resolveRoundSuccessLevel(80, 80)).toBe('championAbs');
   });
 });
 
@@ -102,11 +111,21 @@ describe('resolveSuccessBarSegment', () => {
     expect(seg.wordsToNext).toBe(17);
   });
 
-  it('champion is full with no next', () => {
-    const seg = resolveSuccessBarSegment(300, 5000);
-    expect(seg.levelId).toBe('champion');
+  it('championAbs is full with no next', () => {
+    const seg = resolveSuccessBarSegment(5000, 5000);
+    expect(seg.levelId).toBe('championAbs');
     expect(seg.fill01).toBe(1);
     expect(seg.nextLevelId).toBe(null);
     expect(seg.wordsToNext).toBe(0);
+  });
+
+  it('fills toward championAbs while in champion', () => {
+    const seg = resolveSuccessBarSegment(400, 5000);
+    expect(seg.levelId).toBe('champion');
+    expect(seg.startWords).toBe(300);
+    expect(seg.endWords).toBe(5000);
+    expect(seg.fill01).toBeCloseTo((400 - 300) / (5000 - 300));
+    expect(seg.nextLevelId).toBe('championAbs');
+    expect(seg.wordsToNext).toBe(4600);
   });
 });

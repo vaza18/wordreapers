@@ -9,6 +9,7 @@ const LEVEL_TITLE_KEYS: Record<Exclude<SoloSuccessLevelId, 'none'>, string> = {
   strong: 'soloSuccess.levelStrong',
   top: 'soloSuccess.levelTop',
   champion: 'soloSuccess.levelChampion',
+  championAbs: 'soloSuccess.levelChampionAbs',
 };
 
 /** Localized title for a success level, or null for `none`. */

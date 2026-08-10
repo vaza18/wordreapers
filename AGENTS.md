@@ -4,100 +4,136 @@ Ukrainian word game for families: build words from the letters of a base word; t
 
 Almost all code is written and maintained by AI agents. This file is the single entry point for how to work in this repo safely.
 
-**No legacy / dead code:** when replacing a contract, delete the old path — do not keep silent fallbacks, dual APIs, stubs, or unused exports unless the user explicitly asks. See [`.cursor/rules/no-legacy-code.mdc`](.cursor/rules/no-legacy-code.mdc) and [`.cursor/rules/no-dead-code.mdc`](.cursor/rules/no-dead-code.mdc).
-
 ## Where to find the truth
 
-| Topic                                                                   | Source of truth                                                                                                      |
-| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Online room state machine (rematch, presence, opt-in, frozen round)     | [`docs/online-multiplayer-rules.md`](docs/online-multiplayer-rules.md)                                               |
-| Firebase RTDB schema and read/write policies                            | [`docs/firebase_schema.md`](docs/firebase_schema.md)                                                                 |
-| Word validation and normalization                                       | [`docs/validation_test_cases.md`](docs/validation_test_cases.md), [`lib/dictionary/`](lib/dictionary/)               |
-| Feature status and milestones                                           | [`docs/wordreapers_plan.md`](docs/wordreapers_plan.md)                                                               |
-| Screen flows and UX mockups                                             | [`docs/wordreapers_screens.html`](docs/wordreapers_screens.html)                                                     |
-| Past bugs and regression lessons                                        | [`docs/known-issues.md`](docs/known-issues.md)                                                                       |
-| Why non-obvious design choices exist                                    | [`docs/decisions.md`](docs/decisions.md)                                                                             |
-| Rolling agent session notes (promote to permanent docs when stable)     | [`docs/agent-notes.md`](docs/agent-notes.md)                                                                         |
-| Legal / about copy                                                      | [`docs/legal/`](docs/legal/), [`docs/wordreapers_about.md`](docs/wordreapers_about.md)                               |
-| Release CI (GitHub Release → Firebase backend gate → Play / TestFlight) | [`docs/release-ci.md`](docs/release-ci.md)                                                                           |
-| Firebase backend CI (rules + functions deploy)                          | [`docs/firebase-deploy-ci.md`](docs/firebase-deploy-ci.md)                                                           |
-| Dev Metro action logs (`EXPO_PUBLIC_LOG_LEVEL`)                         | [`lib/debug/dev-log.ts`](lib/debug/dev-log.ts), [`.env.example`](.env.example), [`CONTRIBUTING.md`](CONTRIBUTING.md) |
+| Topic                                                               | Source of truth                                                                                                      |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Online room state machine (rematch, presence, opt-in, frozen round) | [`docs/online-multiplayer-rules.md`](docs/online-multiplayer-rules.md)                                               |
+| Firebase RTDB schema and read/write policies                        | [`docs/firebase_schema.md`](docs/firebase_schema.md)                                                                 |
+| Word validation and normalization                                   | [`docs/validation_test_cases.md`](docs/validation_test_cases.md), [`lib/dictionary/`](lib/dictionary/)               |
+| Feature status and milestones                                       | [`docs/wordreapers_plan.md`](docs/wordreapers_plan.md)                                                               |
+| Screen flows and UX mockups                                         | [`docs/wordreapers_screens.html`](docs/wordreapers_screens.html)                                                     |
+| Past bugs and regression lessons                                    | [`docs/known-issues.md`](docs/known-issues.md)                                                                       |
+| Why non-obvious design choices exist                                | [`docs/decisions.md`](docs/decisions.md)                                                                             |
+| Rolling agent session notes                                         | [`docs/agent-notes.md`](docs/agent-notes.md)                                                                         |
+| Legal / about copy                                                  | [`docs/legal/`](docs/legal/), [`docs/wordreapers_about.md`](docs/wordreapers_about.md)                               |
+| Release CI (GitHub Release → Firebase backend gate)                 | [`docs/release-ci.md`](docs/release-ci.md)                                                                           |
+| Firebase backend CI (rules + functions deploy)                      | [`docs/firebase-deploy-ci.md`](docs/firebase-deploy-ci.md)                                                           |
+| Dev Metro action logs (`EXPO_PUBLIC_LOG_LEVEL`)                     | [`lib/debug/dev-log.ts`](lib/debug/dev-log.ts), [`.env.example`](.env.example), [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 
 Types for Firebase live in [`lib/firebase/types.ts`](lib/firebase/types.ts). Shared game logic is in [`lib/game/`](lib/game/). Online session logic is in [`lib/online/`](lib/online/) (~100 files — highest regression risk).
 
 ## Workflow when changing behavior
 
-1. **Read** the relevant doc from the table above before editing code.
-2. **Test first** when fixing a bug or changing edge-case logic: add or extend a test in [`tests/`](tests/) that fails with the old behavior.
-3. **Change** the minimal code needed; prefer pure functions in `lib/` over logic in components.
-4. **Update docs** when user-visible behavior, data flows, or screens change (see `.cursor/rules/docs-sync.mdc`).
-5. **Record regressions** in [`docs/known-issues.md`](docs/known-issues.md) when you fix a non-trivial bug.
-6. **Verify** before claiming done:
+1.  **Read** the relevant doc from the table above before editing code.
+2.  **Test first** when fixing a bug or changing edge-case logic: add or extend a test in [`tests/`](tests/) that fails with the old behavior.
+3.  **Change** the minimal code needed; prefer pure functions in `lib/` over logic in components.
+4.  **Update docs** when user-visible behavior, data flows, or screens change. Keep `docs/wordreapers_screens.html`, `docs/firebase_schema.md`, and `docs/known-issues.md` in sync.
+5.  **Record regressions** in [`docs/known-issues.md`](docs/known-issues.md) when you fix a non-trivial bug (Symptom → Cause → Fix → Test).
+6.  **Verify** before claiming done: `npm run ci:check`.
+
+### Risky-zone Pre-flight
+
+When changing behavior in `lib/online/**`, `firebase/**`, or `functions/src/**`, state this block in your reply **before** the first code edit:
+
+```markdown
+1. **Expected behavior** — user-visible outcome.
+2. **Invariants (must NOT change)** — copy from `docs/online-multiplayer-rules.md` or `docs/decisions.md`.
+3. **Affected areas** — files/modules you will touch.
+4. **Regression context** — search `docs/known-issues.md` for similar past bugs.
+```
+
+## Engineering Standards
+
+### No Legacy Code
+
+Do **not** leave behind compatibility layers, dual code paths, or “just in case” fallbacks. When replacing behavior, delete the old path in the same change. Fail loudly if required input is missing — do not silently fall back to an obsolete value.
+
+### No Dead Code
+
+Do not leave dead stubs, unused symbols, or duplicate gates in the paths you touch.
+
+- **Delete** thin rename wrappers.
+- **Drop** pass-through re-exports after a move.
+- **Remove** unused exports or orphan helpers.
+- **Wipe** commented-out old implementation blocks.
+
+### Commit Hygiene
+
+One logical change per commit. Future agents rely on `git log` and `git blame` to understand **why** code exists. Split Feature, Refactor, Docs, and Tooling changes. Use imperative mood in subjects.
+
+## CI & Quality Gates
+
+Before committing or handing off, you MUST run:
 
 ```bash
 npm run ci:check
 ```
 
-For Firebase rules or Cloud Functions changes, also run:
+This runs:
 
-```bash
-npm run test:rules
-```
+1.  `npm run lint` — ESLint on the whole repo.
+2.  `npm run format:check` — Prettier (must already match).
+3.  `npm run typecheck` — TypeScript checks.
+4.  `npm run test:coverage` — Vitest unit tests with coverage gate.
 
-For dictionary logic changes, `ci:check` already runs `npm run dict:validate`.
+**Format before CI:** Run `npx prettier --write <touched-paths>` and `npx eslint --fix <touched-paths>` ONCE on all files changed this session immediately before `npm run ci:check`.
 
-## Task specs for non-trivial work
+## Domain SOPs
 
-For bugs or features in `lib/online/` or `firebase/`, use [`docs/task-template.md`](docs/task-template.md) (or the GitHub issue template) so invariants and manual verification steps are explicit before coding.
+### [Online Multiplayer](file:///Users/Vasyl_Zaitsev/projects/wordreapers/lib/online/)
 
-## Agent notes hygiene
+Highest risk. Room lifecycle involves opt-in rematch, presence, and frozen rounds.
 
-[`docs/agent-notes.md`](docs/agent-notes.md) holds short-lived session findings. When a note becomes a stable rule or regression lesson, move it to `known-issues.md`, `online-multiplayer-rules.md`, or `decisions.md` and remove the stale note.
+- **Rematch:** Next round starts ONLY for players who pressed «Грати ще».
+- **Frozen View:** Players who don't opt in stay on their finished round UI even if RTDB moved to the next.
+- **Presence:** `online` / `hasLeft` / `liveRoundPlayerUids` drive lobby visibility.
+- **Tests:** Extend `tests/online-invariants.test.ts` for invariant changes.
 
-**End-of-session rule:** after non-trivial work in `lib/online/**`, `firebase/**`, or `functions/src/**`, if you discovered a nuance that does not yet warrant a permanent doc entry (flaky emulator behavior, temporary workaround, unclear edge case), add a dated line to `docs/agent-notes.md` before ending the session. Promote stable notes on the next pass.
+### [Firebase Backend](file:///Users/Vasyl_Zaitsev/projects/wordreapers/firebase/)
 
-**Pre-commit gate:** changes under `lib/online/`, `firebase/`, or `functions/src/` must also touch a file under `tests/` (see `scripts/check-test-touched.mjs`). Opt out with `[skip-test-check]` in the commit message when behavior is unchanged (e.g. comment-only).
+RTDB rules and Cloud Functions.
 
-## High-risk zones (extra care)
+- **Rules:** Run `npm run test:rules` (requires emulator).
+- **Functions:** Add unit tests in `tests/` for logic (e.g., `tests/guard-public-lobby-write-trigger.test.ts`).
+- **Deploy:** `npm run firebase:deploy:functions` or `npm run firebase:deploy:rules`.
 
-| Area                                                                 | Why risky                                                                                    |
-| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| [`lib/online/`](lib/online/)                                         | Opt-in rematch, presence, frozen round view, mid-round join — many interdependent edge cases |
-| [`lib/game/scoring.ts`](lib/game/scoring.ts)                         | x2 / +N bonus rules affect scores and results                                                |
-| [`lib/dictionary/validate-word.ts`](lib/dictionary/validate-word.ts) | Core gameplay validation; regressions break trust                                            |
-| [`firebase/database.rules.json`](firebase/database.rules.json)       | Security; weak rules or overly strict rules both hurt                                        |
-| [`functions/src/`](functions/src/)                                   | Background purges and lobby guards; failures are silent                                      |
+### [Dictionary & Validation](file:///Users/Vasyl_Zaitsev/projects/wordreapers/lib/dictionary/)
 
-Domain-specific Cursor rules auto-attach when you edit files in these areas (see `.cursor/rules/*-domain.mdc`).
+Core gameplay trust.
 
-## Project layout (quick map)
+- **Validation:** Cross-check `docs/validation_test_cases.md`.
+- **Verification:** Run `npm run dict:validate`.
+- **Build:** Use `npm run dict:build` / `dict:all` (don't edit generated assets).
 
-```
-app/           Expo Router screens (online play, settings, profile)
-components/    UI components
-hooks/         React hooks (often thin wrappers over lib/)
-lib/           Pure logic — dictionary, game, online (rematch/, presence/, session/, voting/), firebase helpers
-store/         Zustand stores
-tests/         Vitest unit tests (regression tests for edge cases)
-functions/     Firebase Cloud Functions (TypeScript)
-firebase/      RTDB security rules
-docs/          Specs, schemas, mockups, known issues
-```
+## Expert Orchestration Workflows
 
-## Commit hygiene
+Complex tasks (like staged code reviews or fixing build loops) MUST be delegated to specialized sub-agents using the `task` tool.
 
-One logical change per commit (feature / refactor / docs separately). Future agents use `git log` and `git blame` to understand _why_ code looks the way it does. See `.cursor/rules/commit-hygiene.mdc`.
+### Delegation Pattern
 
-## Cursor rules (always or auto-attached)
+1.  **Identify Trigger:** When a user asks for a review («перевір код», «code review staged») or a build fix loop.
+2.  **Load Definition:** Read the relevant agent/skill file from `.cursor/agents/` or `.cursor/skills/`.
+3.  **Dispatch Task:** Call the `task` tool. The prompt should be the **content of the agent file** plus the current context (staged diff, intent bullets, prior findings).
 
-| Rule                               | When                                                               |
-| ---------------------------------- | ------------------------------------------------------------------ |
-| `docs-sync.mdc`                    | Always — keep docs/mockups/legal in sync                           |
-| `ci-check-before-done.mdc`         | Always — run `npm run ci:check` before done                        |
-| `commit-hygiene.mdc`               | Always — atomic commits                                            |
-| `no-legacy-code.mdc`               | Always — no compatibility shims unless user asks                   |
-| `no-dead-code.mdc`                 | Always — no stubs, unused exports, redundant gates in touched code |
-| `online-multiplayer-domain.mdc`    | Editing `app/online/`, `lib/online/`, related hooks                |
-| `dictionary-validation-domain.mdc` | Editing `lib/dictionary/`, `scripts/dictionary/`                   |
-| `firebase-backend-domain.mdc`      | Editing `firebase/`, `functions/src/`                              |
-| `risky-zone-preflight.mdc`         | Always — state Expected/Invariants before risky edits              |
+### Workflow Triggers
+
+| Trigger                                             | Target Agent / Skill File                                                                                            |
+| :-------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------- |
+| «Перевір код», «code review staged», «рев’ю staged» | [`.cursor/skills/wordreapers-staged-review/SKILL.md`](.cursor/skills/wordreapers-staged-review/SKILL.md)             |
+| «Повторний аналіз», «перевір виправлення»           | [`.cursor/agents/wordreapers-staged-reviewer.md`](.cursor/agents/wordreapers-staged-reviewer.md) (Mode: `re-review`) |
+| «Fix until green», «виправ до апруву»               | [`.cursor/skills/wordreapers-review-fix-loop/SKILL.md`](.cursor/skills/wordreapers-review-fix-loop/SKILL.md)         |
+
+---
+
+## Project Layout
+
+- `app/`: Expo Router screens.
+- `components/`: UI components.
+- `hooks/`: React hooks (thin wrappers over lib/).
+- `lib/`: Pure logic (dictionary, game, online, firebase).
+- `store/`: Zustand stores.
+- `tests/`: Vitest unit tests.
+- `functions/`: Firebase Cloud Functions.
+- `firebase/`: RTDB security rules.
+- `docs/`: Specs, schemas, mockups, known issues.

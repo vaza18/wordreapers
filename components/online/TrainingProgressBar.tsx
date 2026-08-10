@@ -28,6 +28,7 @@ const LEVEL_TITLE_KEYS: Record<Exclude<SoloSuccessLevelId, 'none'>, string> = {
   strong: 'soloSuccess.levelStrong',
   top: 'soloSuccess.levelTop',
   champion: 'soloSuccess.levelChampion',
+  championAbs: 'soloSuccess.levelChampionAbs',
 };
 
 function createStyles(colors: ThemeColors) {

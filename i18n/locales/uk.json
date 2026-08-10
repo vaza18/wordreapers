@@ -45,6 +45,7 @@
     "levelStrong": "Сильний результат",
     "levelTop": "Топ раунду",
     "levelChampion": "Темп чемпіона",
+    "levelChampionAbs": "Абсолютний чемпіон",
     "firstWord": "Знайдіть перше слово",
     "nextLevel": "До: {{title}} · ще {{count}}\u00A0{{wordForm}}",
     "championMax": "Максимум за раунд!",

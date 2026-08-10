@@ -61,21 +61,28 @@ function ResultsWordRow({
 
   return (
     <View style={[notebookRow.row, styles.row]}>
-      <Text style={[styles.word, !row.found ? styles.wordMissing : null]} numberOfLines={1}>
-        {row.display}
-      </Text>
+      <FeedbackPressable
+        accessibilityRole="link"
+        accessibilityLabel={definitionA11yLabel}
+        onPress={handleOpenDefinition}
+        style={styles.wordPressable}
+      >
+        <Text style={[styles.word, !row.found ? styles.wordMissing : null]} numberOfLines={1}>
+          {row.display}
+        </Text>
+      </FeedbackPressable>
+
       <View style={styles.meta}>
-        {!row.found ? (
-          <FeedbackPressable
-            accessibilityRole="button"
-            accessibilityLabel={definitionA11yLabel}
-            hitSlop={8}
-            onPress={handleOpenDefinition}
-            style={styles.definitionButton}
-          >
-            <DictionaryBookIcon size={18} color={definitionIconColor} />
-          </FeedbackPressable>
-        ) : null}
+        <FeedbackPressable
+          accessibilityRole="button"
+          accessibilityLabel={definitionA11yLabel}
+          hitSlop={8}
+          onPress={handleOpenDefinition}
+          style={styles.definitionButton}
+        >
+          <DictionaryBookIcon size={18} color={definitionIconColor} />
+        </FeedbackPressable>
+
         {showAuthors && row.found && row.authors ? (
           <ResultWordAuthorAvatars authors={row.authors} showUniqueBadge={showScoreBadges} />
         ) : null}
@@ -171,9 +178,14 @@ function createStyles(colors: ThemeColors) {
       paddingHorizontal: spacing.sm,
       overflow: 'visible',
     },
-    word: {
+    wordPressable: {
       flex: 1,
       flexShrink: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    word: {
+      flex: 1,
       fontSize: 16,
       fontWeight: '500',
       color: colors.penBlue,
