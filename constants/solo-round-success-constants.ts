@@ -6,6 +6,7 @@ export const SOLO_SUCCESS_LEVEL_IDS = [
   'strong',
   'top',
   'champion',
+  'championAbs',
 ] as const;
 
 export type SoloSuccessLevelId = (typeof SOLO_SUCCESS_LEVEL_IDS)[number];
@@ -21,12 +22,14 @@ export const SOLO_SUCCESS_GOOD_PACE_RATIO = 0.05;
 export const SOLO_SUCCESS_STRONG_RATIO = 0.2;
 export const SOLO_SUCCESS_TOP_RATIO = 0.3;
 export const SOLO_SUCCESS_CHAMPION_RATIO = 0.5;
+export const SOLO_SUCCESS_CHAMPION_ABS_RATIO = 1.0;
 
 /** Medal emoji for medal tiers (none for lower levels). */
 export const SOLO_SUCCESS_MEDALS: Readonly<Partial<Record<SoloSuccessLevelId, string>>> = {
   strong: '🥉',
   top: '🥈',
   champion: '🥇',
+  championAbs: '🏆',
 };
 
 /** Levels that fire confetti when first entered during a round. */
@@ -34,4 +37,5 @@ export const SOLO_SUCCESS_CONFETTI_LEVELS: ReadonlySet<SoloSuccessLevelId> = new
   'strong',
   'top',
   'champion',
+  'championAbs',
 ]);

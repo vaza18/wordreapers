@@ -223,6 +223,8 @@ export default function OrganizerSoloPlayScreen() {
   const isPaused = status === 'paused';
   const addTimeRemainingMs = getRemainingMs(Date.now());
 
+  const enteredWords = useMemo(() => words.map((word) => word.normalized), [words]);
+
   const showSuccessBar =
     status === 'playing' && !isPaused && roundLexicon != null && roundLexicon.maxCount > 0;
   const showUnlockHint = trainingHydrated && !hasCompletedTrainingRound;
@@ -249,11 +251,23 @@ export default function OrganizerSoloPlayScreen() {
     if (SOLO_SUCCESS_CONFETTI_LEVELS.has(levelId)) {
       celebrate();
     }
-  }, [celebrate, enqueueToasts, roundLexicon, scoredWords.length, showSuccessBar, t]);
+    if (count > 0 && maxWordCount !== null && maxWordCount > 0 && count >= maxWordCount) {
+      finishRound();
+    }
+  }, [
+    celebrate,
+    enqueueToasts,
+    finishRound,
+    maxWordCount,
+    roundLexicon,
+    scoredWords.length,
+    showSuccessBar,
+    t,
+  ]);
 
   useTrainingWordHint({
     enabled: showSuccessBar,
-    enteredWords: words.map((word) => word.normalized),
+    enteredWords,
     draftLength: draft.length,
     sortedWords: roundLexicon?.sortedWords,
     displays: roundLexicon?.displays,

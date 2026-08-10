@@ -25,6 +25,7 @@ const TIER_THRESHOLDS: readonly TierThreshold[] = [
   { id: 'strong', abs: SOLO_SUCCESS_STRONG_ABS, ratio: SOLO_SUCCESS_STRONG_RATIO },
   { id: 'top', abs: SOLO_SUCCESS_TOP_ABS, ratio: SOLO_SUCCESS_TOP_RATIO },
   { id: 'champion', abs: SOLO_SUCCESS_CHAMPION_ABS, ratio: SOLO_SUCCESS_CHAMPION_RATIO },
+  { id: 'championAbs', abs: 9999, ratio: 1.0 },
 ];
 
 /** Segment boundaries for the thin progress bar (current → next). */
@@ -34,6 +35,7 @@ const BAR_SEGMENT_TARGETS: readonly SoloSuccessLevelId[] = [
   'strong',
   'top',
   'champion',
+  'championAbs',
 ];
 
 function clamp01(value: number): number {
@@ -111,8 +113,8 @@ export function resolveSuccessBarSegment(
 ): SoloSuccessBarSegment {
   const levelId = resolveRoundSuccessLevel(wordCount, lexiconMax);
 
-  if (levelId === 'champion') {
-    const endWords = wordsNeeded('champion', lexiconMax);
+  if (levelId === 'championAbs') {
+    const endWords = lexiconMax;
     return {
       levelId,
       startWords: endWords,
