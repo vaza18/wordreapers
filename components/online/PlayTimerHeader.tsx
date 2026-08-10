@@ -14,6 +14,7 @@ type PlayTimerHeaderBaseProps = {
   wordCount: number;
   maxWordCount: number | null;
   score: number;
+  timerEndsAt: number | null;
   timerAlertMode: FeedbackMode;
   onOpenGameMenu: () => void;
   onOpenAddTimeModal: () => void;
@@ -21,7 +22,6 @@ type PlayTimerHeaderBaseProps = {
 
 export type PlayTimerHeaderServerProps = PlayTimerHeaderBaseProps & {
   clock: 'server';
-  timerEndsAt: number | null;
   pauseFrozenRemainingMs: number | null;
   rank: number;
   showRank: boolean;
@@ -36,7 +36,6 @@ export type PlayTimerHeaderServerProps = PlayTimerHeaderBaseProps & {
 
 export type PlayTimerHeaderLocalProps = PlayTimerHeaderBaseProps & {
   clock: 'local';
-  endsAt: number | null;
   getRemainingMs: (now: number) => number;
   onTimeUp: () => void;
   /** When true, skip onTimeUp even if the clock has elapsed (e.g. add-time modal open). */
@@ -94,12 +93,12 @@ export const PlayTimerHeader = memo(function PlayTimerHeader(props: PlayTimerHea
     if (props.clock !== 'local') {
       return;
     }
-    const { endsAt, isPaused, onTimeUp, roundActive, deferTimeUp } = props;
+    const { timerEndsAt, isPaused, onTimeUp, roundActive, deferTimeUp } = props;
     if (
       !roundActive ||
       isPaused ||
-      endsAt === null ||
-      now < endsAt ||
+      timerEndsAt === null ||
+      now < timerEndsAt ||
       deferTimeUp ||
       timeUpHandledRef.current
     ) {

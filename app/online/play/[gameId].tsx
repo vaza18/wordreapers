@@ -11,7 +11,7 @@ import type { PlayableLexiconSnapshot } from '@/lib/dictionary/round-playable-le
 import { GameMenuModal } from '@/components/GameMenuModal';
 import { OnlineMapsSyncBanner } from '@/components/online/OnlineMapsSyncBanner';
 import { OnlinePlayActiveBody } from '@/components/online/OnlinePlayActiveBody';
-import { OnlinePlayTimerHeader } from '@/components/online/OnlinePlayTimerHeader';
+import { PlayTimerHeader } from '@/components/online/PlayTimerHeader';
 import { PlayStandingsSheet } from '@/components/online/PlayStandingsSheet';
 import { PlayStatsExplainModal } from '@/components/online/PlayStatsExplainModal';
 import { PlayDialogsStack } from '@/components/online/PlayDialogsStack';
@@ -1820,7 +1820,8 @@ export default function OnlinePlayScreen() {
         ) : null}
         {!isPaused ? (
           <>
-            <OnlinePlayTimerHeader
+            <PlayTimerHeader
+              clock="server"
               timerEndsAt={endsAt}
               pauseFrozenRemainingMs={session?.pauseState?.frozenRemainingMs ?? null}
               isPaused={false}
@@ -1910,7 +1911,7 @@ export default function OnlinePlayScreen() {
               }
             }}
             showPause={!isPaused && !earlyVote && !pauseVote && !addTimeVote && !roundEnded}
-            pauseLabel={hasOnlineOpponentInRound ? t('game.menuPause') : t('game.menuPauseSolo')}
+            pauseLabel={t('game.menuPause')}
             showInvite={canInviteOthers && !roundEnded}
             showExit={!roundEnded}
             onInvite={() => {

@@ -18,7 +18,7 @@ import { GameMenuModal } from '@/components/GameMenuModal';
 import { GameTimeUpModal } from '@/components/GameTimeUpModal';
 import { HowToPlayDialog } from '@/components/HowToPlayDialog';
 import { OnlinePlayActiveBody } from '@/components/online/OnlinePlayActiveBody';
-import { OrganizerSoloTimerHeader } from '@/components/online/OrganizerSoloTimerHeader';
+import { PlayTimerHeader } from '@/components/online/PlayTimerHeader';
 import { PlayStatsExplainModal } from '@/components/online/PlayStatsExplainModal';
 import { TrainingProgressBar } from '@/components/online/TrainingProgressBar';
 import { PauseRoundModal } from '@/components/PauseRoundModal';
@@ -31,7 +31,7 @@ import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useAutoPauseOnAppBackground } from '@/hooks/useAutoPauseOnAppBackground';
 import { usePlayWordFeedbackDismiss } from '@/hooks/usePlayWordFeedback';
 import { useToastQueue } from '@/hooks/useToastQueue';
-import { useTrainingFirstWordHint } from '@/hooks/useTrainingFirstWordHint';
+import { useTrainingWordHint } from '@/hooks/useTrainingWordHint';
 import { useTrainingMilestone } from '@/hooks/useTrainingMilestone';
 import { resolveRoundSuccessLevel } from '@/lib/game/solo-round-success';
 import { formatSoloSuccessLevelUpToast } from '@/lib/game/solo-round-success-i18n';
@@ -251,9 +251,9 @@ export default function OrganizerSoloPlayScreen() {
     }
   }, [celebrate, enqueueToasts, roundLexicon, scoredWords.length, showSuccessBar, t]);
 
-  useTrainingFirstWordHint({
-    enabled: showUnlockHint && showSuccessBar && scoredWords.length === 0,
-    wordCount: scoredWords.length,
+  useTrainingWordHint({
+    enabled: showSuccessBar,
+    enteredWords: words.map((word) => word.normalized),
     draftLength: draft.length,
     sortedWords: roundLexicon?.sortedWords,
     displays: roundLexicon?.displays,
@@ -308,6 +308,11 @@ export default function OrganizerSoloPlayScreen() {
     if (!setup || !isPaused) {
       return null;
     }
+    // Optimized wordPlayers map.
+    const wordPlayers = new Map<string, Record<string, boolean>>();
+    words.forEach(function (word) {
+      wordPlayers.set(word.normalized, { [myUid]: true });
+    });
     const frozenRemainingMs = getRemainingMs(Date.now());
     return {
       baseWord: setup.baseWord,
@@ -330,6 +335,7 @@ export default function OrganizerSoloPlayScreen() {
           online: true,
         },
       },
+      wordPlayers: Object.fromEntries(wordPlayers),
       pauseState: {
         active: true,
         frozenRemainingMs,
@@ -344,6 +350,7 @@ export default function OrganizerSoloPlayScreen() {
     viewerGender,
     scoredWords.length,
     playerScore,
+    words,
     getRemainingMs,
   ]);
 
@@ -549,8 +556,9 @@ export default function OrganizerSoloPlayScreen() {
       <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
         {!isPaused ? (
           <>
-            <OrganizerSoloTimerHeader
-              endsAt={endsAt}
+            <PlayTimerHeader
+              clock="local"
+              timerEndsAt={endsAt}
               isPaused={isPaused}
               roundActive={status === 'playing'}
               getRemainingMs={getRemainingMs}
@@ -642,7 +650,7 @@ export default function OrganizerSoloPlayScreen() {
         }}
         onProposeEnd={() => {}}
         showPause={!isPaused}
-        pauseLabel={t('game.menuPauseSolo')}
+        pauseLabel={t('game.menuPause')}
         showInvite={canInviteOthers}
         onInvite={() => {
           void handleInvite();
