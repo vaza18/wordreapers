@@ -70,8 +70,6 @@ export function shouldPurgeSession(session: GameSessionPurgeNode, now: number): 
 
 /**
  * Delete game_sessions + session_word_maps when retention has passed.
- * Legacy `player_words` is outside the client contract — wipe once via ops
- * (`firebase_schema.md` / `npm run firebase:purge-orphans`); not a CF ongoing path.
  */
 export async function purgeExpiredRtdbSessions(
   now = Date.now(),

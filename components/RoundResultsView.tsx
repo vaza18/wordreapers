@@ -176,7 +176,11 @@ export function RoundResultsView({
   const roundDurationLabel =
     roundDurationSeconds != null ? formatRoundDuration(roundDurationSeconds) : null;
   const activeTab: ResultsTab = showTabs ? tab : 'all';
-  const canShowMissingToggle = Boolean(roundLexicon) && !lexiconLoading;
+  const canShowMissingToggle =
+    Boolean(roundLexicon) &&
+    !lexiconLoading &&
+    roundLexicon?.sortedWords?.length &&
+    roundLexicon.sortedWords.length > globalWords.length;
   const lexiconForWordList = resolveResultsWordListLexicon(roundLexicon, deferredShowMissingWords);
   const allWordRows = useMemo(
     () => buildResultsWordList(globalWords, lexiconForWordList, deferredShowMissingWords),

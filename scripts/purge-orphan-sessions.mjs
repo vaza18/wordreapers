@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * One-shot Admin wipe of abandoned waiting/playing (and finished without purgeAfterAt)
- * game sessions plus related session_word_maps / player_words.
+ * game sessions plus related session_word_maps.
  *
  * Loads `EXPO_PUBLIC_FIREBASE_DATABASE_URL` from `.env` / `.env.local` (repo root).
  * Precedence: shell env > `.env.local` > `.env`.
@@ -205,7 +205,6 @@ async function main() {
     await db.ref().update({
       [`game_sessions/${gameId}`]: null,
       [`session_word_maps/${gameId}`]: null,
-      [`player_words/${gameId}`]: null,
     });
     purged += 1;
   }

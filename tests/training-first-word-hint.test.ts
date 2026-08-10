@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatFirstWordHintLetters } from '@/lib/onboarding/training-first-word-hint';
+import { formatWordHintLetters } from '@/lib/onboarding/training-word-hint';
 
-describe('formatFirstWordHintLetters', () => {
+describe('formatWordHintLetters', () => {
   it('uppercases and spaces letters', () => {
-    expect(formatFirstWordHintLetters('екю')).toBe('Е К Ю');
+    expect(formatWordHintLetters('екю')).toBe('Е К Ю');
   });
 });

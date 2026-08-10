@@ -49,7 +49,6 @@ describe('buildGameMenuGroups', () => {
 describe('game menu uk copy', () => {
   it('uses short labels without emoji prefixes', () => {
     expect(uk.game.menuPause).toBe('Пауза');
-    expect(uk.game.menuPauseSolo).toBe('Пауза');
     expect(uk.online.menuInvitePlayer).toBe('Запросити');
     expect(uk.game.menuProposeEnd).toBe('Завершити гру для всіх');
     expect(uk.game.menuEndEarly).toBe('Завершити гру');
@@ -59,7 +58,6 @@ describe('game menu uk copy', () => {
 
     for (const label of [
       uk.game.menuPause,
-      uk.game.menuPauseSolo,
       uk.online.menuInvitePlayer,
       uk.game.menuProposeEnd,
       uk.game.menuEndEarly,

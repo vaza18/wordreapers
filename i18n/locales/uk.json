@@ -36,7 +36,8 @@
     "retryTitle": "Спробуй ще раз",
     "retryBody": "Цього разу ти знайшов {{found}}\u00A0{{foundForm}}. Щоб розблокувати гру з іншими гравцями, знайди щонайменше {{required}}\u00A0{{requiredForm}} за один раунд (рівень «Гарний темп»).",
     "retryCtaAgain": "Спробувати ще раз",
-    "firstWordHint": "Підказка: набери «{{letters}}»"
+    "firstWordHint": "Підказка: набери «{{letters}}»",
+    "noWordsAnymore": "Усі можливі слова вже зібрані."
   },
   "soloSuccess": {
     "levelProgress": "Є прогрес",
@@ -328,7 +329,6 @@
     "menu": "Меню",
     "menuTitle": "Меню",
     "menuPause": "Пауза",
-    "menuPauseSolo": "Пауза",
     "menuProposeEnd": "Завершити гру для всіх",
     "menuEndEarly": "Завершити гру",
     "endEarlyConfirmTitle": "Завершити гру достроково?",
