@@ -8,6 +8,16 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 <!-- Add dated notes at the top -->
 
+### 2026-08-11 — RTDB traffic diagnostics (developer mode)
+
+- **Feature:** Hidden 7-tap gesture on `AppVersionLabel` (About screen) toggles `developerModeEnabled`.
+- **Diagnostics:** When `rtdbDiagnosticsEnabled` (Settings), captures JSON payload bytes (down/up) for all RTDB actions. Dual sparkline banner in root layout + history screen.
+- **Log bridge:** `devLogAction` mirrors all actions into local ring probe in prod (including observed events) while collecting. Console is never used in production.
+- **Instrumentation:** Captured `get`, `update`, `remove`, `onValue`, `runTransaction` in `game-session-service` and `session-word-maps-service`.
+- **Storage:** `wordreapers.*` keys used for flags and history; cleared via `clearLocalDataStorage`.
+- **Verification:** `npm run ci:check` passed. ADR-025 added.
+- **Root layout:** Added `<View style={{ flex: 1 }}>` wrapper around `RootStack` in `app/_layout.tsx` so `RtdbTrafficBanner` / `GlobalToastHost` mount without breaking main screen flex layouts.
+
 ### 2026-08-06 — Rematch heal must poll finish during grace (review C1)
 
 - `join_live` + `FINISH_WORD_SUBMIT_GRACE`: UI expired ≠ finish allowed. Use `ensureSessionFinishedForResults` before rematch; do not fail on first false finish.
@@ -406,7 +416,7 @@ Promote important items to permanent docs (`known-issues.md`, `online-multiplaye
 
 - Root fix kept: `DictionaryIndex` O(1) `Set` + `Intl.Collator('uk')` sort (+ commit-only setup prefetch). Speculative letter-mask / preferFastWallClock experiments reverted.
 - Verified ~3–6s for 5773 accepts on S931B (`yieldEveryMs` 64). No play/solo blocking spinner — lexicon builds in background while the screen mounts; word submit already has ~1s debounce.
-- iOS suggest / setup hint: typing uses soft `pause` (no cache eviction); deferred `onPressOut` clear keeps suppress until `onPress`.
+- iOS suggest / setup hint: typing uses soft `pause` (not cache eviction); deferred `onPressOut` clear keeps suppress until `onPress`.
 
 ### 2026-07-15 — Dead code cleanup
 

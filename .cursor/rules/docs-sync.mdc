@@ -11,7 +11,9 @@ When you change user-visible behavior, data flows, or screens in Wordreapers:
 2. **Screens / UX** — update `docs/wordreapers_screens.html` mockups when layout or flows change materially.
 3. **Legal / about text** — edit markdown only under `docs/legal/` or `docs/wordreapers_about.md`. `lib/legal/bundled-legal.ts` is generated (gitignored); `npm run legal:bundle` runs on `postinstall` / `prestart`, or run it manually after MD edits.
 4. **Plan / milestones** — tick or adjust `docs/wordreapers_plan.md` when a feature lands.
-5. **Regression log** — when fixing a non-trivial bug, add an entry to `docs/known-issues.md` (symptom → cause → fix → test).
+5. **Regression log & In-code fixes** —
+    - Add to `docs/known-issues.md` ONLY if the bug reveals a **major architectural gap** or cross-module invariant break.
+    - For all other non-trivial fixes, add an **in-code comment** (e.g., `// FIX: YYYY-MM — <Symptom> → <Cause>`) directly above the change.
 
 Do not ship placeholder i18n legal strings when real markdown exists in `docs/legal/`.
 
