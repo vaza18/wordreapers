@@ -6,15 +6,30 @@ Format: **Symptom → Cause → Fix → Area**
 
 ---
 
+### 2026-09 — Offline results incomplete after rich local freeze
+
+- **Symptom:** Player who locked the screen mid-round opened results later with fewer words than peers (e.g. 56 vs 89); RTDB still had the full tree.
+- **Cause:** Non-empty local freeze (stale listen / Firebase disk cache) disabled results maps listen; upgrade path only handled empty→rich. Prefer-memory archive could also skip a richer server fetch.
+- **Fix:** Grow-only upgrade for incomplete freezes; keep maps listen while live `finished` same round; archive always fetch∪pickRicherWordPlayers.
+- **Test:** `tests/frozen-round-view.test.ts`, `tests/archive-finished-round-from-firebase.test.ts`, `tests/archive-words-gate.test.ts`
+- **Area:** `lib/online/session/frozen-round-view.ts`, `app/online/results/[gameId].tsx`, `lib/online/session/archive-finished-round-from-firebase.ts`
+
+### 2026-09 — RTDB diagnostics ↓ double-count on word-maps seed
+
+- **Symptom:** With diagnostics collecting, ↓ JSON for a room was ~2× the `wordPlayers` tree on join/rematch.
+- **Cause:** ADR-022 listen-first attaches `onChild*` before seed `get`; both paths called `instrumentedSnapshotVal` for the same initial tree.
+- **Fix:** `instrumentedChildSnapshotVal(seeded, …)` skips child recording until authoritative seed; seed `get` remains the initial ↓ count (ADR-025 trade-off #4).
+- **Test:** `tests/firebase/instrumentation.test.ts` (`instrumentedChildSnapshotVal`)
+- **Area:** `lib/firebase/session-word-maps-service.ts`, `lib/firebase/rtdb-instrumentation.ts`
+
 ### 2026-08 — Rematch-survival wipe race (C1 wipe race)
 
-<<<<<<< HEAD
 - **Symptom:** Authoritative empty snapshot wiped rich `tryFetch` bootstrap on results/left.
 - **Cause:** Results roster bootstrap completed on the first authoritative listen (even if empty) before the non-empty bootstrap fetch settled.
 - **Fix:** `useLiveRosterPlayerWords` delay bootstrap-complete until fetch settles; apply non-empty fetch over empty seed if previous leaves are 0 (wipe race survival).
 - **Test:** `tests/use-live-roster-player-words.test.tsx` (rich fetch over empty listen), `tests/frozen-round-view.test.ts`
 - **Area:** `hooks/useLiveRosterPlayerWords.ts`, `lib/online/session/frozen-round-view.ts`
-=======
+
 ### 2026-08 — Nearby isComplete/gaps uncapped vs Want MAX (I1)
 
 - **Symptom (review):** Want capped at `MAX_ROUNDS_PER_ROOM` but `expectedPriorRounds` / `haveRoundsCompleteForN` expected full `0..N-1` → for N>12 trusted HaveAck of `0..11` never stopped lobby advertise.
@@ -177,25 +192,6 @@ Format: **Symptom → Cause → Fix → Area**
 - **Test:** `tests/nearby-archive-review-fixes.test.ts`, `tests/nearby-archive-permission.test.ts`
 - **Area:** `lib/online/nearby/**`, `lib/online/session/online-session-archive.ts`
 
-### 2026-08 — Play Retry dismissed maps banner before authoritative seed
->>>>>>> 4107794 (Add nearby LAN/BLE peer archive sync for missed rounds.)
-
-### 2026-09 — Offline results incomplete after rich local freeze
-
-- **Symptom:** Player who locked the screen mid-round opened results later with fewer words than peers (e.g. 56 vs 89); RTDB still had the full tree.
-- **Cause:** Non-empty local freeze (stale listen / Firebase disk cache) disabled results maps listen; upgrade path only handled empty→rich. Prefer-memory archive could also skip a richer server fetch.
-- **Fix:** Grow-only upgrade for incomplete freezes; keep maps listen while live `finished` same round; archive always fetch∪pickRicherWordPlayers.
-- **Test:** `tests/frozen-round-view.test.ts`, `tests/archive-finished-round-from-firebase.test.ts`, `tests/archive-words-gate.test.ts`
-- **Area:** `lib/online/session/frozen-round-view.ts`, `app/online/results/[gameId].tsx`, `lib/online/session/archive-finished-round-from-firebase.ts`
-
-### 2026-09 — RTDB diagnostics ↓ double-count on word-maps seed
-
-- **Symptom:** With diagnostics collecting, ↓ JSON for a room was ~2× the `wordPlayers` tree on join/rematch.
-- **Cause:** ADR-022 listen-first attaches `onChild*` before seed `get`; both paths called `instrumentedSnapshotVal` for the same initial tree.
-- **Fix:** `instrumentedChildSnapshotVal(seeded, …)` skips child recording until authoritative seed; seed `get` remains the initial ↓ count (ADR-025 trade-off #4).
-- **Test:** `tests/firebase/instrumentation.test.ts` (`instrumentedChildSnapshotVal`)
-- **Area:** `lib/firebase/session-word-maps-service.ts`, `lib/firebase/rtdb-instrumentation.ts`
-
 ### 2026-08 — ADR-022: Maps Listen & Seed Reliability
 
 - **Symptom:** Dead listens after seed, parallel hung gets, and hung-cap Retry spam during slow connectivity.
@@ -222,7 +218,7 @@ Format: **Symptom → Cause → Fix → Area**
 
 ### 2026-08 — Hung ensureAnonymousAuth never reached maps CTA
 
-- **Symptom:** `subscribeSessionWordMaps` awaited auth with no timeout → hung Auth left results on "Завантаження слів" forever.
+- **Symptom:** `subscribeSessionWordMaps` awaited auth with no timeout → hung Auth left results on \"Завантаження слів\" forever.
 - **Fix:** `WORD_MAPS_AUTH_TIMEOUT_MS` (15s) → emit `unavailable` without attach; Retry CTA can then show.
 - **Test:** `tests/firebase/session-word-maps-service.test.ts`
 - **Area:** `lib/firebase/session-word-maps-service.ts`
@@ -334,7 +330,7 @@ Format: **Symptom → Cause → Fix → Area**
 ### 2026-06 — Frozen round results overwritten when rematch advances
 
 - **Symptom:** Results for a finished round were lost when a peer started a rematch.
-- **Cause:** Live session data overwriting the "frozen" view of non-opt-in players.
+- **Cause:** Live session data overwriting the \"frozen\" view of non-opt-in players.
 - **Fix:** ADR-022; keep frozen snapshot until explicit opt-in.
 - **Area:** `lib/online/session/frozen-round-view.ts`
 
