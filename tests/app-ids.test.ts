@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveFirebaseAppId } from '../lib/firebase/app-ids.js';
 
@@ -6,6 +6,13 @@ const ANDROID_ID = '1:x:android:demo';
 const IOS_ID = '1:x:ios:demo';
 
 describe('resolveFirebaseAppId', () => {
+  beforeEach(() => {
+    // Isolate from real .env values: Vitest loads .env automatically, so
+    // EXPO_PUBLIC_FIREBASE_APP_ID_* would be present unless explicitly stubbed.
+    vi.stubEnv('EXPO_PUBLIC_FIREBASE_APP_ID_ANDROID', '');
+    vi.stubEnv('EXPO_PUBLIC_FIREBASE_APP_ID_IOS', '');
+  });
+
   afterEach(() => {
     vi.unstubAllEnvs();
   });

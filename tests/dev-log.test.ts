@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { rtdbTrafficProbe } from '../lib/debug/rtdb-traffic-probe';
+import { useRtdbDiagnosticsStore } from '../store/rtdb-diagnostics-store';
 import {
   devLog,
   devLogAction,
@@ -123,5 +125,61 @@ describe('dev-log', () => {
     expect(console.log).toHaveBeenCalledWith(
       expect.stringContaining('[Peer] joined room via code (observed) (L8NN5, round 0)'),
     );
+  });
+
+  describe('production mode with diagnostics', () => {
+    beforeEach(() => {
+      vi.stubGlobal('__DEV__', false);
+      rtdbTrafficProbe.reset();
+      useRtdbDiagnosticsStore.getState().reset();
+    });
+
+    it('records all actions to probe when collecting, but stays silent in console', () => {
+      useRtdbDiagnosticsStore.setState({
+        developerModeEnabled: true,
+        rtdbDiagnosticsEnabled: true,
+      });
+      expect(rtdbTrafficProbe.isCollecting()).toBe(true);
+
+      devLogAction('local action', { actor: 'Me' });
+      devLogAction('observed action', { actor: 'Peer', observed: true });
+
+      expect(console.log).not.toHaveBeenCalled();
+      expect(console.warn).not.toHaveBeenCalled();
+
+      const actions = rtdbTrafficProbe.getRecentActions(2);
+      expect(actions).toHaveLength(2);
+      expect(actions[0].action).toBe('observed action');
+      expect(actions[1].action).toBe('local action');
+    });
+
+    it('records detail/observed actions to probe in production even when console is silent', () => {
+      useRtdbDiagnosticsStore.setState({
+        developerModeEnabled: true,
+        rtdbDiagnosticsEnabled: true,
+      });
+
+      // Observed actions require 'detail' level, which is > 'event' (prod default).
+      devLogAction('remote peer joined', { actor: 'Peer', observed: true });
+
+      expect(console.log).not.toHaveBeenCalled();
+      const actions = rtdbTrafficProbe.getRecentActions(1);
+      expect(actions).toHaveLength(1);
+      expect(actions[0].action).toBe('remote peer joined');
+    });
+
+    it('devLog stays silent and does not record to probe in production', () => {
+      useRtdbDiagnosticsStore.setState({
+        developerModeEnabled: true,
+        rtdbDiagnosticsEnabled: true,
+      });
+
+      devLog('event', 'ignored console log');
+      devLog('error', 'ignored console warn');
+
+      expect(console.log).not.toHaveBeenCalled();
+      expect(console.warn).not.toHaveBeenCalled();
+      expect(rtdbTrafficProbe.getRecentActions()).toHaveLength(0);
+    });
   });
 });

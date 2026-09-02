@@ -1,0 +1,159 @@
+// @vitest-environment happy-dom
+
+import { fireEvent, render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import React from 'react';
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, params?: { id?: string }) => (params?.id ? `${key}:${params.id}` : key),
+  }),
+}));
+
+vi.mock('@/hooks/useTheme', () => ({
+  useTheme: () => ({
+    colors: {
+      penBlue: '#00f',
+      destructiveAction: '#f00',
+      backgroundPrimary: '#fff',
+      textPrimary: '#000',
+      textSecondary: '#666',
+      textTertiary: '#999',
+      borderTertiary: '#eee',
+    },
+  }),
+}));
+
+vi.mock('@/hooks/useThemedStyles', () => ({
+  useThemedStyles: (factory: (colors: Record<string, string>) => object) =>
+    factory({
+      penBlue: '#00f',
+      destructiveAction: '#f00',
+      backgroundPrimary: '#fff',
+      textPrimary: '#000',
+      textSecondary: '#666',
+      textTertiary: '#999',
+      borderTertiary: '#eee',
+    }),
+}));
+
+const mockHistory = [
+  {
+    roomId: 'TEST',
+    timestamp: 1724170000000,
+    downTotal: 1024,
+    upTotal: 512,
+    buckets: [{ tSec: 1724170000, downBytes: 1024, upBytes: 512 }],
+    actions: [
+      { timestamp: 1724170000500, action: 'test-action', details: 'test-details', observed: false },
+    ],
+  },
+];
+
+const mockClearHistory = vi.fn();
+let mockDeveloperModeEnabled = true;
+let mockIsHydrated = true;
+
+vi.mock('@/store/rtdb-diagnostics-store', () => {
+  const useRtdbDiagnosticsStore = (
+    selector: (state: {
+      history: typeof mockHistory;
+      clearHistory: () => void;
+      developerModeEnabled: boolean;
+      isHydrated: boolean;
+    }) => unknown,
+  ) => {
+    const state = {
+      history: mockHistory,
+      clearHistory: mockClearHistory,
+      get developerModeEnabled() {
+        return mockDeveloperModeEnabled;
+      },
+      get isHydrated() {
+        return mockIsHydrated;
+      },
+    };
+    return selector(state);
+  };
+  return {
+    useRtdbDiagnosticsStore: Object.assign(useRtdbDiagnosticsStore, {
+      subscribe: vi.fn(() => vi.fn()),
+      getState: vi.fn(() => ({
+        history: mockHistory,
+        clearHistory: mockClearHistory,
+        get developerModeEnabled() {
+          return mockDeveloperModeEnabled;
+        },
+        rtdbDiagnosticsEnabled: true,
+        get isHydrated() {
+          return mockIsHydrated;
+        },
+      })),
+    }),
+  };
+});
+
+vi.mock('expo-router', () => ({
+  Redirect: ({ href }: { href: string }) => <div data-testid="redirect" data-href={href} />,
+}));
+
+vi.mock('@/components/Screen', () => ({
+  Screen: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
+vi.mock('@/components/FeedbackPressable', () => ({
+  FeedbackPressable: ({
+    children,
+    onPress,
+  }: {
+    children: React.ReactNode;
+    onPress: () => void;
+  }) => (
+    <div onClick={onPress} role="button">
+      {children}
+    </div>
+  ),
+}));
+
+import RtdbDiagnosticsScreen from '../app/settings/rtdb-diagnostics.js';
+
+describe('RtdbDiagnosticsScreen', () => {
+  beforeEach(() => {
+    mockDeveloperModeEnabled = true;
+    mockIsHydrated = true;
+    mockClearHistory.mockClear();
+  });
+
+  it('renders history list', () => {
+    render(<RtdbDiagnosticsScreen />);
+    expect(screen.getByText('rtdbDiagnostics.roomLabel:TEST')).toBeTruthy();
+  });
+
+  it('opens details when an entry is pressed', () => {
+    render(<RtdbDiagnosticsScreen />);
+    const item = screen.getByText('rtdbDiagnostics.roomLabel:TEST');
+    fireEvent.click(item);
+
+    expect(screen.getByText('test-action')).toBeTruthy();
+    expect(screen.getByText('test-details')).toBeTruthy();
+  });
+
+  it('calls clearHistory when clear button is pressed', () => {
+    render(<RtdbDiagnosticsScreen />);
+    const clearBtn = screen.getByText('rtdbDiagnostics.clearHistory');
+    fireEvent.click(clearBtn);
+    expect(mockClearHistory).toHaveBeenCalled();
+  });
+
+  it('redirects to settings when developer mode is off', () => {
+    mockDeveloperModeEnabled = false;
+    render(<RtdbDiagnosticsScreen />);
+    expect(screen.getByTestId('redirect').getAttribute('data-href')).toBe('/settings');
+  });
+
+  it('renders nothing until hydrated', () => {
+    mockIsHydrated = false;
+    const { container } = render(<RtdbDiagnosticsScreen />);
+    expect(container.firstChild).toBeNull();
+  });
+});
