@@ -1,6 +1,6 @@
 import { getApp } from '@react-native-firebase/app';
 import {
-  getToken as getNativeAppCheckToken,
+  getToken,
   initializeAppCheck as initializeNativeAppCheck,
   ReactNativeFirebaseAppCheckProvider,
 } from '@react-native-firebase/app-check';
@@ -8,10 +8,14 @@ import {
 import { useProductionAppCheckProviders } from './app-check-mode.js';
 import { buildNativeAppCheckProviderConfig } from './native-app-check-provider-config.js';
 
+export interface NativeAppCheckTokenResult {
+  token: string;
+}
+
 export type NativeAppCheckTokenGetter = (
   appCheckInstance: unknown,
   forceRefresh?: boolean,
-) => Promise<{ token: string }>;
+) => Promise<NativeAppCheckTokenResult>;
 
 export interface NativeAppCheckSession {
   nativeAppCheck: unknown;
@@ -33,6 +37,7 @@ export async function createNativeAppCheckSession(): Promise<NativeAppCheckSessi
 
   return {
     nativeAppCheck,
-    getNativeAppCheckToken: getNativeAppCheckToken as NativeAppCheckTokenGetter,
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+    getNativeAppCheckToken: getToken as unknown as NativeAppCheckTokenGetter,
   };
 }

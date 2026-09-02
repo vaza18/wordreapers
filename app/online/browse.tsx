@@ -17,6 +17,7 @@ import { RefreshIcon } from '@/components/HeaderIcons';
 import { PrimaryButton } from '@/components/PrimaryButton';
 import { Screen } from '@/components/Screen';
 import { spacing, type ThemeColors } from '@/constants/theme';
+import { devLogAction } from '@/lib/debug/dev-log';
 import { useServerNow } from '@/hooks/useServerNow';
 import { useTrainingMilestone } from '@/hooks/useTrainingMilestone';
 import { useHeaderIconButtonLayout } from '@/hooks/useHeaderIconButtonLayout';
@@ -193,6 +194,7 @@ export default function BrowsePublicLobbiesScreen() {
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
+    devLogAction('refreshing public lobbies', { level: 'event' });
     try {
       await loadPage(page, sort, true);
     } catch (error: unknown) {
@@ -205,6 +207,7 @@ export default function BrowsePublicLobbiesScreen() {
   const goToPage = useCallback(
     async (targetPage: number) => {
       setLoading(true);
+      devLogAction(`browsing public lobbies page ${targetPage}`, { level: 'event' });
       try {
         await loadPage(targetPage, sort, false);
       } catch (error: unknown) {
@@ -221,6 +224,7 @@ export default function BrowsePublicLobbiesScreen() {
       if (nextSort === sort) {
         return;
       }
+      devLogAction(`changing public lobby sort to ${nextSort}`, { level: 'event' });
       setSort(nextSort);
       setPage(1);
     },

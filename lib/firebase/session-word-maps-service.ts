@@ -21,8 +21,15 @@ import {
   removeWordPlayersChild,
   type SessionWordMaps,
 } from './session-word-maps.js';
-import { liveWordMapsSignature } from '../online/session/live-words-snapshot.js';
-import { devLogAction } from '../debug/dev-log.js';
+import { liveWordMapsSignature } from '@/lib/online/session/live-words-snapshot.js';
+import { devLogAction } from '@/lib/debug/dev-log.js';
+import { rtdbTrafficProbe } from '@/lib/debug/rtdb-traffic-probe.js';
+import {
+  recordRtdbUpdate,
+  recordRtdbRemove,
+  instrumentedSnapshotVal,
+  instrumentedChildSnapshotVal,
+} from './rtdb-instrumentation.js';
 
 function sessionWordMapsRef(gameId: string): DatabaseReference {
   return ref(getFirebaseDatabase(), sessionWordMapsPath(gameId));
@@ -92,10 +99,11 @@ export async function tryFetchSessionWordMaps(gameId: string): Promise<SessionWo
     await ensureAnonymousAuth();
     // Same RTDB node as live listen seed get (wordPlayers) — avoid parent/child cache skew.
     const snapshot = await get(sessionWordPlayersRef(roomId));
+    const val = instrumentedSnapshotVal(snapshot);
     if (!snapshot.exists()) {
       return { ok: true, maps: { ...EMPTY_SESSION_WORD_MAPS } };
     }
-    return { ok: true, maps: mapsFromWordPlayersNode(snapshot.val()) };
+    return { ok: true, maps: mapsFromWordPlayersNode(val) };
   } catch (error) {
     return { ok: false, error };
   }
@@ -223,6 +231,9 @@ export type SubscribeSessionWordMapsOptions = {
  * unsubscribe() does not emit. Cancel while auth is pending does **not** emit.
  * Hung auth (no resolve/reject) after {@link WORD_MAPS_AUTH_TIMEOUT_MS} emits
  * `unavailable` without attach; late auth must not attach.
+ *
+ * FIX: 2026-08 — Hung ensureAnonymousAuth (ADR-022) → fail-loud `unavailable`
+ * after auth timeout so Retry CTA can show.
  */
 export function subscribeSessionWordMaps(
   gameId: string,
@@ -230,6 +241,9 @@ export function subscribeSessionWordMaps(
   options?: SubscribeSessionWordMapsOptions,
 ): Unsubscribe {
   const roomId = normalizeRoomCode(gameId);
+  // Intentional double-call (with subscribeGameSession) is guarded by early-return
+  // in setActiveRoomId. Both must ensure the probe tracks this room before data arrives.
+  rtdbTrafficProbe.setActiveRoomId(roomId);
   let cancelled = false;
   let authTimedOut = false;
   let detach: Unsubscribe | null = null;
@@ -274,6 +288,7 @@ export function subscribeSessionWordMaps(
   };
 }
 
+// FIX: 2026-08 — listen-first + seed buffer (ADR-022) → avoids rematch wipe Nibble/Race.
 /** Attach children + seed get. Call only after auth is ready. */
 function attachSessionWordMapsListen(
   roomId: string,
@@ -408,8 +423,9 @@ function attachSessionWordMapsListen(
       if (seedAbandoned) {
         return;
       }
+      // FIX: 2026-08 — get-buffer coalescing (ADR-022) → coalescence by word key (O(words)).
       // Buffer only — never seal authoritative seed from children alone.
-      // Coalesce by word key (O(words)). Provisional UI may emit; bootstrap waits for get.
+      // Provisional UI may emit; bootstrap waits for get.
       pushCoalescedBufferOp(bufferByKey, op);
       scheduleProvisionalFromBuffer();
       return;
@@ -464,6 +480,7 @@ function attachSessionWordMapsListen(
     if (cancelled || seeded || seedAbandoned) {
       return;
     }
+    // FIX: 2026-08 — single-flight seed get (ADR-022) → avoid parallel hung gets.
     // ── DO NOT (ADR-022 / late-seal) ─────────────────────────────────────────
     // - Do NOT start a parallel Firebase get on soft-timeout (eager supersede).
     // - Do NOT burn seedAttempt on soft-timeout ticks (hang detector only).
@@ -489,6 +506,7 @@ function attachSessionWordMapsListen(
         if (cancelled || seeded || seedAbandoned || getId !== activeGetId) {
           return;
         }
+        // FIX: 2026-08 — soft-timeout hang detector (ADR-022) → wait for late-seal.
         // Soft timeout without parallel get (single-flight). Same get may still seal
         // until we abandon. Do **not** increment seedAttempt (I1).
         softTimeoutTicks += 1;
@@ -519,9 +537,8 @@ function attachSessionWordMapsListen(
           flushQueuedSeedRetry();
           return;
         }
-        const base = snapshot.exists()
-          ? (mapsFromWordPlayersNode(snapshot.val()).wordPlayers ?? {})
-          : {};
+        const val = instrumentedSnapshotVal(snapshot);
+        const base = snapshot.exists() ? (mapsFromWordPlayersNode(val).wordPlayers ?? {}) : {};
         finishSeed(base);
       },
       (error: unknown) => {
@@ -555,7 +572,10 @@ function attachSessionWordMapsListen(
         if (snap.key == null) {
           return;
         }
-        handleChildOp({ kind: 'upsert', key: snap.key, val: snap.val() });
+        // FIX: 2026-09 — seed get + pre-seal children double-counted ↓ → skip child
+        // instrumentation until after authoritative seed (ADR-025 / ADR-022 listen-first).
+        const val = instrumentedChildSnapshotVal(seeded, snap);
+        handleChildOp({ kind: 'upsert', key: snap.key, val });
       },
       onCancel,
     ),
@@ -565,7 +585,8 @@ function attachSessionWordMapsListen(
         if (snap.key == null) {
           return;
         }
-        handleChildOp({ kind: 'upsert', key: snap.key, val: snap.val() });
+        const val = instrumentedChildSnapshotVal(seeded, snap);
+        handleChildOp({ kind: 'upsert', key: snap.key, val });
       },
       onCancel,
     ),
@@ -574,6 +595,10 @@ function attachSessionWordMapsListen(
       (snap) => {
         if (snap.key == null) {
           return;
+        }
+        // After seed, RTDB still delivers the removed node snapshot — count once.
+        if (seeded) {
+          instrumentedSnapshotVal(snap);
         }
         handleChildOp({ kind: 'remove', key: snap.key });
       },
@@ -609,6 +634,7 @@ export async function writeSessionWordMapsShards(
   if (Object.keys(payload).length === 0) {
     return;
   }
+  recordRtdbUpdate(payload);
   await update(sessionWordMapsRef(roomId), payload);
 }
 
@@ -616,6 +642,7 @@ export async function writeSessionWordMapsShards(
 export async function clearSessionWordMaps(gameId: string): Promise<void> {
   const roomId = normalizeRoomCode(gameId);
   try {
+    recordRtdbRemove(sessionWordMapsPath(roomId));
     await remove(sessionWordMapsRef(roomId));
   } catch (error) {
     if (isFirebasePermissionDenied(error)) {

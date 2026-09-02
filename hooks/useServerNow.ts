@@ -19,8 +19,9 @@ function subscribeForegroundClockRefresh(onActive: () => void): () => void {
 /**
  * Ticking clock based on Firebase `.info/serverTimeOffset` (same remaining time on all devices).
  * Refreshes immediately on AppState `active` so lock-screen freezes do not leave a stale timer.
+ * Also refreshes immediately when `refreshTrigger` changes.
  */
-export function useServerNow(tickMs = 250): number {
+export function useServerNow(tickMs = 250, refreshTrigger?: unknown): number {
   const [now, setNow] = useState(() => getServerNow());
 
   useEffect(() => {
@@ -34,7 +35,7 @@ export function useServerNow(tickMs = 250): number {
       clearInterval(id);
       unsubAppState();
     };
-  }, [tickMs]);
+  }, [tickMs, refreshTrigger]);
 
   return now;
 }
@@ -42,9 +43,9 @@ export function useServerNow(tickMs = 250): number {
 /**
  * Tick only while `enabled` — avoids re-rendering idle screens every 250ms.
  * When disabled, returns a fresh `getServerNow()` snapshot without scheduling.
- * While enabled, also refreshes on AppState `active` (iOS lock resume).
+ * While enabled, also refreshes on AppState `active` (iOS lock resume) and `refreshTrigger`.
  */
-export function useServerNowWhen(enabled: boolean, tickMs = 250): number {
+export function useServerNowWhen(enabled: boolean, tickMs = 250, refreshTrigger?: unknown): number {
   const [now, setNow] = useState(() => getServerNow());
 
   useEffect(() => {
@@ -61,7 +62,7 @@ export function useServerNowWhen(enabled: boolean, tickMs = 250): number {
       clearInterval(id);
       unsubAppState();
     };
-  }, [enabled, tickMs]);
+  }, [enabled, tickMs, refreshTrigger]);
 
   return enabled ? now : getServerNow();
 }

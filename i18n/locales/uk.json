@@ -265,7 +265,16 @@
     "clearLocalDataAction": "Очистити →",
     "clearLocalDataConfirmTitle": "Очистити локальні дані?",
     "clearLocalDataConfirmBody": "Буде видалено профіль, історію ігор, налаштування, відгук і локальну онлайн-ідентичність на цьому пристрої. Дані старих ігор на сервері можуть залишатися ще деякий час.",
-    "clearLocalDataConfirmAction": "Очистити"
+    "clearLocalDataConfirmAction": "Очистити",
+    "developerMode": {
+      "title": "Режим розробника",
+      "enabled": "Режим розробника увімкнено",
+      "disabled": "Режим розробника вимкнено",
+      "diagnostics": "Діагностика RTDB",
+      "diagnosticsHint": "Збір трафіку та action-лог. Впливає на батарею.",
+      "diagnosticsInfo": "Проксі JSON-payload, банер, історія, локальний action-лог. Не є точним відображенням білінгу Firebase. На iOS «Мережа (сумарно)» включає трафік усього пристрою.",
+      "history": "Історія RTDB…"
+    }
   },
   "game": {
     "baseWord": "Базове слово",
@@ -483,6 +492,20 @@
     "errorNotInDictionary": "Немає в словнику",
     "errorAlreadySubmitted": "Ви вже вводили це слово",
     "errorUnknown": "Слово не зараховано"
+  },
+  "rtdbDiagnostics": {
+    "title": "Діагностика RTDB",
+    "empty": "Історія трафіку порожня",
+    "clearHistory": "Очистити історію",
+    "roomLabel": "Кімната {{id}}",
+    "totalDown": "↓ {{size}}",
+    "totalUp": "↑ {{size}}",
+    "details": "Деталі трафіку",
+    "wireTotal": "Мережа (сумарно)",
+    "wireDown": "Мережа ↓ {{size}}",
+    "wireUp": "Мережа ↑ {{size}}",
+    "noRoom": "без кімнати",
+    "observed": "(спостереж.)"
   },
   "common": {
     "back": "Назад",

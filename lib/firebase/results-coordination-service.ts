@@ -2,6 +2,7 @@ import { get, ref, set } from 'firebase/database';
 
 import { getFirebaseDatabase } from './init.js';
 import { gameSessionPath } from './paths.js';
+import { recordRtdbUp, instrumentedSnapshotVal } from './rtdb-instrumentation.js';
 import { sessionRef } from './session-ref.js';
 import { isFirebasePermissionDenied } from './rtdb-errors.js';
 import { normalizeRoomCode } from './room-code.js';
@@ -14,10 +15,11 @@ function resultsExitedRef(gameId: string, uid: string) {
 
 async function readSession(gameId: string): Promise<GameSession | null> {
   const snapshot = await get(sessionRef(gameId));
+  const val = instrumentedSnapshotVal(snapshot);
   if (!snapshot.exists()) {
     return null;
   }
-  return snapshot.val() as GameSession;
+  return val as GameSession;
 }
 
 /**
@@ -37,6 +39,7 @@ export async function markResultsExited(gameId: string, uid: string): Promise<vo
   }
 
   try {
+    recordRtdbUp(true);
     await set(resultsExitedRef(gameId, uid), true);
   } catch (error) {
     if (isFirebasePermissionDenied(error)) {

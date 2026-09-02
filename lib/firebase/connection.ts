@@ -18,6 +18,9 @@ const RTDB_CONNECT_TIMEOUT_MS = 12_000;
 /**
  * Wait until RTDB reports connected (`.info/connected`), with timeout.
  * No test writes — write permissions are validated on the first real game action.
+ *
+ * FIX: 2026-08 — waitForRtdbConnected crashed (sync unsub) → handle synchronous
+ * onValue emission where unsub is called before assignment.
  */
 export function waitForRtdbConnected(timeoutMs = RTDB_CONNECT_TIMEOUT_MS): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -46,7 +49,9 @@ export function waitForRtdbConnected(timeoutMs = RTDB_CONNECT_TIMEOUT_MS): Promi
     unsubRef.current = onValue(
       connectedRef,
       (snapshot) => {
-        if (snapshot.val() !== true) {
+        const val = snapshot.val();
+        // diagnostic: .info/connected excluded (not RTDB payload, systemic Firebase state).
+        if (val !== true) {
           return;
         }
         settle(() => {

@@ -9,25 +9,26 @@ import {
   earlyFinishRequiredVoterIds,
   earlyFinishVoteExpired,
   shouldFinishFromEarlyVote,
-} from '../online/voting/early-finish-vote.js';
+} from '@/lib/online/voting/early-finish-vote.js';
 import {
   computeExtendedTimerEndsAt,
   shouldApplyAddTimeFromVote,
   shouldClearAddTimeVote,
-} from '../online/voting/add-time-vote.js';
-import { shouldActivatePauseFromVote } from '../online/voting/pause-vote.js';
-import { resumeVoteRequiredIds, shouldResumeFromVote } from '../online/voting/resume-vote.js';
+} from '@/lib/online/voting/add-time-vote.js';
+import { shouldActivatePauseFromVote } from '@/lib/online/voting/pause-vote.js';
+import { resumeVoteRequiredIds, shouldResumeFromVote } from '@/lib/online/voting/resume-vote.js';
 import { isFirebaseIgnorableRtdbError } from './rtdb-errors.js';
+import { instrumentedSnapshotVal } from './rtdb-instrumentation.js';
 import { computePurgeAfterAt } from './session-purge.js';
 import { getServerNow } from './server-clock.js';
 import {
   computeRoundPlayedSecondsAtFinish,
   resolveRoundTimerBudgetSeconds,
-} from '../game/round-duration.js';
+} from '@/lib/game/round-duration.js';
 import { normalizeRoomCode } from './room-code.js';
 import { sessionRef } from './session-ref.js';
 import type { GameSession, GameSessionPlayer } from './types.js';
-import { displayPlayerName } from '../online/public-lobby/display-player-name.js';
+import { displayPlayerName } from '@/lib/online/public-lobby/display-player-name.js';
 
 function logVoteAction(
   action: string,
@@ -50,10 +51,11 @@ async function runSessionVoteTransaction(
 ): Promise<boolean> {
   const roomId = normalizeRoomCode(gameId);
   const pre = await get(sessionRef(roomId));
+  const preVal = instrumentedSnapshotVal(pre);
   if (!pre.exists()) {
     return false;
   }
-  const preSession = pre.val() as GameSession;
+  const preSession = preVal as GameSession;
   if (options?.requirePlaying && preSession.status !== 'playing') {
     return false;
   }
@@ -74,6 +76,8 @@ async function runSessionVoteTransaction(
       // would show resumeVote on the proposer while peers never receive a commit).
       { applyLocally: false },
     );
+    // Note: recordRtdbTransactionCommit in runRtdbTransaction records the full
+    // session snapshot (up), which may double-count bytes already read in preVal (down).
     return result.committed;
   } catch (error) {
     if (isFirebaseIgnorableRtdbError(error)) {

@@ -50,6 +50,7 @@ export function nextResultsFreezePending(
   finishedSessionForRematch?: GameSession | null,
 ): ResultsFreezePending | null {
   if (liveSession?.status === 'finished') {
+    // FIX: 2026-08 — results bootstrap-complete (ADR-022) → avoid pinning provisional incomplete candidate.
     // Provisional / incomplete maps must not pin a freeze candidate.
     if (!wordsBootstrapComplete) {
       return previous;
@@ -142,6 +143,7 @@ export function resolveResultsFreezeSource(options: {
     wordsBootstrapComplete;
 
   if (canFreezeLiveFinished && liveSession) {
+    // FIX: 2026-08 — bootstrap-complete freeze gate (ADR-022) → avoid authoritative empty freeze while maps claim.
     const words = resolveFinishedFreezeWords({ liveSession, liveWords, pending });
     // Do not lock an empty freeze when live maps still claim words.
     if (shouldSkipEmptyArchiveWords(liveSession, words)) {
@@ -218,6 +220,8 @@ export function shouldCloseResultsRematchSurvival(options: {
   /** When true, keep survival open (maps fail-loud / Retry path). */
   mapsUnavailable?: boolean;
 }): boolean {
+  // FIX: 2026-08 — rematch-survival close ignoring mapsUnavailable (C2) → keep survival open
+  // while maps are unavailable so Retry can still latch rich pending.
   if (
     options.freezeAttempted ||
     options.hasFrozenRound ||

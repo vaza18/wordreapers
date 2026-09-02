@@ -13,23 +13,24 @@ import {
   type DataSnapshot,
 } from 'firebase/database';
 
-import { normalizeUk } from '../dictionary/normalize.js';
-import { sessionBaseWordDisplay } from '../online/session-base-word-display.js';
+import { normalizeUk } from '@/lib/dictionary/normalize.js';
+import { sessionBaseWordDisplay } from '@/lib/online/session-base-word-display.js';
 import {
   PUBLIC_LOBBY_MAX_PLAYERS,
   PUBLIC_LOBBY_PAGE_SIZE,
   PUBLIC_LOBBY_TTL_MS,
-} from '../online/public-lobby/constants.js';
-import { shouldReconcilePublicLobbyBrowseTotal } from '../online/public-lobby/browse-total.js';
+} from '@/lib/online/public-lobby/constants.js';
+import { shouldReconcilePublicLobbyBrowseTotal } from '@/lib/online/public-lobby/browse-total.js';
 import {
   canPublishPublicRoom,
   withPublicSafeSettings,
-} from '../online/public-lobby/content-safety.js';
-import { publicAliasAssignmentsForRoster } from '../online/public-lobby/public-alias.js';
+} from '@/lib/online/public-lobby/content-safety.js';
+import { publicAliasAssignmentsForRoster } from '@/lib/online/public-lobby/public-alias.js';
 import {
   sessionHadPublicBrowseExposure,
   sessionIdentityMasked,
-} from '../online/public-lobby/session-identity.js';
+} from '@/lib/online/public-lobby/session-identity.js';
+import { devLogAction } from '@/lib/debug/dev-log.js';
 import { ensureAnonymousAuth } from './auth.js';
 import { resolveGameSessionSettingsForSession } from './session-settings.js';
 import { getServerNow } from './server-clock.js';
@@ -40,6 +41,12 @@ import {
   publicLobbyEntryPath,
   publicLobbyLanguagePath,
 } from './paths.js';
+import {
+  recordRtdbRemove,
+  recordRtdbUp,
+  recordRtdbUpdate,
+  instrumentedSnapshotVal,
+} from './rtdb-instrumentation.js';
 import { normalizeRoomCode } from './room-code.js';
 import type { GameSession, GameSessionPlayer } from './types.js';
 import type {
@@ -124,6 +131,9 @@ async function fetchPageSlice(
           )
         : query(baseRef, orderByChild('publishedAt'), limitToLast(pageSize));
     const snapshot = await get(q);
+    // Record parent JSON download once; child iteration in parseLobbyRows uses child.val()
+    // which does not double-count toward diagnostics.
+    instrumentedSnapshotVal(snapshot);
     let rows = parseLobbyRows(snapshot, now).reverse();
     if (cursor && rows.length > 0 && rows[0]?.gameId === cursor.gameId) {
       rows = rows.slice(1);
@@ -141,6 +151,9 @@ async function fetchPageSlice(
         )
       : query(baseRef, orderByChild('baseWordNorm'), limitToFirst(pageSize));
   const snapshot = await get(q);
+  // Record parent JSON download once; child iteration in parseLobbyRows uses child.val()
+  // which does not double-count toward diagnostics.
+  instrumentedSnapshotVal(snapshot);
   let rows = parseLobbyRows(snapshot, now);
   if (cursor && rows.length > 0 && rows[0]?.gameId === cursor.gameId) {
     rows = rows.slice(1);
@@ -182,6 +195,9 @@ async function walkToPage(
 /** Count non-expired browse rows in the language shard (fallback when counter node is stale). */
 async function fetchLivePublicLobbyTotal(language: string): Promise<number> {
   const snapshot = await get(ref(getFirebaseDatabase(), languageShardPath(language)));
+  // Record parent JSON download once; child iteration in parseLobbyRows uses child.val()
+  // which does not double-count toward diagnostics.
+  instrumentedSnapshotVal(snapshot);
   if (!snapshot.exists()) {
     return 0;
   }
@@ -220,6 +236,7 @@ export async function fetchPublicLobbyPage(
   cursors: Map<number, PublicLobbyBrowseCursor | null>;
 }> {
   await ensureAnonymousAuth();
+  devLogAction(`fetching public lobbies (page=${page}, sort=${sort})`, { level: 'detail' });
   const safePage = Math.max(1, page);
   let total = await resolvePublicLobbyTotal(language);
   let totalPages = total === 0 ? 0 : Math.ceil(total / pageSize);
@@ -261,10 +278,11 @@ export async function fetchPublicLobbyPage(
 export async function fetchPublicLobbyCount(language: string): Promise<number | null> {
   await ensureAnonymousAuth();
   const snapshot = await get(ref(getFirebaseDatabase(), publicLobbyCountPath(language)));
+  const val = instrumentedSnapshotVal(snapshot);
   if (!snapshot.exists()) {
     return 0;
   }
-  const value = snapshot.val();
+  const value = val;
   return typeof value === 'number' && value >= 0 ? value : null;
 }
 
@@ -307,6 +325,7 @@ export async function syncPublicRosterAliases(
   if (Object.keys(patches).length === 0) {
     return;
   }
+  recordRtdbUpdate(patches);
   await update(ref(getFirebaseDatabase(), gameSessionPath(normalizeRoomCode(gameId))), patches);
 }
 
@@ -317,10 +336,11 @@ export async function setRoomPublic(
 ): Promise<void> {
   const normalized = normalizeRoomCode(gameId);
   const sessionSnap = await get(ref(getFirebaseDatabase(), gameSessionPath(normalized)));
+  const val = instrumentedSnapshotVal(sessionSnap);
   if (!sessionSnap.exists()) {
     throw new Error('ROOM_NOT_FOUND');
   }
-  const session = sessionSnap.val() as GameSession;
+  const session = val as GameSession;
   if (session.organizerId !== organizerUid || session.status !== 'waiting') {
     throw new Error('NOT_ORGANIZER');
   }
@@ -335,13 +355,15 @@ export async function setRoomPublic(
   const language = settings.language;
   const rosterForAliases = { ...session, settings };
 
-  await update(ref(getFirebaseDatabase(), gameSessionPath(normalized)), {
+  const updates = {
     isPublic: true,
     publicPublishedAt: now,
     maxPlayers: PUBLIC_LOBBY_MAX_PLAYERS,
     settings,
     ...publicAliasPatches(rosterForAliases),
-  });
+  };
+  recordRtdbUpdate(updates);
+  await update(ref(getFirebaseDatabase(), gameSessionPath(normalized)), updates);
 
   const indexEntry = buildIndexEntry(
     {
@@ -353,6 +375,7 @@ export async function setRoomPublic(
     now,
   );
 
+  recordRtdbUp(indexEntry);
   await set(ref(getFirebaseDatabase(), entryPath(language, normalized)), indexEntry);
 }
 
@@ -372,10 +395,11 @@ export async function unpublishPublicLobby(
   const normalized = normalizeRoomCode(gameId);
   const sessionRef = ref(getFirebaseDatabase(), gameSessionPath(normalized));
   const sessionSnap = await get(sessionRef);
+  const val = instrumentedSnapshotVal(sessionSnap);
   if (!sessionSnap.exists()) {
     return;
   }
-  const session = sessionSnap.val() as GameSession;
+  const session = val as GameSession;
   if (
     !options?.force &&
     actorUid &&
@@ -398,11 +422,13 @@ export async function unpublishPublicLobby(
         updates[`players/${uid}/publicAlias`] = null;
       }
     }
+    recordRtdbUpdate(updates);
     await update(sessionRef, updates);
   }
 
   if (wasPublic) {
     try {
+      recordRtdbRemove(entryPath(language, normalized));
       await remove(ref(getFirebaseDatabase(), entryPath(language, normalized)));
     } catch {
       // Session is already private; stale index row is cleaned by scheduled purge.
@@ -426,9 +452,11 @@ export async function syncPublicLobbyPlayerCount(
     return;
   }
   try {
-    await update(ref(getFirebaseDatabase(), entryPath(language, normalized)), {
+    const patch = {
       playerCount,
-    });
+    };
+    recordRtdbUpdate(patch);
+    await update(ref(getFirebaseDatabase(), entryPath(language, normalized)), patch);
   } catch {
     // Joiner may lack index write in older rules; lobby still works.
   }
