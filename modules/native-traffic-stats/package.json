@@ -1,0 +1,13 @@
+{
+  "name": "native-traffic-stats",
+  "version": "1.0.0",
+  "description": "App network traffic counters for RTDB diagnostics (ADR-025).",
+  "main": "index.ts",
+  "license": "UNLICENSED",
+  "author": "Wordreapers",
+  "homepage": "https://github.com/wordreapers/wordreapers",
+  "peerDependencies": {
+    "expo": "*",
+    "react-native": "*"
+  }
+}
