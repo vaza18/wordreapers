@@ -1,8 +1,20 @@
 // @vitest-environment happy-dom
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
+
+const mockSetStringAsync = vi.fn<(value: string) => Promise<boolean>>(async () => true);
+const mockEnqueueToast = vi.fn();
+
+vi.mock('expo-clipboard', () => ({
+  setStringAsync: (value: string) => mockSetStringAsync(value),
+}));
+
+vi.mock('@/store/toast-store', () => ({
+  useToastStore: (selector: (state: { enqueueToast: typeof mockEnqueueToast }) => unknown) =>
+    selector({ enqueueToast: mockEnqueueToast }),
+}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -122,6 +134,8 @@ describe('RtdbDiagnosticsScreen', () => {
     mockDeveloperModeEnabled = true;
     mockIsHydrated = true;
     mockClearHistory.mockClear();
+    mockSetStringAsync.mockClear();
+    mockEnqueueToast.mockClear();
   });
 
   it('renders history list', () => {
@@ -136,6 +150,24 @@ describe('RtdbDiagnosticsScreen', () => {
 
     expect(screen.getByText('test-action')).toBeTruthy();
     expect(screen.getByText('test-details')).toBeTruthy();
+  });
+
+  it('copies CSV for the selected room and shows a toast', async () => {
+    render(<RtdbDiagnosticsScreen />);
+    fireEvent.click(screen.getByText('rtdbDiagnostics.roomLabel:TEST'));
+    fireEvent.click(screen.getByText('rtdbDiagnostics.copyCsv'));
+
+    await waitFor(() => {
+      expect(mockSetStringAsync).toHaveBeenCalledTimes(1);
+    });
+    const csv = mockSetStringAsync.mock.calls[0][0];
+    expect(csv).toContain(
+      'iso_time,type,down_bytes,up_bytes,wire_rx_bytes,wire_tx_bytes,action,details,observed,room_id',
+    );
+    expect(csv).toContain('test-action');
+    expect(csv).toContain(',1024,512,');
+    expect(csv).toContain('TEST');
+    expect(mockEnqueueToast).toHaveBeenCalledWith('rtdbDiagnostics.copyCsvDone', 'success');
   });
 
   it('calls clearHistory when clear button is pressed', () => {

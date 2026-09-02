@@ -505,7 +505,10 @@
     "wireDown": "Мережа ↓ {{size}}",
     "wireUp": "Мережа ↑ {{size}}",
     "noRoom": "без кімнати",
-    "observed": "(спостереж.)"
+    "observed": "(спостереж.)",
+    "copyCsv": "Копіювати CSV",
+    "copyCsvA11y": "Скопіювати логи кімнати {{id}} у CSV",
+    "copyCsvDone": "CSV скопійовано"
   },
   "common": {
     "back": "Назад",

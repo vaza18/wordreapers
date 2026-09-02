@@ -8,8 +8,10 @@ import { Screen } from '@/components/Screen';
 import { spacing, type ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
+import { copyTrafficHistoryCsv } from '@/lib/debug/copy-traffic-history-csv';
 import { formatBytes } from '@/lib/debug/format-bytes';
 import { useRtdbDiagnosticsStore } from '@/store/rtdb-diagnostics-store';
+import { useToastStore } from '@/store/toast-store';
 import type { TrafficHistoryEntry } from '@/lib/debug/rtdb-diagnostics-types';
 
 function createStyles(colors: ThemeColors) {
@@ -33,6 +35,15 @@ function createStyles(colors: ThemeColors) {
     clearAction: {
       color: colors.destructiveAction,
       fontWeight: '600',
+    },
+    copyAction: {
+      color: colors.penBlue,
+      fontWeight: '600',
+    },
+    detailHeaderActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
     },
     item: {
       backgroundColor: colors.backgroundPrimary,
@@ -116,8 +127,15 @@ export default function RtdbDiagnosticsScreen() {
   const isHydrated = useRtdbDiagnosticsStore((state) => state.isHydrated);
   const history = useRtdbDiagnosticsStore((state) => state.history);
   const clearHistory = useRtdbDiagnosticsStore((state) => state.clearHistory);
+  const enqueueToast = useToastStore((state) => state.enqueueToast);
 
   const [selectedEntry, setSelectedEntry] = useState<TrafficHistoryEntry | null>(null);
+
+  const onCopyCsv = useCallback(async () => {
+    if (!selectedEntry) return;
+    await copyTrafficHistoryCsv(selectedEntry);
+    enqueueToast(t('rtdbDiagnostics.copyCsvDone'), 'success');
+  }, [enqueueToast, selectedEntry, t]);
 
   const timelineData = useMemo(() => {
     if (!selectedEntry) return [];
@@ -261,9 +279,19 @@ export default function RtdbDiagnosticsScreen() {
           <FeedbackPressable onPress={() => setSelectedEntry(null)}>
             <Text style={{ color: colors.penBlue, fontWeight: '600' }}>← {t('common.back')}</Text>
           </FeedbackPressable>
-          <Text style={styles.roomCode}>
-            {t('rtdbDiagnostics.roomLabel', { id: selectedEntry.roomId })}
-          </Text>
+          <View style={styles.detailHeaderActions}>
+            <FeedbackPressable
+              onPress={() => {
+                void onCopyCsv();
+              }}
+              accessibilityLabel={t('rtdbDiagnostics.copyCsvA11y', { id: selectedEntry.roomId })}
+            >
+              <Text style={styles.copyAction}>{t('rtdbDiagnostics.copyCsv')}</Text>
+            </FeedbackPressable>
+            <Text style={styles.roomCode}>
+              {t('rtdbDiagnostics.roomLabel', { id: selectedEntry.roomId })}
+            </Text>
+          </View>
         </View>
 
         <FlatList
