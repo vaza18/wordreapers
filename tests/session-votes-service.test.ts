@@ -18,6 +18,11 @@ vi.mock('../lib/firebase/server-clock.js', () => ({
   getServerNow: () => SERVER_NOW,
 }));
 
+vi.mock('../lib/firebase/auth.js', () => ({
+  getFirebaseUid: vi.fn().mockReturnValue('org'),
+  ensureAnonymousAuth: vi.fn().mockResolvedValue({ uid: 'org' }),
+}));
+
 import type { GameSession } from '../lib/firebase/types.js';
 import {
   cancelAddTimeVote,
@@ -28,9 +33,6 @@ import {
   proposeEarlyFinish,
   proposePause,
   proposeResume,
-  resolveAddTimeVoteIfExpired,
-  resolveEarlyFinishVoteIfExpired,
-  resolveResumeVoteIfExpired,
   reconcileOpenSessionVotes,
   voteAddTime,
   voteEarlyFinish,
@@ -38,6 +40,7 @@ import {
   voteResume,
   voteProposerName,
 } from '../lib/firebase/session-votes-service.js';
+import { getFirebaseUid } from '../lib/firebase/auth.js';
 import { DEFAULT_SESSION_SETTINGS } from './helpers/game-session-fixtures.js';
 
 function playingSession(
@@ -188,7 +191,7 @@ describe('session-votes-service', () => {
     const session = playingSession(
       {
         org: { name: 'Org', wordCount: 0, score: 0, online: true },
-        guest: { name: 'Guest', wordCount: 0, score: 0, online: true },
+        guest: { name: 'Guest', wordCount: 0, score: 0, online: false },
       },
       {
         earlyFinishVote: {
@@ -200,7 +203,7 @@ describe('session-votes-service', () => {
     );
     installSession(session);
 
-    await resolveEarlyFinishVoteIfExpired('ABCDE');
+    await reconcileOpenSessionVotes('ABCDE');
 
     expect(session.status).toBe('finished');
   });
@@ -286,7 +289,7 @@ describe('session-votes-service', () => {
     const session = playingSession(
       {
         org: { name: 'Org', wordCount: 0, score: 0, online: true },
-        guest: { name: 'Guest', wordCount: 0, score: 0, online: true },
+        guest: { name: 'Guest', wordCount: 0, score: 0, online: false },
       },
       {
         addTimeVote: {
@@ -299,7 +302,7 @@ describe('session-votes-service', () => {
     );
     installSession(session);
 
-    await resolveAddTimeVoteIfExpired('ABCDE');
+    await reconcileOpenSessionVotes('ABCDE');
 
     expect(session.addTimeVote).toBeNull();
     expect(session.status).toBe('playing');
@@ -385,7 +388,7 @@ describe('session-votes-service', () => {
     const session = playingSession(
       {
         org: { name: 'Org', wordCount: 0, score: 0, online: true },
-        guest: { name: 'Guest', wordCount: 0, score: 0, online: true },
+        guest: { name: 'Guest', wordCount: 0, score: 0, online: false },
       },
       {
         pauseState: { active: true, frozenRemainingMs: 45_000, frozenAt: SERVER_NOW - 1000 },
@@ -399,7 +402,7 @@ describe('session-votes-service', () => {
     );
     installSession(session);
 
-    await resolveResumeVoteIfExpired('ABCDE');
+    await reconcileOpenSessionVotes('ABCDE');
 
     expect(session.pauseState).toBeNull();
   });
@@ -434,12 +437,13 @@ describe('session-votes-service', () => {
     expect(session.resumeVote).toBeNull();
   });
 
-  it('skips vote transactions when the session is missing', async () => {
+  it('handles vote transactions gracefully when the session is missing', async () => {
     installSession(null);
 
-    await proposeEarlyFinish('ABCDE', 'org');
+    const committed = await proposeEarlyFinish('ABCDE', 'org');
 
-    expect(runTransactionMock).not.toHaveBeenCalled();
+    expect(committed).toBeUndefined();
+    expect(runTransactionMock).toHaveBeenCalled();
   });
 
   it('returns proposer display name for vote banners', () => {
@@ -471,6 +475,35 @@ describe('session-votes-service', () => {
 
     expect(session.pauseState?.active).toBe(true);
     expect(session.pauseVote).toBeNull();
+  });
+
+  it('skips reconciliation if not the designated resolver', async () => {
+    const session = playingSession(
+      {
+        org: { name: 'Org', wordCount: 0, score: 0, online: true },
+        other: { name: 'Other', wordCount: 0, score: 0, online: true },
+        guest: { name: 'Guest', wordCount: 0, score: 0, online: false },
+      },
+      {
+        pauseVote: {
+          proposedBy: 'org',
+          proposedAt: SERVER_NOW,
+          votes: { org: 'yes' },
+        },
+      },
+    );
+    // Force 'other' to be the local user. 'org' is the first online player.
+    vi.mocked(getFirebaseUid).mockReturnValue('other');
+    installSession(session);
+
+    await reconcileOpenSessionVotes('ABCDE');
+
+    // Should NOT reconcile because 'org' is online and ahead in alphabetical order.
+    expect(session.pauseState?.active).toBeUndefined();
+    expect(session.pauseVote).not.toBeNull();
+
+    // Reset back to 'org' for other tests
+    vi.mocked(getFirebaseUid).mockReturnValue('org');
   });
 
   it('finishes early-finish vote when the last required voter goes offline', async () => {

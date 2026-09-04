@@ -4,10 +4,8 @@ import { runRtdbTransaction } from './rtdb-transaction.js';
 
 import { devLogAction } from '../debug/dev-log.js';
 import {
-  allRequiredVotedYes,
   anyRequiredVotedNo,
   earlyFinishRequiredVoterIds,
-  earlyFinishVoteExpired,
   shouldFinishFromEarlyVote,
 } from '@/lib/online/voting/early-finish-vote.js';
 import {
@@ -18,6 +16,7 @@ import {
 import { shouldActivatePauseFromVote } from '@/lib/online/voting/pause-vote.js';
 import { resumeVoteRequiredIds, shouldResumeFromVote } from '@/lib/online/voting/resume-vote.js';
 import { isFirebaseIgnorableRtdbError } from './rtdb-errors.js';
+import { getFirebaseUid } from './auth.js';
 import { instrumentedSnapshotVal } from './rtdb-instrumentation.js';
 import { computePurgeAfterAt } from './session-purge.js';
 import { getServerNow } from './server-clock.js';
@@ -29,6 +28,10 @@ import { normalizeRoomCode } from './room-code.js';
 import { gameSessionPath } from './paths.js';
 import { sessionRef } from './session-ref.js';
 import type { GameSession, GameSessionPlayer } from './types.js';
+import {
+  onlineExpiryResolverCandidateUids,
+  shouldAttemptExpiryNetworkResolve,
+} from '@/lib/online/voting/expiry-resolver-role.js';
 import { displayPlayerName } from '@/lib/online/public-lobby/display-player-name.js';
 
 function logVoteAction(
@@ -51,15 +54,6 @@ async function runSessionVoteTransaction(
   options?: { requirePlaying?: boolean },
 ): Promise<boolean> {
   const roomId = normalizeRoomCode(gameId);
-  const pre = await get(sessionRef(roomId));
-  const preVal = instrumentedSnapshotVal(pre, gameSessionPath(roomId));
-  if (!pre.exists()) {
-    return false;
-  }
-  const preSession = preVal as GameSession;
-  if (options?.requirePlaying && preSession.status !== 'playing') {
-    return false;
-  }
   try {
     const result = await runRtdbTransaction(
       sessionRef(roomId),
@@ -77,8 +71,6 @@ async function runSessionVoteTransaction(
       // would show resumeVote on the proposer while peers never receive a commit).
       { applyLocally: false },
     );
-    // Note: recordRtdbTransactionCommit in runRtdbTransaction records the full
-    // session snapshot (up), which may double-count bytes already read in preVal (down).
     return result.committed;
   } catch (error) {
     if (isFirebaseIgnorableRtdbError(error)) {
@@ -218,38 +210,6 @@ export async function voteEarlyFinish(
 }
 
 /**
- * Resolve an active early-finish vote after the 30s deadline (any client may commit).
- */
-export async function resolveEarlyFinishVoteIfExpired(gameId: string): Promise<void> {
-  await runSessionVoteTransaction(
-    gameId,
-    (session) => {
-      const vote = session.earlyFinishVote;
-      if (!vote) {
-        return undefined;
-      }
-
-      const required = earlyFinishRequiredVoterIds(session, vote.proposedBy);
-      if (anyRequiredVotedNo(vote, required)) {
-        session.earlyFinishVote = null;
-        return session;
-      }
-
-      if (allRequiredVotedYes(vote, required)) {
-        return finishPlayingSession(session);
-      }
-
-      if (earlyFinishVoteExpired(vote, getServerNow())) {
-        return finishPlayingSession(session);
-      }
-
-      return undefined;
-    },
-    { requirePlaying: true },
-  );
-}
-
-/**
  * Cancel an active early-finish proposal (proposer only).
  */
 export async function cancelEarlyFinishVote(gameId: string, uid: string): Promise<void> {
@@ -372,39 +332,6 @@ export async function cancelAddTimeVote(gameId: string, uid: string): Promise<vo
   if (committed) {
     logVoteAction('cancelled adding time', gameId, { level: 'detail' });
   }
-}
-
-/**
- * Resolve an active add-time vote after the 30s deadline (any client may commit).
- */
-export async function resolveAddTimeVoteIfExpired(gameId: string): Promise<void> {
-  await runSessionVoteTransaction(
-    gameId,
-    (session) => {
-      const vote = session.addTimeVote;
-      if (!vote) {
-        return undefined;
-      }
-
-      const required = earlyFinishRequiredVoterIds(session, vote.proposedBy);
-      if (anyRequiredVotedNo(vote, required)) {
-        session.addTimeVote = null;
-        return finishIfTimerExpired(session);
-      }
-
-      if (shouldApplyAddTimeFromVote(session, vote)) {
-        return applyAddTime(session, vote.addMinutes);
-      }
-
-      if (shouldClearAddTimeVote(session, vote, getServerNow())) {
-        session.addTimeVote = null;
-        return finishIfTimerExpired(session);
-      }
-
-      return undefined;
-    },
-    { requirePlaying: true },
-  );
 }
 
 /**
@@ -587,80 +514,98 @@ export async function cancelResumeVote(gameId: string, uid: string): Promise<voi
 }
 
 /**
- * Resolve an active resume vote after the 30s deadline (any client may commit).
- */
-export async function resolveResumeVoteIfExpired(gameId: string): Promise<void> {
-  await runSessionVoteTransaction(
-    gameId,
-    (session) => {
-      const vote = session.resumeVote;
-      if (!vote || !session.pauseState?.active) {
-        return undefined;
-      }
-
-      const required = resumeVoteRequiredIds(session, vote.proposedBy);
-      if (anyRequiredVotedNo(vote, required)) {
-        session.resumeVote = null;
-        return session;
-      }
-
-      if (shouldResumeFromVote(session, vote, getServerNow())) {
-        return resumePlayingSession(session);
-      }
-
-      return undefined;
-    },
-    { requirePlaying: true },
-  );
-}
-
-/**
- * Activate pause when all remaining online required voters have agreed
- * (including when the required set becomes empty after someone goes offline),
- * or after the 30s silence timeout.
- */
-export async function resolvePauseVoteIfReady(gameId: string): Promise<void> {
-  await runSessionVoteTransaction(
-    gameId,
-    (session) => {
-      const vote = session.pauseVote;
-      if (!vote || session.pauseState?.active) {
-        return undefined;
-      }
-
-      const required = earlyFinishRequiredVoterIds(session, vote.proposedBy);
-      if (anyRequiredVotedNo(vote, required)) {
-        session.pauseVote = null;
-        return session;
-      }
-
-      if (shouldActivatePauseFromVote(session, vote, getServerNow())) {
-        return activatePauseState(session);
-      }
-
-      return undefined;
-    },
-    { requirePlaying: true },
-  );
-}
-
-/**
  * After presence changes (background offline / voluntary leave), re-evaluate open votes
  * so remaining players are not stuck waiting on offline required voters.
+ *
+ * FIX: 2026-09 — Merged 4 sequential transactions into one root commit to reduce
+ * traffic spikes and conflicts when peers go offline.
+ *
+ * FIX: 2026-09 (v2) — added designated resolver gate (only first online player
+ * commits) to stop root transaction conflict storms (megabytes of wire traffic).
  */
 export async function reconcileOpenSessionVotes(gameId: string): Promise<void> {
   const roomId = normalizeRoomCode(gameId);
-  // FIX: 2026-09 — results offline reconcile paid 4× full-session get while already
-  // `finished` → gate on status leaf first (votes only mutate playing rounds).
+  const myUid = getFirebaseUid();
+  if (!myUid) {
+    return;
+  }
+
+  // Status check first (lightweight leaf get) to avoid transactions on finished rooms.
   const statusSnap = await get(child(sessionRef(roomId), 'status'));
   const statusVal = instrumentedSnapshotVal(statusSnap, `${gameSessionPath(roomId)}/status`);
   if (!statusSnap.exists() || statusVal !== 'playing') {
     return;
   }
-  await resolvePauseVoteIfReady(gameId);
-  await resolveEarlyFinishVoteIfExpired(gameId);
-  await resolveAddTimeVoteIfExpired(gameId);
-  await resolveResumeVoteIfExpired(gameId);
+
+  await runSessionVoteTransaction(gameId, (session) => {
+    const now = getServerNow();
+
+    // Designated resolver gate: only the first eligible online player reconciles.
+    const candidateUids = onlineExpiryResolverCandidateUids(
+      session.players,
+      session.liveRoundPlayerUids,
+    );
+    if (!shouldAttemptExpiryNetworkResolve({ myUid, candidateUids, now, expiresAt: now })) {
+      return undefined;
+    }
+
+    let changed = false;
+
+    // 1. Pause vote
+    if (session.pauseVote && !session.pauseState?.active) {
+      const required = earlyFinishRequiredVoterIds(session, session.pauseVote.proposedBy);
+      if (anyRequiredVotedNo(session.pauseVote, required)) {
+        session.pauseVote = null;
+        changed = true;
+      } else if (shouldActivatePauseFromVote(session, session.pauseVote, now)) {
+        activatePauseState(session);
+        changed = true;
+      }
+    }
+
+    // 2. Early finish vote
+    if (session.earlyFinishVote) {
+      const required = earlyFinishRequiredVoterIds(session, session.earlyFinishVote.proposedBy);
+      if (anyRequiredVotedNo(session.earlyFinishVote, required)) {
+        session.earlyFinishVote = null;
+        changed = true;
+      } else if (shouldFinishFromEarlyVote(session, session.earlyFinishVote, now)) {
+        finishPlayingSession(session);
+        return session; // Finish clears all other votes too
+      }
+    }
+
+    // 3. Add time vote
+    if (session.addTimeVote) {
+      const required = earlyFinishRequiredVoterIds(session, session.addTimeVote.proposedBy);
+      if (anyRequiredVotedNo(session.addTimeVote, required)) {
+        session.addTimeVote = null;
+        finishIfTimerExpired(session);
+        changed = true;
+      } else if (shouldApplyAddTimeFromVote(session, session.addTimeVote)) {
+        applyAddTime(session, session.addTimeVote.addMinutes);
+        changed = true;
+      } else if (shouldClearAddTimeVote(session, session.addTimeVote, now)) {
+        session.addTimeVote = null;
+        finishIfTimerExpired(session);
+        changed = true;
+      }
+    }
+
+    // 4. Resume vote
+    if (session.resumeVote && session.pauseState?.active) {
+      const required = resumeVoteRequiredIds(session, session.resumeVote.proposedBy);
+      if (anyRequiredVotedNo(session.resumeVote, required)) {
+        session.resumeVote = null;
+        changed = true;
+      } else if (shouldResumeFromVote(session, session.resumeVote, now)) {
+        resumePlayingSession(session);
+        changed = true;
+      }
+    }
+
+    return changed ? session : undefined;
+  });
 }
 
 /**

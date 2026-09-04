@@ -889,7 +889,7 @@ export default function OnlinePlayScreen() {
     liveRoundPlayerUids: session?.liveRoundPlayerUids,
   });
 
-  useReconcileOpenVotesOnPresence(gameId, session, !resultsNavigatedRef.current);
+  useReconcileOpenVotesOnPresence(gameId, session, myUid, !resultsNavigatedRef.current);
 
   useEffect(() => {
     if (
