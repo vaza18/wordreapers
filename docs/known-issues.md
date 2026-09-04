@@ -14,6 +14,14 @@ Format: **Symptom → Cause → Fix → Area**
 - **Test:** `tests/use-live-roster-player-words.test.tsx` (rich fetch over empty listen), `tests/frozen-round-view.test.ts`
 - **Area:** `hooks/useLiveRosterPlayerWords.ts`, `lib/online/session/frozen-round-view.ts`
 
+### 2026-09 — Offline results incomplete after rich local freeze
+
+- **Symptom:** Player who locked the screen mid-round opened results later with fewer words than peers (e.g. 56 vs 89); RTDB still had the full tree.
+- **Cause:** Non-empty local freeze (stale listen / Firebase disk cache) disabled results maps listen; upgrade path only handled empty→rich. Prefer-memory archive could also skip a richer server fetch.
+- **Fix:** Grow-only upgrade for incomplete freezes; keep maps listen while live `finished` same round; archive always fetch∪pickRicherWordPlayers.
+- **Test:** `tests/frozen-round-view.test.ts`, `tests/archive-finished-round-from-firebase.test.ts`, `tests/archive-words-gate.test.ts`
+- **Area:** `lib/online/session/frozen-round-view.ts`, `app/online/results/[gameId].tsx`, `lib/online/session/archive-finished-round-from-firebase.ts`
+
 ### 2026-09 — RTDB diagnostics ↓ double-count on word-maps seed
 
 - **Symptom:** With diagnostics collecting, ↓ JSON for a room was ~2× the `wordPlayers` tree on join/rematch.
