@@ -37,6 +37,7 @@
     "lib/ui/**/*.tsx",
     "modules/native-traffic-stats/**/*.ts",
     "types/assets.d.ts",
+    "types/expo-process-env.d.ts",
     "types/firebase-auth-rn.d.ts",
     "types/react-native-firebase-app-check.d.ts",
     ".expo/types/**/*.ts",
