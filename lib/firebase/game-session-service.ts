@@ -23,6 +23,9 @@ import {
   recordRtdbRemove,
   instrumentedSnapshotVal,
   recordSnapshotTrafficIfCollecting,
+  readSnapshotVal,
+  recordRtdbDownBytes,
+  deepChangedJsonBytes,
 } from './rtdb-instrumentation.js';
 import { ensureAppCheckWithRetry } from './ensure-app-check-with-retry.js';
 
@@ -437,7 +440,7 @@ function profilePatch(
 async function readSessionSnapshot(gameId: string): Promise<GameSessionSnapshot> {
   const normalized = normalizeRoomCode(gameId);
   const snapshot = await get(sessionRef(normalized));
-  const val = instrumentedSnapshotVal(snapshot);
+  const val = instrumentedSnapshotVal(snapshot, gameSessionPath(normalized));
   if (!snapshot.exists()) {
     throw new Error('ROOM_NOT_FOUND');
   }
@@ -451,6 +454,33 @@ async function readSessionSnapshot(gameId: string): Promise<GameSessionSnapshot>
 /** Fresh RTDB session read for routing after rematch / rejoin. */
 export async function readGameSessionSnapshot(gameId: string): Promise<GameSessionSnapshot> {
   return readSessionSnapshot(gameId);
+}
+
+/**
+ * Tiny status/round leaves for ensure-before-results (avoid full-session get while
+ * local time-up has already pinned the round and play subscribe may already be finished).
+ */
+export async function readGameSessionEnsureFields(
+  gameId: string,
+): Promise<{ status: string; baseWordRound: number } | null> {
+  const normalized = normalizeRoomCode(gameId);
+  await ensureAnonymousAuth();
+  const root = sessionRef(normalized);
+  const path = gameSessionPath(normalized);
+  const [statusSnap, roundSnap] = await Promise.all([
+    get(child(root, 'status')),
+    get(child(root, 'baseWordRound')),
+  ]);
+  const statusVal = instrumentedSnapshotVal(statusSnap, `${path}/status`);
+  const roundVal = instrumentedSnapshotVal(roundSnap, `${path}/baseWordRound`);
+  if (!statusSnap.exists() || statusVal == null) {
+    return null;
+  }
+  if (typeof statusVal !== 'string') {
+    return null;
+  }
+  const baseWordRound = typeof roundVal === 'number' && Number.isFinite(roundVal) ? roundVal : 0;
+  return { status: statusVal, baseWordRound: Math.floor(baseWordRound) };
 }
 
 /**
@@ -902,18 +932,29 @@ export function gameSessionSnapshotFromRtdbVal(
 /**
  * Subscribe to session updates (lobby / play).
  * Multiple callers for the same room share one RTDB `onValue` (ref-counted).
+ * Last-listener teardown is deferred so play→results remount reuses the socket
+ * (avoids a second full-session download on results mount).
  */
 type SharedSessionSub = {
   listeners: Set<(session: GameSessionSnapshot | null) => void>;
   unsub: Unsubscribe | null;
   last: GameSessionSnapshot | null | undefined;
+  /** Raw RTDB val for top-level delta ↓ accounting (ADR-025). */
+  lastRaw: unknown;
+  teardownTimer: ReturnType<typeof setTimeout> | null;
 };
 
 const sharedGameSessionSubs = new Map<string, SharedSessionSub>();
 
+/** Grace before dropping the shared onValue when the last screen unsubscribes. */
+export const SHARED_GAME_SESSION_SUB_TEARDOWN_MS = 400;
+
 /** Test-only: drop shared session listeners between cases. */
 export function resetSharedGameSessionSubscriptionsForTests(): void {
   for (const entry of sharedGameSessionSubs.values()) {
+    if (entry.teardownTimer != null) {
+      clearTimeout(entry.teardownTimer);
+    }
     entry.unsub?.();
   }
   sharedGameSessionSubs.clear();
@@ -933,6 +974,8 @@ export function subscribeGameSession(
       listeners: new Set(),
       unsub: null,
       last: undefined,
+      lastRaw: undefined,
+      teardownTimer: null,
     };
     sharedGameSessionSubs.set(normalized, entry);
 
@@ -968,7 +1011,14 @@ export function subscribeGameSession(
             }
             let next: GameSessionSnapshot | null = null;
             if (snapshot.exists()) {
-              const raw = instrumentedSnapshotVal(snapshot);
+              // FIX: 2026-09 — finish leaf update counted as full-session ↓ on onValue
+              // → record top-level key deltas only after the first snapshot.
+              const raw = readSnapshotVal(snapshot);
+              const path = gameSessionPath(normalized);
+              if (rtdbTrafficProbe.isCollecting()) {
+                recordRtdbDownBytes(deepChangedJsonBytes(live.lastRaw, raw), path);
+              }
+              live.lastRaw = raw;
               if (isOrphanGameSessionShell(raw)) {
                 const uid = getFirebaseUid();
                 if (uid && orphanShellHasPlayer(raw, uid)) {
@@ -978,6 +1028,8 @@ export function subscribeGameSession(
               } else {
                 next = gameSessionSnapshotFromRtdbVal(normalized, raw);
               }
+            } else {
+              live.lastRaw = null;
             }
             live.last = next;
             for (const fn of [...live.listeners]) {
@@ -997,6 +1049,10 @@ export function subscribeGameSession(
       });
   }
 
+  if (entry.teardownTimer != null) {
+    clearTimeout(entry.teardownTimer);
+    entry.teardownTimer = null;
+  }
   entry.listeners.add(listener);
   if (entry.last !== undefined) {
     listener(entry.last);
@@ -1009,12 +1065,19 @@ export function subscribeGameSession(
     }
     current.listeners.delete(listener);
     if (current.listeners.size === 0) {
-      current.unsub?.();
-      sharedGameSessionSubs.delete(normalized);
-      // ADR-025: flush room history when the last live session listener leaves.
-      if (rtdbTrafficProbe.getRoomTotals().roomId === normalized) {
-        rtdbTrafficProbe.setActiveRoomId(null);
+      // FIX: 2026-09 — play→results remount tore down onValue → second full session ↓
+      if (current.teardownTimer != null) {
+        clearTimeout(current.teardownTimer);
       }
+      current.teardownTimer = setTimeout(() => {
+        const live = sharedGameSessionSubs.get(normalized);
+        if (!live || live.listeners.size > 0) {
+          return;
+        }
+        live.unsub?.();
+        sharedGameSessionSubs.delete(normalized);
+      }, SHARED_GAME_SESSION_SUB_TEARDOWN_MS);
+      // Do not clear rtdbTrafficProbe here — sticky room across play→results (ADR-025).
     }
   };
 }
@@ -1333,20 +1396,70 @@ export async function gameSessionExists(gameId: string): Promise<boolean> {
   return snapshot.exists();
 }
 
+export type FinishGameSessionIfExpiredOptions = {
+  /**
+   * Play subscribe SoT past grace — commit without a full-session `get` when still
+   * `playing` and no local `addTimeVote` (avoids finish-second ↓ ≈ 2× session tree).
+   * On write failure, falls through to an authoritative full get.
+   */
+  hintSession?: GameSession | null;
+};
+
 /**
  * End the round when server timer has elapsed (any connected client may commit).
  * Uses leaf-path `update` (not a whole-session transaction) so peer `online`/`hasLeft`
  * echoes cannot fail `.validate` (LRAHP) and results presence cannot `maxretry` the write.
  */
-export async function finishGameSessionIfExpired(gameId: string): Promise<boolean> {
+export async function finishGameSessionIfExpired(
+  gameId: string,
+  options?: FinishGameSessionIfExpiredOptions,
+): Promise<boolean> {
   const normalized = normalizeRoomCode(gameId);
   await ensureAnonymousAuth();
+  const hint = options?.hintSession ?? null;
+  // Already finished on play SoT — do not pay a confirm get (avoids resync spam).
+  if (hint?.status === 'finished') {
+    return true;
+  }
+  // Still inside submit grace on play SoT — known no-op without full-session get.
+  if (
+    hint?.status === 'playing' &&
+    hint.timerEndsAt != null &&
+    getServerNow() < hint.timerEndsAt + FINISH_WORD_SUBMIT_GRACE_MS
+  ) {
+    return false;
+  }
+  // FIX: 2026-09 — finish ↓ ~2× full session get+onValue → prefer play hint commit
+  if (
+    hint &&
+    hint.status === 'playing' &&
+    hint.timerEndsAt != null &&
+    getServerNow() >= hint.timerEndsAt + FINISH_WORD_SUBMIT_GRACE_MS &&
+    !hint.addTimeVote
+  ) {
+    const patch = buildFinishLeafPatch(hint, getServerNowForExpire(hint));
+    try {
+      recordRtdbUpdate(patch);
+      await update(sessionRef(normalized), patch);
+      devLogAction('finished round (timer expired)', { room: normalized });
+      return true;
+    } catch (error) {
+      if (!isFirebaseIgnorableRtdbError(error)) {
+        throw error;
+      }
+      // Peer finished / rematched / rules — confirm with authoritative get below.
+    }
+  }
   const preSnapshot = await get(sessionRef(normalized));
-  const preVal = instrumentedSnapshotVal(preSnapshot);
+  const preVal = instrumentedSnapshotVal(preSnapshot, gameSessionPath(normalized));
   if (!preSnapshot.exists()) {
     return false;
   }
   const preSession = preVal as GameSession;
+  // FIX: 2026-09 — already-finished get returned false → resync paid a second full get
+  if (preSession.status === 'finished') {
+    return true;
+  }
   if (preSession.status !== 'playing' || preSession.timerEndsAt === null) {
     return false;
   }
@@ -1360,13 +1473,14 @@ export async function finishGameSessionIfExpired(gameId: string): Promise<boolea
   try {
     recordRtdbUpdate(patch);
     await update(sessionRef(normalized), patch);
+    devLogAction('finished round (timer expired)', { room: normalized });
     return true;
   } catch (error) {
     if (!isFirebaseIgnorableRtdbError(error)) {
       throw error;
     }
     const again = await get(sessionRef(normalized));
-    const againVal = instrumentedSnapshotVal(again);
+    const againVal = instrumentedSnapshotVal(again, gameSessionPath(normalized));
     if (!again.exists()) {
       return false;
     }
@@ -1394,6 +1508,7 @@ export async function finishGameSession(gameId: string): Promise<void> {
   try {
     recordRtdbUpdate(patch);
     await update(sessionRef(normalized), patch);
+    devLogAction('finished round', { room: normalized });
   } catch (error) {
     if (!isFirebaseIgnorableRtdbError(error)) {
       throw error;

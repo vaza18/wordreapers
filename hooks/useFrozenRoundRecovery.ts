@@ -7,6 +7,7 @@ import {
   loadLatestFrozenFinishedRoundFromArchive,
   type FrozenFinishedRound,
 } from '@/lib/online/session/frozen-finished-round';
+import { peekFinishedRoundResultsHandoff } from '@/lib/online/session/finished-round-results-handoff';
 import {
   shouldLoadViewingRoundFromArchive,
   shouldRecoverFinishedRoundFromArchive,
@@ -76,9 +77,12 @@ export function useFrozenRoundRecovery({
     let cancelled = false;
     setArchiveRecoveryPending(true);
     void (async () => {
-      const archived = await loadFrozenRoundWithRetry(() =>
-        loadFrozenFinishedRoundFromArchive(gameId, viewingBaseWordRound),
-      );
+      const handed = peekFinishedRoundResultsHandoff(gameId, viewingBaseWordRound);
+      const archived =
+        handed ??
+        (await loadFrozenRoundWithRetry(() =>
+          loadFrozenFinishedRoundFromArchive(gameId, viewingBaseWordRound),
+        ));
       if (cancelled) {
         return;
       }

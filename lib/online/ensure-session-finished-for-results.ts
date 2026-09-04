@@ -1,7 +1,8 @@
 import {
   finishGameSessionIfExpired,
-  readGameSessionSnapshot,
+  readGameSessionEnsureFields,
 } from '../firebase/game-session-service.js';
+import type { GameSession } from '../firebase/types.js';
 import { canOpenOnlineResults } from './play-timer-submit-gate.js';
 
 const DEFAULT_ATTEMPTS = 20;
@@ -68,6 +69,9 @@ export function classifyEnsureSessionSnapshot(options: {
  *
  * Fail-fast when live already rematched (`waiting` / later `playing`) — do not spin
  * ~10s of no-op finish retries.
+ *
+ * Uses status/round leaves (not full-session get) and optional play subscribe hint
+ * so time-up → results does not pay 2× multi-KB downloads.
  */
 export async function ensureSessionFinishedForResults(
   gameId: string,
@@ -75,6 +79,10 @@ export async function ensureSessionFinishedForResults(
     attempts?: number;
     delayMs?: number;
     expectedBaseWordRound?: number | null;
+    /** Play subscribe SoT — skip leaf reads when already finished / drive hint finish. */
+    hintSession?: GameSession | null;
+    /** Prefer over static hint each attempt (play `sessionCoreRef`). */
+    getHintSession?: () => GameSession | null | undefined;
   },
 ): Promise<EnsureSessionFinishedForResultsOutcome> {
   const attempts = options?.attempts ?? DEFAULT_ATTEMPTS;
@@ -82,10 +90,29 @@ export async function ensureSessionFinishedForResults(
   const expectedBaseWordRound = options?.expectedBaseWordRound;
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const snap = await readGameSessionSnapshot(gameId);
+    const hint = options?.getHintSession?.() ?? options?.hintSession ?? null;
+    if (hint) {
+      const fromHint = classifyEnsureSessionSnapshot({
+        status: hint.status,
+        baseWordRound: hint.baseWordRound,
+        expectedBaseWordRound,
+      });
+      if (fromHint === 'finished') {
+        return 'finished';
+      }
+      if (fromHint === 'rematch_advanced') {
+        return 'rematch_advanced';
+      }
+    }
+
+    // FIX: 2026-09 — time-up→results paid 2× full-session get → status/round leaves only
+    const fields = await readGameSessionEnsureFields(gameId);
+    if (!fields) {
+      return 'timeout';
+    }
     const before = classifyEnsureSessionSnapshot({
-      status: snap.status,
-      baseWordRound: snap.baseWordRound,
+      status: fields.status,
+      baseWordRound: fields.baseWordRound,
       expectedBaseWordRound,
     });
     if (before === 'finished') {
@@ -94,11 +121,28 @@ export async function ensureSessionFinishedForResults(
     if (before === 'rematch_advanced') {
       return 'rematch_advanced';
     }
-    await finishGameSessionIfExpired(gameId);
-    const after = await readGameSessionSnapshot(gameId);
+    await finishGameSessionIfExpired(gameId, { hintSession: hint });
+    const hintAfter = options?.getHintSession?.() ?? null;
+    if (hintAfter) {
+      const fromHintAfter = classifyEnsureSessionSnapshot({
+        status: hintAfter.status,
+        baseWordRound: hintAfter.baseWordRound,
+        expectedBaseWordRound,
+      });
+      if (fromHintAfter === 'finished') {
+        return 'finished';
+      }
+      if (fromHintAfter === 'rematch_advanced') {
+        return 'rematch_advanced';
+      }
+    }
+    const afterFields = await readGameSessionEnsureFields(gameId);
+    if (!afterFields) {
+      return 'timeout';
+    }
     const classified = classifyEnsureSessionSnapshot({
-      status: after.status,
-      baseWordRound: after.baseWordRound,
+      status: afterFields.status,
+      baseWordRound: afterFields.baseWordRound,
       expectedBaseWordRound,
     });
     if (classified === 'finished') {

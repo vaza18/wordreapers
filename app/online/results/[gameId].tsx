@@ -23,6 +23,7 @@ import {
   subscribeGameSession,
   type GameSessionSnapshot,
 } from '@/lib/firebase/game-session-service';
+import { navigateHomeClearingStack } from '@/lib/navigation/navigate-home';
 import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
 import { persistLocalArchive } from '@/lib/online/coordinated-session-cleanup';
 import { shouldSkipEmptyArchiveWords } from '@/lib/online/session/archive-words-gate';
@@ -63,6 +64,7 @@ import { resolveResultsPresence } from '@/lib/online/live-round-screen-actions';
 import { optIntoLiveRound } from '@/lib/online/rematch/opt-into-live-round';
 import { resultsRematchFooterMode } from '@/lib/online/results-rematch-footer-mode';
 import { parseViewingBaseWordRoundParam } from '@/lib/online/parse-viewing-base-word-round-param';
+import { peekFinishedRoundResultsHandoff } from '@/lib/online/session/finished-round-results-handoff';
 import type { RoundResultsViewData } from '@/lib/online/online-results-data';
 import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
 import { useFrozenRoundRecovery } from '@/hooks/useFrozenRoundRecovery';
@@ -101,7 +103,9 @@ export default function OnlineResultsScreen() {
   const [sessionLoaded, setSessionLoaded] = useState(false);
   const [rematchLoading, setRematchLoading] = useState(false);
   const [rematchError, setRematchError] = useState<string | null>(null);
-  const [archiveRecoveryPending, setArchiveRecoveryPending] = useState(false);
+  const [archiveRecoveryPending, setArchiveRecoveryPending] = useState(
+    () => viewingBaseWordRound != null,
+  );
   const statsRecordedRef = useRef(false);
   const archivedRef = useRef(false);
   const archivePromiseRef = useRef<Promise<void> | null>(null);
@@ -131,12 +135,15 @@ export default function OnlineResultsScreen() {
   const [emptySurvivalCloseTick, setEmptySurvivalCloseTick] = useState(0);
 
   useEffect(() => {
-    setFrozenRound(null);
+    // FIX: 2026-09 — play→results maps seed before AsyncStorage freeze → memory handoff
+    // Peek only (do not clear): React Strict Mode remount must still see the pin.
+    const handed = peekFinishedRoundResultsHandoff(gameId, viewingBaseWordRound);
+    setFrozenRound(handed);
     emptyClaimsLoadingSinceRef.current = null;
     setEmptyClaimsNowMs(Date.now());
     // Eager pending when a viewing pin is set so we never flash errorRoomNotFound
-    // before useFrozenRoundRecovery's effect runs.
-    setArchiveRecoveryPending(viewingBaseWordRound != null);
+    // before useFrozenRoundRecovery's effect runs — skip when handoff already froze.
+    setArchiveRecoveryPending(viewingBaseWordRound != null && handed == null);
     setRematchError(null);
     setRematchLoading(false);
     setLocalLoadComplete(false);
@@ -179,6 +186,10 @@ export default function OnlineResultsScreen() {
     [frozenRound, liveSessionCore, lastFinishedCore, freezeAttempted],
   );
 
+  const liveFinishedSameRound =
+    liveSessionCore?.status === 'finished' &&
+    (viewingBaseWordRound == null || (liveSessionCore.baseWordRound ?? 0) === viewingBaseWordRound);
+
   const { liveWords, liveWordMaps, wordsBootstrapComplete, mapsUnavailable, retryMapsListen } =
     useLiveRosterPlayerWords({
       gameId,
@@ -187,6 +198,8 @@ export default function OnlineResultsScreen() {
         hasGameId: Boolean(gameId),
         rosterPlayerIdsLength: rosterPlayerIds.length,
         frozenWords: frozenRound?.words,
+        archiveRecoveryPending,
+        liveFinishedSameRound,
       }),
     });
 
@@ -587,7 +600,8 @@ export default function OnlineResultsScreen() {
   }, [gameId]);
 
   const navigateHomeOnly = useCallback(() => {
-    router.replace('/');
+    // Room-not-found: no membership leave, but still flush sticky RTDB diagnostics (ADR-025).
+    navigateHomeClearingStack();
   }, []);
 
   const onBack = useSyncedStackBack(handleHome);

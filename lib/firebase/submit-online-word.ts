@@ -7,6 +7,8 @@ import {
   wordPlayersShardPlayerRef,
 } from '@/lib/online/word-maps-shard-refs.js';
 
+import { devLogAction } from '@/lib/debug/dev-log.js';
+
 import { ensureAnonymousAuth } from './auth.js';
 import { isFirebaseNetworkError, isFirebasePermissionDenied } from './rtdb-errors.js';
 import { normalizeRoomCode } from './room-code.js';
@@ -115,6 +117,10 @@ export async function submitOnlineWord(
     ).length;
     const kind: WordScoreKind = globalCount > 1 ? 'normal' : 'unique';
     const entry = toScoredWordEntry(normalized, kind, uniqueBonusEnabled, globalCount);
+    devLogAction(`submitted word "${normalized}"`, {
+      room: roomId,
+      details: `kind=${entry.kind} players=${globalCount}`,
+    });
     profile?.mark('done');
     return { ok: true, entry };
   } catch (error) {

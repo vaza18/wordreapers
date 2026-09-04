@@ -45,6 +45,7 @@ import {
   finishGameSession,
   finishGameSessionIfExpired,
   leaveGameSession,
+  readGameSessionEnsureFields,
   readGameSessionSnapshot,
   tryReadGameSessionSnapshot,
   type GameSessionSnapshot,
@@ -52,6 +53,7 @@ import {
 import { mergeSessionWithWordMaps } from '@/lib/firebase/session-word-maps';
 import { resolveGameSessionSettingsForSession } from '@/lib/firebase/session-settings';
 import type { SessionWordMaps } from '@/lib/firebase/types';
+import { navigateHomeClearingStack } from '@/lib/navigation/navigate-home';
 import { exitOnlineToHome } from '@/lib/online/exit-online-flow';
 import { devLogAction } from '@/lib/debug/dev-log';
 import { markPendingRoundArchive } from '@/lib/online/session/pending-round-archive';
@@ -91,6 +93,11 @@ import { feedbackForFailedOnlineSubmit } from '@/lib/online/submit-online-word-f
 import { waitUntilIdleOrTimeout } from '@/lib/online/wait-until-idle-or-timeout';
 import { FINISH_WORD_SUBMIT_GRACE_MS } from '@/constants/finish-word-submit-grace';
 import { archiveFinishedRoundFromFirebase } from '@/lib/online/session/archive-finished-round-from-firebase';
+import { freezeFinishedRound } from '@/lib/online/session/frozen-finished-round';
+import { setFinishedRoundResultsHandoff } from '@/lib/online/session/finished-round-results-handoff';
+import { getFinishedRoundArchive } from '@/lib/online/session/online-session-archive';
+import { totalPlayerWordCount } from '@/lib/online/session/live-words-snapshot';
+import { wordsByPlayerFromWordPlayers } from '@/lib/online/word-players-invert';
 import {
   cancelAddTimeVote,
   cancelEarlyFinishVote,
@@ -133,7 +140,10 @@ import {
   resolveLocalFinishedSessionForResultsArchive,
 } from '@/lib/online/ensure-rematch-advanced-results-archive';
 import { beginExpireFinishAttempt } from '@/lib/online/play-expire-finish';
-import { finishRetryBackoffMs } from '@/lib/online/play-expire-finish-schedule';
+import {
+  finishRetryBackoffMs,
+  timerFinishNetworkExpiresAt,
+} from '@/lib/online/play-expire-finish-schedule';
 import { isRemoteRoundClockStillRunning } from '@/lib/online/play-remote-timer-alive';
 import {
   msUntil,
@@ -205,6 +215,8 @@ export default function OnlinePlayScreen() {
     return { session: bootstrap, loading: bootstrap === null };
   });
   const [sessionCore, setSessionCore] = useState<GameSessionSnapshot | null>(playInit.session);
+  const sessionCoreRef = useRef(sessionCore);
+  sessionCoreRef.current = sessionCore;
   const [wordMaps, setWordMaps] = useState<SessionWordMaps | null>(null);
   const session = useMemo(
     () => (sessionCore ? mergeSessionWithWordMaps(sessionCore, wordMaps) : null),
@@ -281,7 +293,6 @@ export default function OnlinePlayScreen() {
   const playMapsGateRef = useRef(createPlayMapsListenerGate());
   const [mapsResetNonce, setMapsResetNonce] = useState(0);
   const [mapsRetryNonce, setMapsRetryNonce] = useState(0);
-  const finishedArchiveRoundRef = useRef<number | null>(null);
   const wordMapsRef = useRef(wordMaps);
   wordMapsRef.current = wordMaps;
   const myWordsRef = useRef(myWords);
@@ -533,16 +544,15 @@ export default function OnlinePlayScreen() {
     if (frozenRound != null && shouldKeepFrozenResultsOverLiveFinished(frozenRound, liveRound)) {
       return;
     }
-    if (finishedArchiveRoundRef.current === liveRound) {
-      return;
-    }
-    finishedArchiveRoundRef.current = liveRound;
-    void archiveFinishedRoundFromFirebase(gameId, session).catch((error) => {
+    // Re-run when wordMaps grows (late append); helper no-ops if archive already fresh.
+    void archiveFinishedRoundFromFirebase(gameId, session, {
+      wordPlayers: wordMaps?.wordPlayers ?? wordMapsRef.current?.wordPlayers,
+    }).catch((error) => {
       if (__DEV__) {
         console.warn('archiveFinishedRoundFromFirebase', error);
       }
     });
-  }, [gameId, roundEndSessionSnapshot?.baseWordRound, session]);
+  }, [gameId, roundEndSessionSnapshot?.baseWordRound, session, wordMaps]);
 
   const forceLocalRoundOver = useCallback(() => {
     if (gameId && session) {
@@ -603,38 +613,56 @@ export default function OnlinePlayScreen() {
       // Local round-over alone must not open results while RTDB is still `playing`
       // (results spins until words bootstrap / finished — 20–30s hang for organizer).
       // Use pinned round — live baseWordRound may already be rematch N+1.
+      // Prefer subscribe SoT after waitUntilIdle — tap Results during grace often races
+      // expire finish; full-session get here was the ~4–6 KB finish-second ↓ spike.
+      const coreNow = sessionCoreRef.current;
+      const statusForGate = coreNow?.status ?? session.status;
+      const roundForGate = coreNow?.baseWordRound ?? session.baseWordRound;
       let ensureOutcome: OpenResultsEnsureOutcome = 'already_finished';
-      if (
-        !canOpenOnlineResults(session.status) ||
-        (session.baseWordRound ?? 0) > expectedBaseWordRound
-      ) {
-        // Local pin: one snapshot — finished → open; rematch → archive path;
+      if (!canOpenOnlineResults(statusForGate) || (roundForGate ?? 0) > expectedBaseWordRound) {
+        // Local pin: status/round leaves — finished → open; rematch → archive path;
         // still playing same round (FINISH_WORD_SUBMIT_GRACE) → wait for finish
         // (do not mislabel as rematch_advanced or multiplayer has no archive).
         if (localRoundOverForcedRef.current || roundEndSessionSnapshot?.status === 'finished') {
           try {
-            const live = await readGameSessionSnapshot(gameId);
-            if (navEpoch !== resultsNavEpochRef.current) {
-              return;
-            }
-            const classified = classifyEnsureSessionSnapshot({
-              status: live.status,
-              baseWordRound: live.baseWordRound,
-              expectedBaseWordRound,
-            });
-            if (classified === 'finished') {
+            const classifiedCore = coreNow
+              ? classifyEnsureSessionSnapshot({
+                  status: coreNow.status,
+                  baseWordRound: coreNow.baseWordRound,
+                  expectedBaseWordRound,
+                })
+              : 'continue';
+            if (classifiedCore === 'finished') {
               ensureOutcome = 'finished';
-            } else if (classified === 'rematch_advanced') {
+            } else if (classifiedCore === 'rematch_advanced') {
               ensureOutcome = 'rematch_advanced';
             } else {
-              ensureOutcome = await ensureSessionFinishedForResults(gameId, {
-                expectedBaseWordRound,
-              });
+              const fields = await readGameSessionEnsureFields(gameId);
               if (navEpoch !== resultsNavEpochRef.current) {
                 return;
               }
-              if (ensureOutcome === 'timeout') {
+              const classified = fields
+                ? classifyEnsureSessionSnapshot({
+                    status: fields.status,
+                    baseWordRound: fields.baseWordRound,
+                    expectedBaseWordRound,
+                  })
+                : 'continue';
+              if (classified === 'finished') {
+                ensureOutcome = 'finished';
+              } else if (classified === 'rematch_advanced') {
                 ensureOutcome = 'rematch_advanced';
+              } else {
+                ensureOutcome = await ensureSessionFinishedForResults(gameId, {
+                  expectedBaseWordRound,
+                  getHintSession: () => sessionCoreRef.current,
+                });
+                if (navEpoch !== resultsNavEpochRef.current) {
+                  return;
+                }
+                if (ensureOutcome === 'timeout') {
+                  ensureOutcome = 'rematch_advanced';
+                }
               }
             }
           } catch {
@@ -643,6 +671,7 @@ export default function OnlinePlayScreen() {
         } else {
           ensureOutcome = await ensureSessionFinishedForResults(gameId, {
             expectedBaseWordRound,
+            getHintSession: () => sessionCoreRef.current,
           });
           if (navEpoch !== resultsNavEpochRef.current) {
             return;
@@ -661,24 +690,39 @@ export default function OnlinePlayScreen() {
         debounceRef.current = null;
       }
       let liveForArchive: GameSessionSnapshot | null = null;
-      try {
-        const live = await readGameSessionSnapshot(gameId);
-        if (navEpoch !== resultsNavEpochRef.current) {
-          return;
-        }
-        if (
-          shouldWriteFinishedRoundArchiveOnNavigate({
-            ensureOutcome,
-            liveStatus: live.status,
-            liveBaseWordRound: live.baseWordRound,
-            expectedBaseWordRound,
-          })
-        ) {
-          liveForArchive = live;
-        }
-      } catch (error) {
-        if (__DEV__) {
-          console.warn('readGameSessionSnapshot before archive', error);
+      // FIX: 2026-09 — navigate full-session get on already-finished → use play subscribe SoT
+      const archiveCore = sessionCoreRef.current ?? session;
+      if (
+        archiveCore.status === 'finished' &&
+        (archiveCore.baseWordRound ?? 0) === expectedBaseWordRound &&
+        shouldWriteFinishedRoundArchiveOnNavigate({
+          ensureOutcome,
+          liveStatus: archiveCore.status,
+          liveBaseWordRound: archiveCore.baseWordRound,
+          expectedBaseWordRound,
+        })
+      ) {
+        liveForArchive = archiveCore;
+      } else {
+        try {
+          const live = await readGameSessionSnapshot(gameId);
+          if (navEpoch !== resultsNavEpochRef.current) {
+            return;
+          }
+          if (
+            shouldWriteFinishedRoundArchiveOnNavigate({
+              ensureOutcome,
+              liveStatus: live.status,
+              liveBaseWordRound: live.baseWordRound,
+              expectedBaseWordRound,
+            })
+          ) {
+            liveForArchive = live;
+          }
+        } catch (error) {
+          if (__DEV__) {
+            console.warn('readGameSessionSnapshot before archive', error);
+          }
         }
       }
       if (navEpoch !== resultsNavEpochRef.current) {
@@ -687,15 +731,34 @@ export default function OnlinePlayScreen() {
       // Archive must exist before replace — covers rematch_advanced and the
       // already_finished race (tap Results before the finished archive effect runs).
       let archiveReady = false;
+      const viewingRound = liveForArchive?.baseWordRound ?? expectedBaseWordRound;
+      const memoryWords = wordsByPlayerFromWordPlayers(wordMapsRef.current?.wordPlayers);
       if (liveForArchive) {
         try {
-          await archiveFinishedRoundFromFirebase(gameId, liveForArchive);
-          archiveReady = true;
+          await archiveFinishedRoundFromFirebase(
+            gameId,
+            mergeSessionWithWordMaps(liveForArchive, wordMapsRef.current),
+            { wordPlayers: wordMapsRef.current?.wordPlayers },
+          );
         } catch (error) {
           if (__DEV__) {
             console.warn('archiveFinishedRoundFromFirebase', error);
           }
         }
+        // FIX: 2026-09 — results second wordPlayers seed → memory handoff before replace
+        if (totalPlayerWordCount(memoryWords) > 0) {
+          setFinishedRoundResultsHandoff(
+            gameId,
+            viewingRound,
+            freezeFinishedRound(
+              gameId,
+              mergeSessionWithWordMaps(liveForArchive, wordMapsRef.current),
+              memoryWords,
+            ),
+          );
+        }
+        const disk = await getFinishedRoundArchive(gameId, viewingRound);
+        archiveReady = disk != null || totalPlayerWordCount(memoryWords) > 0;
       }
       if (navEpoch !== resultsNavEpochRef.current) {
         return;
@@ -714,6 +777,13 @@ export default function OnlinePlayScreen() {
           myUid,
           myWords: [...(roundEndWordsSnapshot ?? myWordsRef.current)],
         });
+        if (archiveReady && localFinished && totalPlayerWordCount(memoryWords) > 0) {
+          setFinishedRoundResultsHandoff(
+            gameId,
+            expectedBaseWordRound,
+            freezeFinishedRound(gameId, localFinished, memoryWords),
+          );
+        }
       }
       if (navEpoch !== resultsNavEpochRef.current) {
         return;
@@ -722,7 +792,6 @@ export default function OnlinePlayScreen() {
         setViewResultsError(t('online.errorOpenResultsFailed'));
         return;
       }
-      const viewingRound = liveForArchive?.baseWordRound ?? expectedBaseWordRound;
       try {
         router.replace(onlineResultsRoute(gameId, viewingRound));
         // Only lock out retries after replace succeeds — failed replace must allow retry.
@@ -1014,8 +1083,10 @@ export default function OnlinePlayScreen() {
     ) {
       return;
     }
+    const commitReadyAt = timerFinishNetworkExpiresAt(endsAt);
     beginExpireFinishAttempt({
       endsAt,
+      commitReadyAt,
       now: getServerNow(),
       deferFinish: shouldDeferClientTimerFinish({
         addTimeVote: addTimeVoteRef.current,
@@ -1031,7 +1102,8 @@ export default function OnlinePlayScreen() {
       },
       clearElapsedDraft,
       onLocalRoundOver: forceLocalRoundOver,
-      finishIfExpired: () => finishGameSessionIfExpired(gameId),
+      finishIfExpired: () =>
+        finishGameSessionIfExpired(gameId, { hintSession: sessionCoreRef.current }),
       getNow: getServerNow,
       getDeferFinish: () =>
         shouldDeferClientTimerFinish({
@@ -1049,6 +1121,55 @@ export default function OnlinePlayScreen() {
     roundOverPendingResults,
     session?.baseWordRound,
     session?.status,
+  ]);
+
+  // Local time-up at timerEndsAt (UI only) — RTDB finish waits out submit grace.
+  useEffect(() => {
+    if (
+      isPaused ||
+      session?.status !== 'playing' ||
+      endsAt === null ||
+      shouldDeferClientTimerFinish({
+        addTimeVote: session?.addTimeVote,
+        showAddTimeModal,
+      })
+    ) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(
+      () => {
+        if (cancelled) {
+          return;
+        }
+        if (
+          shouldDeferClientTimerFinish({
+            addTimeVote: addTimeVoteRef.current,
+            showAddTimeModal: showAddTimeModalRef.current,
+          })
+        ) {
+          return;
+        }
+        if (getServerNow() < endsAt) {
+          return;
+        }
+        forceLocalRoundOver();
+      },
+      msUntil(endsAt, getServerNow()),
+    );
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [
+    endsAt,
+    forceLocalRoundOver,
+    isPaused,
+    session?.addTimeVote,
+    session?.status,
+    showAddTimeModal,
   ]);
 
   useEffect(() => {
@@ -1069,6 +1190,8 @@ export default function OnlinePlayScreen() {
       session.players ?? {},
       session.liveRoundPlayerUids,
     );
+    // Network commit only after submit grace — avoids full-session get spam while finish is a no-op.
+    const networkExpiresAt = timerFinishNetworkExpiresAt(endsAt);
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -1095,20 +1218,21 @@ export default function OnlinePlayScreen() {
               myUid,
               candidateUids,
               now,
-              expiresAt: endsAt,
+              expiresAt: networkExpiresAt,
             })
           ) {
             scheduleAt(
               nextExpiryNetworkWakeAt({
                 myUid,
                 candidateUids,
-                expiresAt: endsAt,
+                expiresAt: networkExpiresAt,
               }),
             );
             return;
           }
           beginExpireFinishAttempt({
             endsAt,
+            commitReadyAt: networkExpiresAt,
             now,
             deferFinish: shouldDeferClientTimerFinish({
               addTimeVote: addTimeVoteRef.current,
@@ -1124,7 +1248,8 @@ export default function OnlinePlayScreen() {
             },
             clearElapsedDraft,
             onLocalRoundOver: forceLocalRoundOver,
-            finishIfExpired: () => finishGameSessionIfExpired(gameId),
+            finishIfExpired: () =>
+              finishGameSessionIfExpired(gameId, { hintSession: sessionCoreRef.current }),
             getNow: getServerNow,
             getDeferFinish: () =>
               shouldDeferClientTimerFinish({
@@ -1133,7 +1258,8 @@ export default function OnlinePlayScreen() {
               }),
             resyncIfRemoteClockAlive,
             onUncommitted: () => {
-              if (cancelled || finishAttemptedRef.current || localRoundOverForcedRef.current) {
+              // Keep retrying RTDB finish after local time-up (grace UI must not stop commits).
+              if (cancelled || finishAttemptedRef.current) {
                 return;
               }
               const fails = Math.max(1, expiredFinishFailCountRef.current);
@@ -1149,7 +1275,7 @@ export default function OnlinePlayScreen() {
       nextExpiryNetworkWakeAt({
         myUid,
         candidateUids,
-        expiresAt: endsAt,
+        expiresAt: networkExpiresAt,
       }),
     );
 
@@ -1223,7 +1349,7 @@ export default function OnlinePlayScreen() {
     forceLocalRoundOver();
     setShowAddTimeModal(false);
     if (gameId && session?.status === 'playing') {
-      void finishGameSessionIfExpired(gameId);
+      void finishGameSessionIfExpired(gameId, { hintSession: sessionCoreRef.current });
     }
   }, [endsAt, forceLocalRoundOver, gameId, session?.addTimeVote, session?.status]);
 
@@ -1533,7 +1659,7 @@ export default function OnlinePlayScreen() {
     setShowExitConfirm(false);
     setShowGameMenu(false);
     if (!myUid || !session) {
-      router.replace('/');
+      navigateHomeClearingStack();
       return;
     }
     if (session.status === 'playing') {

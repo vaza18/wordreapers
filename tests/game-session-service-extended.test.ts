@@ -97,6 +97,7 @@ import {
   updateGameSessionBaseWord,
   updateGameSessionSetup,
   resetSharedGameSessionSubscriptionsForTests,
+  SHARED_GAME_SESSION_SUB_TEARDOWN_MS,
 } from '../lib/firebase/game-session-service.js';
 import { DEFAULT_SESSION_SETTINGS, finishedSession } from './helpers/game-session-fixtures.js';
 
@@ -529,6 +530,28 @@ describe('game-session-service extended', () => {
     unsubA();
     expect(onValueMock).toHaveBeenCalledTimes(1);
     unsubB();
+    // Within teardown grace, remount reuses the shared onValue (play→results).
+    const c = vi.fn();
+    const unsubC = subscribeGameSession('ABCDE', c);
+    expect(onValueMock).toHaveBeenCalledTimes(1);
+    expect(c).toHaveBeenCalledWith(expect.objectContaining({ id: 'ABCDE' }));
+    unsubC();
+  });
+
+  it('tears down shared session onValue after grace when no listeners remain', async () => {
+    const unsubFirebase = vi.fn();
+    onValueMock.mockImplementation(() => unsubFirebase);
+
+    const unsub = subscribeGameSession('ABCDE', vi.fn());
+    await vi.waitFor(() => {
+      expect(onValueMock).toHaveBeenCalledTimes(1);
+    });
+    unsub();
+    expect(unsubFirebase).not.toHaveBeenCalled();
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, SHARED_GAME_SESSION_SUB_TEARDOWN_MS + 50);
+    });
+    expect(unsubFirebase).toHaveBeenCalledTimes(1);
   });
 
   it('does not clear the session listener on transient RTDB subscribe errors', async () => {

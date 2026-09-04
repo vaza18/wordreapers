@@ -11,7 +11,7 @@ import {
 } from 'firebase/database';
 
 import { getFirebaseDatabase } from './init.js';
-import { ensureAnonymousAuth } from './auth.js';
+import { ensureAnonymousAuth, getFirebaseUid } from './auth.js';
 import { isFirebasePermissionDenied } from './rtdb-errors.js';
 import { sessionWordMapsPath, sessionWordPlayersPath } from './paths.js';
 import { normalizeRoomCode } from './room-code.js';
@@ -68,6 +68,20 @@ function applyBufferedOp(wordPlayers: WordPlayersMap, op: BufferedChildOp): Word
   return applyWordPlayersChildSnapshot(wordPlayers, op.key, op.val);
 }
 
+/** Uids newly set to true on a word (for observed post-seed action logs). */
+export function newlyClaimedWordPlayerUids(
+  prev: Record<string, boolean> | undefined,
+  next: Record<string, boolean> | undefined,
+): string[] {
+  const claimed: string[] = [];
+  for (const [uid, onWord] of Object.entries(next ?? {})) {
+    if (onWord === true && prev?.[uid] !== true) {
+      claimed.push(uid);
+    }
+  }
+  return claimed;
+}
+
 /**
  * Last op wins per word key so a hung seed cannot grow memory with O(events).
  * Exported for unit tests.
@@ -99,7 +113,7 @@ export async function tryFetchSessionWordMaps(gameId: string): Promise<SessionWo
     await ensureAnonymousAuth();
     // Same RTDB node as live listen seed get (wordPlayers) — avoid parent/child cache skew.
     const snapshot = await get(sessionWordPlayersRef(roomId));
-    const val = instrumentedSnapshotVal(snapshot);
+    const val = instrumentedSnapshotVal(snapshot, sessionWordPlayersPath(roomId));
     if (!snapshot.exists()) {
       return { ok: true, maps: { ...EMPTY_SESSION_WORD_MAPS } };
     }
@@ -220,6 +234,12 @@ export type SubscribeSessionWordMapsOptions = {
    * soft-timeout — that regresses late-seal.
    */
   seedGetMaxAttempts?: number;
+  /**
+   * Local player uid — post-seed word claims for this uid are not logged as
+   * observed (local submit already logs via `submitOnlineWord`).
+   * When omitted, falls back to {@link getFirebaseUid}.
+   */
+  localUid?: string | null;
 };
 
 /**
@@ -296,6 +316,7 @@ function attachSessionWordMapsListen(
   options?: SubscribeSessionWordMapsOptions,
 ): Unsubscribe {
   const maxSeedAttempts = options?.seedGetMaxAttempts ?? WORD_MAPS_SEED_GET_MAX_ATTEMPTS;
+  const localUid = options?.localUid !== undefined ? options.localUid : getFirebaseUid();
   const playersRef = sessionWordPlayersRef(roomId);
   let wordPlayers: WordPlayersMap = {};
   let cancelled = false;
@@ -430,7 +451,24 @@ function attachSessionWordMapsListen(
       scheduleProvisionalFromBuffer();
       return;
     }
-    emitIfChanged(applyBufferedOp(wordPlayers, op), 'authoritative');
+    const prevPlayers = op.kind === 'upsert' ? wordPlayers[op.key] : undefined;
+    const next = applyBufferedOp(wordPlayers, op);
+    if (op.kind === 'upsert') {
+      const nextPlayers = next[op.key];
+      for (const uid of newlyClaimedWordPlayerUids(prevPlayers, nextPlayers)) {
+        if (localUid != null && uid === localUid) {
+          continue;
+        }
+        const players = Object.values(nextPlayers ?? {}).filter((on) => on === true).length;
+        devLogAction(`submitted word "${op.key}"`, {
+          observed: true,
+          actor: uid,
+          room: roomId,
+          details: `players=${players}`,
+        });
+      }
+    }
+    emitIfChanged(next, 'authoritative');
   };
 
   const abandonSeedRetries = (error: unknown) => {
@@ -537,7 +575,7 @@ function attachSessionWordMapsListen(
           flushQueuedSeedRetry();
           return;
         }
-        const val = instrumentedSnapshotVal(snapshot);
+        const val = instrumentedSnapshotVal(snapshot, sessionWordPlayersPath(roomId));
         const base = snapshot.exists() ? (mapsFromWordPlayersNode(val).wordPlayers ?? {}) : {};
         finishSeed(base);
       },
@@ -636,6 +674,10 @@ export async function writeSessionWordMapsShards(
   }
   recordRtdbUpdate(payload);
   await update(sessionWordMapsRef(roomId), payload);
+  devLogAction('restored session word maps', {
+    room: roomId,
+    details: `shards=${Object.keys(payload).length}`,
+  });
 }
 
 /** Clear word maps on rematch / new round start. */
@@ -644,6 +686,7 @@ export async function clearSessionWordMaps(gameId: string): Promise<void> {
   try {
     recordRtdbRemove(sessionWordMapsPath(roomId));
     await remove(sessionWordMapsRef(roomId));
+    devLogAction('cleared session word maps', { room: roomId });
   } catch (error) {
     if (isFirebasePermissionDenied(error)) {
       return;

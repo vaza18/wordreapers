@@ -75,6 +75,8 @@ vi.mock('../lib/firebase/init.js', () => ({
 }));
 
 import { exitOnlineSession, exitOnlineToHome } from '../lib/online/exit-online-flow.js';
+import { rtdbTrafficProbe } from '../lib/debug/rtdb-traffic-probe.js';
+import { useRtdbDiagnosticsStore } from '../store/rtdb-diagnostics-store.js';
 import { DEFAULT_SESSION_SETTINGS, finishedSession } from './helpers/game-session-fixtures.js';
 
 describe('exitOnlineToHome', () => {
@@ -257,6 +259,8 @@ describe('exitOnlineSession', () => {
     }
     runExitCleanupMocks.persistLocalArchive.mockResolvedValue('saved');
     getMock.mockResolvedValue({ exists: () => false });
+    rtdbTrafficProbe.reset();
+    useRtdbDiagnosticsStore.getState().reset();
   });
 
   it('runs finished-results cleanup without navigating home', async () => {
@@ -276,5 +280,24 @@ describe('exitOnlineSession', () => {
     expect(runExitCleanupMocks.persistLocalArchive).toHaveBeenCalled();
     expect(runExitCleanupMocks.markResultsExitedAndOffline).toHaveBeenCalled();
     expect(navigateHomeClearingStack).not.toHaveBeenCalled();
+  });
+
+  it('flushes sticky RTDB diagnostics room on leave without waiting for subscribe teardown', async () => {
+    useRtdbDiagnosticsStore.setState({ developerModeEnabled: true, rtdbDiagnosticsEnabled: true });
+    rtdbTrafficProbe.setActiveRoomId('ABCDE');
+    rtdbTrafficProbe.record('down', 33);
+
+    await exitOnlineSession({
+      gameId: 'ABCDE',
+      uid: 'org',
+      isOrganizer: true,
+      sessionStatus: 'finished',
+      session: finishedSession(),
+      exitedResults: true,
+    });
+
+    expect(useRtdbDiagnosticsStore.getState().history).toHaveLength(1);
+    expect(useRtdbDiagnosticsStore.getState().history[0]?.roomId).toBe('ABCDE');
+    expect(rtdbTrafficProbe.getRoomTotals().roomId).toBeNull();
   });
 });

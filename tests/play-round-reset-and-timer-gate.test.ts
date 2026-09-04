@@ -159,6 +159,54 @@ describe('beginExpireFinishAttempt', () => {
     });
     expect(finishIfExpired).not.toHaveBeenCalled();
   });
+
+  it('before commitReadyAt: local time-up only — no RTDB finish get spam during grace', () => {
+    const finishIfExpired = vi.fn(async () => false);
+    const onLocalRoundOver = vi.fn();
+    const onBeforeCommitReady = vi.fn();
+    const clearElapsedDraft = vi.fn();
+    const refs = expireRefs({
+      draftKeyIndices: { current: [0] },
+      lastValidatedDraft: { current: 'лан' },
+    });
+    beginExpireFinishAttempt({
+      endsAt: 1000,
+      commitReadyAt: 6000,
+      now: 2000,
+      deferFinish: false,
+      refs,
+      clearElapsedDraft,
+      onLocalRoundOver,
+      onBeforeCommitReady,
+      finishIfExpired,
+    });
+    expect(finishIfExpired).not.toHaveBeenCalled();
+    expect(clearElapsedDraft).toHaveBeenCalledOnce();
+    expect(onLocalRoundOver).toHaveBeenCalledOnce();
+    expect(refs.localRoundOverForced.current).toBe(true);
+    expect(refs.expiredFailCount.current).toBe(0);
+    expect(onBeforeCommitReady).toHaveBeenCalledOnce();
+  });
+
+  it('at commitReadyAt: runs finish without treating grace as a failed attempt', async () => {
+    const finishIfExpired = vi.fn(async () => true);
+    const onBeforeCommitReady = vi.fn();
+    const refs = expireRefs();
+    beginExpireFinishAttempt({
+      endsAt: 1000,
+      commitReadyAt: 6000,
+      now: 6000,
+      deferFinish: false,
+      refs,
+      clearElapsedDraft: vi.fn(),
+      onLocalRoundOver: vi.fn(),
+      onBeforeCommitReady,
+      finishIfExpired,
+    });
+    expect(onBeforeCommitReady).not.toHaveBeenCalled();
+    expect(finishIfExpired).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(refs.finishAttempted.current).toBe(true));
+  });
 });
 
 describe('shouldClearPlayLocalWordsOnRoundChange', () => {

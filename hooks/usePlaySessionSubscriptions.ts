@@ -270,7 +270,7 @@ export function usePlaySessionSubscriptions({
           });
         });
       },
-      { seedGetMaxAttempts: PLAY_WORD_MAPS_SEED_GET_MAX_ATTEMPTS },
+      { seedGetMaxAttempts: PLAY_WORD_MAPS_SEED_GET_MAX_ATTEMPTS, localUid: myUid },
     );
 
     return () => {

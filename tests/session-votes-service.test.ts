@@ -6,6 +6,7 @@ const runTransactionMock = vi.fn();
 
 vi.mock('firebase/database', () => ({
   get: (...args: unknown[]) => getMock(...args),
+  child: (parent: { path: string }, sub: string) => ({ path: `${parent.path}/${sub}` }),
   runTransaction: (...args: unknown[]) => runTransactionMock(...args),
 }));
 
@@ -55,9 +56,18 @@ function playingSession(
 }
 
 function installSession(session: GameSession | null): void {
-  getMock.mockResolvedValue({
-    exists: () => session != null,
-    val: () => session,
+  getMock.mockImplementation(async (ref: { path?: string }) => {
+    const path = ref?.path ?? '';
+    if (path.endsWith('/status')) {
+      return {
+        exists: () => session != null,
+        val: () => session?.status ?? null,
+      };
+    }
+    return {
+      exists: () => session != null,
+      val: () => session,
+    };
   });
   runTransactionMock.mockImplementation(
     async (_ref: unknown, updater: (current: unknown) => unknown) => {
@@ -483,5 +493,19 @@ describe('session-votes-service', () => {
 
     expect(session.status).toBe('finished');
     expect(session.earlyFinishVote).toBeNull();
+  });
+
+  it('skips vote resolvers when session is already finished (results offline path)', async () => {
+    const session = playingSession(
+      { org: { name: 'Org', wordCount: 0, score: 0, online: true } },
+      { status: 'finished', timerEndsAt: null },
+    );
+    installSession(session);
+
+    await reconcileOpenSessionVotes('ABCDE');
+
+    expect(getMock).toHaveBeenCalledTimes(1);
+    expect(getMock.mock.calls[0]?.[0]).toEqual({ path: 'game_sessions/ABCDE/status' });
+    expect(runTransactionMock).not.toHaveBeenCalled();
   });
 });

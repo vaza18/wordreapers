@@ -4,6 +4,9 @@
  * window (`finishedAt + 15000` in `firebase/database.rules.json`) for force-finish
  * / clock skew — that literal lives only in rules (RTDB cannot import TS).
  *
- * Local play UI still treats the round as over at `timerEndsAt` (no new submits).
+ * Local play UI treats the round as over at `timerEndsAt` (no new submits /
+ * time-up modal). Network `finishGameSessionIfExpired` wakes only after this
+ * grace (`timerFinishNetworkExpiresAt`) so clients do not spam full-session gets
+ * while finish is a known no-op.
  */
 export const FINISH_WORD_SUBMIT_GRACE_MS = 5_000;

@@ -31,6 +31,7 @@ import {
   updateLocalRoomDraft,
 } from '@/lib/online/local-room-draft';
 import { generateRoomCode } from '@/lib/firebase/room-code';
+import { navigateHomeClearingStack } from '@/lib/navigation/navigate-home';
 import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
 import { organizerSoloStandings, useOrganizerSoloStore } from '@/store/organizer-solo-store';
 import { usePlayerStatsStore } from '@/store/player-stats-store';
@@ -74,7 +75,7 @@ export default function OrganizerSoloResultsScreen() {
       return;
     }
     if (status === 'idle' && !playAgainNavRef.current) {
-      router.replace('/');
+      navigateHomeClearingStack();
     }
   }, [gameId, status]);
 
@@ -274,7 +275,7 @@ export default function OrganizerSoloResultsScreen() {
   const goHome = useCallback(() => {
     clear();
     removeLocalRoomDraft(gameId);
-    router.replace('/');
+    navigateHomeClearingStack();
   }, [clear, gameId]);
 
   const onBack = useSyncedStackBack(goHome);

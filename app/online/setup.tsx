@@ -27,7 +27,10 @@ import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useTrainingMilestone } from '@/hooks/useTrainingMilestone';
 import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
 import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
-import { navigateHomeWithBackAnimation } from '@/lib/navigation/navigate-home';
+import {
+  navigateHomeClearingStack,
+  navigateHomeWithBackAnimation,
+} from '@/lib/navigation/navigate-home';
 import { joinErrorMessage, firebaseBootstrapErrorMessage } from '@/lib/firebase/join-error-message';
 import {
   organizerLeaveWaitingLobby,
@@ -267,11 +270,7 @@ export default function OnlineSetupScreen() {
             }
           }
         }
-        if (router.canDismiss()) {
-          router.dismissTo('/');
-        } else {
-          router.replace('/');
-        }
+        navigateHomeClearingStack();
       })();
       return;
     }

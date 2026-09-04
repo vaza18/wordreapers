@@ -2,10 +2,11 @@
  * Results «Головна» wiring (NLD7S family).
  *
  * Paths that may still have rematch `waiting` / playing membership must run
- * {@link exitOnlineToHome} (screen `handleHome`) — never navigate-only
- * `router.replace('/')`, which skips leave/hasLeft and resurrects joiners.
+ * {@link exitOnlineToHome} (screen `handleHome`) — never navigate-only Home,
+ * which skips leave/hasLeft and resurrects joiners.
  *
- * Room-not-found (no live membership) may navigate-only.
+ * Room-not-found (no live membership) may use `navigateHomeClearingStack`
+ * (flush sticky RTDB diagnostics without membership leave).
  */
 
 export type ResultsHomeEscapePath =

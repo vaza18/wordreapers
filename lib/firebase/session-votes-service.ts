@@ -1,4 +1,4 @@
-import { get } from 'firebase/database';
+import { child, get } from 'firebase/database';
 
 import { runRtdbTransaction } from './rtdb-transaction.js';
 
@@ -26,6 +26,7 @@ import {
   resolveRoundTimerBudgetSeconds,
 } from '@/lib/game/round-duration.js';
 import { normalizeRoomCode } from './room-code.js';
+import { gameSessionPath } from './paths.js';
 import { sessionRef } from './session-ref.js';
 import type { GameSession, GameSessionPlayer } from './types.js';
 import { displayPlayerName } from '@/lib/online/public-lobby/display-player-name.js';
@@ -51,7 +52,7 @@ async function runSessionVoteTransaction(
 ): Promise<boolean> {
   const roomId = normalizeRoomCode(gameId);
   const pre = await get(sessionRef(roomId));
-  const preVal = instrumentedSnapshotVal(pre);
+  const preVal = instrumentedSnapshotVal(pre, gameSessionPath(roomId));
   if (!pre.exists()) {
     return false;
   }
@@ -648,6 +649,14 @@ export async function resolvePauseVoteIfReady(gameId: string): Promise<void> {
  * so remaining players are not stuck waiting on offline required voters.
  */
 export async function reconcileOpenSessionVotes(gameId: string): Promise<void> {
+  const roomId = normalizeRoomCode(gameId);
+  // FIX: 2026-09 — results offline reconcile paid 4× full-session get while already
+  // `finished` → gate on status leaf first (votes only mutate playing rounds).
+  const statusSnap = await get(child(sessionRef(roomId), 'status'));
+  const statusVal = instrumentedSnapshotVal(statusSnap, `${gameSessionPath(roomId)}/status`);
+  if (!statusSnap.exists() || statusVal !== 'playing') {
+    return;
+  }
   await resolvePauseVoteIfReady(gameId);
   await resolveEarlyFinishVoteIfExpired(gameId);
   await resolveAddTimeVoteIfExpired(gameId);
