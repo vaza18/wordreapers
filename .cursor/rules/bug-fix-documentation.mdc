@@ -1,6 +1,6 @@
 ---
 description: Standards for documenting bug fixes in code vs docs/known-issues.md
-alwaysApply: true
+alwaysApply: false
 ---
 # Bug Fix Documentation Standards
 
