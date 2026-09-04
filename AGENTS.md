@@ -29,7 +29,7 @@ Types for Firebase live in [`lib/firebase/types.ts`](lib/firebase/types.ts). Sha
 2.  **Test first** when fixing a bug or changing edge-case logic: add or extend a test in [`tests/`](tests/) that fails with the old behavior.
 3.  **Change** the minimal code needed; prefer pure functions in `lib/` over logic in components.
 4.  **Update docs** when user-visible behavior, data flows, or screens change. Keep `docs/wordreapers_screens.html`, `docs/firebase_schema.md`, and `docs/known-issues.md` in sync.
-5.  **Record regressions** in [`docs/known-issues.md`](docs/known-issues.md) when you fix a non-trivial bug (Symptom → Cause → Fix → Test).
+5.  **Record regressions** in [`docs/known-issues.md`](docs/known-issues.md) ONLY when you fix a high-level **architectural invariant break** (e.g. cross-module race family, ADR violation). For local logic fixes (UI jank, platform-specific bugs, simple edge cases), use **in-code comments** (Symptom → Cause → Fix).
 6.  **Verify** before claiming done: `npm run ci:check`.
 
 ### Risky-zone Pre-flight
@@ -114,7 +114,7 @@ Complex tasks (like staged code reviews or fixing build loops) MUST be delegated
 
 1.  **Identify Trigger:** When a user asks for a review («перевір код», «code review staged») or a build fix loop.
 2.  **Load Definition:** Read the relevant agent/skill file from `.cursor/agents/` or `.cursor/skills/`.
-3.  **Dispatch Task:** Call the `task` tool. The prompt should be the **content of the agent file** plus the current context (staged diff, intent bullets, prior findings).
+3.  **Dispatch Task:** Call the `task` tool. The prompt should be the **content of the agent file** plus the current context (**staged summary/stat only**, intent bullets, prior findings). **CRITICAL:** Do not include the full code diff in the prompt; the sub-agent will read it independently to save tokens.
 
 ### Workflow Triggers
 

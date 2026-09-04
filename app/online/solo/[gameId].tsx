@@ -25,6 +25,7 @@ import { PauseRoundModal } from '@/components/PauseRoundModal';
 import { PlaySessionToastStack } from '@/components/PlaySessionToast';
 import { SOLO_SUCCESS_CONFETTI_LEVELS } from '@/constants/solo-round-success-constants';
 import { spacing, type ThemeColors } from '@/constants/theme';
+import { navigateHomeClearingStack } from '@/lib/navigation/navigate-home';
 import { modalOverlayBackground } from '@/lib/ui/modal-chrome';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
@@ -129,11 +130,11 @@ export default function OrganizerSoloPlayScreen() {
 
   useEffect(() => {
     if (!gameId) {
-      router.replace('/');
+      navigateHomeClearingStack();
       return;
     }
     if (status === 'idle' && !setup) {
-      router.replace('/');
+      navigateHomeClearingStack();
     }
   }, [gameId, setup, status]);
 

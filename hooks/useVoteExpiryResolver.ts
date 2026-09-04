@@ -1,12 +1,7 @@
 import { useEffect } from 'react';
 
 import { getServerNow } from '@/lib/firebase/server-clock';
-import {
-  resolveAddTimeVoteIfExpired,
-  resolveEarlyFinishVoteIfExpired,
-  resolvePauseVoteIfReady,
-  resolveResumeVoteIfExpired,
-} from '@/lib/firebase/session-votes-service';
+import { reconcileOpenSessionVotes } from '@/lib/firebase/session-votes-service';
 import type { GameSessionPlayer, SessionVote } from '@/lib/firebase/types';
 import { EARLY_FINISH_VOTE_TIMEOUT_MS } from '@/lib/online/voting/early-finish-vote';
 import {
@@ -83,18 +78,7 @@ export function useVoteExpiryResolver({
       ) {
         return;
       }
-      if (hasEarlyFinish) {
-        void resolveEarlyFinishVoteIfExpired(gameId);
-      }
-      if (hasAddTime) {
-        void resolveAddTimeVoteIfExpired(gameId);
-      }
-      if (hasResume) {
-        void resolveResumeVoteIfExpired(gameId);
-      }
-      if (hasPause) {
-        void resolvePauseVoteIfReady(gameId);
-      }
+      void reconcileOpenSessionVotes(gameId);
     };
 
     const wakeAt = nextExpiryNetworkWakeAt({

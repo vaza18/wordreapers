@@ -17,6 +17,11 @@ vi.mock('../lib/firebase/auth.js', () => ({
   ensureAnonymousAuth: vi.fn().mockResolvedValue({ uid: 'org-1' }),
 }));
 
+const devLogAction = vi.fn();
+vi.mock('../lib/debug/dev-log.js', () => ({
+  devLogAction: (...args: unknown[]) => devLogAction(...args),
+}));
+
 vi.mock('../lib/online/word-maps-shard-refs.js', () => ({
   wordPlayersShardPlayerRef: (gameId: string, normalized: string, uid: string) => ({
     path: `session_word_maps/${gameId}/wordPlayers/${normalized}/${uid}`,
@@ -64,6 +69,10 @@ describe('submitOnlineWord', () => {
       { 'org-1': true },
     );
     expect(getMock).not.toHaveBeenCalled();
+    expect(devLogAction).toHaveBeenCalledWith('submitted word "порт"', {
+      room: 'ABCDE',
+      details: 'kind=unique players=1',
+    });
   });
 
   it('persists a shared word via leaf set after parent denied', async () => {
@@ -90,6 +99,10 @@ describe('submitOnlineWord', () => {
     });
     expect(setMock).toHaveBeenCalledTimes(2);
     expect(getMock).toHaveBeenCalled();
+    expect(devLogAction).toHaveBeenCalledWith('submitted word "порт"', {
+      room: 'ABCDE',
+      details: 'kind=normal players=2',
+    });
   });
 
   it('returns NOT_PLAYING when parent and leaf sets are denied', async () => {
@@ -97,6 +110,7 @@ describe('submitOnlineWord', () => {
 
     const result = await submitOnlineWord('ABCDE', 'org-1', 'порт', true);
     expect(result).toEqual({ ok: false, error: 'NOT_PLAYING' });
+    expect(devLogAction).not.toHaveBeenCalled();
   });
 
   it('treats leaf commit as success when parent get throws (unique until maps confirm)', async () => {

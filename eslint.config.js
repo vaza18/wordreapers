@@ -60,7 +60,7 @@ export default defineConfig(
     files: libFiles,
     languageOptions: {
       parserOptions: {
-        project: './tsconfig.node.json',
+        project: ['./tsconfig.json', './tsconfig.node.json'],
         tsconfigRootDir: import.meta.dirname,
       },
     },

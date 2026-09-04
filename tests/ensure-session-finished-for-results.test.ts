@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const readGameSessionSnapshot = vi.fn();
+const readGameSessionEnsureFields = vi.fn();
 const finishGameSessionIfExpired = vi.fn();
 
 vi.mock('../lib/firebase/game-session-service.js', () => ({
-  readGameSessionSnapshot: (...args: unknown[]) => readGameSessionSnapshot(...args),
+  readGameSessionEnsureFields: (...args: unknown[]) => readGameSessionEnsureFields(...args),
   finishGameSessionIfExpired: (...args: unknown[]) => finishGameSessionIfExpired(...args),
 }));
 
@@ -77,8 +77,19 @@ describe('ensureSessionFinishedForResults', () => {
     vi.clearAllMocks();
   });
 
+  it('returns finished from hintSession without leaf reads', async () => {
+    await expect(
+      ensureSessionFinishedForResults('ABCDE', {
+        expectedBaseWordRound: 1,
+        hintSession: { status: 'finished', baseWordRound: 1 } as never,
+      }),
+    ).resolves.toBe('finished');
+    expect(readGameSessionEnsureFields).not.toHaveBeenCalled();
+    expect(finishGameSessionIfExpired).not.toHaveBeenCalled();
+  });
+
   it('returns finished immediately when session is already finished', async () => {
-    readGameSessionSnapshot.mockResolvedValue({ status: 'finished', baseWordRound: 1 });
+    readGameSessionEnsureFields.mockResolvedValue({ status: 'finished', baseWordRound: 1 });
 
     await expect(
       ensureSessionFinishedForResults('ABCDE', { expectedBaseWordRound: 1 }),
@@ -87,7 +98,7 @@ describe('ensureSessionFinishedForResults', () => {
   });
 
   it('retries finish then succeeds when status becomes finished', async () => {
-    readGameSessionSnapshot
+    readGameSessionEnsureFields
       .mockResolvedValueOnce({ status: 'playing', baseWordRound: 1 })
       .mockResolvedValueOnce({ status: 'playing', baseWordRound: 1 })
       .mockResolvedValueOnce({ status: 'finished', baseWordRound: 1 });
@@ -103,8 +114,26 @@ describe('ensureSessionFinishedForResults', () => {
     expect(finishGameSessionIfExpired).toHaveBeenCalled();
   });
 
+  it('passes hintSession into finishGameSessionIfExpired', async () => {
+    const hint = { status: 'playing', baseWordRound: 1 } as never;
+    readGameSessionEnsureFields
+      .mockResolvedValueOnce({ status: 'playing', baseWordRound: 1 })
+      .mockResolvedValueOnce({ status: 'finished', baseWordRound: 1 });
+    finishGameSessionIfExpired.mockResolvedValue(true);
+
+    await expect(
+      ensureSessionFinishedForResults('ABCDE', {
+        attempts: 1,
+        delayMs: 0,
+        expectedBaseWordRound: 1,
+        hintSession: hint,
+      }),
+    ).resolves.toBe('finished');
+    expect(finishGameSessionIfExpired).toHaveBeenCalledWith('ABCDE', { hintSession: hint });
+  });
+
   it('fail-fasts on waiting without spinning retries', async () => {
-    readGameSessionSnapshot.mockResolvedValue({ status: 'waiting', baseWordRound: 1 });
+    readGameSessionEnsureFields.mockResolvedValue({ status: 'waiting', baseWordRound: 1 });
 
     await expect(
       ensureSessionFinishedForResults('ABCDE', {
@@ -117,7 +146,7 @@ describe('ensureSessionFinishedForResults', () => {
   });
 
   it('fail-fasts when playing advanced past expected round', async () => {
-    readGameSessionSnapshot.mockResolvedValue({ status: 'playing', baseWordRound: 2 });
+    readGameSessionEnsureFields.mockResolvedValue({ status: 'playing', baseWordRound: 2 });
 
     await expect(
       ensureSessionFinishedForResults('ABCDE', {
@@ -130,7 +159,7 @@ describe('ensureSessionFinishedForResults', () => {
   });
 
   it('fail-fasts when finished advanced past expected round (no finish of N+1)', async () => {
-    readGameSessionSnapshot.mockResolvedValue({ status: 'finished', baseWordRound: 2 });
+    readGameSessionEnsureFields.mockResolvedValue({ status: 'finished', baseWordRound: 2 });
 
     await expect(
       ensureSessionFinishedForResults('ABCDE', {
@@ -143,7 +172,7 @@ describe('ensureSessionFinishedForResults', () => {
   });
 
   it('returns timeout after exhausting attempts while still playing', async () => {
-    readGameSessionSnapshot.mockResolvedValue({ status: 'playing', baseWordRound: 1 });
+    readGameSessionEnsureFields.mockResolvedValue({ status: 'playing', baseWordRound: 1 });
     finishGameSessionIfExpired.mockResolvedValue(false);
 
     await expect(

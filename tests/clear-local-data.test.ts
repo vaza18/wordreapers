@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { storage, signOutFirebaseAuth } = vi.hoisted(() => {
+const { storage, signOutFirebaseAuth, resetDiagnostics, resetTrafficProbe } = vi.hoisted(() => {
   const storage = new Map<string, string>();
   const signOutFirebaseAuth = vi.fn(async () => {
     for (const key of [...storage.keys()]) {
@@ -9,7 +9,9 @@ const { storage, signOutFirebaseAuth } = vi.hoisted(() => {
       }
     }
   });
-  return { storage, signOutFirebaseAuth };
+  const resetDiagnostics = vi.fn();
+  const resetTrafficProbe = vi.fn();
+  return { storage, signOutFirebaseAuth, resetDiagnostics, resetTrafficProbe };
 });
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
@@ -37,6 +39,24 @@ vi.mock('../lib/firebase/auth', () => ({
   signOutFirebaseAuth,
 }));
 
+vi.mock('@/store/rtdb-diagnostics-store', () => ({
+  useRtdbDiagnosticsStore: {
+    getState: () => ({
+      reset: resetDiagnostics,
+      setDeveloperModeEnabled: vi.fn(),
+      clearHistory: vi.fn(),
+    }),
+    subscribe: vi.fn(() => vi.fn()),
+  },
+}));
+
+vi.mock('@/lib/debug/rtdb-traffic-probe', () => ({
+  rtdbTrafficProbe: {
+    reset: resetTrafficProbe,
+    isCollecting: () => false,
+  },
+}));
+
 import { clearLocalDataStorage } from '../lib/settings/clear-local-data';
 import { PROFILE_STORAGE_KEY } from '../lib/profile/player-profile';
 
@@ -44,6 +64,8 @@ describe('clearLocalDataStorage', () => {
   beforeEach(() => {
     storage.clear();
     signOutFirebaseAuth.mockClear();
+    resetDiagnostics.mockClear();
+    resetTrafficProbe.mockClear();
   });
 
   it('removes all wordreapers.* keys and signs out Firebase Auth', async () => {
@@ -60,6 +82,8 @@ describe('clearLocalDataStorage', () => {
     await clearLocalDataStorage();
 
     expect(signOutFirebaseAuth).toHaveBeenCalledOnce();
+    expect(resetDiagnostics).toHaveBeenCalledOnce();
+    expect(resetTrafficProbe).toHaveBeenCalledOnce();
     expect([...storage.keys()]).toEqual([]);
   });
 
@@ -69,6 +93,7 @@ describe('clearLocalDataStorage', () => {
     await clearLocalDataStorage();
 
     expect(signOutFirebaseAuth).toHaveBeenCalledOnce();
+    expect(resetDiagnostics).toHaveBeenCalledOnce();
     expect([...storage.keys()]).toEqual([]);
   });
 

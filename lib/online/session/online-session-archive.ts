@@ -9,7 +9,10 @@ import type { AllPlayerWords } from './clone-player-words.js';
 import { playableLexiconSnapshotForSession } from '../playable-lexicon-archive.js';
 import type { PlayableLexiconSnapshot } from '../../dictionary/round-playable-lexicon.js';
 import { wordPlayersFromWordsByPlayer } from '../word-players-invert.js';
-import { archiveHasPlayerWords } from './archive-words-gate.js';
+import {
+  archiveHasPlayerWords,
+  sessionWordPlayersRicherThanArchive,
+} from './archive-words-gate.js';
 
 const FINISHED_ARCHIVES_KEY = 'wordreapers.finishedOnlineRounds';
 const MAX_FINISHED_ARCHIVES = 1000;
@@ -149,6 +152,10 @@ export function isFinishedArchiveStale(
   const archiveEmpty = !archiveHasPlayerWords(archive.playerWords);
   const mapsClaimWords = Object.keys(session.wordPlayers ?? {}).length > 0;
   if (archiveEmpty && mapsClaimWords) {
+    return true;
+  }
+  // Late append after an early finished archive: memory grew past disk.
+  if (sessionWordPlayersRicherThanArchive(session.wordPlayers, archive.playerWords)) {
     return true;
   }
   return archivePlayerWordsDisagreeWithCounts(archive);

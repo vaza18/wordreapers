@@ -6,6 +6,8 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { VictoryConfettiHost } from '@/components/VictoryConfetti';
+import { GlobalToastHost } from '@/components/GlobalToastHost';
+import { RtdbTrafficBanner } from '@/components/debug/RtdbTrafficBanner';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { stackScreenOptions } from '@/constants/stack-screen-options';
 import {
@@ -35,6 +37,7 @@ import { useOnlineSyncCoordinator } from '@/hooks/useOnlineSyncCoordinator';
 import { purgeStaleActiveRoundCaches } from '@/lib/online/session/cache-active-round';
 import { usePlayerStatsStore } from '@/store/player-stats-store';
 import { useProfileStore } from '@/store/profile-store';
+import { useRtdbDiagnosticsStore } from '@/store/rtdb-diagnostics-store';
 import { useSettingsStore } from '@/store/settings-store';
 
 function BootstrapLoading() {
@@ -96,6 +99,15 @@ function RootStack({ resumeTarget }: { resumeTarget: InterruptedRoundResumeTarge
             }),
           }}
         />
+        <Stack.Screen
+          name="settings/rtdb-diagnostics"
+          options={{
+            title: i18n.t('rtdbDiagnostics.title'),
+            ...stackHeaderBack(() => {
+              router.back();
+            }),
+          }}
+        />
         <Stack.Screen name="online" options={{ headerShown: false }} />
         <Stack.Screen name="history" options={{ headerShown: false }} />
         <Stack.Screen
@@ -136,6 +148,8 @@ function RootStack({ resumeTarget }: { resumeTarget: InterruptedRoundResumeTarge
         />
       </Stack>
       <VictoryConfettiHost />
+      <RtdbTrafficBanner />
+      <GlobalToastHost />
     </I18nextProvider>
   );
 }
@@ -161,6 +175,7 @@ export default function RootLayout() {
   );
   const hydrateProfile = useProfileStore((state) => state.hydrateProfile);
   const hydratePlayerStats = usePlayerStatsStore((state) => state.hydratePlayerStats);
+  const hydrateRtdbDiagnostics = useRtdbDiagnosticsStore((state) => state.hydrate);
 
   useEffect(() => {
     void (async () => {
@@ -199,6 +214,12 @@ export default function RootLayout() {
           withBootstrapTimeout(hydratePlayerStats(), LOCAL_BOOTSTRAP_TIMEOUT_MS, 'playerStats'),
         ]);
 
+        void withBootstrapTimeout(
+          hydrateRtdbDiagnostics(),
+          LOCAL_BOOTSTRAP_TIMEOUT_MS,
+          'rtdbDiagnostics',
+        );
+
         const target = await withBootstrapTimeout(
           resolveInterruptedRoundResumeDefault(),
           FIREBASE_BOOTSTRAP_TIMEOUT_MS,
@@ -229,6 +250,7 @@ export default function RootLayout() {
     hydrateGameSetupPreferences,
     hydrateProfile,
     hydratePlayerStats,
+    hydrateRtdbDiagnostics,
     setLocale,
   ]);
 
@@ -240,7 +262,10 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        {ready ? <RootStack resumeTarget={resumeTarget} /> : <BootstrapLoading />}
+        {/* flex:1 wrapper ensures the diagnostic banner and global toast host are correctly positioned at the bottom of the screen */}
+        <View style={{ flex: 1 }}>
+          {ready ? <RootStack resumeTarget={resumeTarget} /> : <BootstrapLoading />}
+        </View>
       </ThemeProvider>
     </SafeAreaProvider>
   );

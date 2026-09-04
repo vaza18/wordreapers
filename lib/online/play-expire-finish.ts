@@ -49,6 +49,13 @@ export function beginExpireFinishAttempt(options: {
   clearElapsedDraft: () => void;
   onLocalRoundOver: () => void;
   finishIfExpired: () => Promise<boolean>;
+  /**
+   * Earliest wall-clock for RTDB finish (defaults to `endsAt`).
+   * During `[endsAt, commitReadyAt)` only local time-up runs — no full-session get.
+   */
+  commitReadyAt?: number;
+  /** Called when clock elapsed but RTDB finish is still inside submit grace. */
+  onBeforeCommitReady?: () => void;
   /** Fresh clock after the async finish attempt (defaults to `now`). */
   getNow?: () => number;
   /** Re-read defer at settle time (add-time vote may appear while finish is in flight). */
@@ -64,6 +71,7 @@ export function beginExpireFinishAttempt(options: {
   const { endsAt, now, deferFinish, refs } = options;
   const getNow = options.getNow ?? (() => now);
   const resolveDefer = () => options.getDeferFinish?.() ?? deferFinish;
+  const commitReadyAt = options.commitReadyAt ?? endsAt;
   if (now < endsAt) {
     refs.expiredFailCount.current = 0;
     return;
@@ -78,6 +86,17 @@ export function beginExpireFinishAttempt(options: {
   if (deferFinish || refs.finishAttempted.current || refs.finishInFlight.current) {
     return;
   }
+
+  // FIX: 2026-09 — grace-window finish get spam → local time-up only until commitReadyAt
+  if (now < commitReadyAt) {
+    if (!refs.localRoundOverForced.current) {
+      refs.localRoundOverForced.current = true;
+      options.onLocalRoundOver();
+    }
+    options.onBeforeCommitReady?.();
+    return;
+  }
+
   refs.finishInFlight.current = true;
   void options
     .finishIfExpired()

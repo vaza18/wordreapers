@@ -1,0 +1,24 @@
+---
+description: Standards for documenting bug fixes in code vs docs/known-issues.md
+alwaysApply: false
+---
+# Bug Fix Documentation Standards
+
+To keep documentation clean and context local, follow these rules for documenting fixes.
+
+## Where to Document
+
+### 1. In-Code Comments (Default)
+Use for local logic, UI jank, platform-specific hacks, simple edge cases, or any fix that doesn't change global architectural rules.
+- **Format:** `// FIX: YYYY-MM — <Symptom> → <Cause> [→ <Reference if any>]`
+- **Example:** `// FIX: 2026-08 — iOS suggest overlap → keyboard blur race → deferred hide`
+
+### 2. docs/known-issues.md (Architectural Only)
+Use ONLY for major architectural "lessons" or invariant breaks that future agents MUST know before touching the module.
+- **Criteria:** Cross-module race conditions, RTDB/Firestore rule family fixes, core game loop invariants (ADR-022, etc.).
+
+## Guidelines for In-Code Comments
+- Place the comment **directly above** the affected block of code.
+- Keep it concise. Focus on the "Why" (Cause) and "What" (Symptom).
+- Use the standard `// FIX: YYYY-MM` prefix to make them searchable.
+- If a fix spans multiple files, place the comment in the primary logic file.

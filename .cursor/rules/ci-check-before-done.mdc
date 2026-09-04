@@ -1,8 +1,7 @@
 ---
-description: Run npm run ci:check before finishing work or committing
-alwaysApply: true
+description: Run npm run ci:check before finishing work (when there are changes in files or new files are added) or committing
+alwaysApply: false
 ---
-
 # CI quality gate (pre-commit hook)
 
 The Husky pre-commit hook runs `npm run ci:check` (`scripts/ci-check.sh`). Before claiming work is complete, creating a commit, or opening a PR, run the same checks locally and fix failures.

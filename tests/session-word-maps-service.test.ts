@@ -24,12 +24,19 @@ vi.mock('../lib/firebase/init.js', () => ({
 
 vi.mock('../lib/firebase/auth.js', () => ({
   ensureAnonymousAuth: () => ensureAnonymousAuth(),
+  getFirebaseUid: () => 'u1',
+}));
+
+const devLogAction = vi.fn();
+vi.mock('../lib/debug/dev-log.js', () => ({
+  devLogAction: (...args: unknown[]) => devLogAction(...args),
 }));
 
 import {
   clearSessionWordMaps,
   coalesceWordPlayersChildBuffer,
   ensureSessionWordMapsEmptyForRoundStart,
+  newlyClaimedWordPlayerUids,
   requireSessionWordMaps,
   subscribeSessionWordMaps,
   tryFetchSessionWordMaps,
@@ -62,6 +69,12 @@ describe('session-word-maps-service', () => {
     onChildAddedMock.mockReturnValue(vi.fn());
     onChildChangedMock.mockReturnValue(vi.fn());
     onChildRemovedMock.mockReturnValue(vi.fn());
+  });
+
+  it('newlyClaimedWordPlayerUids returns only newly true uids', () => {
+    expect(newlyClaimedWordPlayerUids({ a: true }, { a: true, b: true })).toEqual(['b']);
+    expect(newlyClaimedWordPlayerUids(undefined, { a: true })).toEqual(['a']);
+    expect(newlyClaimedWordPlayerUids({ a: true }, { a: true })).toEqual([]);
   });
 
   it('returns empty maps when the shard root is missing', async () => {
@@ -111,6 +124,15 @@ describe('session-word-maps-service', () => {
         'wordPlayers/порт/org-1': true,
       },
     );
+    expect(devLogAction).toHaveBeenCalledWith('restored session word maps', {
+      room: 'ABCDE',
+      details: 'shards=1',
+    });
+  });
+
+  it('logs cleared session word maps after successful remove', async () => {
+    await clearSessionWordMaps('ABCDE');
+    expect(devLogAction).toHaveBeenCalledWith('cleared session word maps', { room: 'ABCDE' });
   });
 
   it('ignores permission denied when clearing word maps', async () => {
@@ -119,6 +141,7 @@ describe('session-word-maps-service', () => {
     removeMock.mockRejectedValueOnce(denied);
 
     await expect(clearSessionWordMaps('ABCDE')).resolves.toBeUndefined();
+    expect(devLogAction).not.toHaveBeenCalledWith('cleared session word maps', expect.anything());
   });
 
   it('ensureSessionWordMapsEmptyForRoundStart verifies empty after clear', async () => {
@@ -275,7 +298,7 @@ describe('session-word-maps-service', () => {
       });
 
       const listener = vi.fn();
-      const unsub = subscribeSessionWordMaps('ABCDE', listener);
+      const unsub = subscribeSessionWordMaps('ABCDE', listener, { localUid: 'org' });
 
       await vi.waitFor(() => {
         expect(listener).toHaveBeenCalledWith({
@@ -290,6 +313,11 @@ describe('session-word-maps-service', () => {
           path: expect.stringContaining('session_word_maps/ABCDE/wordPlayers'),
         }),
       );
+      // Seed dump must not spam submitted-word actions.
+      expect(devLogAction).not.toHaveBeenCalledWith(
+        expect.stringMatching(/^submitted word/),
+        expect.anything(),
+      );
 
       const { added, changed, removed } = getHandlers();
       added?.({ key: 'ретро', val: () => ({ guest: true }) });
@@ -297,6 +325,12 @@ describe('session-word-maps-service', () => {
         type: 'snapshot',
         seed: 'authoritative',
         maps: { wordPlayers: { порт: { org: true }, ретро: { guest: true } } },
+      });
+      expect(devLogAction).toHaveBeenCalledWith('submitted word "ретро"', {
+        observed: true,
+        actor: 'guest',
+        room: 'ABCDE',
+        details: 'players=1',
       });
 
       changed?.({ key: 'порт', val: () => ({ org: true, guest: true }) });
@@ -307,12 +341,27 @@ describe('session-word-maps-service', () => {
           wordPlayers: { порт: { org: true, guest: true }, ретро: { guest: true } },
         },
       });
+      expect(devLogAction).toHaveBeenCalledWith('submitted word "порт"', {
+        observed: true,
+        actor: 'guest',
+        room: 'ABCDE',
+        details: 'players=2',
+      });
 
-      removed?.({ key: 'ретро', val: () => null });
+      // Local uid claim after seed is skipped (submitOnlineWord already logged).
+      changed?.({ key: 'ретро', val: () => ({ guest: true, org: true }) });
+      expect(devLogAction).not.toHaveBeenCalledWith('submitted word "ретро"', {
+        observed: true,
+        actor: 'org',
+        room: 'ABCDE',
+        details: 'players=2',
+      });
+
+      removed?.({ key: 'порт', val: () => null });
       expect(listener).toHaveBeenLastCalledWith({
         type: 'snapshot',
         seed: 'authoritative',
-        maps: { wordPlayers: { порт: { org: true, guest: true } } },
+        maps: { wordPlayers: { ретро: { guest: true, org: true } } },
       });
 
       unsub();

@@ -7,6 +7,8 @@ import { shouldReplaceLiveWordMaps, wordPlayersLeafCount } from './live-words-sn
  * after round reset until wipe empty. Force-sync exhaustion empties UI but still
  * waits for authoritative empty before accepting any non-empty (avoids prior-round
  * rich after delayed clearSessionWordMaps).
+ *
+ * FIX: 2026-08 — awaitingEmptySync (ADR-022) → blocks prior-round re-import until authoritative empty.
  */
 export type PlayMapsListenerGate = {
   epoch: number;
@@ -162,6 +164,9 @@ export const PLAY_MAPS_EXHAUSTION_WIPE_RETRY_MS = 2_000;
  * After wipe-before-play + exhaustion, still-awaiting under `playing` with rich
  * maps: adopt as new-round baseline (empty wipe will not arrive once peers submit).
  * Never use while status is still waiting/finished (prefer wipe retry).
+ *
+ * FIX: 2026-08 — Play stuck empty (exhaustion under playing) → recovery allows
+ * adopting rich maps if wipe never lands after start.
  */
 export const PLAY_MAPS_PLAYING_RICH_RECOVERY_MS = 8_000;
 

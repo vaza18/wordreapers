@@ -307,6 +307,7 @@ export function useLiveRosterPlayerWords({
         }
         applyMaps(event.maps, { fromAuthoritativeSource: true });
         heardAuthoritative = true;
+        // FIX: 2026-08 — bootstrap-complete authoritative snapshots only (ADR-022) → avoids empty results freeze.
         if (wordPlayersLeafCount(event.maps.wordPlayers) > 0) {
           markBootstrapComplete();
           return;
@@ -379,6 +380,7 @@ export function useLiveRosterPlayerWords({
           }
           return;
         }
+        // FIX: 2026-08 — rich fetch SoT (ADR-022) → rich fetch overrides empty authoritative listen.
         const fetchLeaves = wordPlayersLeafCount(result.maps.wordPlayers);
         if (fetchLeaves > 0) {
           // Late rich fetch over empty authoritative listen (C1 wipe race). Skip if listen

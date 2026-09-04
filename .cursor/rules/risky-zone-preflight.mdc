@@ -14,4 +14,4 @@ When the task changes **behavior** in `lib/online/**`, `firebase/**`, or `functi
 
 Skip the block only for trivial edits with no behavior change (comments, formatting, renames).
 
-After the change: update tests (`tests/online-invariants.test.ts` when invariants shift), run `npm run ci:check`, and record non-trivial fixes in `docs/known-issues.md`.
+After the change: update tests (`tests/online-invariants.test.ts` when invariants shift), run `npm run ci:check`, and document the fix (in `docs/known-issues.md` for architectural items, or via in-code `// FIX:` comments for local logic).

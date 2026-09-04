@@ -50,8 +50,9 @@ dist/
 *.log
 .DS_Store
 .expo/
-ios/
-android/
+# Expo prebuild app projects only (not modules/*/ios|android local Expo modules).
+/ios/
+/android/
 # Local EAS build outputs (`eas build --local` / `npm run build:android`)
 build-*.aab
 build-*.apk

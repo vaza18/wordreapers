@@ -294,6 +294,30 @@ describe('resolveResultsFreezeSource rematch-before-freeze', () => {
     ).toBe(false);
   });
 
+  it('upgrades incomplete non-empty freeze when live words grow (offline resume)', () => {
+    const partial = new Map([['org', ['порт']]]);
+    const richer = new Map([
+      ['org', ['порт', 'кіт']],
+      ['p2', ['ліс']],
+    ]);
+    expect(
+      shouldUpgradeEmptyResultsFreeze({
+        frozenWords: partial,
+        nextWords: richer,
+        frozenBaseWordRound: 0,
+        liveBaseWordRound: 0,
+      }),
+    ).toBe(true);
+    expect(
+      shouldUpgradeEmptyResultsFreeze({
+        frozenWords: richer,
+        nextWords: partial,
+        frozenBaseWordRound: 0,
+        liveBaseWordRound: 0,
+      }),
+    ).toBe(false);
+  });
+
   it('does not upgrade empty freeze with a later finished round words', () => {
     expect(
       shouldUpgradeEmptyResultsFreeze({
@@ -346,6 +370,25 @@ describe('shouldEnableResultsMapsRosterListen', () => {
     ).toBe(false);
   });
 
+  it('keeps listening for rich freeze while live finished same round (offline sync)', () => {
+    expect(
+      shouldEnableResultsMapsRosterListen({
+        hasGameId: true,
+        rosterPlayerIdsLength: 2,
+        frozenWords: new Map([['org', ['порт']]]),
+        liveFinishedSameRound: true,
+      }),
+    ).toBe(true);
+    expect(
+      shouldEnableResultsMapsRosterListen({
+        hasGameId: true,
+        rosterPlayerIdsLength: 2,
+        frozenWords: new Map([['org', ['порт']]]),
+        liveFinishedSameRound: false,
+      }),
+    ).toBe(false);
+  });
+
   it('disables without gameId or empty roster', () => {
     expect(
       shouldEnableResultsMapsRosterListen({
@@ -361,6 +404,28 @@ describe('shouldEnableResultsMapsRosterListen', () => {
         frozenWords: null,
       }),
     ).toBe(false);
+  });
+
+  it('disables while viewing-pin archive recovery is pending', () => {
+    expect(
+      shouldEnableResultsMapsRosterListen({
+        hasGameId: true,
+        rosterPlayerIdsLength: 2,
+        frozenWords: null,
+        archiveRecoveryPending: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('enables empty freeze after archive recovery completes', () => {
+    expect(
+      shouldEnableResultsMapsRosterListen({
+        hasGameId: true,
+        rosterPlayerIdsLength: 2,
+        frozenWords: new Map(),
+        archiveRecoveryPending: false,
+      }),
+    ).toBe(true);
   });
 });
 

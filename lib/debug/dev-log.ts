@@ -1,5 +1,8 @@
 import { useProfileStore } from '@/store/profile-store';
 
+import { useRtdbDiagnosticsStore } from '@/store/rtdb-diagnostics-store';
+import { rtdbTrafficProbe } from './rtdb-traffic-probe';
+
 /** Verbosity for client Metro logs. Production builds always resolve to `none`. */
 export type DevLogLevel = 'none' | 'error' | 'event' | 'detail' | 'all';
 
@@ -37,19 +40,37 @@ function isDevBuild(): boolean {
 }
 
 /**
- * Effective log level. Outside `__DEV__` always `none`.
+ * Effective log level. Outside `__DEV__` always `none` UNLESS RTDB diagnostics is collecting.
  * In dev: env value when valid; empty/invalid → `event`.
  */
 export function getDevLogLevel(): DevLogLevel {
-  if (!isDevBuild()) {
-    return 'none';
+  const isDev = isDevBuild();
+  const state = useRtdbDiagnosticsStore.getState();
+  const isCollecting = state.developerModeEnabled && state.rtdbDiagnosticsEnabled;
+
+  if (!isDev) {
+    return isCollecting ? 'event' : 'none';
   }
+
   const parsed = parseDevLogLevel(readEnvLogLevel());
   return parsed ?? 'event';
 }
 
-/** Whether the current effective level is at least `minLevel`. */
+/**
+ * Whether the current effective level is at least `minLevel`.
+ *
+ * Note: Returns true in production if diagnostics are collecting (prod+collecting
+ * level is 'event'), but console output is still gated by `!isDevBuild()` in
+ * `devLog` and `devLogAction`. This 'true' return in production is exclusively
+ * to allow `devLogAction` to mirror entries to the local probe ring.
+ */
 export function isDevLogEnabled(minLevel: DevLogLevel): boolean {
+  const isDev = isDevBuild();
+  const isCollecting = rtdbTrafficProbe.isCollecting();
+
+  if (!isDev && !isCollecting) {
+    return false;
+  }
   const current = getDevLogLevel();
   return LEVEL_RANK[current] >= LEVEL_RANK[minLevel];
 }
@@ -120,13 +141,19 @@ export interface DevLogActionOptions {
 
 /**
  * Unified Metro log line. No-op when level is below the current threshold
- * (and always no-op outside `__DEV__`).
+ * (and always no-op outside `__DEV__` unless diagnostics are collecting).
+ *
+ * Design choice: local logs (devLog) are excluded from the probe; only
+ * action-oriented devLogAction is mirrored.
  */
 export function devLog(minLevel: DevLogLevel, message: string, actor?: string | null): void {
-  if (!isDevLogEnabled(minLevel)) {
+  if (!isDevBuild() || !isDevLogEnabled(minLevel)) {
     return;
   }
-  const line = formatDevLogLine(resolveLocalActorLabel(actor), message);
+
+  const resolvedActor = resolveLocalActorLabel(actor);
+  const line = formatDevLogLine(resolvedActor, message);
+
   if (minLevel === 'error') {
     console.warn(line);
   } else {
@@ -141,6 +168,17 @@ export function devLog(minLevel: DevLogLevel, message: string, actor?: string | 
 export function devLogAction(action: string, options: DevLogActionOptions = {}): void {
   const observed = options.observed === true;
   const minLevel: DevLogLevel = observed ? 'detail' : (options.level ?? 'event');
+
+  // Record to diagnostic probe regardless of console level, as long as collecting is active.
+  if (rtdbTrafficProbe.isCollecting()) {
+    rtdbTrafficProbe.recordAction({
+      timestamp: options.date?.getTime() ?? Date.now(),
+      action: action.trim(),
+      details: options.details,
+      observed,
+    });
+  }
+
   if (!isDevLogEnabled(minLevel)) {
     return;
   }
@@ -155,7 +193,14 @@ export function devLogAction(action: string, options: DevLogActionOptions = {}):
   }
   const suffix = formatRoomRoundSuffix(options.room, options.round);
   const message = `${parts.join(' ')}${suffix}`;
+
   const line = formatDevLogLine(resolveLocalActorLabel(options.actor), message, options.date);
+
+  // Production exception: ADR-025 requires no console output in production builds.
+  if (!isDevBuild()) {
+    return;
+  }
+
   if (minLevel === 'error') {
     console.warn(line);
   } else {

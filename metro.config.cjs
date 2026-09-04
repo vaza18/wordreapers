@@ -39,7 +39,10 @@ config.resolver.resolveRequest = (context, moduleImport, platform) => {
       filePath: path.join(firebaseAuthRoot, 'dist/rn/index.js'),
     };
   }
-  if (moduleImport.startsWith('.') && moduleImport.endsWith('.js')) {
+  // FIX: 2026-09 — `@/….js` failed to resolve after alias rewrite → Metro only
+  // stripped `.js` on relative imports; extend to tsconfig `@/*` paths too.
+  const isTsPathAliasOrRelative = moduleImport.startsWith('.') || moduleImport.startsWith('@/');
+  if (isTsPathAliasOrRelative && moduleImport.endsWith('.js')) {
     const redirected = moduleImport.replace(/\.js$/, '');
     if (defaultResolveRequest) {
       return defaultResolveRequest(context, redirected, platform);

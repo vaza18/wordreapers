@@ -50,6 +50,7 @@ export function nextResultsFreezePending(
   finishedSessionForRematch?: GameSession | null,
 ): ResultsFreezePending | null {
   if (liveSession?.status === 'finished') {
+    // FIX: 2026-08 — results bootstrap-complete (ADR-022) → avoid pinning provisional incomplete candidate.
     // Provisional / incomplete maps must not pin a freeze candidate.
     if (!wordsBootstrapComplete) {
       return previous;
@@ -142,6 +143,7 @@ export function resolveResultsFreezeSource(options: {
     wordsBootstrapComplete;
 
   if (canFreezeLiveFinished && liveSession) {
+    // FIX: 2026-08 — bootstrap-complete freeze gate (ADR-022) → avoid authoritative empty freeze while maps claim.
     const words = resolveFinishedFreezeWords({ liveSession, liveWords, pending });
     // Do not lock an empty freeze when live maps still claim words.
     if (shouldSkipEmptyArchiveWords(liveSession, words)) {
@@ -218,6 +220,8 @@ export function shouldCloseResultsRematchSurvival(options: {
   /** When true, keep survival open (maps fail-loud / Retry path). */
   mapsUnavailable?: boolean;
 }): boolean {
+  // FIX: 2026-08 — rematch-survival close ignoring mapsUnavailable (C2) → keep survival open
+  // while maps are unavailable so Retry can still latch rich pending.
   if (
     options.freezeAttempted ||
     options.hasFrozenRound ||
@@ -325,9 +329,10 @@ export function resolveResultsErrorCta(options: {
 }
 
 /**
- * Empty freeze from a non-authoritative path must yield to a later rich snapshot
- * (permission_denied → late maps) **for the same round only**.
- * Never upgrade an empty freeze for round N with live finished N+1 words.
+ * Empty or incomplete freeze must yield to a later richer snapshot
+ * (permission_denied → late maps; offline resume → stale local archive)
+ * **for the same round only**. Grow-only: never shrink or swap membership.
+ * Never upgrade a freeze for round N with live finished N+1 words.
  */
 export function shouldUpgradeEmptyResultsFreeze(options: {
   frozenWords: AllPlayerWords | null | undefined;
@@ -337,9 +342,6 @@ export function shouldUpgradeEmptyResultsFreeze(options: {
   viewingBaseWordRound?: number | null;
 }): boolean {
   if (options.frozenWords == null) {
-    return false;
-  }
-  if (totalPlayerWordCount(options.frozenWords) > 0) {
     return false;
   }
   if (totalPlayerWordCount(options.nextWords) === 0) {
@@ -354,28 +356,58 @@ export function shouldUpgradeEmptyResultsFreeze(options: {
   ) {
     return false;
   }
-  return true;
+  // FIX: 2026-09 — incomplete non-empty freeze (offline) stuck → grow-only upgrade
+  if (totalPlayerWordCount(options.frozenWords) === 0) {
+    return true;
+  }
+  return (
+    totalPlayerWordCount(options.nextWords) > totalPlayerWordCount(options.frozenWords) &&
+    shouldReplaceLiveWordsSnapshot(options.frozenWords, options.nextWords, { mode: 'grow-only' })
+  );
 }
 
 /**
  * Whether results should keep `useLiveRosterPlayerWords` enabled.
- * After a **rich** freeze, disable (SoT pinned). After an **empty** freeze, keep
- * listening so late `onChildAdded` (empty get∪fetch raced ahead of child wave)
- * can still upgrade via {@link shouldUpgradeEmptyResultsFreeze} — otherwise
- * `enabled: !frozenRound` tears down the sub and «0 слів» sticks forever.
+ * After a **rich** freeze, disable (SoT pinned) **unless** live RTDB is still
+ * `finished` for this round — then keep listening so offline/stale local freezes
+ * grow to the server tree (Firebase disk cache may seed incomplete first).
+ * After an **empty** freeze, keep listening for late `onChildAdded`.
+ *
+ * While viewing-pin archive recovery is in flight, stay off so play→results does
+ * not pay a second full `wordPlayers` seed before a rich local freeze lands.
+ * Callers must initialize `archiveRecoveryPending` to true when a viewing pin is
+ * present (not only after useEffect) to avoid a first-paint seed race.
  */
 export function shouldEnableResultsMapsRosterListen(options: {
   hasGameId: boolean;
   rosterPlayerIdsLength: number;
   frozenWords: AllPlayerWords | null | undefined;
+  /** Viewing-round archive hydrate in flight — defer maps listen/seed. */
+  archiveRecoveryPending?: boolean;
+  /**
+   * Live session is still `finished` for the viewing round — maps remain on RTDB.
+   * Keep sub so offline clients catch up (do not pin incomplete local freeze).
+   */
+  liveFinishedSameRound?: boolean;
 }): boolean {
   if (!options.hasGameId || options.rosterPlayerIdsLength <= 0) {
+    return false;
+  }
+  // FIX: 2026-09 — play→results double maps seed → wait for archive freeze first
+  if (options.archiveRecoveryPending === true) {
     return false;
   }
   if (options.frozenWords == null) {
     return true;
   }
-  return totalPlayerWordCount(options.frozenWords) === 0;
+  if (totalPlayerWordCount(options.frozenWords) === 0) {
+    return true;
+  }
+  // FIX: 2026-09 — offline incomplete rich freeze stuck → listen while RTDB finished
+  if (options.liveFinishedSameRound === true) {
+    return true;
+  }
+  return false;
 }
 
 export type RecoverFinishedRoundFromArchiveOptions = {

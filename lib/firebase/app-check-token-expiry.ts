@@ -5,7 +5,14 @@ export function expireTimeMillisFromAppCheckJwt(token: string, nowMs = Date.now(
     if (!segment) {
       return nowMs + 55 * 60 * 1000;
     }
-    const payload = JSON.parse(globalThis.atob(segment)) as { exp?: unknown };
+
+    // React Native: globalThis.atob might be missing or limited (padding issues).
+    // Use a robust base64-url decoder.
+    const base64 = segment.replace(/-/g, '+').replace(/_/g, '/');
+    const padding = '='.repeat((4 - (base64.length % 4)) % 4);
+    const decoded = globalThis.atob(base64 + padding);
+
+    const payload = JSON.parse(decoded) as { exp?: unknown };
     if (typeof payload.exp === 'number' && Number.isFinite(payload.exp)) {
       return payload.exp * 1000;
     }

@@ -58,6 +58,23 @@ describe('results rematch archive staleness', () => {
     expect(isFinishedArchiveStale(round1Archive, finishedSession(1))).toBe(false);
   });
 
+  it('treats archive as stale when merged wordPlayers grew past archived words', () => {
+    const round1Archive = {
+      gameId: 'ABCDE',
+      baseWordRound: 1,
+      savedAt: 2,
+      session: finishedSession(1),
+      playerWords: { a: ['а'] },
+      ackSent: true as const,
+      playerWordCounts: { a: 1 },
+      archiveVersion: 4 as const,
+    };
+    const live = finishedSession(1);
+    live.wordPlayers = { а: { a: true }, б: { b: true } };
+
+    expect(isFinishedArchiveStale(round1Archive, live)).toBe(true);
+  });
+
   it('treats empty words with non-zero counts as stale', () => {
     const emptyWordsArchive = {
       gameId: 'ABCDE',

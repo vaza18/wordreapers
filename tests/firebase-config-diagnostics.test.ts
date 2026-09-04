@@ -19,7 +19,16 @@ describe('describeFirebaseConfigGap', () => {
   beforeEach(() => {
     mockExtra.current = {};
     mockPlatform.OS = 'android';
-    vi.unstubAllEnvs();
+    // Vitest loads .env automatically; stub all Firebase env vars to empty so
+    // tests that expect a missing-config state are not polluted by real .env values.
+    vi.stubEnv('EXPO_PUBLIC_FIREBASE_API_KEY', '');
+    vi.stubEnv('EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN', '');
+    vi.stubEnv('EXPO_PUBLIC_FIREBASE_DATABASE_URL', '');
+    vi.stubEnv('EXPO_PUBLIC_FIREBASE_PROJECT_ID', '');
+    vi.stubEnv('EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET', '');
+    vi.stubEnv('EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID', '');
+    vi.stubEnv('EXPO_PUBLIC_FIREBASE_APP_ID_ANDROID', '');
+    vi.stubEnv('EXPO_PUBLIC_FIREBASE_APP_ID_IOS', '');
   });
 
   afterEach(() => {
@@ -89,7 +98,15 @@ describe('loadFirebaseConfig', () => {
   beforeEach(() => {
     mockExtra.current = {};
     mockPlatform.OS = 'android';
-    vi.unstubAllEnvs();
+    // Same isolation as above: prevent real .env from leaking into these tests.
+    vi.stubEnv('EXPO_PUBLIC_FIREBASE_API_KEY', '');
+    vi.stubEnv('EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN', '');
+    vi.stubEnv('EXPO_PUBLIC_FIREBASE_DATABASE_URL', '');
+    vi.stubEnv('EXPO_PUBLIC_FIREBASE_PROJECT_ID', '');
+    vi.stubEnv('EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET', '');
+    vi.stubEnv('EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID', '');
+    vi.stubEnv('EXPO_PUBLIC_FIREBASE_APP_ID_ANDROID', '');
+    vi.stubEnv('EXPO_PUBLIC_FIREBASE_APP_ID_IOS', '');
   });
 
   afterEach(() => {

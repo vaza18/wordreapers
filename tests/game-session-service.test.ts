@@ -51,8 +51,6 @@ vi.mock('../lib/online/organizer-waiting-room.js', () => ({
 
 vi.mock('../lib/firebase/session-votes-service.js', () => ({
   reconcileOpenSessionVotes: vi.fn().mockResolvedValue(undefined),
-  resolveEarlyFinishVoteIfExpired: vi.fn().mockResolvedValue(undefined),
-  resolveResumeVoteIfExpired: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../services/dictionary-service.js', () => ({
@@ -62,6 +60,11 @@ vi.mock('../services/dictionary-service.js', () => ({
 vi.mock('../lib/firebase/auth.js', () => ({
   ensureAnonymousAuth: vi.fn().mockResolvedValue({ uid: 'org-1' }),
   getFirebaseUid: vi.fn().mockReturnValue('org-1'),
+}));
+
+const devLogAction = vi.fn();
+vi.mock('../lib/debug/dev-log.js', () => ({
+  devLogAction: (...args: unknown[]) => devLogAction(...args),
 }));
 
 vi.mock('../lib/firebase/results-coordination-service.js', () => ({
@@ -83,6 +86,7 @@ import {
   beginVoluntaryLeave,
   endVoluntaryLeave,
   finishGameSessionIfExpired,
+  finishGameSession,
   gameSessionExists,
   leaveGameSession,
   markPlayerOffline,
@@ -277,6 +281,118 @@ describe('game-session-service', () => {
       expect.objectContaining({ status: 'finished', timerEndsAt: null }),
     );
     expect(runTransactionMock).not.toHaveBeenCalled();
+    expect(devLogAction).toHaveBeenCalledWith('finished round (timer expired)', {
+      room: 'ABCDE',
+    });
+  });
+
+  it('finishes from hintSession without a full-session get', async () => {
+    const session = {
+      baseWord: 'тест',
+      status: 'playing' as const,
+      settings: DEFAULT_SESSION_SETTINGS,
+      timerEndsAt: 1_000_000,
+      organizerId: 'org-1',
+      players: {
+        'org-1': { name: 'Org', wordCount: 1, score: 1, online: true },
+      },
+    };
+    getMock.mockClear();
+    updateMock.mockResolvedValue(undefined);
+
+    await expect(finishGameSessionIfExpired('ABCDE', { hintSession: session })).resolves.toBe(true);
+    expect(getMock).not.toHaveBeenCalled();
+    expect(updateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'game_sessions/ABCDE' }),
+      expect.objectContaining({ status: 'finished', timerEndsAt: null }),
+    );
+  });
+
+  it('falls through to get when hintSession has an active addTimeVote', async () => {
+    const session = {
+      baseWord: 'тест',
+      status: 'playing' as const,
+      settings: DEFAULT_SESSION_SETTINGS,
+      timerEndsAt: 1_000_000,
+      organizerId: 'org-1',
+      addTimeVote: {
+        proposedBy: 'org-1',
+        addMinutes: 1,
+        votes: { 'org-1': 'yes' as const },
+      },
+      players: {
+        'org-1': { name: 'Org', wordCount: 1, score: 1, online: true },
+      },
+    };
+    getMock.mockResolvedValue({ exists: () => true, val: () => session });
+    updateMock.mockClear();
+
+    await expect(finishGameSessionIfExpired('ABCDE', { hintSession: session })).resolves.toBe(
+      false,
+    );
+    expect(getMock).toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it('returns true without get when hintSession is already finished', async () => {
+    getMock.mockClear();
+    await expect(
+      finishGameSessionIfExpired('ABCDE', {
+        hintSession: {
+          baseWord: 'тест',
+          status: 'finished',
+          settings: DEFAULT_SESSION_SETTINGS,
+          timerEndsAt: null,
+          organizerId: 'org-1',
+          players: {},
+        },
+      }),
+    ).resolves.toBe(true);
+    expect(getMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it('returns false without get while hintSession is still inside submit grace', async () => {
+    getMock.mockClear();
+    updateMock.mockClear();
+    await expect(
+      finishGameSessionIfExpired('ABCDE', {
+        hintSession: {
+          baseWord: 'тест',
+          status: 'playing',
+          settings: DEFAULT_SESSION_SETTINGS,
+          // getServerNow mock is 2_000_000; still inside 5s grace after 1_999_000.
+          timerEndsAt: 1_999_000,
+          organizerId: 'org-1',
+          players: {
+            'org-1': { name: 'Org', wordCount: 1, score: 1, online: true },
+          },
+        },
+      }),
+    ).resolves.toBe(false);
+    expect(getMock).not.toHaveBeenCalled();
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it('force-finishes a playing session and logs finished round', async () => {
+    const session = {
+      baseWord: 'тест',
+      status: 'playing' as const,
+      settings: DEFAULT_SESSION_SETTINGS,
+      timerEndsAt: 1_000_000,
+      organizerId: 'org-1',
+      players: {
+        'org-1': { name: 'Org', wordCount: 1, score: 1, online: true },
+      },
+    };
+    getMock.mockResolvedValue({ exists: () => true, val: () => session });
+
+    await finishGameSession('ABCDE');
+    expect(updateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'game_sessions/ABCDE' }),
+      expect.objectContaining({ status: 'finished', timerEndsAt: null }),
+    );
+    expect(devLogAction).toHaveBeenCalledWith('finished round', { room: 'ABCDE' });
   });
 
   it('transitions a finished session back to waiting for rematch', async () => {

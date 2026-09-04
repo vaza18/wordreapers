@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
+import { FINISH_WORD_SUBMIT_GRACE_MS } from '@/constants/finish-word-submit-grace';
+
 import {
   FINISH_RETRY_BACKOFF_CAP_MS,
   finishRetryBackoffMs,
+  timerFinishNetworkExpiresAt,
 } from '../lib/online/play-expire-finish-schedule.js';
 
 describe('finishRetryBackoffMs', () => {
@@ -16,5 +19,11 @@ describe('finishRetryBackoffMs', () => {
 
   it('treats zero/negative fails as first retry delay', () => {
     expect(finishRetryBackoffMs(0)).toBe(1000);
+  });
+});
+
+describe('timerFinishNetworkExpiresAt', () => {
+  it('defers RTDB finish wake until after word-submit grace', () => {
+    expect(timerFinishNetworkExpiresAt(10_000)).toBe(10_000 + FINISH_WORD_SUBMIT_GRACE_MS);
   });
 });

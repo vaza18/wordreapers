@@ -1,5 +1,6 @@
 import { get, ref } from 'firebase/database';
 
+import { rtdbTrafficProbe } from '@/lib/debug/rtdb-traffic-probe';
 import { navigateHomeClearingStack } from '@/lib/navigation/navigate-home';
 
 import {
@@ -22,6 +23,7 @@ import { cacheActiveRoundProgress } from './session/cache-active-round.js';
 import { clearLeftOnlineResume } from './session/left-online-resume.js';
 import { clearPausedOnlineResume } from './session/paused-online-resume.js';
 import { markPendingRoundArchive } from './session/pending-round-archive.js';
+import { resetFinishedRoundResultsHandoff } from './session/finished-round-results-handoff.js';
 
 export interface ExitOnlineFlowOptions {
   gameId: string;
@@ -108,6 +110,11 @@ async function runExitCleanup(
  */
 export async function exitOnlineSession(options: ExitOnlineFlowOptions): Promise<void> {
   const { gameId, uid, sessionStatus, session, myWords, exitedResults } = options;
+
+  // ADR-025: leave room for home / next room — flush sticky diagnostics group now
+  // (do not wait for subscribeGameSession teardown; play→results must stay sticky).
+  resetFinishedRoundResultsHandoff();
+  rtdbTrafficProbe.setActiveRoomId(null);
 
   await clearPausedOnlineResume();
   await clearLeftOnlineResume();

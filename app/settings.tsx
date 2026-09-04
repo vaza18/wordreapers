@@ -1,3 +1,4 @@
+import { Link } from 'expo-router';
 import type { ComponentType } from 'react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -33,6 +34,7 @@ import { isFirebaseConfigured } from '@/lib/firebase/config';
 import { useFirebaseStore } from '@/store/firebase-store';
 import { usePlayerStatsStore } from '@/store/player-stats-store';
 import { useProfileStore } from '@/store/profile-store';
+import { useRtdbDiagnosticsStore } from '@/store/rtdb-diagnostics-store';
 import { useSettingsStore, type VisualEffectsToggleKey } from '@/store/settings-store';
 
 const APPEARANCE_OPTIONS: {
@@ -119,7 +121,14 @@ export default function SettingsScreen() {
   const setVisualEffectsMode = useSettingsStore((state) => state.setVisualEffectsMode);
   const setVisualEffectsToggle = useSettingsStore((state) => state.setVisualEffectsToggle);
 
+  const developerModeEnabled = useRtdbDiagnosticsStore((state) => state.developerModeEnabled);
+  const rtdbDiagnosticsEnabled = useRtdbDiagnosticsStore((state) => state.rtdbDiagnosticsEnabled);
+  const setRtdbDiagnosticsEnabled = useRtdbDiagnosticsStore(
+    (state) => state.setRtdbDiagnosticsEnabled,
+  );
+
   const [clearDialogVisible, setClearDialogVisible] = useState(false);
+  const [diagnosticsInfoVisible, setDiagnosticsInfoVisible] = useState(false);
   const [clearing, setClearing] = useState(false);
 
   const handleClearConfirm = async () => {
@@ -232,6 +241,39 @@ export default function SettingsScreen() {
           <Text style={styles.clearAction}>{t('settings.clearLocalDataAction')}</Text>
         </FeedbackPressable>
       </View>
+
+      {developerModeEnabled ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('settings.developerMode.title')}</Text>
+          <SettingSwitch
+            label={t('settings.developerMode.diagnostics')}
+            hint={t('settings.developerMode.diagnosticsHint')}
+            value={rtdbDiagnosticsEnabled}
+            onChange={setRtdbDiagnosticsEnabled}
+            onInfoPress={() => {
+              setDiagnosticsInfoVisible(true);
+            }}
+          />
+          <Link href="/settings/rtdb-diagnostics" asChild>
+            <FeedbackPressable accessibilityRole="link" style={styles.clearRow}>
+              <Text style={styles.clearLabel}>{t('settings.developerMode.history')}</Text>
+            </FeedbackPressable>
+          </Link>
+        </View>
+      ) : null}
+
+      <CenterDialogModal
+        visible={diagnosticsInfoVisible}
+        title={t('settings.developerMode.diagnostics')}
+        body={t('settings.developerMode.diagnosticsInfo')}
+        primaryLabel={t('common.close')}
+        onPrimary={() => {
+          setDiagnosticsInfoVisible(false);
+        }}
+        onRequestClose={() => {
+          setDiagnosticsInfoVisible(false);
+        }}
+      />
 
       <CenterDialogModal
         visible={clearDialogVisible}

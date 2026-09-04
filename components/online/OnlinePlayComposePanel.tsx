@@ -355,9 +355,6 @@ function createStyles(colors: ThemeColors) {
       color: colors.composeDraftText,
     },
     flyLetter: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
       fontWeight: '600',
       color: colors.composeDraftText,
     },

@@ -1,15 +1,18 @@
 import { get, set } from 'firebase/database';
 
-import { toScoredWordEntry, type ScoredWordEntry, type WordScoreKind } from '../game/scoring.js';
-import type { SubmitWordProfile } from '../online/submit-word-profile.js';
+import { toScoredWordEntry, type ScoredWordEntry, type WordScoreKind } from '@/lib/game/scoring.js';
+import type { SubmitWordProfile } from '@/lib/online/submit-word-profile.js';
 import {
   wordPlayersPerWordRef,
   wordPlayersShardPlayerRef,
-} from '../online/word-maps-shard-refs.js';
+} from '@/lib/online/word-maps-shard-refs.js';
+
+import { devLogAction } from '@/lib/debug/dev-log.js';
 
 import { ensureAnonymousAuth } from './auth.js';
 import { isFirebaseNetworkError, isFirebasePermissionDenied } from './rtdb-errors.js';
 import { normalizeRoomCode } from './room-code.js';
+import { recordRtdbUp, instrumentedSnapshotVal } from './rtdb-instrumentation.js';
 
 export type SubmitWordError = 'NOT_PLAYING' | 'SESSION_MISSING' | 'NETWORK';
 
@@ -37,9 +40,8 @@ type WordShardCommit =
  * First finder: parent `set` on empty word node (rules: `!data.exists()`).
  * Second+ / parent race: leaf `set(true)` (parent rewrite denied so peers cannot be wiped).
  *
- * Prefer `set` over `runTransaction`: transactions + default `applyLocally` caused
- * multi-second retry storms and Metro `permission_denied` after `playing → finished`
- * while optimistic UI already showed the word to the submitter only.
+ * FIX: 2026-08 — late-round words missing (sync lag) → parent/leaf `set` (no TX)
+ * avoids multi-second retry storms and Metro `permission_denied` after `playing → finished`.
  */
 async function commitWordPlayersShard(
   roomId: string,
@@ -50,7 +52,9 @@ async function commitWordPlayersShard(
   const leafRef = wordPlayersShardPlayerRef(roomId, normalized, uid);
 
   try {
-    await set(parentRef, { [uid]: true });
+    const patch = { [uid]: true };
+    recordRtdbUp(patch);
+    await set(parentRef, patch);
     return { ok: true, playersOnWord: { [uid]: true } };
   } catch (error) {
     if (!isFirebasePermissionDenied(error)) {
@@ -60,6 +64,7 @@ async function commitWordPlayersShard(
   }
 
   try {
+    recordRtdbUp(true);
     await set(leafRef, true);
   } catch (error) {
     if (isFirebasePermissionDenied(error)) {
@@ -72,7 +77,8 @@ async function commitWordPlayersShard(
   // Do not invent peer overlap (`assumeShared`); keep unique until maps listener confirms.
   try {
     const parentSnapshot = await get(parentRef);
-    const playersOnWord = playersOnWordFromVal(parentSnapshot.val());
+    const val = instrumentedSnapshotVal(parentSnapshot);
+    const playersOnWord = playersOnWordFromVal(val);
     const withSelf = playersOnWord[uid] ? playersOnWord : { ...playersOnWord, [uid]: true };
     return { ok: true, playersOnWord: withSelf };
   } catch {
@@ -111,6 +117,10 @@ export async function submitOnlineWord(
     ).length;
     const kind: WordScoreKind = globalCount > 1 ? 'normal' : 'unique';
     const entry = toScoredWordEntry(normalized, kind, uniqueBonusEnabled, globalCount);
+    devLogAction(`submitted word "${normalized}"`, {
+      room: roomId,
+      details: `kind=${entry.kind} players=${globalCount}`,
+    });
     profile?.mark('done');
     return { ok: true, entry };
   } catch (error) {

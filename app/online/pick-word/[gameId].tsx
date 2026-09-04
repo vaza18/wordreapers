@@ -24,6 +24,7 @@ import {
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
+import { navigateHomeClearingStack } from '@/lib/navigation/navigate-home';
 import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
 import { DictionaryIndex } from '@/lib/dictionary/dictionary-index';
 import { letterCount, normalizeUk, toDisplayUpper } from '@/lib/dictionary/normalize';
@@ -316,7 +317,7 @@ export default function OnlinePickWordScreen() {
             label={t('nav.home')}
             variant="secondary"
             onPress={() => {
-              router.replace('/');
+              navigateHomeClearingStack();
             }}
           />
         </Screen>

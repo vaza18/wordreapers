@@ -27,6 +27,57 @@ export function sessionWordPlayersClaimWords(
   return Object.keys(session?.wordPlayers ?? {}).length > 0;
 }
 
+/** Count uid leaves under `wordPlayers` (word × finders). */
+export function wordPlayersClaimLeafCount(
+  wordPlayers: GameSession['wordPlayers'] | null | undefined,
+): number {
+  let n = 0;
+  for (const uids of Object.values(wordPlayers ?? {})) {
+    if (uids != null && typeof uids === 'object') {
+      n += Object.keys(uids).length;
+    }
+  }
+  return n;
+}
+
+/**
+ * Grow-only: merged live maps have more claim-leaves than archived player-word
+ * entries — archive must refresh (late post-finish append after early save).
+ */
+export function sessionWordPlayersRicherThanArchive(
+  wordPlayers: GameSession['wordPlayers'] | null | undefined,
+  archivePlayerWords: Record<string, string[]> | AllPlayerWords | null | undefined,
+): boolean {
+  const memoryLeaves = wordPlayersClaimLeafCount(wordPlayers);
+  if (memoryLeaves === 0) {
+    return false;
+  }
+  let archiveCount = 0;
+  if (archivePlayerWords instanceof Map) {
+    archiveCount = totalPlayerWordCount(archivePlayerWords);
+  } else if (archivePlayerWords) {
+    for (const words of Object.values(archivePlayerWords)) {
+      if (Array.isArray(words)) {
+        archiveCount += words.length;
+      }
+    }
+  }
+  return memoryLeaves > archiveCount;
+}
+
+/** Prefer the wordPlayers tree with more claim-leaves (server vs stale memory). */
+export function pickRicherWordPlayers(
+  a: GameSession['wordPlayers'] | null | undefined,
+  b: GameSession['wordPlayers'] | null | undefined,
+): NonNullable<GameSession['wordPlayers']> {
+  const aCount = wordPlayersClaimLeafCount(a);
+  const bCount = wordPlayersClaimLeafCount(b);
+  if (bCount > aCount) {
+    return b ?? {};
+  }
+  return a ?? {};
+}
+
 /**
  * Soft-skip archive persist when inverted maps are empty but words are still
  * claimed by live maps and/or an existing non-empty archive (rematch wipe / race).

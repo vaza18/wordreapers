@@ -11,47 +11,60 @@ import {
 } from 'firebase/database';
 import { AppState } from 'react-native';
 
-import { FINISH_WORD_SUBMIT_GRACE_MS } from '../../constants/finish-word-submit-grace.js';
-import { canRematchAfterRound } from '../../constants/max-rounds-per-room.js';
+import { FINISH_WORD_SUBMIT_GRACE_MS } from '@/constants/finish-word-submit-grace.js';
+import { canRematchAfterRound } from '@/constants/max-rounds-per-room.js';
 import { runRtdbTransaction } from './rtdb-transaction.js';
-import { shouldMarkPresenceOnline } from '../online/presence/app-presence-state.js';
-import { presenceWriteQueue } from '../online/presence/presence-write-queue.js';
-import { devLogAction } from '../debug/dev-log.js';
+import { shouldMarkPresenceOnline } from '@/lib/online/presence/app-presence-state.js';
+import { presenceWriteQueue } from '@/lib/online/presence/presence-write-queue.js';
+import { devLogAction } from '@/lib/debug/dev-log.js';
+import { rtdbTrafficProbe } from '@/lib/debug/rtdb-traffic-probe.js';
+import {
+  recordRtdbUpdate,
+  recordRtdbRemove,
+  instrumentedSnapshotVal,
+  recordSnapshotTrafficIfCollecting,
+  readSnapshotVal,
+  recordRtdbDownBytes,
+  deepChangedJsonBytes,
+} from './rtdb-instrumentation.js';
 import { ensureAppCheckWithRetry } from './ensure-app-check-with-retry.js';
 
-import { isOrphanGameSessionShell, orphanShellHasPlayer } from '../online/orphan-game-session.js';
-import type { PlayerProfile } from '../profile/player-profile.js';
+import {
+  isOrphanGameSessionShell,
+  orphanShellHasPlayer,
+} from '@/lib/online/orphan-game-session.js';
+import type { PlayerProfile } from '@/lib/profile/player-profile.js';
 
 import {
   currentBaseWordPickerUid,
   shouldClearLobbyBaseWordForPicker,
-} from '../online/base-word-picker.js';
-import { clearAllActiveRoundCachesForGame } from '../online/session/active-round-cache.js';
-import { setOrganizerWaitingRoom } from '../online/organizer-waiting-room.js';
+} from '@/lib/online/base-word-picker.js';
+import { clearAllActiveRoundCachesForGame } from '@/lib/online/session/active-round-cache.js';
+import { setOrganizerWaitingRoom } from '@/lib/online/organizer-waiting-room.js';
 import {
   buildRoundStartWritePaths,
   resolveRoundStartSettings,
-} from '../online/start-game-session-write.js';
+} from '@/lib/online/start-game-session-write.js';
 import { resolveGameSessionSettings, uniqueBonusLatchSettingsPatch } from './session-settings.js';
-import { computeRoundPlayedSecondsAtFinish } from '../game/round-duration.js';
+import { computeRoundPlayedSecondsAtFinish } from '@/lib/game/round-duration.js';
 import { appendLiveRoundPlayerUid } from './live-round-player-uids.js';
-import { formatLiveRosterDetails } from '../debug/format-session-roster-log.js';
+import { formatLiveRosterDetails } from '@/lib/debug/format-session-roster-log.js';
 import {
   isActiveLivePlayer,
   liveRoundPlayerUidsForRoundStart,
   rematchWaitingPlayerPatch,
-} from '../online/presence/live-round-membership.js';
-import { shouldOrganizerAbandonWaitingRoom } from '../online/should-organizer-abandon-waiting-room.js';
+} from '@/lib/online/presence/live-round-membership.js';
+import { shouldOrganizerAbandonWaitingRoom } from '@/lib/online/should-organizer-abandon-waiting-room.js';
 import { reconcileOpenSessionVotes } from './session-votes-service.js';
 import { markResultsExited } from './results-coordination-service.js';
 import { getServerNow } from './server-clock.js';
-import { PUBLIC_LOBBY_MAX_PLAYERS } from '../online/public-lobby/constants.js';
+import { PUBLIC_LOBBY_MAX_PLAYERS } from '@/lib/online/public-lobby/constants.js';
 import {
   applyPublicContentSafety,
   validateSessionBaseWord,
-} from '../online/public-lobby/content-safety.js';
-import { collectPublicAliases, nextPublicAlias } from '../online/public-lobby/public-alias.js';
-import { sessionIdentityMasked } from '../online/public-lobby/session-identity.js';
+} from '@/lib/online/public-lobby/content-safety.js';
+import { collectPublicAliases, nextPublicAlias } from '@/lib/online/public-lobby/public-alias.js';
+import { sessionIdentityMasked } from '@/lib/online/public-lobby/session-identity.js';
 import {
   activePublicLobbyPlayerCount,
   reconcilePublicLobbyAfterRosterChange,
@@ -72,7 +85,7 @@ import { gameSessionPath, GAME_SESSIONS_PATH } from './paths.js';
 import { sessionRef } from './session-ref.js';
 import { isValidRoomCode, normalizeRoomCode } from './room-code.js';
 import type { GameSession, GameSessionPlayer, GameSessionSettings } from './types.js';
-import type { BaseWord } from '../dictionary/dictionary-index.js';
+import type { BaseWord } from '@/lib/dictionary/dictionary-index.js';
 
 let cachedBaseWordsForValidation: BaseWord[] | null = null;
 
@@ -80,7 +93,7 @@ async function loadBaseWordsForValidation(): Promise<readonly string[]> {
   if (cachedBaseWordsForValidation) {
     return cachedBaseWordsForValidation;
   }
-  const { loadBundledBaseWords } = await import('../../services/dictionary-service.js');
+  const { loadBundledBaseWords } = await import('@/services/dictionary-service.js');
   cachedBaseWordsForValidation = await loadBundledBaseWords();
   return cachedBaseWordsForValidation;
 }
@@ -227,7 +240,9 @@ async function setPlayerOnlinePresence(gameId: string, uid: string): Promise<voi
     ) {
       return;
     }
-    await update(node, { online: true });
+    const patch = { online: true };
+    recordRtdbUpdate(patch);
+    await update(node, patch);
     if (!presenceWriteQueue.isCurrent(normalized, uid, generation, 'online')) {
       await repairPresenceIntentIfNeeded(normalized, uid);
       return;
@@ -252,10 +267,11 @@ export async function syncLobbyPickerState(gameId: string): Promise<void> {
 
 async function reconcileLobbyPickerState(gameId: string): Promise<void> {
   const snapshot = await get(sessionRef(gameId));
+  const val = instrumentedSnapshotVal(snapshot);
   if (!snapshot.exists()) {
     return;
   }
-  const session = snapshot.val() as GameSession;
+  const session = val as GameSession;
   if (session.status !== 'waiting') {
     return;
   }
@@ -278,6 +294,7 @@ async function reconcileLobbyPickerState(gameId: string): Promise<void> {
   }
 
   try {
+    recordRtdbUpdate(updates);
     await update(sessionRef(gameId), updates);
   } catch (error) {
     if (isFirebasePermissionDenied(error)) {
@@ -317,7 +334,9 @@ export async function markPlayerOffline(gameId: string, uid: string): Promise<vo
   const generation = presenceWriteQueue.begin(normalized, uid, 'offline');
   const node = playerRef(normalized, uid);
   try {
-    await update(node, { online: false });
+    const patch = { online: false };
+    recordRtdbUpdate(patch);
+    await update(node, patch);
     if (!presenceWriteQueue.isCurrent(normalized, uid, generation, 'offline')) {
       try {
         await repairPresenceIntentIfNeeded(normalized, uid);
@@ -367,6 +386,7 @@ async function repairPresenceIntentIfNeeded(gameId: string, uid: string): Promis
     return;
   }
   if (intent === 'offline') {
+    recordRtdbUpdate({ online: false });
     await update(playerRef(gameId, uid), { online: false });
   }
 }
@@ -374,10 +394,11 @@ async function repairPresenceIntentIfNeeded(gameId: string, uid: string): Promis
 export async function removeOrphanGameSessionShell(gameId: string, uid?: string): Promise<boolean> {
   const normalized = normalizeRoomCode(gameId);
   const snapshot = await get(sessionRef(normalized));
+  const val = instrumentedSnapshotVal(snapshot);
   if (!snapshot.exists()) {
     return false;
   }
-  const session = snapshot.val();
+  const session = val;
   if (!isOrphanGameSessionShell(session)) {
     return false;
   }
@@ -388,6 +409,7 @@ export async function removeOrphanGameSessionShell(gameId: string, uid?: string)
     }
   }
   try {
+    recordRtdbRemove(gameSessionPath(normalized));
     await remove(sessionRef(normalized));
     return true;
   } catch (error) {
@@ -418,10 +440,11 @@ function profilePatch(
 async function readSessionSnapshot(gameId: string): Promise<GameSessionSnapshot> {
   const normalized = normalizeRoomCode(gameId);
   const snapshot = await get(sessionRef(normalized));
+  const val = instrumentedSnapshotVal(snapshot, gameSessionPath(normalized));
   if (!snapshot.exists()) {
     throw new Error('ROOM_NOT_FOUND');
   }
-  const parsed = gameSessionSnapshotFromRtdbVal(normalized, snapshot.val());
+  const parsed = gameSessionSnapshotFromRtdbVal(normalized, val);
   if (!parsed) {
     throw new Error('ROOM_NOT_FOUND');
   }
@@ -431,6 +454,33 @@ async function readSessionSnapshot(gameId: string): Promise<GameSessionSnapshot>
 /** Fresh RTDB session read for routing after rematch / rejoin. */
 export async function readGameSessionSnapshot(gameId: string): Promise<GameSessionSnapshot> {
   return readSessionSnapshot(gameId);
+}
+
+/**
+ * Tiny status/round leaves for ensure-before-results (avoid full-session get while
+ * local time-up has already pinned the round and play subscribe may already be finished).
+ */
+export async function readGameSessionEnsureFields(
+  gameId: string,
+): Promise<{ status: string; baseWordRound: number } | null> {
+  const normalized = normalizeRoomCode(gameId);
+  await ensureAnonymousAuth();
+  const root = sessionRef(normalized);
+  const path = gameSessionPath(normalized);
+  const [statusSnap, roundSnap] = await Promise.all([
+    get(child(root, 'status')),
+    get(child(root, 'baseWordRound')),
+  ]);
+  const statusVal = instrumentedSnapshotVal(statusSnap, `${path}/status`);
+  const roundVal = instrumentedSnapshotVal(roundSnap, `${path}/baseWordRound`);
+  if (!statusSnap.exists() || statusVal == null) {
+    return null;
+  }
+  if (typeof statusVal !== 'string') {
+    return null;
+  }
+  const baseWordRound = typeof roundVal === 'number' && Number.isFinite(roundVal) ? roundVal : 0;
+  return { status: statusVal, baseWordRound: Math.floor(baseWordRound) };
 }
 
 /**
@@ -473,8 +523,9 @@ export async function rejoinExistingPlayer(
     return;
   }
   const sessionSnapshot = await get(sessionRef(normalized));
+  const sessionVal = instrumentedSnapshotVal(sessionSnapshot);
   if (sessionSnapshot.exists()) {
-    const prior = (sessionSnapshot.val() as GameSession).players?.[uid];
+    const prior = (sessionVal as GameSession).players?.[uid];
     if (prior?.hasLeft === true && options?.reviveAfterLeave !== true) {
       return;
     }
@@ -490,15 +541,16 @@ export async function rejoinExistingPlayer(
   patch[`players/${uid}/online`] = true;
   patch[`players/${uid}/hasLeft`] = false;
   if (sessionSnapshot.exists()) {
-    const session = sessionSnapshot.val() as GameSession;
+    const session = sessionVal as GameSession;
     if (session.status === 'playing') {
       patch.liveRoundPlayerUids = appendLiveRoundPlayerUid(session.liveRoundPlayerUids, uid);
     }
   }
+  recordRtdbUpdate(patch);
   await update(sessionRef(normalized), patch);
   await setPlayerOnlinePresence(normalized, uid);
   if (sessionSnapshot.exists()) {
-    const session = sessionSnapshot.val() as GameSession;
+    const session = sessionVal as GameSession;
     const prior = session.players?.[uid];
     const round = session.baseWordRound ?? 0;
     const nextLive =
@@ -566,10 +618,11 @@ export async function joinGameSession(
 
   try {
     const snapshot = await get(sessionRef(normalized));
+    const val = instrumentedSnapshotVal(snapshot);
     if (!snapshot.exists()) {
       throw new Error('ROOM_NOT_FOUND');
     }
-    session = snapshot.val() as GameSession;
+    session = val as GameSession;
   } catch (error) {
     if (error instanceof Error && error.message === 'ROOM_NOT_FOUND') {
       throw error;
@@ -593,7 +646,9 @@ async function blindJoinGameSession(
   newPlayer.joinedVia = 'invite';
 
   try {
-    await update(playersRef(gameId), { [uid]: newPlayer });
+    const patch = { [uid]: newPlayer };
+    recordRtdbUpdate(patch);
+    await update(playersRef(gameId), patch);
   } catch (error) {
     if (isFirebasePermissionDenied(error)) {
       throw new Error('ROOM_NOT_FOUND');
@@ -613,6 +668,7 @@ async function blindJoinGameSession(
   }
   if (committed === 'ROOM_FULL') {
     try {
+      recordRtdbRemove(`${gameSessionPath(gameId)}/players/${uid}`);
       await remove(playerRef(gameId, uid));
     } catch {
       // Best-effort rollback.
@@ -707,11 +763,12 @@ async function commitNewPlayerJoinTransaction(
 ): Promise<JoinCommitResult> {
   const normalized = normalizeRoomCode(gameId);
   const snapshot = await get(sessionRef(normalized));
+  const val = instrumentedSnapshotVal(snapshot);
   if (!snapshot.exists()) {
     return 'ROOM_NOT_FOUND';
   }
 
-  const built = buildJoinCommitPatch(snapshot.val() as GameSession, uid, newPlayer, context);
+  const built = buildJoinCommitPatch(val as GameSession, uid, newPlayer, context);
   if (built.roomFull) {
     return 'ROOM_FULL';
   }
@@ -720,6 +777,7 @@ async function commitNewPlayerJoinTransaction(
   }
 
   try {
+    recordRtdbUpdate(built.patch);
     await update(sessionRef(normalized), built.patch);
   } catch (error) {
     // Roster write already succeeded; metadata patch must not block join/rejoin.
@@ -737,15 +795,17 @@ async function rollbackJoinPlayerIfSessionMissing(
 ): Promise<'ROOM_NOT_FOUND' | 'partial_ok'> {
   const normalized = normalizeRoomCode(gameId);
   const snapshot = await get(sessionRef(normalized));
+  const val = instrumentedSnapshotVal(snapshot);
   if (!snapshot.exists()) {
     try {
+      recordRtdbRemove(`${gameSessionPath(normalized)}/players/${uid}`);
       await remove(playerRef(normalized, uid));
     } catch {
       // Best-effort rollback.
     }
     return 'ROOM_NOT_FOUND';
   }
-  const session = snapshot.val() as GameSession;
+  const session = val as GameSession;
   if (session.players[uid]) {
     return 'partial_ok';
   }
@@ -815,9 +875,11 @@ async function joinGameSessionWithSnapshot(
     newPlayer.publicAlias = nextPublicAlias(collectPublicAliases(session.players), locale);
   }
 
-  await update(playersRef(gameId), {
+  const rosterPatch = {
     [uid]: newPlayer,
-  });
+  };
+  recordRtdbUpdate(rosterPatch);
+  await update(playersRef(gameId), rosterPatch);
 
   const committed = await commitNewPlayerJoinTransaction(gameId, uid, newPlayer, {
     isBrowseJoin,
@@ -825,6 +887,7 @@ async function joinGameSessionWithSnapshot(
 
   if (committed === 'ROOM_FULL') {
     try {
+      recordRtdbRemove(`${gameSessionPath(gameId)}/players/${uid}`);
       await remove(playerRef(gameId, uid));
     } catch {
       // Best-effort rollback.
@@ -869,18 +932,29 @@ export function gameSessionSnapshotFromRtdbVal(
 /**
  * Subscribe to session updates (lobby / play).
  * Multiple callers for the same room share one RTDB `onValue` (ref-counted).
+ * Last-listener teardown is deferred so play→results remount reuses the socket
+ * (avoids a second full-session download on results mount).
  */
 type SharedSessionSub = {
   listeners: Set<(session: GameSessionSnapshot | null) => void>;
   unsub: Unsubscribe | null;
   last: GameSessionSnapshot | null | undefined;
+  /** Raw RTDB val for top-level delta ↓ accounting (ADR-025). */
+  lastRaw: unknown;
+  teardownTimer: ReturnType<typeof setTimeout> | null;
 };
 
 const sharedGameSessionSubs = new Map<string, SharedSessionSub>();
 
+/** Grace before dropping the shared onValue when the last screen unsubscribes. */
+export const SHARED_GAME_SESSION_SUB_TEARDOWN_MS = 400;
+
 /** Test-only: drop shared session listeners between cases. */
 export function resetSharedGameSessionSubscriptionsForTests(): void {
   for (const entry of sharedGameSessionSubs.values()) {
+    if (entry.teardownTimer != null) {
+      clearTimeout(entry.teardownTimer);
+    }
     entry.unsub?.();
   }
   sharedGameSessionSubs.clear();
@@ -891,12 +965,17 @@ export function subscribeGameSession(
   listener: (session: GameSessionSnapshot | null) => void,
 ): Unsubscribe {
   const normalized = normalizeRoomCode(gameId);
+  // Intentional double-call (with subscribeSessionWordMaps) is guarded by early-return
+  // in setActiveRoomId. Both must ensure the probe tracks this room before data arrives.
+  rtdbTrafficProbe.setActiveRoomId(normalized);
   let entry = sharedGameSessionSubs.get(normalized);
   if (!entry) {
     entry = {
       listeners: new Set(),
       unsub: null,
       last: undefined,
+      lastRaw: undefined,
+      teardownTimer: null,
     };
     sharedGameSessionSubs.set(normalized, entry);
 
@@ -932,7 +1011,14 @@ export function subscribeGameSession(
             }
             let next: GameSessionSnapshot | null = null;
             if (snapshot.exists()) {
-              const raw = snapshot.val();
+              // FIX: 2026-09 — finish leaf update counted as full-session ↓ on onValue
+              // → record top-level key deltas only after the first snapshot.
+              const raw = readSnapshotVal(snapshot);
+              const path = gameSessionPath(normalized);
+              if (rtdbTrafficProbe.isCollecting()) {
+                recordRtdbDownBytes(deepChangedJsonBytes(live.lastRaw, raw), path);
+              }
+              live.lastRaw = raw;
               if (isOrphanGameSessionShell(raw)) {
                 const uid = getFirebaseUid();
                 if (uid && orphanShellHasPlayer(raw, uid)) {
@@ -942,6 +1028,8 @@ export function subscribeGameSession(
               } else {
                 next = gameSessionSnapshotFromRtdbVal(normalized, raw);
               }
+            } else {
+              live.lastRaw = null;
             }
             live.last = next;
             for (const fn of [...live.listeners]) {
@@ -961,6 +1049,10 @@ export function subscribeGameSession(
       });
   }
 
+  if (entry.teardownTimer != null) {
+    clearTimeout(entry.teardownTimer);
+    entry.teardownTimer = null;
+  }
   entry.listeners.add(listener);
   if (entry.last !== undefined) {
     listener(entry.last);
@@ -973,8 +1065,19 @@ export function subscribeGameSession(
     }
     current.listeners.delete(listener);
     if (current.listeners.size === 0) {
-      current.unsub?.();
-      sharedGameSessionSubs.delete(normalized);
+      // FIX: 2026-09 — play→results remount tore down onValue → second full session ↓
+      if (current.teardownTimer != null) {
+        clearTimeout(current.teardownTimer);
+      }
+      current.teardownTimer = setTimeout(() => {
+        const live = sharedGameSessionSubs.get(normalized);
+        if (!live || live.listeners.size > 0) {
+          return;
+        }
+        live.unsub?.();
+        sharedGameSessionSubs.delete(normalized);
+      }, SHARED_GAME_SESSION_SUB_TEARDOWN_MS);
+      // Do not clear rtdbTrafficProbe here — sticky room across play→results (ADR-025).
     }
   };
 }
@@ -995,10 +1098,11 @@ export async function markPlayerOnline(gameId: string, uid: string): Promise<voi
   const node = playerRef(normalized, uid);
   try {
     const snapshot = await get(node);
+    const val = instrumentedSnapshotVal(snapshot);
     if (!snapshot.exists()) {
       return;
     }
-    const player = snapshot.val() as GameSessionPlayer;
+    const player = val as GameSessionPlayer;
     if (player.hasLeft === true) {
       return;
     }
@@ -1071,10 +1175,11 @@ export async function updateGameSessionSetup(
 ): Promise<void> {
   const normalized = normalizeRoomCode(gameId);
   const snapshot = await get(sessionRef(normalized));
+  const val = instrumentedSnapshotVal(snapshot);
   if (!snapshot.exists()) {
     throw new Error('ROOM_NOT_FOUND');
   }
-  const session = snapshot.val() as GameSession;
+  const session = val as GameSession;
   const isOrganizer = session.organizerId === actorUid;
   const isPicker = currentBaseWordPickerUid(session) === actorUid;
   if (!isOrganizer && !isPicker) {
@@ -1106,10 +1211,11 @@ export async function updateGameSessionSetup(
     await assertSessionBaseWordAllowed(payload.baseWord, session);
     // Re-read: peer may have taken the seat while dictionary validation ran (ZF6U4).
     const latestSnap = await get(sessionRef(normalized));
+    const latestVal = instrumentedSnapshotVal(latestSnap);
     if (!latestSnap.exists()) {
       throw new Error('ROOM_NOT_FOUND');
     }
-    const latest = latestSnap.val() as GameSession;
+    const latest = latestVal as GameSession;
     if (latest.status !== 'waiting') {
       throw new Error('ROOM_NOT_WAITING');
     }
@@ -1121,6 +1227,7 @@ export async function updateGameSessionSetup(
     updates.baseWordChosenBy = actorUid;
   }
 
+  recordRtdbUpdate(updates);
   await update(sessionRef(normalized), updates);
   if (payload.baseWord !== undefined) {
     devLogAction(`picked base word "${payload.baseWord}"`, {
@@ -1148,10 +1255,11 @@ export async function updateGameSessionBaseWord(
 ): Promise<void> {
   const normalized = normalizeRoomCode(gameId);
   const snapshot = await get(sessionRef(normalized));
+  const val = instrumentedSnapshotVal(snapshot);
   if (!snapshot.exists()) {
     throw new Error('ROOM_NOT_FOUND');
   }
-  const session = snapshot.val() as GameSession;
+  const session = val as GameSession;
   if (session.status !== 'waiting') {
     throw new Error('ROOM_NOT_WAITING');
   }
@@ -1163,11 +1271,13 @@ export async function updateGameSessionBaseWord(
   }
   await assertSessionBaseWordAllowed(baseWord, session);
 
-  await update(sessionRef(normalized), {
+  const patch = {
     baseWord,
     baseWordDisplay: baseWord,
     baseWordChosenBy: uid,
-  });
+  };
+  recordRtdbUpdate(patch);
+  await update(sessionRef(normalized), patch);
   devLogAction(`picked base word "${baseWord}"`, {
     room: normalized,
     round: session.baseWordRound ?? 0,
@@ -1183,10 +1293,11 @@ export async function startGameSession(gameId: string, actorUid: string): Promis
   const normalized = normalizeRoomCode(gameId);
   await syncLobbyPickerState(normalized);
   const snapshot = await get(sessionRef(normalized));
+  const val = instrumentedSnapshotVal(snapshot);
   if (!snapshot.exists()) {
     throw new Error('ROOM_NOT_FOUND');
   }
-  const session = snapshot.val() as GameSession;
+  const session = val as GameSession;
   const pickerUid = currentBaseWordPickerUid(session);
   if (pickerUid !== actorUid) {
     throw new Error('NOT_ROUND_STARTER');
@@ -1221,6 +1332,7 @@ export async function startGameSession(gameId: string, actorUid: string): Promis
     now,
     settings,
   });
+  recordRtdbUpdate(multiPath);
   await update(rootRef, multiPath);
   const liveUids = liveRoundPlayerUidsForRoundStart(session, actorUid);
   devLogAction('started round', {
@@ -1239,7 +1351,9 @@ export async function leaveGameSession(gameId: string, uid: string): Promise<voi
   try {
     const node = playerRef(normalized, uid);
     await onDisconnect(node).cancel();
-    await update(node, { online: false, hasLeft: true });
+    const patch = { online: false, hasLeft: true };
+    recordRtdbUpdate(patch);
+    await update(node, patch);
     devLogAction('left the round early', { room: normalized });
     try {
       await syncLobbyPickerState(normalized);
@@ -1258,8 +1372,9 @@ export async function leaveGameSession(gameId: string, uid: string): Promise<voi
 
     try {
       const sessionSnap = await get(sessionRef(normalized));
+      const sessionVal = instrumentedSnapshotVal(sessionSnap);
       if (sessionSnap.exists()) {
-        await reconcilePublicLobbyAfterRosterChange(normalized, sessionSnap.val() as GameSession);
+        await reconcilePublicLobbyAfterRosterChange(normalized, sessionVal as GameSession);
       }
     } catch (error) {
       if (__DEV__) {
@@ -1277,22 +1392,74 @@ export async function leaveGameSession(gameId: string, uid: string): Promise<voi
 export async function gameSessionExists(gameId: string): Promise<boolean> {
   const normalized = normalizeRoomCode(gameId);
   const snapshot = await get(ref(getFirebaseDatabase(), `${GAME_SESSIONS_PATH}/${normalized}`));
+  recordSnapshotTrafficIfCollecting(snapshot);
   return snapshot.exists();
 }
+
+export type FinishGameSessionIfExpiredOptions = {
+  /**
+   * Play subscribe SoT past grace — commit without a full-session `get` when still
+   * `playing` and no local `addTimeVote` (avoids finish-second ↓ ≈ 2× session tree).
+   * On write failure, falls through to an authoritative full get.
+   */
+  hintSession?: GameSession | null;
+};
 
 /**
  * End the round when server timer has elapsed (any connected client may commit).
  * Uses leaf-path `update` (not a whole-session transaction) so peer `online`/`hasLeft`
  * echoes cannot fail `.validate` (LRAHP) and results presence cannot `maxretry` the write.
  */
-export async function finishGameSessionIfExpired(gameId: string): Promise<boolean> {
+export async function finishGameSessionIfExpired(
+  gameId: string,
+  options?: FinishGameSessionIfExpiredOptions,
+): Promise<boolean> {
   const normalized = normalizeRoomCode(gameId);
   await ensureAnonymousAuth();
+  const hint = options?.hintSession ?? null;
+  // Already finished on play SoT — do not pay a confirm get (avoids resync spam).
+  if (hint?.status === 'finished') {
+    return true;
+  }
+  // Still inside submit grace on play SoT — known no-op without full-session get.
+  if (
+    hint?.status === 'playing' &&
+    hint.timerEndsAt != null &&
+    getServerNow() < hint.timerEndsAt + FINISH_WORD_SUBMIT_GRACE_MS
+  ) {
+    return false;
+  }
+  // FIX: 2026-09 — finish ↓ ~2× full session get+onValue → prefer play hint commit
+  if (
+    hint &&
+    hint.status === 'playing' &&
+    hint.timerEndsAt != null &&
+    getServerNow() >= hint.timerEndsAt + FINISH_WORD_SUBMIT_GRACE_MS &&
+    !hint.addTimeVote
+  ) {
+    const patch = buildFinishLeafPatch(hint, getServerNowForExpire(hint));
+    try {
+      recordRtdbUpdate(patch);
+      await update(sessionRef(normalized), patch);
+      devLogAction('finished round (timer expired)', { room: normalized });
+      return true;
+    } catch (error) {
+      if (!isFirebaseIgnorableRtdbError(error)) {
+        throw error;
+      }
+      // Peer finished / rematched / rules — confirm with authoritative get below.
+    }
+  }
   const preSnapshot = await get(sessionRef(normalized));
+  const preVal = instrumentedSnapshotVal(preSnapshot, gameSessionPath(normalized));
   if (!preSnapshot.exists()) {
     return false;
   }
-  const preSession = preSnapshot.val() as GameSession;
+  const preSession = preVal as GameSession;
+  // FIX: 2026-09 — already-finished get returned false → resync paid a second full get
+  if (preSession.status === 'finished') {
+    return true;
+  }
   if (preSession.status !== 'playing' || preSession.timerEndsAt === null) {
     return false;
   }
@@ -1304,17 +1471,20 @@ export async function finishGameSessionIfExpired(gameId: string): Promise<boolea
   }
   const patch = buildFinishLeafPatch(preSession, getServerNowForExpire(preSession));
   try {
+    recordRtdbUpdate(patch);
     await update(sessionRef(normalized), patch);
+    devLogAction('finished round (timer expired)', { room: normalized });
     return true;
   } catch (error) {
     if (!isFirebaseIgnorableRtdbError(error)) {
       throw error;
     }
     const again = await get(sessionRef(normalized));
+    const againVal = instrumentedSnapshotVal(again, gameSessionPath(normalized));
     if (!again.exists()) {
       return false;
     }
-    return (again.val() as GameSession).status === 'finished';
+    return (againVal as GameSession).status === 'finished';
   }
 }
 
@@ -1326,16 +1496,19 @@ export async function finishGameSession(gameId: string): Promise<void> {
   const normalized = normalizeRoomCode(gameId);
   await ensureAnonymousAuth();
   const preSnapshot = await get(sessionRef(normalized));
+  const preVal = instrumentedSnapshotVal(preSnapshot);
   if (!preSnapshot.exists()) {
     return;
   }
-  const preSession = preSnapshot.val() as GameSession;
+  const preSession = preVal as GameSession;
   if (preSession.status !== 'playing') {
     return;
   }
   const patch = buildFinishLeafPatch(preSession, getServerNow());
   try {
+    recordRtdbUpdate(patch);
     await update(sessionRef(normalized), patch);
+    devLogAction('finished round', { room: normalized });
   } catch (error) {
     if (!isFirebaseIgnorableRtdbError(error)) {
       throw error;
@@ -1380,10 +1553,11 @@ export async function restartGameSessionForRematch(
 ): Promise<void> {
   const normalized = normalizeRoomCode(gameId);
   const preSnapshot = await get(sessionRef(normalized));
+  const preVal = instrumentedSnapshotVal(preSnapshot);
   if (!preSnapshot.exists()) {
     throw new Error('REMATCH_FAILED');
   }
-  const preSession = preSnapshot.val() as GameSession;
+  const preSession = preVal as GameSession;
   if (preSession.organizerId !== organizerUid || preSession.status !== 'finished') {
     throw new Error('REMATCH_FAILED');
   }
@@ -1408,7 +1582,8 @@ async function joinAlreadyOpenRematchWaitingLobby(
     setOrganizerWaitingRoom(normalized);
   }
   const after = await get(sessionRef(normalized));
-  const details = after.exists() ? (after.val() as GameSession) : waitingSession;
+  const afterVal = instrumentedSnapshotVal(after);
+  const details = after.exists() ? (afterVal as GameSession) : waitingSession;
   devLogAction('joined rematch lobby (peer already opened waiting)', {
     room: normalized,
     round: waitingSession.baseWordRound ?? 0,
@@ -1491,10 +1666,11 @@ export async function rematchFinishedSessionToWaiting(
 ): Promise<void> {
   const normalized = normalizeRoomCode(gameId);
   const preSnapshot = await get(sessionRef(normalized));
+  const preVal = instrumentedSnapshotVal(preSnapshot);
   if (!preSnapshot.exists()) {
     throw new Error('REMATCH_FAILED');
   }
-  const preSession = preSnapshot.val() as GameSession;
+  const preSession = preVal as GameSession;
   if (!preSession.players[actorUid]) {
     throw new Error('REMATCH_FAILED');
   }
@@ -1520,10 +1696,11 @@ export async function rematchFinishedSessionToWaiting(
 
   for (let attempt = 0; attempt < rematchAttempts && !committedWaiting; attempt += 1) {
     const snap = attempt === 0 ? preSnapshot : await get(sessionRef(normalized));
+    const val = attempt === 0 ? preVal : instrumentedSnapshotVal(snap);
     if (!snap.exists()) {
       throw new Error('REMATCH_FAILED');
     }
-    const session = snap.val() as GameSession;
+    const session = val as GameSession;
     if (session.status === 'waiting') {
       await joinAlreadyOpenRematchWaitingLobby(normalized, actorUid, session);
       return;
@@ -1543,10 +1720,11 @@ export async function rematchFinishedSessionToWaiting(
 
     if (!statusTx.committed) {
       const again = await get(sessionRef(normalized));
+      const againVal = instrumentedSnapshotVal(again);
       if (!again.exists()) {
         throw new Error('REMATCH_FAILED');
       }
-      const againSession = again.val() as GameSession;
+      const againSession = againVal as GameSession;
       if (againSession.status === 'waiting') {
         await joinAlreadyOpenRematchWaitingLobby(normalized, actorUid, againSession);
         return;
@@ -1561,6 +1739,7 @@ export async function rematchFinishedSessionToWaiting(
     // Status CAS already won — never treat follow-up PD as "peer opened" (false join / R62F9).
     for (let followAttempt = 0; followAttempt < 3; followAttempt += 1) {
       try {
+        recordRtdbUpdate(patch);
         await update(sessionRef(normalized), patch);
         break;
       } catch (error) {
@@ -1574,10 +1753,11 @@ export async function rematchFinishedSessionToWaiting(
     }
 
     const afterWrite = await get(sessionRef(normalized));
+    const afterWriteVal = instrumentedSnapshotVal(afterWrite);
     if (!afterWrite.exists()) {
       throw new Error('REMATCH_FAILED');
     }
-    const afterSession = afterWrite.val() as GameSession;
+    const afterSession = afterWriteVal as GameSession;
     if (afterSession.status !== 'waiting') {
       throw new Error('REMATCH_FAILED');
     }
@@ -1598,7 +1778,8 @@ export async function rematchFinishedSessionToWaiting(
     setOrganizerWaitingRoom(normalized);
   }
   const after = await get(sessionRef(normalized));
-  const details = after.exists() ? (after.val() as GameSession) : committedWaiting;
+  const afterVal = instrumentedSnapshotVal(after);
+  const details = after.exists() ? (afterVal as GameSession) : committedWaiting;
   devLogAction('opened rematch lobby', {
     room: normalized,
     round: nextBaseWordRound,
@@ -1642,10 +1823,11 @@ export async function abandonWaitingGameSession(
     }
     throw error;
   }
+  const preVal = instrumentedSnapshotVal(preSnapshot);
   if (!preSnapshot.exists()) {
     return;
   }
-  const session = preSnapshot.val() as GameSession;
+  const session = preVal as GameSession;
   if (session.organizerId !== organizerUid || session.status !== 'waiting') {
     return;
   }
@@ -1656,6 +1838,7 @@ export async function abandonWaitingGameSession(
   await Promise.all(playerIds.map((playerUid) => cancelPlayerOnDisconnect(normalized, playerUid)));
   await clearSessionWordMaps(normalized);
   try {
+    recordRtdbRemove(gameSessionPath(normalized));
     await remove(sessionRef(normalized));
   } catch (error) {
     if (isFirebasePermissionDenied(error)) {

@@ -1,6 +1,15 @@
-import { memo, useEffect, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Animated, Easing, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import {
+  Animated,
+  Easing,
+  StyleSheet,
+  Text,
+  View,
+  type StyleProp,
+  type TextStyle,
+  type ViewStyle,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
@@ -127,6 +136,39 @@ function createStyles(colors: ThemeColors) {
   });
 }
 
+interface StatsLabelProps {
+  textStyle: StyleProp<TextStyle>;
+  accessibilityLabel?: string;
+  statsText: ReturnType<typeof formatPlayStatsCompactSegments>;
+  deemphasizedStyle: StyleProp<TextStyle>;
+}
+
+const StatsLabel = memo(function StatsLabel({
+  textStyle,
+  accessibilityLabel,
+  statsText,
+  deemphasizedStyle,
+}: StatsLabelProps) {
+  return (
+    <Text
+      style={textStyle}
+      accessibilityLabel={accessibilityLabel}
+      numberOfLines={1}
+      adjustsFontSizeToFit
+      minimumFontScale={0.85}
+    >
+      {statsText.map((segment, index) => (
+        <Text
+          key={`${index}-${segment.text}`}
+          style={segment.variant === 'deemphasized' ? deemphasizedStyle : undefined}
+        >
+          {segment.text}
+        </Text>
+      ))}
+    </Text>
+  );
+});
+
 /**
  * Play header: menu + timer (left), standings chip on the right (grows left only when cramped).
  * Pressable timer uses accent fill + border instead of a trailing "+" affordance.
@@ -192,44 +234,41 @@ export const GamePlayStatusBar = memo(function GamePlayStatusBar({
     };
   }, [shouldPulseTimer, timerPulseAnim]);
 
-  const statsInput = {
-    rank,
-    wordCount,
-    maxWordCount,
-    score,
-    showRank,
-    showScore,
-  };
-  const statsText = formatPlayStatsCompactSegments(statsInput, {
-    rankSuffix: t('game.rankSuffix'),
-    wordsSuffix: wordsShort,
-    pointsSuffix: pointsShort,
-  });
-  const statsAccessibleText = formatPlayStatsAccessible(statsInput);
+  const statsText = useMemo(
+    () =>
+      formatPlayStatsCompactSegments(
+        {
+          rank,
+          wordCount,
+          maxWordCount,
+          score,
+          showRank,
+          showScore,
+        },
+        {
+          rankSuffix: t('game.rankSuffix'),
+          wordsSuffix: wordsShort,
+          pointsSuffix: pointsShort,
+        },
+      ),
+    [rank, wordCount, maxWordCount, score, showRank, showScore, t, wordsShort, pointsShort],
+  );
+
+  const statsAccessibleText = useMemo(
+    () =>
+      formatPlayStatsAccessible({
+        rank,
+        wordCount,
+        maxWordCount,
+        score,
+        showRank,
+        showScore,
+      }),
+    [rank, wordCount, maxWordCount, score, showRank, showScore],
+  );
+
   const starColor = showRank && rank === 1 ? RANK_FIRST_STAR_COLOR : colors.textSecondary;
   const timerPressable = onAddTimePress != null;
-
-  const renderStatsLabel = (
-    textStyle: typeof styles.stats | typeof styles.statsPlain,
-    accessibilityLabel?: string,
-  ) => (
-    <Text
-      style={textStyle}
-      accessibilityLabel={accessibilityLabel}
-      numberOfLines={1}
-      adjustsFontSizeToFit
-      minimumFontScale={0.85}
-    >
-      {statsText.map((segment, index) => (
-        <Text
-          key={`${index}-${segment.text}`}
-          style={segment.variant === 'deemphasized' ? styles.statsDeemphasized : undefined}
-        >
-          {segment.text}
-        </Text>
-      ))}
-    </Text>
-  );
 
   const timerText = (
     <Animated.Text
@@ -299,7 +338,11 @@ export const GamePlayStatusBar = memo(function GamePlayStatusBar({
             style={[styles.actionButton, styles.statsButton]}
           >
             <StarIcon size={16} color={starColor} />
-            {renderStatsLabel(styles.stats)}
+            <StatsLabel
+              textStyle={styles.stats}
+              statsText={statsText}
+              deemphasizedStyle={styles.statsDeemphasized}
+            />
           </FeedbackPressable>
         ) : onStatsPress ? (
           <FeedbackPressable
@@ -308,10 +351,19 @@ export const GamePlayStatusBar = memo(function GamePlayStatusBar({
             onPress={onStatsPress}
             style={[styles.actionButton, styles.statsButton]}
           >
-            {renderStatsLabel(styles.stats)}
+            <StatsLabel
+              textStyle={styles.stats}
+              statsText={statsText}
+              deemphasizedStyle={styles.statsDeemphasized}
+            />
           </FeedbackPressable>
         ) : (
-          renderStatsLabel(styles.statsPlain, statsAccessibleText)
+          <StatsLabel
+            textStyle={styles.statsPlain}
+            accessibilityLabel={statsAccessibleText}
+            statsText={statsText}
+            deemphasizedStyle={styles.statsDeemphasized}
+          />
         )}
       </View>
     </View>

@@ -214,6 +214,7 @@ describe('fetchPublicLobbyPage', () => {
       }
       return {
         exists: () => true,
+        val: () => ({}),
         forEach: (_fn: (child: { key: string; val: () => unknown }) => void) => {
           return false;
         },
@@ -240,6 +241,7 @@ describe('fetchPublicLobbyPage', () => {
       }
       return {
         exists: () => true,
+        val: () => ({}),
         forEach: (_fn: (child: { key: string; val: () => unknown }) => void) => {
           return false;
         },
@@ -277,6 +279,7 @@ describe('fetchPublicLobbyPage', () => {
     };
     const shardSnapshot = {
       exists: () => true,
+      val: () => entries,
       forEach: (fn: (child: { key: string; val: () => unknown }) => void) => {
         for (const [key, value] of Object.entries(entries)) {
           fn({ key, val: () => value });

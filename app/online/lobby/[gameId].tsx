@@ -118,9 +118,13 @@ export default function LobbyScreen() {
   const gameId = rawGameId ?? '';
   const justOptedIn = rawOptedIn === '1';
   const firebaseUid = useFirebaseStore((state) => state.uid);
-  const serverNow = useServerNow(30_000);
 
   const [session, setSession] = useState<GameSessionSnapshot | null>(null);
+  // Sync server clock when session arrives or rematch/status advances (not only null↔non-null).
+  const serverNow = useServerNow(
+    30_000,
+    session ? `${session.status}:${session.baseWordRound ?? 0}` : null,
+  );
   const [firebaseSessionLive, setFirebaseSessionLive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
