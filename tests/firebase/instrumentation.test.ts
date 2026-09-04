@@ -26,13 +26,13 @@ describe('RTDB Instrumentation', () => {
     it('records traffic in the probe', () => {
       const spy = vi.spyOn(rtdbTrafficProbe, 'record');
       recordRtdbDown({ foo: 'bar' });
-      expect(spy).toHaveBeenCalledWith('down', expect.any(Number));
+      expect(spy).toHaveBeenCalledWith('down', expect.any(Number), undefined);
     });
 
     it('records 0 bytes if value is undefined', () => {
       const spy = vi.spyOn(rtdbTrafficProbe, 'record');
       recordRtdbDown(undefined);
-      expect(spy).toHaveBeenCalledWith('down', 0);
+      expect(spy).toHaveBeenCalledWith('down', 0, undefined);
     });
   });
 
@@ -67,7 +67,7 @@ describe('RTDB Instrumentation', () => {
       const val = instrumentedSnapshotVal(mockSnapshot);
 
       expect(val).toEqual({ data: 123 });
-      expect(spy).toHaveBeenCalledWith('down', expect.any(Number));
+      expect(spy).toHaveBeenCalledWith('down', expect.any(Number), undefined);
     });
 
     it('extracts value without recording when not collecting', () => {
@@ -112,7 +112,7 @@ describe('RTDB Instrumentation', () => {
       const spy = vi.spyOn(rtdbTrafficProbe, 'record');
       recordSnapshotTrafficIfCollecting(mockSnapshot);
       expect(mockSnapshot.val).toHaveBeenCalled();
-      expect(spy).toHaveBeenCalledWith('down', expect.any(Number));
+      expect(spy).toHaveBeenCalledWith('down', expect.any(Number), undefined);
     });
   });
 
@@ -129,7 +129,14 @@ describe('RTDB Instrumentation', () => {
       const mockSnapshot = { val: vi.fn(() => ({ word: true })) };
       const spy = vi.spyOn(rtdbTrafficProbe, 'record');
       expect(instrumentedChildSnapshotVal(true, mockSnapshot)).toEqual({ word: true });
-      expect(spy).toHaveBeenCalledWith('down', expect.any(Number));
+      expect(spy).toHaveBeenCalledWith('down', expect.any(Number), undefined);
+    });
+
+    it('forwards optional path to record', () => {
+      const mockSnapshot = { val: vi.fn(() => ({ a: 1 })) };
+      const spy = vi.spyOn(rtdbTrafficProbe, 'record');
+      instrumentedSnapshotVal(mockSnapshot, 'game_sessions/ABCDE');
+      expect(spy).toHaveBeenCalledWith('down', expect.any(Number), 'game_sessions/ABCDE');
     });
   });
 

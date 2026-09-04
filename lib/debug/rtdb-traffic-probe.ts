@@ -1,9 +1,13 @@
 import { useRtdbDiagnosticsStore } from '@/store/rtdb-diagnostics-store';
 import { getAppTrafficBytes } from '@/modules/native-traffic-stats';
+import { formatBytes } from './format-bytes';
 import type { ActionEntry, TrafficBucket } from './rtdb-diagnostics-types';
 
 /** Traffic direction for diagnostics. */
 export type TrafficDirection = 'down' | 'up';
+
+/** Timeline tag for large JSON ↓ (finish/results dig). Below this, only bucket totals update. */
+export const RTDB_LARGE_DOWN_ACTION_BYTES = 2048;
 
 /**
  * Simple estimation of JSON payload size in bytes.
@@ -65,6 +69,7 @@ class RtdbTrafficProbe {
    * Commit the active room into history when it has JSON and/or wire traffic.
    * Does not require `isCollecting()` — totals only grow while collecting, so
    * disable-then-flush still persists the session (ADR-025 flush-on-exit).
+   * Keeps `activeRoomId` so re-enabling mid-visit continues the same room.
    */
   flushActiveRoom() {
     this.commitActiveRoomHistory();
@@ -73,10 +78,17 @@ class RtdbTrafficProbe {
     this.ensurePolling();
   }
 
+  /**
+   * Bind traffic to a room, or explicitly leave (`null`).
+   *
+   * Sticky room (ADR-025): subscribe teardown must NOT call `null` — play→results
+   * remounts keep one history group. Call `null` only from exit-online / Home.
+   */
   setActiveRoomId(roomId: string | null) {
     if (this.activeRoomId === roomId) return;
 
-    // Flush current room totals to history before switching (ADR-025 flush-on-exit).
+    // FIX: 2026-09 — play→results remount must not split history → sticky until
+    // explicit leave (exitOnlineSession / navigate-home) or a different roomId.
     this.commitActiveRoomHistory();
 
     this.activeRoomId = roomId;
@@ -90,7 +102,7 @@ class RtdbTrafficProbe {
     this.ensurePolling();
   }
 
-  record(direction: TrafficDirection, bytes: number) {
+  record(direction: TrafficDirection, bytes: number, path?: string) {
     if (!this.isCollecting()) return;
 
     const tSec = Math.floor(Date.now() / 1000);
@@ -117,6 +129,14 @@ class RtdbTrafficProbe {
     if (direction === 'down') {
       bucket.downBytes += bytes;
       this.roomDownTotal += bytes;
+      // FIX: 2026-09 — finish/results ↓ spikes opaque → path-tag large JSON downs
+      if (path && bytes >= RTDB_LARGE_DOWN_ACTION_BYTES) {
+        this.recordAction({
+          timestamp: Date.now(),
+          action: `rtdb ↓ ${path}`,
+          details: formatBytes(bytes),
+        });
+      }
     } else {
       bucket.upBytes += bytes;
       this.roomUpTotal += bytes;

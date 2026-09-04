@@ -107,6 +107,20 @@ describe('RtdbTrafficProbe', () => {
     expect(totals.down).toBe(0);
   });
 
+  it('emits timeline action for large path-tagged downs', () => {
+    useRtdbDiagnosticsStore.setState({ developerModeEnabled: true, rtdbDiagnosticsEnabled: true });
+    const payload = { x: 'y'.repeat(3000) };
+    rtdbTrafficProbe.record('down', utf8JsonBytes(payload), 'session_word_maps/ABCDE/wordPlayers');
+    const actions = rtdbTrafficProbe.getRecentActions(5);
+    expect(actions[0]?.action).toBe('rtdb ↓ session_word_maps/ABCDE/wordPlayers');
+  });
+
+  it('does not emit timeline action for small downs', () => {
+    useRtdbDiagnosticsStore.setState({ developerModeEnabled: true, rtdbDiagnosticsEnabled: true });
+    rtdbTrafficProbe.record('down', 100, 'game_sessions/ABCDE');
+    expect(rtdbTrafficProbe.getRecentActions(5)).toEqual([]);
+  });
+
   it('caps the number of actions recorded', () => {
     useRtdbDiagnosticsStore.setState({ developerModeEnabled: true, rtdbDiagnosticsEnabled: true });
 
@@ -146,7 +160,7 @@ describe('RtdbTrafficProbe', () => {
     expect(totals.up).toBe(0);
   });
 
-  it('flushes history when active room is cleared (leave)', () => {
+  it('flushes history immediately on explicit leave (setActiveRoomId null)', () => {
     useRtdbDiagnosticsStore.setState({ developerModeEnabled: true, rtdbDiagnosticsEnabled: true });
 
     rtdbTrafficProbe.setActiveRoomId('ROOM1');
@@ -158,6 +172,27 @@ describe('RtdbTrafficProbe', () => {
     expect(history[0].roomId).toBe('ROOM1');
     expect(history[0].downTotal).toBe(40);
     expect(rtdbTrafficProbe.getRoomTotals().roomId).toBeNull();
+  });
+
+  it('keeps one history group across same-room remount without explicit leave', () => {
+    useRtdbDiagnosticsStore.setState({ developerModeEnabled: true, rtdbDiagnosticsEnabled: true });
+
+    rtdbTrafficProbe.setActiveRoomId('WJLXZ');
+    rtdbTrafficProbe.record('down', 100);
+    rtdbTrafficProbe.recordAction({ timestamp: Date.now(), action: 'opened round results' });
+
+    // play→results: subscribeGameSession teardown must NOT clear the sticky room.
+    // Results re-subscribes with the same id (no-op) and keeps accumulating.
+    rtdbTrafficProbe.setActiveRoomId('WJLXZ');
+    rtdbTrafficProbe.record('down', 50);
+
+    expect(useRtdbDiagnosticsStore.getState().history).toHaveLength(0);
+    const totals = rtdbTrafficProbe.getRoomTotals();
+    expect(totals.roomId).toBe('WJLXZ');
+    expect(totals.down).toBe(150);
+    expect(
+      rtdbTrafficProbe.getRecentActions(5).some((a) => a.action === 'opened round results'),
+    ).toBe(true);
   });
 
   it('flushes history when diagnostics collecting is disabled', () => {

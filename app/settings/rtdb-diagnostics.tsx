@@ -1,15 +1,17 @@
-import { useState, useMemo, useCallback } from 'react';
-import { Redirect } from 'expo-router';
+import { useState, useMemo, useCallback, useRef } from 'react';
+import { Redirect, Stack, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 
 import { FeedbackPressable } from '@/components/FeedbackPressable';
 import { Screen } from '@/components/Screen';
 import { spacing, type ThemeColors } from '@/constants/theme';
+import { useSyncedStackBack } from '@/hooks/useSyncedStackBack';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import { copyTrafficHistoryCsv } from '@/lib/debug/copy-traffic-history-csv';
 import { formatBytes } from '@/lib/debug/format-bytes';
+import { stackHeaderBack } from '@/lib/navigation/stack-header-options';
 import { useRtdbDiagnosticsStore } from '@/store/rtdb-diagnostics-store';
 import { useToastStore } from '@/store/toast-store';
 import type { TrafficHistoryEntry } from '@/lib/debug/rtdb-diagnostics-types';
@@ -39,11 +41,6 @@ function createStyles(colors: ThemeColors) {
     copyAction: {
       color: colors.penBlue,
       fontWeight: '600',
-    },
-    detailHeaderActions: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.md,
     },
     item: {
       backgroundColor: colors.backgroundPrimary,
@@ -123,6 +120,7 @@ export default function RtdbDiagnosticsScreen() {
   const styles = useThemedStyles(createStyles);
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const router = useRouter();
   const developerModeEnabled = useRtdbDiagnosticsStore((state) => state.developerModeEnabled);
   const isHydrated = useRtdbDiagnosticsStore((state) => state.isHydrated);
   const history = useRtdbDiagnosticsStore((state) => state.history);
@@ -130,6 +128,20 @@ export default function RtdbDiagnosticsScreen() {
   const enqueueToast = useToastStore((state) => state.enqueueToast);
 
   const [selectedEntry, setSelectedEntry] = useState<TrafficHistoryEntry | null>(null);
+  const selectedEntryRef = useRef(selectedEntry);
+  selectedEntryRef.current = selectedEntry;
+
+  // FIX: 2026-09 — stack header back popped to Settings while in-room detail
+  // used a duplicate text back → list; header now clears selection first.
+  const handleBack = useCallback(() => {
+    if (selectedEntryRef.current) {
+      setSelectedEntry(null);
+      return;
+    }
+    router.back();
+  }, [router]);
+  const onBack = useSyncedStackBack(handleBack);
+  const screenOptions = useMemo(() => stackHeaderBack(onBack), [onBack]);
 
   const onCopyCsv = useCallback(async () => {
     if (!selectedEntry) return;
@@ -275,23 +287,19 @@ export default function RtdbDiagnosticsScreen() {
   if (selectedEntry) {
     return (
       <Screen scroll={false}>
+        <Stack.Screen options={screenOptions} />
         <View style={styles.header}>
-          <FeedbackPressable onPress={() => setSelectedEntry(null)}>
-            <Text style={{ color: colors.penBlue, fontWeight: '600' }}>← {t('common.back')}</Text>
+          <FeedbackPressable
+            onPress={() => {
+              void onCopyCsv();
+            }}
+            accessibilityLabel={t('rtdbDiagnostics.copyCsvA11y', { id: selectedEntry.roomId })}
+          >
+            <Text style={styles.copyAction}>{t('rtdbDiagnostics.copyCsv')}</Text>
           </FeedbackPressable>
-          <View style={styles.detailHeaderActions}>
-            <FeedbackPressable
-              onPress={() => {
-                void onCopyCsv();
-              }}
-              accessibilityLabel={t('rtdbDiagnostics.copyCsvA11y', { id: selectedEntry.roomId })}
-            >
-              <Text style={styles.copyAction}>{t('rtdbDiagnostics.copyCsv')}</Text>
-            </FeedbackPressable>
-            <Text style={styles.roomCode}>
-              {t('rtdbDiagnostics.roomLabel', { id: selectedEntry.roomId })}
-            </Text>
-          </View>
+          <Text style={styles.roomCode}>
+            {t('rtdbDiagnostics.roomLabel', { id: selectedEntry.roomId })}
+          </Text>
         </View>
 
         <FlatList
@@ -311,6 +319,7 @@ export default function RtdbDiagnosticsScreen() {
 
   return (
     <Screen scroll={false}>
+      <Stack.Screen options={screenOptions} />
       <View style={styles.header}>
         <Text style={styles.emptyText}>{t('rtdbDiagnostics.details')}</Text>
         {history.length > 0 ? (

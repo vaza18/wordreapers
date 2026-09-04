@@ -46,6 +46,10 @@ describe('SessionWordMaps Instrumentation', () => {
     const result = await tryFetchSessionWordMaps('TEST');
 
     expect(result.ok).toBe(true);
-    expect(spy).toHaveBeenCalledWith('down', expect.any(Number));
+    expect(spy).toHaveBeenCalledWith(
+      'down',
+      expect.any(Number),
+      'session_word_maps/TEST/wordPlayers',
+    );
   });
 });

@@ -6,6 +6,9 @@ import React from 'react';
 
 const mockSetStringAsync = vi.fn<(value: string) => Promise<boolean>>(async () => true);
 const mockEnqueueToast = vi.fn();
+const { mockRouterBack } = vi.hoisted(() => ({
+  mockRouterBack: vi.fn(),
+}));
 
 vi.mock('expo-clipboard', () => ({
   setStringAsync: (value: string) => mockSetStringAsync(value),
@@ -107,6 +110,18 @@ vi.mock('@/store/rtdb-diagnostics-store', () => {
 
 vi.mock('expo-router', () => ({
   Redirect: ({ href }: { href: string }) => <div data-testid="redirect" data-href={href} />,
+  Stack: {
+    Screen: ({ options }: { options?: { headerBackAction?: () => void } }) => (
+      <button type="button" data-testid="header-back" onClick={() => options?.headerBackAction?.()}>
+        header-back
+      </button>
+    ),
+  },
+  useRouter: () => ({ back: mockRouterBack }),
+}));
+
+vi.mock('@/hooks/useSyncedStackBack', () => ({
+  useSyncedStackBack: (handler: () => void) => handler,
 }));
 
 vi.mock('@/components/Screen', () => ({
@@ -136,6 +151,7 @@ describe('RtdbDiagnosticsScreen', () => {
     mockClearHistory.mockClear();
     mockSetStringAsync.mockClear();
     mockEnqueueToast.mockClear();
+    mockRouterBack.mockClear();
   });
 
   it('renders history list', () => {
@@ -150,6 +166,25 @@ describe('RtdbDiagnosticsScreen', () => {
 
     expect(screen.getByText('test-action')).toBeTruthy();
     expect(screen.getByText('test-details')).toBeTruthy();
+  });
+
+  it('header back from details returns to the history list without leaving the screen', () => {
+    render(<RtdbDiagnosticsScreen />);
+    fireEvent.click(screen.getByText('rtdbDiagnostics.roomLabel:TEST'));
+    expect(screen.getByText('test-action')).toBeTruthy();
+    expect(screen.queryByText('common.back')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('header-back'));
+
+    expect(screen.queryByText('test-action')).toBeNull();
+    expect(screen.getByText('rtdbDiagnostics.details')).toBeTruthy();
+    expect(mockRouterBack).not.toHaveBeenCalled();
+  });
+
+  it('header back from the list pops to the previous screen', () => {
+    render(<RtdbDiagnosticsScreen />);
+    fireEvent.click(screen.getByTestId('header-back'));
+    expect(mockRouterBack).toHaveBeenCalledTimes(1);
   });
 
   it('copies CSV for the selected room and shows a toast', async () => {

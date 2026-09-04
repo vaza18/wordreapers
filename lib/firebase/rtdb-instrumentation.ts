@@ -6,11 +6,89 @@ export interface InstrumentedSnapshot {
   exists?: () => boolean;
 }
 
+/** Read snapshot.val() without recording traffic. */
+export function readSnapshotVal<T = unknown>(snapshot: unknown): T {
+  const s = snapshot as InstrumentedSnapshot | null | undefined;
+  return (s && typeof s.val === 'function' ? s.val() : null) as T;
+}
+
 /** Record incoming RTDB data. Safe even if value is null/undefined. */
-export function recordRtdbDown(value: unknown) {
+export function recordRtdbDown(value: unknown, path?: string) {
   if (rtdbTrafficProbe.isCollecting()) {
-    rtdbTrafficProbe.record('down', utf8JsonBytes(value));
+    rtdbTrafficProbe.record('down', utf8JsonBytes(value), path);
   }
+}
+
+/** Record a pre-computed download byte count (e.g. session onValue deep delta). */
+export function recordRtdbDownBytes(bytes: number, path?: string) {
+  if (!rtdbTrafficProbe.isCollecting()) return;
+  rtdbTrafficProbe.record('down', Math.max(0, bytes), path);
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * Estimate JSON ↓ for a root `onValue` relative to the previous snapshot.
+ * First event (`previous === undefined`) counts the full tree; later events
+ * recurse so a finish leaf patch or `players/{uid}/online` flip is not billed
+ * as a multi-KB re-download of unchanged siblings.
+ */
+export function deepChangedJsonBytes(previous: unknown, next: unknown): number {
+  if (previous === undefined) {
+    return utf8JsonBytes(next);
+  }
+  if (Object.is(previous, next)) {
+    return 0;
+  }
+  const isPrevObj = isPlainObject(previous);
+  const isNextObj = isPlainObject(next);
+
+  if (!isPrevObj || !isNextObj) {
+    // One or both are primitives or different types.
+    // Optimization: JSON.stringify is fine for primitives or small values.
+    try {
+      if (JSON.stringify(previous) === JSON.stringify(next)) {
+        return 0;
+      }
+    } catch {
+      // Non-serializable → treat as changed.
+    }
+    return utf8JsonBytes(next);
+  }
+
+  const prevObj = previous;
+  const nextObj = next;
+
+  let bytes = 0;
+  const nextKeys = Object.keys(nextObj);
+
+  // Added or changed keys in next
+  for (let i = 0; i < nextKeys.length; i++) {
+    const key = nextKeys[i];
+    if (key === undefined) continue;
+    if (!Object.prototype.hasOwnProperty.call(prevObj, key)) {
+      bytes += key.length + utf8JsonBytes(nextObj[key]);
+    } else {
+      const nested = deepChangedJsonBytes(prevObj[key], nextObj[key]);
+      if (nested > 0) {
+        bytes += key.length + nested;
+      }
+    }
+  }
+
+  // Removed keys (exist in previous but not in next)
+  const prevKeys = Object.keys(prevObj);
+  for (let i = 0; i < prevKeys.length; i++) {
+    const key = prevKeys[i];
+    if (key === undefined) continue;
+    if (!Object.prototype.hasOwnProperty.call(nextObj, key)) {
+      bytes += Math.max(key.length, 1);
+    }
+  }
+
+  return bytes;
 }
 
 /**
@@ -25,11 +103,12 @@ export function recordRtdbDown(value: unknown) {
  * When diagnostics are off, still returns `val()` for callers that need the
  * value — use {@link recordSnapshotTrafficIfCollecting} for exists-only paths
  * that must not deserialize when not collecting.
+ *
+ * Optional `path` tags large ↓ rows in the diagnostics timeline (finish/results dig).
  */
-export function instrumentedSnapshotVal<T = unknown>(snapshot: unknown): T {
-  const s = snapshot as InstrumentedSnapshot | null | undefined;
-  const val = (s && typeof s.val === 'function' ? s.val() : null) as T;
-  recordRtdbDown(val);
+export function instrumentedSnapshotVal<T = unknown>(snapshot: unknown, path?: string): T {
+  const val = readSnapshotVal<T>(snapshot);
+  recordRtdbDown(val, path);
   return val;
 }
 
@@ -46,12 +125,15 @@ export function recordSnapshotTrafficIfCollecting(snapshot: unknown): void {
  * Word-maps listen-first (ADR-022): before authoritative seed, child callbacks
  * replay the same tree the seed `get` will count — skip instrumentation then.
  */
-export function instrumentedChildSnapshotVal<T = unknown>(seeded: boolean, snapshot: unknown): T {
+export function instrumentedChildSnapshotVal<T = unknown>(
+  seeded: boolean,
+  snapshot: unknown,
+  path?: string,
+): T {
   if (!seeded) {
-    const s = snapshot as InstrumentedSnapshot | null | undefined;
-    return (s && typeof s.val === 'function' ? s.val() : null) as T;
+    return readSnapshotVal(snapshot);
   }
-  return instrumentedSnapshotVal(snapshot);
+  return instrumentedSnapshotVal(snapshot, path);
 }
 
 /** Record outgoing RTDB data. */
