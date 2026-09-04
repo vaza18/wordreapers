@@ -62,9 +62,10 @@ else
 fi
 
 if [ "${IOS_DEVICE_FRESH:-}" = "1" ]; then
-  echo "Fresh iOS build: clearing native build cache…"
+  echo "Fresh iOS build: clearing native build cache and Pods…"
   EXPO_ARGS+=(--no-build-cache)
   rm -rf "$ROOT/node_modules/.cache/metro-bundler" 2>/dev/null || true
+  rm -rf "$ROOT/ios/Pods" "$ROOT/ios/Podfile.lock" 2>/dev/null || true
 fi
 
 BUILD_STARTED_AT="$(date +%s)"

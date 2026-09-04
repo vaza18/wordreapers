@@ -1,8 +1,7 @@
 ---
 description: Keep commits atomic so git history remains useful context for future agents
-alwaysApply: true
+alwaysApply: false
 ---
-
 # Commit hygiene
 
 Future AI agents rely on `git log` and `git blame` to understand **why** code exists. Large mixed commits make that archaeology nearly impossible.
