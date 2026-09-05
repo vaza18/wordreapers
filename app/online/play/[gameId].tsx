@@ -22,6 +22,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { spacing, type ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/useTheme';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
+import { useNearbyArchivePlaySync } from '@/hooks/useNearbyArchiveSync';
 import { useAutoPauseOnAppBackground } from '@/hooks/useAutoPauseOnAppBackground';
 import {
   PLAY_WORD_FEEDBACK_DISMISS_MS,
@@ -253,6 +254,13 @@ export default function OnlinePlayScreen() {
   const [restoredLexiconSnapshot, setRestoredLexiconSnapshot] =
     useState<PlayableLexiconSnapshot | null>(null);
   const roundEnded = session?.status === 'finished' || roundOverPendingResults;
+  useNearbyArchivePlaySync({
+    gameId,
+    selfUid: myUid,
+    session,
+    inviteModalVisible: showInviteModal && !roundEnded,
+    enabled: Boolean(gameId && myUid && session),
+  });
   const timeUpModalVisible = shouldShowTimeUpModal({
     roundEnded,
     showAddTimeModal,

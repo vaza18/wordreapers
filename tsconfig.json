@@ -40,6 +40,7 @@
     "types/expo-process-env.d.ts",
     "types/firebase-auth-rn.d.ts",
     "types/react-native-firebase-app-check.d.ts",
+    "types/nearby-native-modules.d.ts",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
   ],
